@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["nodejs", "chromium", "nss", "atk", "cups", "libdrm", "dbus", "libxkbcommon", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "mesa", "expat", "xorg.libxcb", "libxshmfence", "pango", "cairo", "glib", "nspr"]
+
+[phases.install]
+cmds = ["npm install", "npx playwright install chromium 2>/dev/null || true"]
+
+[start]
+cmd = "node src/server.js"
