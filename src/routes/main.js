@@ -19,6 +19,7 @@ function navBar(user, active) {
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
       <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Historico</a>
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configuracoes</a>` : ''}
+      ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robo</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuarios</a>` : ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">

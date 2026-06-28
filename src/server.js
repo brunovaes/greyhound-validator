@@ -26,6 +26,8 @@ const { requireLogin } = require('./middleware/auth');
 app.use(BASE, requireLogin, require('./routes/main'));
 app.use(BASE + '/api', requireLogin, require('./routes/api'));
 app.use(BASE + '/config', requireLogin, require('./routes/config'));
+app.use(BASE + '/robot', requireLogin, require('./routes/robot'));
+app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__dirname, '../public/pdfs')));
 
 app.get('/', (req, res) => res.redirect(BASE));
 
