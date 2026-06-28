@@ -19,7 +19,11 @@ ESTAVEL: variacao pequena (ex: 2222, 3323). Se houver duvida, classificar como E
 EXEMPLO: bends 1111, 2111, 4333, 1220, 1111 = 3 corridas liderando = FRONTRUNNER.
 
 HIERARQUIA (ordem obrigatoria):
-1. CATEGORIA peso ${config.peso_categoria}x: Validado = ja correu na classe atual. Subindo sem historico = penalizar FORTE + needsCap.
+1. CATEGORIA vs CalTm - REGRA PRINCIPAL:
+- Diferenca de ${config.max_cat_diff_caltm||1} nivel(is) de categoria: CalTm pode decidir. Ex: A5 vs A6 com 1 nivel de diferenca = se A6 tem CalTm claramente melhor (>${config.diff_caltm_significativa}s), ele pode ser favorito.
+- Diferenca de 2+ niveis: CATEGORIA DECIDE SEMPRE, independente do CalTm. Ex: A5 vs A7 = A7 nao pode ser favorito sobre A5 mesmo com tempo melhor.
+- Galgo nunca correu na classe atual E diferenca > ${config.max_cat_diff_caltm||1} nivel = penalizar FORTE + needsCap.
+- Vitoria em categoria 2+ niveis inferior NAO comprova forca na superior.
 2. CalTm peso ${config.peso_caltm}x: SEMPRE CalTm NUNCA WnTm. Media 3-5 valores. Menor = melhor. Dif >${config.diff_caltm_significativa}s = significativa.
 3. BENDS/ARRANQUE peso ${config.peso_bends}x: Split menor = melhor saida. Bends subindo = Recuperador. By Sh/Hd/Nk = valorizar.
 4. REMARKS peso ${config.peso_remarks}x:

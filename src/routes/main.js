@@ -177,7 +177,7 @@ ${navBar(user, 'analisar')}
   <div class="modal">
     <h3 id="cm-title">Capivara necessaria</h3>
     <p id="cm-body">Carregue o print ou PDF.</p>
-    <div class="modal-upload"><input type="file" id="cap-modal-inp" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple><strong>Clique ou arraste</strong><p>JPG PNG PDF aceitos</p></div>
+    <div class="modal-upload"><input type="file" id="cap-modal-inp" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple><strong>Clique, arraste ou cole (Ctrl+V)</strong><p>JPG PNG PDF aceitos · Ctrl+V para colar print</p></div>
     <div class="cap-st" id="cap-st"></div>
     <div class="flist-modal" id="cap-modal-list"></div>
     <div class="modal-acts"><button class="bca" id="btn-cap-cancel">Cancelar</button><button class="bok" id="btn-cap-ok" disabled>Validar e Reanalisar</button></div>
@@ -267,6 +267,28 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
   document.getElementById('cap-modal-inp').addEventListener('change',async function(){for(var i=0;i<this.files.length;i++){var file=this.files[i],id='cm'+Date.now()+i;try{var b64=await readB64(file);var isImg=/\.(jpg|jpeg|png|webp)$/i.test(file.name);capModalFilesList.push({name:file.name,b64:b64,id:id,mime:isImg?file.type:'application/pdf',isImg:isImg});var d=document.createElement('div');d.className='fi';d.innerHTML='<span class="fi-name">'+file.name+'</span><span class="fi-st fi-ok">OK</span>';document.getElementById('cap-modal-list').appendChild(d);document.getElementById('btn-cap-ok').disabled=false;}catch(e){alert('Erro ao ler.');}}});
   document.getElementById('btn-cap-cancel').addEventListener('click',function(){document.getElementById('cap-modal').classList.remove('open');});
+
+  // Ctrl+V para colar imagem no modal de capivara
+  document.addEventListener('paste', async function(e) {
+    if (!document.getElementById('cap-modal').classList.contains('open')) return;
+    var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        var file = items[i].getAsFile();
+        var id = 'cm'+Date.now();
+        try {
+          var b64 = await readB64(file);
+          capModalFilesList.push({name:'capivara-colada.png',b64:b64,id:id,mime:'image/png',isImg:true});
+          var d = document.createElement('div'); d.className = 'fi';
+          d.innerHTML = '<span class="fi-name">&#128247; Imagem colada</span><span class="fi-st fi-ok">OK</span>';
+          document.getElementById('cap-modal-list').appendChild(d);
+          var st = document.getElementById('cap-st');
+          st.className = 'cap-st ok'; st.textContent = 'Imagem colada com sucesso!'; st.style.display = 'block';
+          document.getElementById('btn-cap-ok').disabled = false;
+        } catch(err) { console.error('Erro ao colar:', err); }
+      }
+    }
+  });
   document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
   document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join('\n')],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
 });
