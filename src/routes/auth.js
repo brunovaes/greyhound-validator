@@ -1,0 +1,175 @@
+const express = require('express');
+const router = express.Router();
+const { findUserByEmail, validatePassword, createUser, db } = require('../db/database');
+const { requireAdmin } = require('../middleware/auth');
+const BASE = process.env.BASE_PATH || '/greyhound';
+
+// GET /login
+router.get('/login', (req, res) => {
+  if (req.session.userId) return res.redirect(BASE);
+  const err = req.query.err;
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login - Greyhound Validator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.logo-wrap{width:100%;max-width:600px;margin-bottom:32px}
+.logo-wrap img{width:100%;border-radius:8px}
+.card{background:#111;border:1px solid #333;border-radius:12px;padding:32px;width:100%;max-width:380px;border-top:3px solid #22c55e}
+h2{font-size:20px;font-weight:700;color:#22c55e;margin-bottom:6px;text-align:center}
+p{font-size:13px;color:#888;text-align:center;margin-bottom:24px}
+label{display:block;font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+input{width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:14px;margin-bottom:16px}
+input:focus{outline:none;border-color:#22c55e}
+button{width:100%;padding:12px;background:#22c55e;color:#000;font-weight:700;font-size:15px;border:none;border-radius:6px;cursor:pointer;margin-top:4px}
+button:hover{background:#16a34a}
+.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:16px;text-align:center}
+</style></head><body>
+<div class="card">
+  <h2>🐕 Greyhound Validator</h2>
+  <p>Entre com sua conta para continuar</p>
+  ${err ? '<div class="err">Email ou senha incorretos</div>' : ''}
+  <form method="POST" action="${BASE}/login">
+    <label>Email</label>
+    <input type="email" name="email" placeholder="seu@email.com" required autofocus>
+    <label>Senha</label>
+    <input type="password" name="password" placeholder="••••••••" required>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+</body></html>`);
+});
+
+// POST /login
+router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
+  const { email, password } = req.body;
+  const user = findUserByEmail(email);
+  if (!user || !validatePassword(user, password)) {
+    return res.redirect(BASE + '/login?err=1');
+  }
+  req.session.userId = user.id;
+  db.prepare('UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?').run(user.id);
+  res.redirect(BASE);
+});
+
+// GET /logout
+router.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect(BASE + '/login');
+});
+
+// GET /admin/usuarios
+router.get('/admin/usuarios', requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT id,name,email,role,plan,analyses_used,analyses_limit,active,created_at,last_login FROM users ORDER BY created_at DESC').all();
+  const BASE = process.env.BASE_PATH || '/greyhound';
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Usuarios - Greyhound Validator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;gap:0;align-items:center;justify-content:space-between}
+.nav-links{display:flex}
+.nav-link{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent}
+.nav-link:hover,.nav-link.active{color:#22c55e;border-bottom-color:#22c55e}
+.nav-user{font-size:12px;color:#666;padding:12px}
+.content{padding:24px;max-width:1000px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:20px;color:#f0f0f0}
+.btn{padding:8px 16px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:none;display:inline-block}
+.btn:hover{background:#16a34a}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:4px;border:none;cursor:pointer;font-weight:600}
+.btn-danger{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.form-card{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:20px;border-top:2px solid #22c55e}
+.form-card h2{font-size:14px;color:#22c55e;margin-bottom:14px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end}
+.field label{display:block;font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.field input,.field select{width:100%;padding:7px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#f0f0f0;font-size:13px}
+.field input:focus,.field select:focus{outline:none;border-color:#22c55e}
+table{width:100%;border-collapse:collapse;background:#111;border:1px solid #333;border-radius:8px;overflow:hidden}
+th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}
+td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.badge-admin{background:rgba(249,115,22,.15);color:#f97316}
+.badge-premium{background:rgba(139,92,246,.15);color:#a78bfa}
+.badge-free{background:rgba(100,100,100,.15);color:#888}
+.badge-on{background:rgba(34,197,94,.15);color:#22c55e}
+.badge-off{background:rgba(239,68,68,.12);color:#ef4444}
+</style></head><body>
+<nav>
+  <div class="nav-links">
+    <a href="${BASE}" class="nav-link">Analisar</a>
+    <a href="${BASE}/historico" class="nav-link">Historico</a>
+    <a href="${BASE}/config" class="nav-link">Configuracoes</a>
+    <a href="${BASE}/admin/usuarios" class="nav-link active">Usuarios</a>
+  </div>
+  <span class="nav-user">Admin: ${req.user.name}</span>
+</nav>
+<div class="content">
+  <h1>Gestao de Usuarios</h1>
+
+  <div class="form-card">
+    <h2>Criar novo usuario</h2>
+    <form method="POST" action="${BASE}/admin/usuarios/criar">
+      <div class="form-grid">
+        <div class="field"><label>Nome</label><input type="text" name="name" placeholder="Nome completo" required></div>
+        <div class="field"><label>Email</label><input type="email" name="email" placeholder="email@exemplo.com" required></div>
+        <div class="field"><label>Senha</label><input type="password" name="password" placeholder="senha" required></div>
+        <div class="field"><label>Perfil</label>
+          <select name="role"><option value="user">Usuario</option><option value="admin">Admin</option></select>
+        </div>
+        <div class="field"><label>Plano</label>
+          <select name="plan"><option value="free">Free (30/mes)</option><option value="pro">Pro (200/mes)</option><option value="premium">Premium (ilimitado)</option></select>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button type="submit" class="btn" style="width:100%">Criar Usuario</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th>
+      <th>Analises</th><th>Status</th><th>Ultimo login</th><th>Acoes</th>
+    </tr></thead>
+    <tbody>
+    ${users.map(u => `<tr>
+      <td><strong>${u.name}</strong></td>
+      <td style="color:#888">${u.email}</td>
+      <td><span class="badge badge-${u.role}">${u.role}</span></td>
+      <td><span class="badge badge-${u.plan}">${u.plan}</span></td>
+      <td style="color:#888">${u.analyses_used}/${u.analyses_limit === 999999 ? '∞' : u.analyses_limit}</td>
+      <td><span class="badge badge-${u.active ? 'on' : 'off'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
+      <td style="color:#666;font-size:11px">${u.last_login ? new Date(u.last_login).toLocaleDateString('pt-BR') : 'Nunca'}</td>
+      <td>
+        <form method="POST" action="${BASE}/admin/usuarios/toggle" style="display:inline">
+          <input type="hidden" name="id" value="${u.id}">
+          <button type="submit" class="btn-sm btn-danger">${u.active ? 'Desativar' : 'Ativar'}</button>
+        </form>
+      </td>
+    </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+</body></html>`);
+});
+
+// POST /admin/usuarios/criar
+router.post('/admin/usuarios/criar', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  const { name, email, password, role, plan } = req.body;
+  const limit = plan === 'premium' ? 999999 : plan === 'pro' ? 200 : 30;
+  createUser(name, email, password, role, plan, limit);
+  res.redirect(BASE + '/admin/usuarios');
+});
+
+// POST /admin/usuarios/toggle
+router.post('/admin/usuarios/toggle', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  const { id } = req.body;
+  const user = db.prepare('SELECT active FROM users WHERE id=?').get(id);
+  if (user) db.prepare('UPDATE users SET active=? WHERE id=?').run(user.active ? 0 : 1, id);
+  res.redirect(BASE + '/admin/usuarios');
+});
+
+module.exports = router;
