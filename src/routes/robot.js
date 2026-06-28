@@ -1,12 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
-// Status global do robô (em memória)
+// Pasta para salvar PDFs no servidor
+const PDF_DIR = path.join(__dirname, '../../public/pdfs');
+if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
+
+// Status global do robô
 let robotStatus = {
   running: false,
   progress: 0,
@@ -21,13 +24,18 @@ function resetStatus() {
   robotStatus = { running: false, progress: 0, total: 0, current: '', log: [], pdfs: [], error: null };
 }
 
-// Pasta para salvar PDFs
-const PDF_DIR = path.join(__dirname, '../../public/pdfs');
-if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
+function addLog(type, msg) {
+  robotStatus.log.push({ type, msg });
+  console.log('[ROBO]', msg);
+}
 
 // ─── PÁGINA DO ROBÔ ───
 router.get('/', requireAdmin, (req, res) => {
   const today = new Date().toISOString().split('T')[0];
+  const logoPath = path.join(__dirname, '../../public/img/logo.png');
+  let logoB64 = '';
+  if (fs.existsSync(logoPath)) logoB64 = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
+
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Robo - Greyhound Validator</title>
@@ -39,46 +47,42 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-seri
 nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
 .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
 .nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
-.content{padding:24px;max-width:900px;margin:0 auto}
+.content{padding:24px;max-width:920px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .sub{font-size:13px;color:#888;margin-bottom:24px}
 .card{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:16px}
-.card-title{font-size:13px;font-weight:700;color:#22c55e;margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
+.card-title{font-size:12px;font-weight:700;color:#22c55e;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px}
 .form-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .field input,.field select{padding:9px 12px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:14px}
 .field input:focus,.field select:focus{outline:none;border-color:#22c55e}
-.btn{padding:10px 20px;background:#22c55e;color:#000;font-weight:700;font-size:13px;border:none;border-radius:6px;cursor:pointer;white-space:nowrap}
-.btn:hover{background:#16a34a}
-.btn:disabled{opacity:.35;cursor:not-allowed}
-.btn-danger{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
-.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn{padding:10px 22px;background:#22c55e;color:#000;font-weight:700;font-size:13px;border:none;border-radius:6px;cursor:pointer}
+.btn:hover{background:#16a34a}.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-red{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.btn-red:hover{background:rgba(239,68,68,.25)}
 .btn-blue{background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
 .btn-blue:hover{background:rgba(96,165,250,.25)}
-.pw{margin-bottom:12px}
+.pw{margin:12px 0}
 .pb{height:8px;background:#222;border-radius:4px;overflow:hidden}
 .pf{height:100%;background:linear-gradient(90deg,#22c55e,#f97316);border-radius:4px;transition:width .5s}
-.prog-text{font-size:12px;color:#888;margin-top:6px;display:flex;justify-content:space-between}
-.log-box{background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:12px;max-height:200px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.8}
-.log-ok{color:#22c55e}.log-skip{color:#888}.log-err{color:#ef4444}.log-info{color:#60a5fa}
-.pdf-list{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:300px;overflow-y:auto}
-.pdf-item{display:flex;align-items:center;justify-content:space-between;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:8px 12px}
-.pdf-name{font-size:12px;font-weight:600}
-.pdf-meta{font-size:10px;color:#888;margin-top:2px}
-.pdf-ok{border-left:3px solid #22c55e}.pdf-skip{border-left:3px solid #444;opacity:.5}
-.badge-sm{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600}
-.b-ok{background:rgba(34,197,94,.15);color:#22c55e}.b-skip{background:rgba(100,100,100,.1);color:#888}
-.empty-state{text-align:center;padding:30px;color:#666}
-.status-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px}
-.status-running{background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);color:#60a5fa}
-.status-done{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#22c55e}
-.status-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444}
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(96,165,250,.3);border-top-color:#60a5fa;border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+.prog-info{font-size:11px;color:#888;margin-top:5px;display:flex;justify-content:space-between}
+.log-box{background:#050505;border:1px solid #1a1a1a;border-radius:6px;padding:12px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.9}
+.lok{color:#22c55e}.lsk{color:#555}.ler{color:#ef4444}.lin{color:#60a5fa}
+.pdf-list{display:flex;flex-direction:column;gap:5px;max-height:280px;overflow-y:auto}
+.pdf-item{display:flex;align-items:center;justify-content:space-between;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:8px 12px;border-left:3px solid #22c55e}
+.pdf-name{font-size:12px;font-weight:600;color:#f0f0f0}
+.pdf-meta{font-size:10px;color:#666;margin-top:1px}
+.sbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px}
+.srun{background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);color:#60a5fa}
+.sdone{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:#22c55e}
+.serr{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(96,165,250,.3);border-top-color:#60a5fa;border-radius:50%;animation:sp .8s linear infinite;flex-shrink:0}
+@keyframes sp{to{transform:rotate(360deg)}}
 .ab{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.empty{text-align:center;padding:24px;color:#555;font-size:13px}
 </style></head><body>
-<div class="hero" id="hero-div"></div>
+<div class="hero"><img src="${logoB64}" alt="Greyhound Validator"></div>
 <nav>
   <div>
     <a href="${BASE}" class="nl">Analisar</a>
@@ -89,66 +93,49 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   </div>
   <span style="font-size:11px;color:#666;padding:12px">Admin · <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
 </nav>
-
 <div class="content">
   <h1>&#x1F916; Robo Coletor de PDFs</h1>
-  <p class="sub">Coleta automaticamente as corridas do Racing Post e prepara para analise.</p>
+  <p class="sub">Coleta automaticamente as corridas do Racing Post em background e prepara para analise.</p>
 
   <div class="card">
     <div class="card-title">Configurar Coleta</div>
     <div class="form-row">
       <div class="field">
-        <label>Data das corridas</label>
+        <label>Data</label>
         <input type="date" id="race-date" value="${today}">
       </div>
       <div class="field">
-        <label>Distancia minima (m)</label>
-        <input type="number" id="dist-min" value="400" min="200" max="600" style="width:130px">
+        <label>Dist. minima (m)</label>
+        <input type="number" id="dist-min" value="400" style="width:110px">
       </div>
       <div class="field">
-        <label>Distancia maxima (m)</label>
-        <input type="number" id="dist-max" value="575" min="400" max="1000" style="width:130px">
-      </div>
-      <div class="field">
-        <label>Classes</label>
-        <select id="grade-filter">
-          <option value="A">Apenas A (A1-A12)</option>
-          <option value="all">Todas as classes</option>
-        </select>
+        <label>Dist. maxima (m)</label>
+        <input type="number" id="dist-max" value="575" style="width:110px">
       </div>
       <button class="btn" id="btn-start" onclick="startRobot()">&#x25B6; Iniciar Coleta</button>
-      <button class="btn btn-danger" id="btn-stop" onclick="stopRobot()" style="display:none">&#x25A0; Parar</button>
+      <button class="btn btn-red" id="btn-stop" onclick="stopRobot()" style="display:none">&#x25A0; Parar</button>
     </div>
   </div>
 
-  <div id="status-section" style="display:none">
-    <div class="status-bar status-running" id="status-bar">
-      <span class="spinner"></span>
-      <span id="status-text">Iniciando...</span>
-    </div>
+  <div id="status-wrap" style="display:none">
+    <div class="sbar srun" id="sbar"><span class="spin"></span><span id="sbar-text">Iniciando...</span></div>
     <div class="card">
       <div class="card-title">Progresso</div>
       <div class="pw">
         <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
-        <div class="prog-text">
-          <span id="prog-current">Aguardando...</span>
-          <span id="prog-count">0 / 0</span>
-        </div>
+        <div class="prog-info"><span id="prog-cur">Aguardando...</span><span id="prog-cnt">0 / 0</span></div>
       </div>
       <div class="log-box" id="log-box"></div>
     </div>
   </div>
 
-  <div id="results-section" style="display:none">
+  <div id="results-wrap" style="display:none">
     <div class="card">
       <div class="card-title">PDFs Coletados</div>
-      <div class="pdf-list" id="pdf-list">
-        <div class="empty-state">Nenhum PDF coletado ainda</div>
-      </div>
-      <div class="ab" id="action-btns" style="display:none">
+      <div class="pdf-list" id="pdf-list"><div class="empty">Nenhum PDF ainda</div></div>
+      <div class="ab">
         <button class="btn" onclick="analyzeAll()">&#x1F50D; Analisar Todos no Validator</button>
-        <button class="btn btn-blue" onclick="downloadAll()">&#x2B07; Baixar Todos</button>
-        <button class="btn btn-danger" onclick="clearPdfs()">&#x1F5D1; Limpar</button>
+        <button class="btn btn-red" onclick="clearPdfs()">&#x1F5D1; Limpar PDFs</button>
       </div>
     </div>
   </div>
@@ -156,61 +143,59 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 
 <script>
 var BASE = '${BASE}';
-var pollInterval = null;
+var poll = null;
 
 async function startRobot() {
   var date = document.getElementById('race-date').value;
-  var distMin = document.getElementById('dist-min').value;
-  var distMax = document.getElementById('dist-max').value;
-  var gradeFilter = document.getElementById('grade-filter').value;
+  var dMin = document.getElementById('dist-min').value;
+  var dMax = document.getElementById('dist-max').value;
   if (!date) { alert('Selecione uma data!'); return; }
 
   document.getElementById('btn-start').disabled = true;
   document.getElementById('btn-stop').style.display = 'inline-block';
-  document.getElementById('status-section').style.display = 'block';
-  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('status-wrap').style.display = 'block';
+  document.getElementById('results-wrap').style.display = 'none';
   document.getElementById('log-box').innerHTML = '';
   document.getElementById('pf').style.width = '0%';
+  setSbar('run', 'Iniciando robo...');
 
   try {
-    var resp = await fetch(BASE + '/robot/start', {
+    var r = await fetch(BASE + '/robot/start', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ date, distMin, distMax, gradeFilter })
+      body: JSON.stringify({ date, distMin: dMin, distMax: dMax })
     });
-    var data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'Erro ao iniciar');
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Erro ao iniciar');
     pollStatus();
   } catch(e) {
-    showError(e.message);
+    setSbar('err', 'Erro: ' + e.message);
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('btn-stop').style.display = 'none';
   }
 }
 
 function pollStatus() {
-  pollInterval = setInterval(async function() {
+  poll = setInterval(async function() {
     try {
-      var resp = await fetch(BASE + '/robot/status');
-      var s = await resp.json();
+      var r = await fetch(BASE + '/robot/status');
+      var s = await r.json();
       updateUI(s);
-      if (!s.running) {
-        clearInterval(pollInterval);
-        finishUI(s);
-      }
+      if (!s.running) { clearInterval(poll); finishUI(s); }
     } catch(e) {}
-  }, 1000);
+  }, 1200);
 }
 
 function updateUI(s) {
   var pct = s.total > 0 ? Math.round(s.progress / s.total * 100) : 0;
   document.getElementById('pf').style.width = pct + '%';
-  document.getElementById('prog-count').textContent = s.progress + ' / ' + s.total;
-  document.getElementById('prog-current').textContent = s.current || 'Processando...';
-  document.getElementById('status-text').textContent = s.current || 'Coletando corridas...';
-
+  document.getElementById('prog-cnt').textContent = s.progress + ' / ' + s.total;
+  document.getElementById('prog-cur').textContent = s.current || '...';
+  document.getElementById('sbar-text').textContent = s.current || 'Coletando...';
   var log = document.getElementById('log-box');
-  log.innerHTML = s.log.slice(-20).map(function(l) {
-    var cls = l.type === 'ok' ? 'log-ok' : l.type === 'skip' ? 'log-skip' : l.type === 'err' ? 'log-err' : 'log-info';
-    return '<div class="' + cls + '">' + l.msg + '</div>';
+  log.innerHTML = s.log.slice(-25).map(function(l) {
+    var c = l.type==='ok'?'lok':l.type==='skip'?'lsk':l.type==='err'?'ler':'lin';
+    return '<div class="' + c + '">' + l.msg + '</div>';
   }).join('');
   log.scrollTop = log.scrollHeight;
 }
@@ -218,110 +203,68 @@ function updateUI(s) {
 function finishUI(s) {
   document.getElementById('btn-start').disabled = false;
   document.getElementById('btn-stop').style.display = 'none';
-
-  var bar = document.getElementById('status-bar');
-  if (s.error) {
-    bar.className = 'status-bar status-error';
-    document.getElementById('status-text').textContent = 'Erro: ' + s.error;
-  } else {
-    bar.className = 'status-bar status-done';
-    document.getElementById('status-text').textContent = 'Coleta concluida! ' + s.pdfs.length + ' PDFs coletados.';
-  }
-
+  if (s.error) setSbar('err', 'Erro: ' + s.error);
+  else setSbar('done', 'Concluido! ' + s.pdfs.length + ' PDFs coletados.');
   if (s.pdfs.length > 0) {
-    document.getElementById('results-section').style.display = 'block';
-    document.getElementById('action-btns').style.display = 'flex';
-    var list = document.getElementById('pdf-list');
-    list.innerHTML = s.pdfs.map(function(p) {
-      return '<div class="pdf-item pdf-ok">' +
-        '<div><div class="pdf-name">' + p.name + '</div><div class="pdf-meta">' + p.track + ' · ' + p.grade + ' · ' + p.dist + 'm</div></div>' +
-        '<span class="badge-sm b-ok">OK</span>' +
-      '</div>';
+    document.getElementById('results-wrap').style.display = 'block';
+    document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
+      return '<div class="pdf-item"><div><div class="pdf-name">' + p.name + '</div><div class="pdf-meta">' + p.track + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
     }).join('');
   }
 }
 
-function showError(msg) {
-  document.getElementById('btn-start').disabled = false;
-  document.getElementById('btn-stop').style.display = 'none';
-  var bar = document.getElementById('status-bar');
-  bar.className = 'status-bar status-error';
-  document.getElementById('status-text').textContent = 'Erro: ' + msg;
+function setSbar(type, txt) {
+  var el = document.getElementById('sbar');
+  el.className = 'sbar ' + (type==='run'?'srun':type==='done'?'sdone':'serr');
+  var spin = type==='run' ? '<span class="spin"></span>' : '';
+  el.innerHTML = spin + '<span>' + txt + '</span>';
 }
 
 async function stopRobot() {
   await fetch(BASE + '/robot/stop', { method: 'POST' });
-  clearInterval(pollInterval);
+  clearInterval(poll);
   document.getElementById('btn-start').disabled = false;
   document.getElementById('btn-stop').style.display = 'none';
-}
-
-async function analyzeAll() {
-  var resp = await fetch(BASE + '/robot/status');
-  var s = await resp.json();
-  if (!s.pdfs.length) { alert('Nenhum PDF para analisar!'); return; }
-  // Redirecionar para pagina principal com os PDFs ja carregados
-  sessionStorage.setItem('robotPdfs', JSON.stringify(s.pdfs));
-  window.location.href = BASE + '?from=robot';
-}
-
-async function downloadAll() {
-  var resp = await fetch(BASE + '/robot/status');
-  var s = await resp.json();
-  s.pdfs.forEach(function(p) {
-    var a = document.createElement('a');
-    a.href = BASE + '/static/pdfs/' + p.filename;
-    a.download = p.name;
-    a.click();
-  });
+  setSbar('err', 'Parado pelo usuario.');
 }
 
 async function clearPdfs() {
   if (!confirm('Limpar todos os PDFs coletados?')) return;
   await fetch(BASE + '/robot/clear', { method: 'POST' });
-  document.getElementById('results-section').style.display = 'none';
-  document.getElementById('status-section').style.display = 'none';
+  document.getElementById('results-wrap').style.display = 'none';
+  document.getElementById('status-wrap').style.display = 'none';
 }
 
-// Carregar logo
-fetch(BASE + '/robot/logo').then(r=>r.json()).then(function(d) {
-  if (d.logo) {
-    var img = document.createElement('img');
-    img.src = d.logo; img.alt = 'Logo';
-    img.style.cssText = 'width:100%;height:130px;object-fit:cover;object-position:center 30%;display:block';
-    document.getElementById('hero-div').appendChild(img);
+function analyzeAll() {
+  // Redirecionar para pagina principal — os PDFs estao no servidor
+  window.location.href = BASE + '?from=robot';
+}
+
+// Verificar se já tem PDFs de uma coleta anterior
+(async function() {
+  var r = await fetch(BASE + '/robot/status');
+  var s = await r.json();
+  if (s.pdfs.length > 0 && !s.running) {
+    document.getElementById('results-wrap').style.display = 'block';
+    document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
+      return '<div class="pdf-item"><div><div class="pdf-name">' + p.name + '</div><div class="pdf-meta">' + p.track + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
+    }).join('');
   }
-});
-</script>
-</body></html>`);
-});
-
-// ─── API: STATUS ───
-router.get('/status', requireAdmin, (req, res) => {
-  res.json(robotStatus);
+})();
+</script></body></html>`);
 });
 
-// ─── API: LOGO ───
-router.get('/logo', requireAdmin, (req, res) => {
-  const logoPath = path.join(__dirname, '../../public/img/logo.png');
-  const fs2 = require('fs');
-  if (fs2.existsSync(logoPath)) {
-    const b64 = 'data:image/png;base64,' + fs2.readFileSync(logoPath).toString('base64');
-    res.json({ logo: b64 });
-  } else {
-    res.json({ logo: null });
-  }
-});
+// ─── STATUS ───
+router.get('/status', requireAdmin, (req, res) => res.json(robotStatus));
 
-// ─── API: STOP ───
+// ─── STOP ───
 router.post('/stop', requireAdmin, (req, res) => {
   robotStatus.running = false;
   res.json({ ok: true });
 });
 
-// ─── API: CLEAR ───
+// ─── CLEAR ───
 router.post('/clear', requireAdmin, (req, res) => {
-  // Limpar PDFs da pasta
   if (fs.existsSync(PDF_DIR)) {
     fs.readdirSync(PDF_DIR).forEach(f => {
       try { fs.unlinkSync(path.join(PDF_DIR, f)); } catch(e) {}
@@ -331,221 +274,178 @@ router.post('/clear', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── API: START ───
+// ─── START ───
 router.post('/start', requireAdmin, async (req, res) => {
   if (robotStatus.running) return res.status(400).json({ error: 'Robo ja esta rodando!' });
-
-  const { date, distMin, distMax, gradeFilter } = req.body;
+  const { date, distMin, distMax } = req.body;
   if (!date) return res.status(400).json({ error: 'Data obrigatoria' });
 
   resetStatus();
   robotStatus.running = true;
-  robotStatus.log.push({ type: 'info', msg: '🤖 Iniciando robo para ' + date + '...' });
+  addLog('info', '🤖 Iniciando robo para ' + date + '...');
 
-  res.json({ ok: true, message: 'Robo iniciado!' });
+  res.json({ ok: true });
 
-  // Rodar em background
-  runRobot(date, parseInt(distMin)||400, parseInt(distMax)||575, gradeFilter||'A').catch(err => {
+  // Rodar em background sem bloquear a resposta
+  runRobot(date, parseInt(distMin) || 400, parseInt(distMax) || 575).catch(err => {
     robotStatus.running = false;
     robotStatus.error = err.message;
-    robotStatus.log.push({ type: 'err', msg: '❌ Erro fatal: ' + err.message });
+    addLog('err', '❌ Erro fatal: ' + err.message);
   });
 });
 
-// ─── FUNÇÃO PRINCIPAL DO ROBÔ ───
-async function runRobot(date, distMin, distMax, gradeFilter) {
+// ─── ROBÔ ───
+async function runRobot(DATE, DIST_MIN, DIST_MAX) {
   let browser = null;
   try {
-    const { chromium } = require('playwright');
+    // Tentar playwright-chromium primeiro, depois playwright
+    let chromium;
+    try {
+      chromium = require('playwright-chromium').chromium;
+    } catch(e) {
+      chromium = require('playwright').chromium;
+    }
 
-    robotStatus.log.push({ type: 'info', msg: '🌐 Abrindo navegador...' });
+    addLog('info', '🌐 Abrindo navegador em background...');
 
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
 
-    const page = await browser.newPage();
+    const context = await browser.newContext();
+    const page = await context.newPage();
     await page.setViewportSize({ width: 1280, height: 900 });
 
-    // ─── 1. Acessar lista de corridas ───
-    const listUrl = `https://greyhoundbet.racingpost.com/#meeting-list/r_date=${date}`;
-    robotStatus.log.push({ type: 'info', msg: '📋 Acessando lista de corridas...' });
-    robotStatus.current = 'Carregando lista de corridas...';
+    const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
 
-    await page.goto('https://greyhoundbet.racingpost.com/', { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(2000);
+    addLog('info', '📋 Acessando lista de corridas...');
+    robotStatus.current = 'Carregando lista...';
 
-    // Navegar para a data correta
-    await page.goto(listUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000 });
     await page.waitForTimeout(3000);
+    await page.evaluate((date) => {
+      window.location.hash = 'meeting-list/view=time&r_date=' + date;
+    }, DATE);
+    await page.waitForTimeout(6000);
 
-    // ─── 2. Pegar lista de corridas ───
-    robotStatus.log.push({ type: 'info', msg: '🔍 Buscando corridas...' });
-
-    const races = await page.evaluate((distMin, distMax, gradeFilter) => {
-      const items = document.querySelectorAll('.RC-meetingItem, .meeting-item, [class*="meeting"], [class*="race-item"], a[href*="card/race_id"]');
+    // Coletar corridas — mesma lógica da versão local que funcionou
+    const races = await page.evaluate(({ distMin, distMax }) => {
       const results = [];
-      items.forEach(item => {
-        const text = item.textContent || '';
-        const href = item.getAttribute('href') || (item.querySelector('a') ? item.querySelector('a').getAttribute('href') : '');
+      const seen = new Set();
+      const items = document.querySelectorAll('a[href*="meeting-races"], a[href*="card/race_id"]');
 
-        // Extrair distância
-        const distMatch = text.match(/Dis:?(\d+)m/) || text.match(/(\d{3,4})m/);
-        const dist = distMatch ? parseInt(distMatch[1]) : 0;
-
-        // Extrair grade/classe
-        const gradeMatch = text.match(/Grade:\s*\(?([A-Z]\d+|[A-Z]\d*)\)?/) || text.match(/\(([A-Z]\d+)\)/);
-        const grade = gradeMatch ? gradeMatch[1] : '';
-
-        // Extrair pista e horário
+      items.forEach(a => {
+        const href = a.getAttribute('href') || '';
+        if (seen.has(href)) return;
+        seen.add(href);
+        const ctx = a.closest('li, div, tr') || a.parentElement;
+        const text = (ctx || a).textContent || '';
         const timeMatch = text.match(/(\d{1,2}:\d{2})/);
-        const time = timeMatch ? timeMatch[1] : '';
-
-        if (dist >= distMin && dist <= distMax) {
-          if (gradeFilter === 'all' || (grade && grade.startsWith('A') && /A\d+/.test(grade))) {
-            results.push({ text: text.trim().slice(0, 100), href, dist, grade, time });
-          }
-        }
+        const distMatch = text.match(/Dis[:\s]*(\d{3,4})/) || text.match(/(\d{3,4})m/);
+        const gradeMatch = text.match(/\(([A-Z]\d+)\)/) || text.match(/Grade[:\s]*([A-Z]\d+)/i);
+        const lines = text.trim().split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
+        const dist = distMatch ? parseInt(distMatch[1]) : 0;
+        if (dist > 0 && (dist < distMin || dist > distMax)) return;
+        results.push({
+          href,
+          time: timeMatch ? timeMatch[1] : '',
+          dist,
+          grade: gradeMatch ? gradeMatch[1] : '',
+          track: (lines[0] || '').slice(0, 25)
+        });
       });
       return results;
-    }, distMin, distMax, gradeFilter);
+    }, { distMin: DIST_MIN, distMax: DIST_MAX });
 
-    // Se não achou via evaluate, tentar pegar os links diretamente
-    let raceLinks = [];
+    addLog('info', `📊 ${races.length} corridas encontradas`);
+    robotStatus.total = races.length;
 
     if (races.length === 0) {
-      // Tentar pegar todos os links de corridas
-      raceLinks = await page.evaluate((distMin, distMax) => {
-        const links = Array.from(document.querySelectorAll('a[href*="race_id"]'));
-        return links.map(a => ({
-          href: a.getAttribute('href'),
-          text: a.closest('[class]') ? a.closest('[class]').textContent.trim().slice(0, 150) : a.textContent.trim()
-        })).filter((v, i, arr) => arr.findIndex(x => x.href === v.href) === i); // deduplicar
-      }, distMin, distMax);
-    }
-
-    robotStatus.log.push({ type: 'info', msg: `📊 Encontradas ${races.length + raceLinks.length} corridas potenciais` });
-
-    // Combinar resultados
-    const allRaces = races.length > 0 ? races : raceLinks.map(r => ({
-      href: r.href,
-      text: r.text,
-      dist: 0,
-      grade: '',
-      time: ''
-    }));
-
-    if (allRaces.length === 0) {
-      robotStatus.log.push({ type: 'err', msg: '❌ Nenhuma corrida encontrada. Tente outra data.' });
+      addLog('err', '❌ Nenhuma corrida encontrada. Tente outra data.');
       robotStatus.running = false;
+      await browser.close();
       return;
     }
 
-    robotStatus.total = allRaces.length;
+    let saved = 0, skipped = 0, errors = 0;
 
-    // ─── 3. Processar cada corrida ───
-    for (let i = 0; i < allRaces.length; i++) {
-      if (!robotStatus.running) {
-        robotStatus.log.push({ type: 'info', msg: '⏹ Robô parado pelo usuário' });
-        break;
-      }
+    for (let i = 0; i < races.length; i++) {
+      if (!robotStatus.running) { addLog('info', '⏹ Parado pelo usuario'); break; }
 
-      const race = allRaces[i];
+      const race = races[i];
       robotStatus.progress = i + 1;
-      const label = (race.time || '') + ' ' + (race.grade || '') + ' ' + (race.dist ? race.dist + 'm' : '');
-      robotStatus.current = `Processando ${label} (${i+1}/${allRaces.length})`;
+      robotStatus.current = `[${i+1}/${races.length}] ${race.track} ${race.time}`;
 
       try {
         // Navegar para a corrida
-        let raceUrl = race.href || '';
-        if (!raceUrl.startsWith('http')) {
-          raceUrl = 'https://greyhoundbet.racingpost.com/' + raceUrl.replace(/^#/, '#');
-          if (!raceUrl.includes('racingpost')) {
-            raceUrl = 'https://greyhoundbet.racingpost.com/#' + race.href.replace(/^#/, '');
-          }
-        }
+        const raceHref = race.href.startsWith('http')
+          ? race.href
+          : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
-        await page.goto(raceUrl, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.waitForTimeout(2000);
+        await page.goto(raceHref, { timeout: 30000 });
+        await page.waitForTimeout(4000);
 
-        // Verificar distância e grade na página
-        const pageInfo = await page.evaluate(() => {
-          const text = document.body.textContent;
-          const distM = text.match(/(\d{3,4})m\s*(Flat|Hurdles|Chase)?/);
-          const gradeM = text.match(/Grade:\s*\(?([A-Z]\d+)\)?/) || text.match(/\(([A-Z]\d+)\)/);
-          const timeM = text.match(/(\d{1,2}:\d{2})/);
-          const trackM = document.querySelector('.RC-header__track, h2, .track-name');
+        // Extrair info
+        const info = await page.evaluate(() => {
+          const body = document.body.textContent;
+          const headerEl = document.querySelector('.RC-meetingHeader__track,[class*="header__track"],[class*="headerTrack"],h1,h2');
+          const distM = body.match(/(\d{3,4})m/);
+          const timeM = body.match(/(\d{1,2}:\d{2})/);
           return {
+            track: headerEl ? headerEl.textContent.trim().split(/[\n\r]/)[0].trim().slice(0,20) : '',
             dist: distM ? parseInt(distM[1]) : 0,
-            grade: gradeM ? gradeM[1] : '',
-            time: timeM ? timeM[1] : '',
-            track: trackM ? trackM.textContent.trim() : ''
+            time: timeM ? timeM[1] : ''
           };
         });
 
-        // Filtrar por distância e classe
-        const finalDist = race.dist || pageInfo.dist;
-        const finalGrade = race.grade || pageInfo.grade;
+        const track = ((info.track || race.track).split(/[\s,]/)[0].replace(/[^a-zA-Z]/g,'') || 'Race');
+        const time = (info.time || race.time || `r${i+1}`).replace(':', '.');
+        const dist = info.dist || race.dist;
 
-        if (finalDist > 0 && (finalDist < distMin || finalDist > distMax)) {
-          robotStatus.log.push({ type: 'skip', msg: `⏭ ${label} — distância ${finalDist}m fora do filtro` });
+        if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
+          addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
+          skipped++;
+          await page.goto(LIST_URL, { timeout: 30000 });
+          await page.waitForTimeout(3000);
           continue;
         }
 
-        if (gradeFilter === 'A' && finalGrade && !(/^A\d+$/.test(finalGrade))) {
-          robotStatus.log.push({ type: 'skip', msg: `⏭ ${label} — classe ${finalGrade} fora do filtro` });
-          continue;
-        }
-
-        // Gerar nome do arquivo
-        const track = pageInfo.track.split(' ')[0] || 'Race';
-        const time = (race.time || pageInfo.time || '').replace(':', 'h') || `race${i+1}`;
-        const grade = finalGrade || 'XX';
-        const filename = `${track}_${grade}_${time}_${date}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const filename = `${track} ${time}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
-        // Salvar como PDF
         await page.pdf({
           path: filepath,
           format: 'A4',
           printBackground: true,
-          margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+          margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
         });
 
-        const pdfSize = fs.statSync(filepath).size;
-        if (pdfSize < 5000) {
-          // PDF muito pequeno, provavelmente vazio
+        const size = fs.statSync(filepath).size;
+        if (size < 5000) {
           fs.unlinkSync(filepath);
-          robotStatus.log.push({ type: 'skip', msg: `⚠ ${label} — PDF vazio, pulando` });
-          continue;
+          addLog('skip', `⚠️ ${filename} — PDF vazio`);
+          skipped++;
+        } else {
+          addLog('ok', `✅ ${filename} (${Math.round(size/1024)}KB)`);
+          robotStatus.pdfs.push({ filename, name: filename, track, dist, time });
+          saved++;
         }
 
-        robotStatus.pdfs.push({
-          filename,
-          name: `${track} ${grade} ${time.replace('h',':')}`,
-          track,
-          grade,
-          dist: finalDist,
-          time: time.replace('h',':'),
-          path: filepath
-        });
-
-        robotStatus.log.push({ type: 'ok', msg: `✅ ${track} ${grade} ${time.replace('h',':')} — salvo!` });
-
-      } catch (raceErr) {
-        robotStatus.log.push({ type: 'err', msg: `❌ Erro em corrida ${i+1}: ${raceErr.message.slice(0,60)}` });
+      } catch(err) {
+        addLog('err', `❌ Erro em ${race.track} ${race.time}: ${err.message.slice(0,60)}`);
+        errors++;
       }
 
-      // Pausa entre corridas
-      await new Promise(r => setTimeout(r, 1500));
+      await page.goto(LIST_URL, { timeout: 30000 });
+      await page.waitForTimeout(3000);
     }
 
-    robotStatus.log.push({ type: 'ok', msg: `🏁 Coleta finalizada! ${robotStatus.pdfs.length} PDFs salvos.` });
+    addLog('ok', `🏁 Concluido! ${saved} PDFs salvos, ${skipped} pulados, ${errors} erros.`);
 
-  } catch (err) {
+  } catch(err) {
     robotStatus.error = err.message;
-    robotStatus.log.push({ type: 'err', msg: '❌ Erro: ' + err.message });
+    addLog('err', '❌ ' + err.message);
   } finally {
     if (browser) await browser.close();
     robotStatus.running = false;

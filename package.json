@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "postinstall": "npx playwright install chromium --with-deps 2>/dev/null || true"
+    "postinstall": "npx playwright install chromium --with-deps 2>/dev/null || npx playwright-chromium install 2>/dev/null || true"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -15,7 +15,7 @@
     "dotenv": "^16.4.1",
     "express-session": "^1.17.3",
     "node-fetch": "^2.7.0",
-    "playwright": "^1.44.0"
+    "playwright-chromium": "^1.44.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"
