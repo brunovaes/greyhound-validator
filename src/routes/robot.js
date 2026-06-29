@@ -93,7 +93,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .sub{font-size:13px;color:#888;margin-bottom:24px}
 .card{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:16px}
 .card-title{font-size:12px;font-weight:700;color:#22c55e;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px}
-.form-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:nowrap;overflow-x:auto}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .field input{padding:9px 12px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:14px}
@@ -145,22 +145,22 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
       </div>
       <div class="field">
         <label>Dist. minima (m)</label>
-        <input type="number" id="dist-min" value="400" style="width:110px">
+        <input type="number" id="dist-min" value="400" style="width:90px">
       </div>
       <div class="field">
         <label>Dist. maxima (m)</label>
-        <input type="number" id="dist-max" value="575" style="width:110px">
+        <input type="number" id="dist-max" value="575" style="width:90px">
       </div>
       <div class="field">
         <label>Hora inicio</label>
-        <input type="time" id="time-from" style="width:120px">
+        <input type="time" id="time-from" style="width:105px">
       </div>
       <div class="field">
         <label>Hora fim</label>
-        <input type="time" id="time-to" style="width:120px">
+        <input type="time" id="time-to" style="width:105px">
       </div>
-      <button class="btn" id="btn-start" onclick="startRobot()">&#x25B6; Iniciar Coleta</button>
-      <button class="btn btn-red" id="btn-stop" onclick="stopRobot()">&#x25A0; Parar</button>
+      <button class="btn" id="btn-start" onclick="startRobot()" style="white-space:nowrap">&#x25B6; Iniciar Coleta</button>
+      <button class="btn btn-red" id="btn-stop" onclick="stopRobot()" style="white-space:nowrap">&#x25A0; Parar</button>
     </div>
   </div>
 
