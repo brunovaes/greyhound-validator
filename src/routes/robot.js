@@ -425,7 +425,17 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
           : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
         await page.goto(raceHref, { timeout: 30000, waitUntil: "networkidle0" });
-        await new Promise(r => setTimeout(r, 7000));
+        // Aguardar tabela da corrida carregar (SPA)
+        try {
+          await page.waitForSelector(
+            '.RC-runnerTable, .RC-cardPage, [class*="runnerTable"], [class*="cardPage"], table',
+            { timeout: 10000 }
+          );
+          addLog('info', '   ✅ Tabela carregada');
+        } catch(e) {
+          addLog('info', '   ⚠️ Tabela não detectada, aguardando +5s...');
+          await new Promise(r => setTimeout(r, 5000));
+        }
 
         const info = await page.evaluate(() => {
           const body = document.body.textContent;
