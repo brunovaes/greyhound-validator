@@ -440,7 +440,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         const info = await page.evaluate(() => {
           const body = document.body.textContent;
           const headerEl = document.querySelector('.RC-meetingHeader__track,[class*="header__track"],[class*="headerTrack"],h1,h2');
-          const distM = body.match(/(\d{3,4})m/);
+          const distM = body.match(/\b([2-9]\d{2}|[1-9]\d{3})m\b/) || body.match(/Distance[:\s]*(\d{3,4})/i) || body.match(/Dist[:\s]*(\d{3,4})/i);
           const timeM = body.match(/(\d{1,2}:\d{2})/);
           return {
             track: headerEl ? headerEl.textContent.trim().split(/[\n\r]/)[0].trim().slice(0,20) : '',
@@ -451,7 +451,8 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
 
         const track = ((info.track || race.track).split(/[\s,]/)[0].replace(/[^a-zA-Z]/g,'') || 'Race');
         const time = (info.time || race.time || `r${i+1}`).replace(':', '.');
-        const dist = info.dist || race.dist;
+        // Priorizar distância da lista — mais confiável que re-extrair da página
+        const dist = race.dist || info.dist;
 
         if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
           addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
