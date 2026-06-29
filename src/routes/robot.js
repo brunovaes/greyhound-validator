@@ -464,17 +464,19 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         const filename = `${track} ${time}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
-        await page.pdf({
-          path: filepath,
+        // Browserless retorna buffer — não usar path diretamente
+        const pdfBuffer = await page.pdf({
           format: 'A4',
           printBackground: true,
           margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
         });
 
-        const size = fs.statSync(filepath).size;
+        fs.writeFileSync(filepath, pdfBuffer);
+
+        const size = pdfBuffer.length;
         if (size < 5000) {
           fs.unlinkSync(filepath);
-          addLog('skip', `⚠️ ${filename} — PDF vazio`);
+          addLog('skip', `⚠️ ${filename} — PDF vazio (${size} bytes)`);
           skipped++;
         } else {
           addLog('ok', `✅ ${filename} — ${Math.round(size/1024)}KB`);
