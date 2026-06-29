@@ -10,7 +10,6 @@ function getLogo() {
   return ''; // Logo servido via rota /logo-main
 }
 
-// Rota para servir logo principal
 router.get('/logo-main', (req, res) => {
   const mainLogo = path.join(__dirname, '../../public/img/logo_main.png');
   const fallback = path.join(__dirname, '../../public/img/logo.png');
@@ -19,9 +18,7 @@ router.get('/logo-main', (req, res) => {
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     fs.createReadStream(file).pipe(res);
-  } else {
-    res.status(404).send('Logo not found');
-  }
+  } else res.status(404).send('Not found');
 });
 
 function navBar(user, active) {
