@@ -236,9 +236,11 @@ async function clearPdfs() {
 }
 
 function analyzeAll() {
+  // Redirecionar para pagina principal — os PDFs estao no servidor
   window.location.href = BASE + '?from=robot';
 }
 
+// Verificar se já tem PDFs de uma coleta anterior
 (async function() {
   var r = await fetch(BASE + '/robot/status');
   var s = await r.json();
@@ -296,52 +298,38 @@ router.post('/start', requireAdmin, async (req, res) => {
 async function runRobot(DATE, DIST_MIN, DIST_MAX) {
   let browser = null;
   try {
-    // ✅ PUPPETEER — baixa o próprio Chromium, funciona no Railway
-    const puppeteer = require('puppeteer');
+    // Tentar playwright-chromium primeiro, depois playwright
+    let chromium;
+    try {
+      chromium = require('playwright-chromium').chromium;
+    } catch(e) {
+      chromium = require('playwright').chromium;
+    }
 
     addLog('info', '🌐 Abrindo navegador em background...');
 
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-extensions',
-        '--mute-audio'
-      ]
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
 
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 900 });
-
-    // Bloquear imagens e fontes para economizar memória no servidor
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      if (['image', 'font', 'media'].includes(req.resourceType())) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1280, height: 900 });
 
     const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
 
     addLog('info', '📋 Acessando lista de corridas...');
     robotStatus.current = 'Carregando lista...';
 
-    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: 'networkidle2' });
-    await new Promise(r => setTimeout(r, 3000));
+    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000 });
+    await page.waitForTimeout(3000);
     await page.evaluate((date) => {
       window.location.hash = 'meeting-list/view=time&r_date=' + date;
     }, DATE);
-    await new Promise(r => setTimeout(r, 6000));
+    await page.waitForTimeout(6000);
 
-    // Coletar corridas
+    // Coletar corridas — mesma lógica da versão local que funcionou
     const races = await page.evaluate(({ distMin, distMax }) => {
       const results = [];
       const seen = new Set();
@@ -390,13 +378,15 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
       robotStatus.current = `[${i+1}/${races.length}] ${race.track} ${race.time}`;
 
       try {
+        // Navegar para a corrida
         const raceHref = race.href.startsWith('http')
           ? race.href
           : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
-        await page.goto(raceHref, { timeout: 30000, waitUntil: 'networkidle2' });
-        await new Promise(r => setTimeout(r, 4000));
+        await page.goto(raceHref, { timeout: 30000 });
+        await page.waitForTimeout(4000);
 
+        // Extrair info
         const info = await page.evaluate(() => {
           const body = document.body.textContent;
           const headerEl = document.querySelector('.RC-meetingHeader__track,[class*="header__track"],[class*="headerTrack"],h1,h2');
@@ -416,8 +406,8 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
           addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
           skipped++;
-          await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle2' });
-          await new Promise(r => setTimeout(r, 3000));
+          await page.goto(LIST_URL, { timeout: 30000 });
+          await page.waitForTimeout(3000);
           continue;
         }
 
@@ -447,8 +437,8 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         errors++;
       }
 
-      await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle2' });
-      await new Promise(r => setTimeout(r, 3000));
+      await page.goto(LIST_URL, { timeout: 30000 });
+      await page.waitForTimeout(3000);
     }
 
     addLog('ok', `🏁 Concluido! ${saved} PDFs salvos, ${skipped} pulados, ${errors} erros.`);
