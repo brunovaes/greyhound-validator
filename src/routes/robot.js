@@ -14,14 +14,14 @@ const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_
 // 10,11,12 = AM | 1-6 = PM | 7,8,9 = AM cedo
 function formatTime(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return t.replace(':', '_');
+  if (!m) return t.replace(':', '.');
   const h = parseInt(m[1]);
   const min = m[2];
   let ampm;
   if (h >= 10 && h <= 12) ampm = 'AM';
   else if (h >= 1 && h <= 6) ampm = 'PM';
   else ampm = 'AM'; // 7,8,9
-  return h + '_' + min + ampm;
+  return h + '.' + min + ampm;
 }
 
 // Pasta por data: pdfs/2026-06-29/
@@ -46,7 +46,7 @@ function ukTimeTo24Mins(raceTime) {
 // Filtra corrida pelo intervalo de horário
 // timeFrom/timeTo estão em horário do BRASIL (HH:MM)
 // UK = Brasil + 3h (ajuste padrão; muda para 4 no horário de verão UK)
-const UK_OFFSET_MINS = 3 * 60; // UK está 3h à frente do Brasil
+const UK_OFFSET_MINS = 4 * 60; // UK está 4h à frente do Brasil (BST = UTC+1, Brasil = UTC-3)
 
 function inTimeRange(raceTime, timeFrom, timeTo) {
   if (!timeFrom && !timeTo) return true;
@@ -84,7 +84,9 @@ function resetStatus() {
 }
 
 function addLog(type, msg) {
-  const ts = new Date().toISOString().substring(11, 19);
+  // Horário do Brasil = UTC - 3h
+  const now = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const ts = now.toISOString().substring(11, 19);
   const full = `[${ts}] ${msg}`;
   robotStatus.log.push({ type, msg: full });
   console.log('[ROBO]', full);
