@@ -424,14 +424,23 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
           ? race.href
           : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
-        await page.goto(raceHref, { timeout: 30000, waitUntil: "networkidle0" });
+        // Navegar para a página base primeiro, depois setar o hash (SPA)
+        const raceBase = 'https://greyhoundbet.racingpost.com/';
+        const raceHash = raceHref.includes('#') ? raceHref.split('#')[1] : race.href.replace(/^#/, '');
+
+        await page.goto(raceBase, { timeout: 30000, waitUntil: 'domcontentloaded' });
+        await new Promise(r => setTimeout(r, 2000));
+        await page.evaluate((hash) => { window.location.hash = hash; }, raceHash);
+        addLog('info', `   Hash: #${raceHash}`);
+
         // Aguardar tabela da corrida carregar (SPA)
         try {
           await page.waitForSelector(
-            '.RC-runnerTable, .RC-cardPage, [class*="runnerTable"], [class*="cardPage"], table',
-            { timeout: 10000 }
+            '.RC-runnerTable, .RC-cardPage, [class*="runnerTable"], [class*="cardPage"], [class*="RC-runner"], tbody tr',
+            { timeout: 15000 }
           );
           addLog('info', '   ✅ Tabela carregada');
+          await new Promise(r => setTimeout(r, 2000)); // extra para renderizar tudo
         } catch(e) {
           addLog('info', '   ⚠️ Tabela não detectada, aguardando +5s...');
           await new Promise(r => setTimeout(r, 5000));
@@ -439,15 +448,22 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
 
         const info = await page.evaluate(() => {
           const body = document.body.textContent;
-          const headerEl = document.querySelector('.RC-meetingHeader__track,[class*="header__track"],[class*="headerTrack"],h1,h2');
+          const headerEl = document.querySelector('.RC-meetingHeader__track,[class*="header__track"],[class*="headerTrack"],[class*="meetingHeader"],h1,h2');
           const distM = body.match(/\b([2-9]\d{2}|[1-9]\d{3})m\b/) || body.match(/Distance[:\s]*(\d{3,4})/i) || body.match(/Dist[:\s]*(\d{3,4})/i);
           const timeM = body.match(/(\d{1,2}:\d{2})/);
+          // Debug: capturar estrutura da página
+          const allClasses = Array.from(document.querySelectorAll('[class]')).slice(0,10).map(el => el.className.toString().slice(0,40));
           return {
             track: headerEl ? headerEl.textContent.trim().split(/[\n\r]/)[0].trim().slice(0,20) : '',
             dist: distM ? parseInt(distM[1]) : 0,
-            time: timeM ? timeM[1] : ''
+            time: timeM ? timeM[1] : '',
+            pageTitle: document.title,
+            bodyLen: document.body.innerHTML.length,
+            classes: allClasses
           };
         });
+
+        addLog('info', `   Página: "${info.pageTitle}" | HTML: ${info.bodyLen} chars | Track: "${info.track}"`);
 
         const track = ((info.track || race.track).split(/[\s,]/)[0].replace(/[^a-zA-Z]/g,'') || 'Race');
         const time = (info.time || race.time || `r${i+1}`).replace(':', '.');
