@@ -608,7 +608,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
           skipped++;
         } else {
           addLog('ok', `✅ ${filename} — ${Math.round(size/1024)}KB`);
-          robotStatus.pdfs.push({ filename, name: filename, track, dist, time });
+          robotStatus.pdfs.push({ filename, name: filename, track, dist, time: raceTime });
           saved++;
         }
 
