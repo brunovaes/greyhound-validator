@@ -193,10 +193,14 @@ function pollStatus() {
 
 function updateUI(s) {
   var pct = s.total > 0 ? Math.round(s.progress / s.total * 100) : 0;
-  document.getElementById('pf').style.width = pct + '%';
-  document.getElementById('prog-cnt').textContent = s.progress + ' / ' + (s.total || '?');
-  document.getElementById('prog-cur').textContent = s.current || 'Processando...';
-  if (s.current) document.getElementById('sbar-text').textContent = s.current;
+  var elPf = document.getElementById('pf');
+  var elCnt = document.getElementById('prog-cnt');
+  var elCur = document.getElementById('prog-cur');
+  var elSbarText = document.getElementById('sbar-text');
+  if (elPf) elPf.style.width = pct + '%';
+  if (elCnt) elCnt.textContent = s.progress + ' / ' + (s.total || '?');
+  if (elCur) elCur.textContent = s.current || 'Processando...';
+  if (elSbarText && s.current) elSbarText.textContent = s.current;
 
   // Renderizar todos os logs
   var log = document.getElementById('log-box');
