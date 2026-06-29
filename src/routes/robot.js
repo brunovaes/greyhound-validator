@@ -692,15 +692,25 @@ router.get('/download-zip', requireAdmin, async (req, res) => {
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
 
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.on('error', err => { throw err; });
+  const archive = archiver('zip', { zlib: { level: 6 } });
+
+  archive.on('error', err => {
+    console.error('[ZIP] Erro:', err.message);
+    if (!res.headersSent) res.status(500).send('Erro ao gerar ZIP');
+  });
+
   archive.pipe(res);
 
   files.forEach(f => {
     archive.file(path.join(dir, f), { name: f });
   });
 
-  await archive.finalize();
+  // Aguardar o ZIP ser finalizado antes de fechar
+  await new Promise((resolve, reject) => {
+    res.on('finish', resolve);
+    archive.on('error', reject);
+    archive.finalize();
+  });
 });
 
 module.exports = router;
