@@ -411,7 +411,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     // ── 4. Navegar para o Racing Post ──
     addLog('info', '🏇 Acessando Racing Post...');
     robotStatus.current = 'Carregando site...';
-    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: 'networkidle2' });
+    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: 'domcontentloaded' });
     addLog('ok', '✅ Site carregado: ' + page.url());
 
     addLog('info', '📅 Navegando para data: ' + DATE);
