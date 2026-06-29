@@ -5,49 +5,11 @@ const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
-// PDF_DIR é dinâmico por data — criado em runRobot
+const PDF_DIR = path.join(__dirname, '../../public/pdfs');
+if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
 
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
 const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
-
-// Converte "1:12" → "1_12PM", "10:30" → "10_30AM"
-function formatTime(t) {
-  const m = t.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return t.replace(':', '_');
-  const h = parseInt(m[1]);
-  const min = m[2];
-  const ampm = (h >= 1 && h <= 9) ? 'PM' : 'AM';
-  return h + '_' + min + ampm;
-}
-
-// Pasta por data: pdfs/2026-06-29/
-function getPdfDir(date) {
-  return path.join(__dirname, '../../public/pdfs', date);
-}
-
-// Filtra corrida pelo intervalo de horário (formato "HH:MM")
-function inTimeRange(raceTime, timeFrom, timeTo) {
-  if (!timeFrom && !timeTo) return true;
-  // Converte horário da corrida para minutos do dia (assumindo PM para 1-9, AM para 10-12)
-  const m = raceTime.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return true;
-  const h = parseInt(m[1]);
-  const min = parseInt(m[2]);
-  const h24 = (h >= 1 && h <= 9) ? h + 12 : h; // 1-9 = PM = 13-21
-  const raceMins = h24 * 60 + min;
-
-  const toMins = (str) => {
-    if (!str) return null;
-    const p = str.match(/^(\d{1,2}):(\d{2})$/);
-    if (!p) return null;
-    return parseInt(p[1]) * 60 + parseInt(p[2]);
-  };
-  const fromMins = toMins(timeFrom);
-  const toM = toMins(timeTo);
-  if (fromMins !== null && raceMins < fromMins) return false;
-  if (toM !== null && raceMins > toM) return false;
-  return true;
-}
 
 let robotStatus = {
   running: false,
@@ -151,14 +113,6 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
         <label>Dist. maxima (m)</label>
         <input type="number" id="dist-max" value="575" style="width:110px">
       </div>
-      <div class="field">
-        <label>Hora inicio</label>
-        <input type="time" id="time-from" style="width:120px">
-      </div>
-      <div class="field">
-        <label>Hora fim</label>
-        <input type="time" id="time-to" style="width:120px">
-      </div>
       <button class="btn" id="btn-start" onclick="startRobot()">&#x25B6; Iniciar Coleta</button>
       <button class="btn btn-red" id="btn-stop" onclick="stopRobot()">&#x25A0; Parar</button>
     </div>
@@ -196,8 +150,6 @@ async function startRobot() {
   var date = document.getElementById('race-date').value;
   var dMin = document.getElementById('dist-min').value;
   var dMax = document.getElementById('dist-max').value;
-  var timeFrom = document.getElementById('time-from').value;
-  var timeTo = document.getElementById('time-to').value;
   if (!date) { alert('Selecione uma data!'); return; }
 
   document.getElementById('btn-start').disabled = true;
@@ -212,7 +164,7 @@ async function startRobot() {
     var r = await fetch(BASE + '/robot/start', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ date, distMin: dMin, distMax: dMax, timeFrom, timeTo })
+      body: JSON.stringify({ date, distMin: dMin, distMax: dMax })
     });
     var d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Erro ao iniciar');
@@ -346,16 +298,16 @@ router.post('/clear', requireAdmin, (req, res) => {
 // ─── START ───
 router.post('/start', requireAdmin, async (req, res) => {
   if (robotStatus.running) return res.status(400).json({ error: 'Robo ja esta rodando!' });
-  const { date, distMin, distMax, timeFrom, timeTo } = req.body;
+  const { date, distMin, distMax } = req.body;
   if (!date) return res.status(400).json({ error: 'Data obrigatoria' });
 
   resetStatus();
   robotStatus.running = true;
-  addLog('info', '🤖 Comando recebido — data: ' + date + ' | dist: ' + (distMin||400) + 'm–' + (distMax||575) + 'm' + (timeFrom ? ' | horário: ' + timeFrom + '–' + (timeTo||'fim') : ''));
+  addLog('info', '🤖 Comando recebido — data: ' + date + ' | dist: ' + (distMin||400) + 'm–' + (distMax||575) + 'm');
 
   res.json({ ok: true });
 
-  runRobot(date, parseInt(distMin) || 400, parseInt(distMax) || 575, timeFrom||'', timeTo||'').catch(err => {
+  runRobot(date, parseInt(distMin) || 400, parseInt(distMax) || 575).catch(err => {
     robotStatus.running = false;
     robotStatus.error = err.message;
     addLog('err', '❌ Erro fatal: ' + err.message);
@@ -363,12 +315,8 @@ router.post('/start', requireAdmin, async (req, res) => {
 });
 
 // ─── ROBÔ via Browserless.io ───
-async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
+async function runRobot(DATE, DIST_MIN, DIST_MAX) {
   let browser = null;
-  const PDF_DIR = getPdfDir(DATE);
-  if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
-  addLog('info', '📁 Pasta: ' + PDF_DIR);
-
   try {
     const puppeteer = require('puppeteer');
 
@@ -537,27 +485,19 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
         addLog('info', `   Página: "${info.pageTitle}" | HTML: ${info.bodyLen} chars | Track: "${info.track}"`);
 
         const track = ((info.track || race.track).split(/[\s,]/)[0].replace(/[^a-zA-Z]/g,'') || 'Race');
-        const raceTime = info.time || race.time || '';
+        const time = (info.time || race.time || `r${i+1}`).replace(':', '.');
+        // Priorizar distância da lista — mais confiável que re-extrair da página
         const dist = race.dist || info.dist;
-        const timeFormatted = formatTime(raceTime);
 
         if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
-          addLog('skip', `⏭ ${track} ${timeFormatted} — ${dist}m fora do filtro dist`);
+          addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
           skipped++;
           await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
           await new Promise(r => setTimeout(r, 3000));
           continue;
         }
 
-        if (!inTimeRange(raceTime, TIME_FROM, TIME_TO)) {
-          addLog('skip', `⏭ ${track} ${timeFormatted} — fora do horário`);
-          skipped++;
-          await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
-          await new Promise(r => setTimeout(r, 3000));
-          continue;
-        }
-
-        const filename = `${timeFormatted}_${track}.pdf`;
+        const filename = `${track} ${time}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
         // Injetar CSS para forçar visibilidade (Racing Post esconde conteúdo no print)
