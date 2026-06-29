@@ -8,6 +8,9 @@ const BASE = process.env.BASE_PATH || '/greyhound';
 const PDF_DIR = path.join(__dirname, '../../public/pdfs');
 if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
 
+const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
+const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
+
 let robotStatus = {
   running: false,
   progress: 0,
@@ -93,7 +96,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 </nav>
 <div class="content">
   <h1>&#x1F916; Robo Coletor de PDFs</h1>
-  <p class="sub">Coleta automaticamente as corridas do Racing Post em background e prepara para analise.</p>
+  <p class="sub">Coleta automaticamente as corridas do Racing Post via Browserless.io.</p>
 
   <div class="card">
     <div class="card-title">Configurar Coleta</div>
@@ -165,11 +168,9 @@ async function startRobot() {
     });
     var d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Erro ao iniciar');
-    appendLog('lin', 'Robo iniciado no servidor! Aguardando logs...');
     pollStatus();
   } catch(e) {
     setSbar('err', 'Erro: ' + e.message);
-    appendLog('ler', 'ERRO: ' + e.message);
     document.getElementById('btn-start').disabled = false;
   }
 }
@@ -181,13 +182,8 @@ function pollStatus() {
       var r = await fetch(BASE + '/robot/status');
       var s = await r.json();
       updateUI(s);
-      if (!s.running && s.log.length > 0) {
-        clearInterval(poll);
-        finishUI(s);
-      }
-    } catch(e) {
-      appendLog('ler', 'Erro ao buscar status: ' + e.message);
-    }
+      if (!s.running && s.log.length > 0) { clearInterval(poll); finishUI(s); }
+    } catch(e) {}
   }, 1000);
 }
 
@@ -201,14 +197,14 @@ function updateUI(s) {
   if (elCnt) elCnt.textContent = s.progress + ' / ' + (s.total || '?');
   if (elCur) elCur.textContent = s.current || 'Processando...';
   if (elSbarText && s.current) elSbarText.textContent = s.current;
-
-  // Renderizar todos os logs
   var log = document.getElementById('log-box');
-  log.innerHTML = s.log.map(function(l) {
-    var c = l.type==='ok'?'lok':l.type==='skip'?'lsk':l.type==='err'?'ler':'lin';
-    return '<div class="' + c + '">' + escHtml(l.msg) + '</div>';
-  }).join('');
-  log.scrollTop = log.scrollHeight;
+  if (log) {
+    log.innerHTML = s.log.map(function(l) {
+      var c = l.type==='ok'?'lok':l.type==='skip'?'lsk':l.type==='err'?'ler':'lin';
+      return '<div class="' + c + '">' + escHtml(l.msg) + '</div>';
+    }).join('');
+    log.scrollTop = log.scrollHeight;
+  }
 }
 
 function finishUI(s) {
@@ -231,13 +227,6 @@ function setSbar(type, txt) {
   el.innerHTML = spin + '<span>' + escHtml(txt) + '</span>';
 }
 
-function appendLog(type, msg) {
-  var log = document.getElementById('log-box');
-  var c = type==='ok'?'lok':type==='skip'?'lsk':type==='err'?'ler':'lin';
-  log.innerHTML += '<div class="' + c + '">' + escHtml(msg) + '</div>';
-  log.scrollTop = log.scrollHeight;
-}
-
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -247,7 +236,6 @@ async function stopRobot() {
   if (poll) clearInterval(poll);
   document.getElementById('btn-start').disabled = false;
   setSbar('err', 'Parado pelo usuario.');
-  appendLog('ler', 'Robo parado pelo usuario.');
 }
 
 async function clearPdfs() {
@@ -262,7 +250,6 @@ function analyzeAll() {
   window.location.href = BASE + '?from=robot';
 }
 
-// Checar status ao carregar a página
 (async function() {
   try {
     var r = await fetch(BASE + '/robot/status');
@@ -327,90 +314,31 @@ router.post('/start', requireAdmin, async (req, res) => {
   });
 });
 
-// ─── ROBÔ ───
+// ─── ROBÔ via Browserless.io ───
 async function runRobot(DATE, DIST_MIN, DIST_MAX) {
   let browser = null;
   try {
+    const puppeteer = require('puppeteer');
 
-    // ── 1. Verificar se puppeteer está disponível ──
-    addLog('info', '🔍 Verificando puppeteer...');
-    let puppeteer;
-    try {
-      puppeteer = require('puppeteer');
-      addLog('info', '✅ puppeteer carregado: v' + (puppeteer.version || '?'));
-    } catch(e) {
-      addLog('err', '❌ puppeteer não encontrado: ' + e.message);
-      addLog('err', '   Execute: npm install puppeteer');
-      robotStatus.running = false;
-      robotStatus.error = 'puppeteer não instalado';
-      return;
-    }
+    addLog('info', '🌐 Conectando ao Browserless.io...');
+    addLog('info', '🔗 ' + BROWSERLESS_WS.replace(/token=.*/, 'token=***'));
 
-    // ── 2. Verificar caminho do Chromium ──
-    addLog('info', '🔍 Localizando Chromium...');
-    try {
-      // executablePath() é async no puppeteer v20+
-      const execPath = typeof puppeteer.executablePath === 'function'
-        ? await Promise.resolve(puppeteer.executablePath())
-        : null;
-      addLog('info', '✅ Chromium em: ' + execPath);
-      if (execPath) {
-        const exists = fs.existsSync(execPath);
-        addLog(exists ? 'ok' : 'err', exists ? '✅ Chromium encontrado no disco' : '❌ Chromium NÃO encontrado no disco!');
-        if (!exists) {
-          addLog('err', '   Rodando: npx puppeteer browsers install chrome ...');
-          // Tentar instalar na hora
-          const { execSync } = require('child_process');
-          try {
-            execSync('npx puppeteer browsers install chrome', { stdio: 'pipe', timeout: 120000 });
-            addLog('ok', '✅ Chromium instalado com sucesso!');
-          } catch(ie) {
-            addLog('err', '❌ Falha ao instalar Chromium: ' + ie.message.slice(0,100));
-            robotStatus.running = false;
-            robotStatus.error = 'Chromium não encontrado';
-            return;
-          }
-        }
-      }
-    } catch(e) {
-      addLog('err', '❌ Erro ao localizar Chromium: ' + e.message);
-    }
-
-    // ── 3. Lançar browser ──
-    addLog('info', '🌐 Iniciando browser headless...');
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-extensions',
-        '--mute-audio'
-      ]
+    // Conecta no browser remoto via WebSocket
+    browser = await puppeteer.connect({
+      browserWSEndpoint: BROWSERLESS_WS
     });
-    addLog('ok', '✅ Browser iniciado!');
+
+    addLog('ok', '✅ Conectado ao Browserless!');
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
     addLog('info', '✅ Nova página criada');
 
-    // Bloquear imagens/fontes para economizar memória
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      if (['image', 'font', 'media'].includes(req.resourceType())) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
+    const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
 
-    // ── 4. Navegar para o Racing Post ──
     addLog('info', '🏇 Acessando Racing Post...');
     robotStatus.current = 'Carregando site...';
+
     await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: 'domcontentloaded' });
     addLog('ok', '✅ Site carregado: ' + page.url());
 
@@ -418,11 +346,11 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     await page.evaluate((date) => {
       window.location.hash = 'meeting-list/view=time&r_date=' + date;
     }, DATE);
+
     addLog('info', '⏳ Aguardando lista carregar (6s)...');
     await new Promise(r => setTimeout(r, 6000));
-    addLog('ok', '✅ URL atual: ' + await page.evaluate(() => window.location.href));
+    addLog('info', '🔗 URL atual: ' + await page.evaluate(() => window.location.href));
 
-    // ── 5. Coletar corridas ──
     addLog('info', '🔎 Buscando corridas na página...');
     robotStatus.current = 'Coletando lista...';
 
@@ -461,22 +389,18 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
       };
     }, { distMin: DIST_MIN, distMax: DIST_MAX });
 
-    addLog('info', `📄 Título da página: "${races.title}"`);
-    addLog('info', `🔗 Total de links na página: ${races.totalLinks}`);
-    addLog('info', `#️⃣  Hash atual: ${races.hash}`);
+    addLog('info', `📄 Título: "${races.title}" | Links: ${races.totalLinks} | Hash: ${races.hash}`);
     addLog(races.count > 0 ? 'ok' : 'err', `📊 Corridas no filtro: ${races.count}`);
 
     robotStatus.total = races.count;
 
     if (races.count === 0) {
       addLog('err', '❌ Nenhuma corrida encontrada.');
-      addLog('info', '💡 Possíveis causas: data sem corridas, site bloqueou, seletores mudaram');
       robotStatus.running = false;
-      await browser.close();
+      await browser.disconnect();
       return;
     }
 
-    const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
     let saved = 0, skipped = 0, errors = 0;
 
     for (let i = 0; i < races.races.length; i++) {
@@ -485,15 +409,14 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
       const race = races.races[i];
       robotStatus.progress = i + 1;
       robotStatus.current = `[${i+1}/${races.count}] ${race.track} ${race.time}`;
-      addLog('info', `\n▶ [${i+1}/${races.count}] ${race.track} | ${race.time} | ${race.dist}m`);
+      addLog('info', `▶ [${i+1}/${races.count}] ${race.track} | ${race.time} | ${race.dist}m`);
 
       try {
         const raceHref = race.href.startsWith('http')
           ? race.href
           : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
-        addLog('info', `   URL: ${raceHref}`);
-        await page.goto(raceHref, { timeout: 30000, waitUntil: 'networkidle2' });
+        await page.goto(raceHref, { timeout: 30000, waitUntil: 'domcontentloaded' });
         await new Promise(r => setTimeout(r, 4000));
 
         const info = await page.evaluate(() => {
@@ -515,7 +438,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
           addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
           skipped++;
-          await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle2' });
+          await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'domcontentloaded' });
           await new Promise(r => setTimeout(r, 3000));
           continue;
         }
@@ -523,7 +446,6 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         const filename = `${track} ${time}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
-        addLog('info', `   Salvando PDF: ${filename}`);
         await page.pdf({
           path: filepath,
           format: 'A4',
@@ -534,7 +456,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         const size = fs.statSync(filepath).size;
         if (size < 5000) {
           fs.unlinkSync(filepath);
-          addLog('skip', `⚠️ ${filename} — PDF vazio (${size} bytes)`);
+          addLog('skip', `⚠️ ${filename} — PDF vazio`);
           skipped++;
         } else {
           addLog('ok', `✅ ${filename} — ${Math.round(size/1024)}KB`);
@@ -547,7 +469,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         errors++;
       }
 
-      await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle2' });
+      await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'domcontentloaded' });
       await new Promise(r => setTimeout(r, 3000));
     }
 
@@ -559,7 +481,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     addLog('err', err.stack ? err.stack.slice(0, 300) : '(sem stack)');
   } finally {
     if (browser) {
-      try { await browser.close(); } catch(e) {}
+      try { await browser.disconnect(); } catch(e) {}
     }
     robotStatus.running = false;
     robotStatus.current = 'Concluido';

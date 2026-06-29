@@ -5,11 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
-// Pasta para salvar PDFs no servidor
 const PDF_DIR = path.join(__dirname, '../../public/pdfs');
 if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
 
-// Status global do robô
 let robotStatus = {
   running: false,
   progress: 0,
@@ -25,8 +23,10 @@ function resetStatus() {
 }
 
 function addLog(type, msg) {
-  robotStatus.log.push({ type, msg });
-  console.log('[ROBO]', msg);
+  const ts = new Date().toISOString().substring(11, 19);
+  const full = `[${ts}] ${msg}`;
+  robotStatus.log.push({ type, msg: full });
+  console.log('[ROBO]', full);
 }
 
 // ─── PÁGINA DO ROBÔ ───
@@ -55,19 +55,17 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .form-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
-.field input,.field select{padding:9px 12px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:14px}
-.field input:focus,.field select:focus{outline:none;border-color:#22c55e}
+.field input{padding:9px 12px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:14px}
+.field input:focus{outline:none;border-color:#22c55e}
 .btn{padding:10px 22px;background:#22c55e;color:#000;font-weight:700;font-size:13px;border:none;border-radius:6px;cursor:pointer}
 .btn:hover{background:#16a34a}.btn:disabled{opacity:.35;cursor:not-allowed}
 .btn-red{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
 .btn-red:hover{background:rgba(239,68,68,.25)}
-.btn-blue{background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
-.btn-blue:hover{background:rgba(96,165,250,.25)}
 .pw{margin:12px 0}
 .pb{height:8px;background:#222;border-radius:4px;overflow:hidden}
 .pf{height:100%;background:linear-gradient(90deg,#22c55e,#f97316);border-radius:4px;transition:width .5s}
 .prog-info{font-size:11px;color:#888;margin-top:5px;display:flex;justify-content:space-between}
-.log-box{background:#050505;border:1px solid #1a1a1a;border-radius:6px;padding:12px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.9}
+.log-box{background:#050505;border:1px solid #222;border-radius:6px;padding:12px;height:320px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:2}
 .lok{color:#22c55e}.lsk{color:#555}.ler{color:#ef4444}.lin{color:#60a5fa}
 .pdf-list{display:flex;flex-direction:column;gap:5px;max-height:280px;overflow-y:auto}
 .pdf-item{display:flex;align-items:center;justify-content:space-between;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:8px 12px;border-left:3px solid #22c55e}
@@ -113,19 +111,19 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
         <input type="number" id="dist-max" value="575" style="width:110px">
       </div>
       <button class="btn" id="btn-start" onclick="startRobot()">&#x25B6; Iniciar Coleta</button>
-      <button class="btn btn-red" id="btn-stop" onclick="stopRobot()" style="display:none">&#x25A0; Parar</button>
+      <button class="btn btn-red" id="btn-stop" onclick="stopRobot()">&#x25A0; Parar</button>
     </div>
   </div>
 
-  <div id="status-wrap" style="display:none">
-    <div class="sbar srun" id="sbar"><span class="spin"></span><span id="sbar-text">Iniciando...</span></div>
+  <div id="status-wrap">
+    <div class="sbar srun" id="sbar" style="display:none"><span class="spin"></span><span id="sbar-text">Iniciando...</span></div>
     <div class="card">
-      <div class="card-title">Progresso</div>
+      <div class="card-title">Log em tempo real</div>
       <div class="pw">
         <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
-        <div class="prog-info"><span id="prog-cur">Aguardando...</span><span id="prog-cnt">0 / 0</span></div>
+        <div class="prog-info"><span id="prog-cur">Aguardando inicio...</span><span id="prog-cnt">0 / 0</span></div>
       </div>
-      <div class="log-box" id="log-box"></div>
+      <div class="log-box" id="log-box"><div class="lin">Aguardando inicio do robo...</div></div>
     </div>
   </div>
 
@@ -152,11 +150,11 @@ async function startRobot() {
   if (!date) { alert('Selecione uma data!'); return; }
 
   document.getElementById('btn-start').disabled = true;
-  document.getElementById('btn-stop').style.display = 'inline-block';
-  document.getElementById('status-wrap').style.display = 'block';
   document.getElementById('results-wrap').style.display = 'none';
-  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('log-box').innerHTML = '<div class="lin">Enviando comando para o servidor...</div>';
   document.getElementById('pf').style.width = '0%';
+  document.getElementById('prog-cur').textContent = 'Iniciando...';
+  document.getElementById('prog-cnt').textContent = '0 / 0';
   setSbar('run', 'Iniciando robo...');
 
   try {
@@ -167,89 +165,125 @@ async function startRobot() {
     });
     var d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Erro ao iniciar');
+    appendLog('lin', 'Robo iniciado no servidor! Aguardando logs...');
     pollStatus();
   } catch(e) {
     setSbar('err', 'Erro: ' + e.message);
+    appendLog('ler', 'ERRO: ' + e.message);
     document.getElementById('btn-start').disabled = false;
-    document.getElementById('btn-stop').style.display = 'none';
   }
 }
 
 function pollStatus() {
+  if (poll) clearInterval(poll);
   poll = setInterval(async function() {
     try {
       var r = await fetch(BASE + '/robot/status');
       var s = await r.json();
       updateUI(s);
-      if (!s.running) { clearInterval(poll); finishUI(s); }
-    } catch(e) {}
-  }, 1200);
+      if (!s.running && s.log.length > 0) {
+        clearInterval(poll);
+        finishUI(s);
+      }
+    } catch(e) {
+      appendLog('ler', 'Erro ao buscar status: ' + e.message);
+    }
+  }, 1000);
 }
 
 function updateUI(s) {
   var pct = s.total > 0 ? Math.round(s.progress / s.total * 100) : 0;
-  document.getElementById('pf').style.width = pct + '%';
-  document.getElementById('prog-cnt').textContent = s.progress + ' / ' + s.total;
-  document.getElementById('prog-cur').textContent = s.current || '...';
-  document.getElementById('sbar-text').textContent = s.current || 'Coletando...';
+  var elPf = document.getElementById('pf');
+  var elCnt = document.getElementById('prog-cnt');
+  var elCur = document.getElementById('prog-cur');
+  var elSbarText = document.getElementById('sbar-text');
+  if (elPf) elPf.style.width = pct + '%';
+  if (elCnt) elCnt.textContent = s.progress + ' / ' + (s.total || '?');
+  if (elCur) elCur.textContent = s.current || 'Processando...';
+  if (elSbarText && s.current) elSbarText.textContent = s.current;
+
+  // Renderizar todos os logs
   var log = document.getElementById('log-box');
-  log.innerHTML = s.log.slice(-25).map(function(l) {
+  log.innerHTML = s.log.map(function(l) {
     var c = l.type==='ok'?'lok':l.type==='skip'?'lsk':l.type==='err'?'ler':'lin';
-    return '<div class="' + c + '">' + l.msg + '</div>';
+    return '<div class="' + c + '">' + escHtml(l.msg) + '</div>';
   }).join('');
   log.scrollTop = log.scrollHeight;
 }
 
 function finishUI(s) {
   document.getElementById('btn-start').disabled = false;
-  document.getElementById('btn-stop').style.display = 'none';
   if (s.error) setSbar('err', 'Erro: ' + s.error);
   else setSbar('done', 'Concluido! ' + s.pdfs.length + ' PDFs coletados.');
-  if (s.pdfs.length > 0) {
+  if (s.pdfs && s.pdfs.length > 0) {
     document.getElementById('results-wrap').style.display = 'block';
     document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
-      return '<div class="pdf-item"><div><div class="pdf-name">' + p.name + '</div><div class="pdf-meta">' + p.track + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
+      return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
     }).join('');
   }
 }
 
 function setSbar(type, txt) {
   var el = document.getElementById('sbar');
+  el.style.display = 'flex';
   el.className = 'sbar ' + (type==='run'?'srun':type==='done'?'sdone':'serr');
   var spin = type==='run' ? '<span class="spin"></span>' : '';
-  el.innerHTML = spin + '<span>' + txt + '</span>';
+  el.innerHTML = spin + '<span>' + escHtml(txt) + '</span>';
+}
+
+function appendLog(type, msg) {
+  var log = document.getElementById('log-box');
+  var c = type==='ok'?'lok':type==='skip'?'lsk':type==='err'?'ler':'lin';
+  log.innerHTML += '<div class="' + c + '">' + escHtml(msg) + '</div>';
+  log.scrollTop = log.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function stopRobot() {
   await fetch(BASE + '/robot/stop', { method: 'POST' });
-  clearInterval(poll);
+  if (poll) clearInterval(poll);
   document.getElementById('btn-start').disabled = false;
-  document.getElementById('btn-stop').style.display = 'none';
   setSbar('err', 'Parado pelo usuario.');
+  appendLog('ler', 'Robo parado pelo usuario.');
 }
 
 async function clearPdfs() {
   if (!confirm('Limpar todos os PDFs coletados?')) return;
   await fetch(BASE + '/robot/clear', { method: 'POST' });
   document.getElementById('results-wrap').style.display = 'none';
-  document.getElementById('status-wrap').style.display = 'none';
+  document.getElementById('log-box').innerHTML = '<div class="lin">PDFs limpos. Pronto para nova coleta.</div>';
+  document.getElementById('sbar').style.display = 'none';
 }
 
 function analyzeAll() {
-  // Redirecionar para pagina principal — os PDFs estao no servidor
   window.location.href = BASE + '?from=robot';
 }
 
-// Verificar se já tem PDFs de uma coleta anterior
+// Checar status ao carregar a página
 (async function() {
-  var r = await fetch(BASE + '/robot/status');
-  var s = await r.json();
-  if (s.pdfs.length > 0 && !s.running) {
-    document.getElementById('results-wrap').style.display = 'block';
-    document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
-      return '<div class="pdf-item"><div><div class="pdf-name">' + p.name + '</div><div class="pdf-meta">' + p.track + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
-    }).join('');
-  }
+  try {
+    var r = await fetch(BASE + '/robot/status');
+    var s = await r.json();
+    if (s.running) {
+      setSbar('run', s.current || 'Robo em execucao...');
+      updateUI(s);
+      document.getElementById('btn-start').disabled = true;
+      pollStatus();
+    } else if (s.log.length > 0) {
+      updateUI(s);
+      if (s.error) setSbar('err', 'Erro: ' + s.error);
+      else if (s.pdfs.length > 0) setSbar('done', 'Ultima coleta: ' + s.pdfs.length + ' PDFs.');
+      if (s.pdfs.length > 0) {
+        document.getElementById('results-wrap').style.display = 'block';
+        document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
+          return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
+        }).join('');
+      }
+    }
+  } catch(e) {}
 })();
 </script></body></html>`);
 });
@@ -282,11 +316,10 @@ router.post('/start', requireAdmin, async (req, res) => {
 
   resetStatus();
   robotStatus.running = true;
-  addLog('info', '🤖 Iniciando robo para ' + date + '...');
+  addLog('info', '🤖 Comando recebido — data: ' + date + ' | dist: ' + (distMin||400) + 'm–' + (distMax||575) + 'm');
 
   res.json({ ok: true });
 
-  // Rodar em background sem bloquear a resposta
   runRobot(date, parseInt(distMin) || 400, parseInt(distMax) || 575).catch(err => {
     robotStatus.running = false;
     robotStatus.error = err.message;
@@ -298,38 +331,101 @@ router.post('/start', requireAdmin, async (req, res) => {
 async function runRobot(DATE, DIST_MIN, DIST_MAX) {
   let browser = null;
   try {
-    // Tentar playwright-chromium primeiro, depois playwright
-    let chromium;
+
+    // ── 1. Verificar se puppeteer está disponível ──
+    addLog('info', '🔍 Verificando puppeteer...');
+    let puppeteer;
     try {
-      chromium = require('playwright-chromium').chromium;
+      puppeteer = require('puppeteer');
+      addLog('info', '✅ puppeteer carregado: v' + (puppeteer.version || '?'));
     } catch(e) {
-      chromium = require('playwright').chromium;
+      addLog('err', '❌ puppeteer não encontrado: ' + e.message);
+      addLog('err', '   Execute: npm install puppeteer');
+      robotStatus.running = false;
+      robotStatus.error = 'puppeteer não instalado';
+      return;
     }
 
-    addLog('info', '🌐 Abrindo navegador em background...');
+    // ── 2. Verificar caminho do Chromium ──
+    addLog('info', '🔍 Localizando Chromium...');
+    try {
+      // executablePath() é async no puppeteer v20+
+      const execPath = typeof puppeteer.executablePath === 'function'
+        ? await Promise.resolve(puppeteer.executablePath())
+        : null;
+      addLog('info', '✅ Chromium em: ' + execPath);
+      if (execPath) {
+        const exists = fs.existsSync(execPath);
+        addLog(exists ? 'ok' : 'err', exists ? '✅ Chromium encontrado no disco' : '❌ Chromium NÃO encontrado no disco!');
+        if (!exists) {
+          addLog('err', '   Rodando: npx puppeteer browsers install chrome ...');
+          // Tentar instalar na hora
+          const { execSync } = require('child_process');
+          try {
+            execSync('npx puppeteer browsers install chrome', { stdio: 'pipe', timeout: 120000 });
+            addLog('ok', '✅ Chromium instalado com sucesso!');
+          } catch(ie) {
+            addLog('err', '❌ Falha ao instalar Chromium: ' + ie.message.slice(0,100));
+            robotStatus.running = false;
+            robotStatus.error = 'Chromium não encontrado';
+            return;
+          }
+        }
+      }
+    } catch(e) {
+      addLog('err', '❌ Erro ao localizar Chromium: ' + e.message);
+    }
 
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+    // ── 3. Lançar browser ──
+    addLog('info', '🌐 Iniciando browser headless...');
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-extensions',
+        '--mute-audio'
+      ]
+    });
+    addLog('ok', '✅ Browser iniciado!');
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    addLog('info', '✅ Nova página criada');
+
+    // Bloquear imagens/fontes para economizar memória
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (['image', 'font', 'media'].includes(req.resourceType())) {
+        req.abort();
+      } else {
+        req.continue();
+      }
     });
 
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await page.setViewportSize({ width: 1280, height: 900 });
+    // ── 4. Navegar para o Racing Post ──
+    addLog('info', '🏇 Acessando Racing Post...');
+    robotStatus.current = 'Carregando site...';
+    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: 'domcontentloaded' });
+    addLog('ok', '✅ Site carregado: ' + page.url());
 
-    const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
-
-    addLog('info', '📋 Acessando lista de corridas...');
-    robotStatus.current = 'Carregando lista...';
-
-    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000 });
-    await page.waitForTimeout(3000);
+    addLog('info', '📅 Navegando para data: ' + DATE);
     await page.evaluate((date) => {
       window.location.hash = 'meeting-list/view=time&r_date=' + date;
     }, DATE);
-    await page.waitForTimeout(6000);
+    addLog('info', '⏳ Aguardando lista carregar (6s)...');
+    await new Promise(r => setTimeout(r, 6000));
+    addLog('ok', '✅ URL atual: ' + await page.evaluate(() => window.location.href));
 
-    // Coletar corridas — mesma lógica da versão local que funcionou
+    // ── 5. Coletar corridas ──
+    addLog('info', '🔎 Buscando corridas na página...');
+    robotStatus.current = 'Coletando lista...';
+
     const races = await page.evaluate(({ distMin, distMax }) => {
       const results = [];
       const seen = new Set();
@@ -355,38 +451,51 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
           track: (lines[0] || '').slice(0, 25)
         });
       });
-      return results;
+
+      return {
+        count: results.length,
+        totalLinks: document.querySelectorAll('a[href]').length,
+        title: document.title,
+        hash: window.location.hash,
+        races: results
+      };
     }, { distMin: DIST_MIN, distMax: DIST_MAX });
 
-    addLog('info', `📊 ${races.length} corridas encontradas`);
-    robotStatus.total = races.length;
+    addLog('info', `📄 Título da página: "${races.title}"`);
+    addLog('info', `🔗 Total de links na página: ${races.totalLinks}`);
+    addLog('info', `#️⃣  Hash atual: ${races.hash}`);
+    addLog(races.count > 0 ? 'ok' : 'err', `📊 Corridas no filtro: ${races.count}`);
 
-    if (races.length === 0) {
-      addLog('err', '❌ Nenhuma corrida encontrada. Tente outra data.');
+    robotStatus.total = races.count;
+
+    if (races.count === 0) {
+      addLog('err', '❌ Nenhuma corrida encontrada.');
+      addLog('info', '💡 Possíveis causas: data sem corridas, site bloqueou, seletores mudaram');
       robotStatus.running = false;
       await browser.close();
       return;
     }
 
+    const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
     let saved = 0, skipped = 0, errors = 0;
 
-    for (let i = 0; i < races.length; i++) {
+    for (let i = 0; i < races.races.length; i++) {
       if (!robotStatus.running) { addLog('info', '⏹ Parado pelo usuario'); break; }
 
-      const race = races[i];
+      const race = races.races[i];
       robotStatus.progress = i + 1;
-      robotStatus.current = `[${i+1}/${races.length}] ${race.track} ${race.time}`;
+      robotStatus.current = `[${i+1}/${races.count}] ${race.track} ${race.time}`;
+      addLog('info', `\n▶ [${i+1}/${races.count}] ${race.track} | ${race.time} | ${race.dist}m`);
 
       try {
-        // Navegar para a corrida
         const raceHref = race.href.startsWith('http')
           ? race.href
           : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
-        await page.goto(raceHref, { timeout: 30000 });
-        await page.waitForTimeout(4000);
+        addLog('info', `   URL: ${raceHref}`);
+        await page.goto(raceHref, { timeout: 30000, waitUntil: 'networkidle2' });
+        await new Promise(r => setTimeout(r, 4000));
 
-        // Extrair info
         const info = await page.evaluate(() => {
           const body = document.body.textContent;
           const headerEl = document.querySelector('.RC-meetingHeader__track,[class*="header__track"],[class*="headerTrack"],h1,h2');
@@ -406,14 +515,15 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
           addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
           skipped++;
-          await page.goto(LIST_URL, { timeout: 30000 });
-          await page.waitForTimeout(3000);
+          await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle2' });
+          await new Promise(r => setTimeout(r, 3000));
           continue;
         }
 
         const filename = `${track} ${time}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
+        addLog('info', `   Salvando PDF: ${filename}`);
         await page.pdf({
           path: filepath,
           format: 'A4',
@@ -424,30 +534,33 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         const size = fs.statSync(filepath).size;
         if (size < 5000) {
           fs.unlinkSync(filepath);
-          addLog('skip', `⚠️ ${filename} — PDF vazio`);
+          addLog('skip', `⚠️ ${filename} — PDF vazio (${size} bytes)`);
           skipped++;
         } else {
-          addLog('ok', `✅ ${filename} (${Math.round(size/1024)}KB)`);
+          addLog('ok', `✅ ${filename} — ${Math.round(size/1024)}KB`);
           robotStatus.pdfs.push({ filename, name: filename, track, dist, time });
           saved++;
         }
 
       } catch(err) {
-        addLog('err', `❌ Erro em ${race.track} ${race.time}: ${err.message.slice(0,60)}`);
+        addLog('err', `❌ Erro: ${err.message.slice(0,120)}`);
         errors++;
       }
 
-      await page.goto(LIST_URL, { timeout: 30000 });
-      await page.waitForTimeout(3000);
+      await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle2' });
+      await new Promise(r => setTimeout(r, 3000));
     }
 
-    addLog('ok', `🏁 Concluido! ${saved} PDFs salvos, ${skipped} pulados, ${errors} erros.`);
+    addLog('ok', `🏁 Concluido! ✅${saved} salvos | ⏭${skipped} pulados | ❌${errors} erros`);
 
   } catch(err) {
     robotStatus.error = err.message;
-    addLog('err', '❌ ' + err.message);
+    addLog('err', '❌ Erro fatal: ' + err.message);
+    addLog('err', err.stack ? err.stack.slice(0, 300) : '(sem stack)');
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      try { await browser.close(); } catch(e) {}
+    }
     robotStatus.running = false;
     robotStatus.current = 'Concluido';
   }
