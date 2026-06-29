@@ -40,7 +40,7 @@ router.get('/', (req, res) => {
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(user.id);
   const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
   const taxa = stats.t > 0 ? Math.round(stats.a/stats.t*100) : 0;
-  const logoB64 = getLogo();
+  const logoB64 = ''; // Logo servido via rota estática
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
