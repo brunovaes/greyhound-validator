@@ -84,11 +84,33 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const data = await response.json();
     const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
     const clean = raw.split('```json').join('').split('```').join('').trim();
-    const s = clean.indexOf('{"races"');
-    const e = clean.lastIndexOf('}');
-    if (s < 0 || e < 0) return res.status(500).json({ error: 'JSON nao encontrado na resposta.' });
-
-    const parsed = JSON.parse(clean.slice(s, e+1));
+    
+    // Parser robusto — tenta encontrar JSON de várias formas
+    let parsed = null;
+    try {
+      // Tentativa 1: JSON direto
+      parsed = JSON.parse(clean);
+    } catch(e1) {
+      try {
+        // Tentativa 2: encontrar {"races"
+        const s1 = clean.indexOf('{"races"');
+        const s2 = clean.indexOf('{ "races"');
+        const s = s1 >= 0 ? s1 : s2;
+        const e = clean.lastIndexOf('}');
+        if (s >= 0 && e >= 0) parsed = JSON.parse(clean.slice(s, e+1));
+      } catch(e2) {
+        try {
+          // Tentativa 3: encontrar qualquer {
+          const s = clean.indexOf('{');
+          const e = clean.lastIndexOf('}');
+          if (s >= 0 && e >= 0) parsed = JSON.parse(clean.slice(s, e+1));
+        } catch(e3) {
+          console.error('Raw response:', clean.slice(0, 500));
+          return res.status(500).json({ error: 'JSON nao encontrado na resposta. Raw: ' + clean.slice(0, 200) });
+        }
+      }
+    }
+    if (!parsed) return res.status(500).json({ error: 'JSON nao encontrado na resposta.' });
     
     // Incrementar contador de análises
     db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(user.id);
