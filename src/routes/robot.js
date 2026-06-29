@@ -200,9 +200,20 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
     <div class="card">
       <div class="card-title">PDFs Coletados</div>
       <div class="pdf-list" id="pdf-list"><div class="empty">Nenhum PDF ainda</div></div>
-      <div class="ab">
-        <button class="btn" id="btn-zip" onclick="downloadZip()">&#x2B07; Baixar Todos (ZIP)</button>
-        <button class="btn btn-red" onclick="clearPdfs()">&#x1F5D1; Limpar PDFs</button>
+      <div class="ab" style="margin-top:14px;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:10px">
+          <button class="btn" id="btn-dl-all" onclick="downloadAll()">&#x2B07; Baixar Todos</button>
+          <button class="btn btn-red" onclick="clearPdfs()">&#x1F5D1; Limpar PDFs</button>
+        </div>
+        <div id="dl-progress-wrap" style="display:none;width:100%">
+          <div style="font-size:11px;color:#888;margin-bottom:5px;display:flex;justify-content:space-between">
+            <span id="dl-cur-file">Baixando...</span>
+            <span id="dl-cnt">0 / 0</span>
+          </div>
+          <div style="height:8px;background:#222;border-radius:4px;overflow:hidden">
+            <div id="dl-bar" style="height:100%;background:linear-gradient(90deg,#22c55e,#60a5fa);border-radius:4px;transition:width .3s;width:0%"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -280,9 +291,11 @@ function finishUI(s) {
   if (s.error) setSbar('err', 'Erro: ' + s.error);
   else setSbar('done', 'Concluido! ' + s.pdfs.length + ' PDFs coletados.');
   if (s.pdfs && s.pdfs.length > 0) {
+    var date = document.getElementById('race-date').value;
+    dlQueue = s.pdfs.map(function(p) { return { filename: p.name, date: date }; });
     document.getElementById('results-wrap').style.display = 'block';
     document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
-      return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
+      return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">✅</span></div>';
     }).join('');
   }
 }
@@ -318,23 +331,41 @@ function analyzeAll() {
   window.location.href = BASE + '?from=robot';
 }
 
-function downloadZip() {
-  var date = document.getElementById('race-date').value;
-  if (!date) { alert('Selecione uma data!'); return; }
-  var btn = document.getElementById('btn-zip');
+// Download sequencial com barra de progresso
+var dlQueue = [];
+
+async function downloadAll() {
+  if (dlQueue.length === 0) { alert('Nenhum PDF para baixar!'); return; }
+  var btn = document.getElementById('btn-dl-all');
   btn.disabled = true;
-  btn.textContent = 'Preparando ZIP...';
-  // Cria link invisível e dispara download
-  var a = document.createElement('a');
-  a.href = BASE + '/robot/download-zip?date=' + date;
-  a.download = 'greyhound_' + date + '.zip';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function() {
-    btn.disabled = false;
-    btn.innerHTML = '&#x2B07; Baixar Todos (ZIP)';
-  }, 3000);
+  var wrap = document.getElementById('dl-progress-wrap');
+  var bar = document.getElementById('dl-bar');
+  var cur = document.getElementById('dl-cur-file');
+  var cnt = document.getElementById('dl-cnt');
+  wrap.style.display = 'block';
+
+  for (var i = 0; i < dlQueue.length; i++) {
+    var f = dlQueue[i];
+    cur.textContent = f.filename;
+    cnt.textContent = (i+1) + ' / ' + dlQueue.length;
+    bar.style.width = Math.round((i / dlQueue.length) * 100) + '%';
+
+    // Dispara download do arquivo
+    var a = document.createElement('a');
+    a.href = BASE + '/robot/download-pdf?date=' + f.date + '&file=' + encodeURIComponent(f.filename);
+    a.download = f.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Aguarda 1.5s entre downloads para o navegador processar
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  bar.style.width = '100%';
+  cur.textContent = 'Concluido! ' + dlQueue.length + ' PDFs baixados.';
+  cnt.textContent = dlQueue.length + ' / ' + dlQueue.length;
+  btn.disabled = false;
 }
 
 (async function() {
@@ -351,9 +382,11 @@ function downloadZip() {
       if (s.error) setSbar('err', 'Erro: ' + s.error);
       else if (s.pdfs.length > 0) setSbar('done', 'Ultima coleta: ' + s.pdfs.length + ' PDFs.');
       if (s.pdfs.length > 0) {
+        var date = document.getElementById('race-date').value;
+        dlQueue = s.pdfs.map(function(p) { return { filename: p.name, date: date }; });
         document.getElementById('results-wrap').style.display = 'block';
         document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
-          return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">OK</span></div>';
+          return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">✅</span></div>';
         }).join('');
       }
     }
@@ -671,6 +704,24 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     robotStatus.current = 'Concluido';
   }
 }
+
+// ─── DOWNLOAD PDF INDIVIDUAL ───
+router.get('/download-pdf', requireAdmin, (req, res) => {
+  const { date, file } = req.query;
+  if (!date || !file) return res.status(400).send('Parametros invalidos');
+
+  // Segurança: não permitir path traversal
+  const safeName = path.basename(file);
+  const filepath = path.join(__dirname, '../../public/pdfs', date, safeName);
+
+  if (!fs.existsSync(filepath)) {
+    return res.status(404).send('Arquivo nao encontrado');
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+  fs.createReadStream(filepath).pipe(res);
+});
 
 // ─── DOWNLOAD ZIP ───
 router.get('/download-zip', requireAdmin, async (req, res) => {
