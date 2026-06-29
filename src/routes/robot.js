@@ -323,7 +323,6 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     addLog('info', '🌐 Conectando ao Browserless.io...');
     addLog('info', '🔗 ' + BROWSERLESS_WS.replace(/token=.*/, 'token=***'));
 
-    // Conecta no browser remoto via WebSocket
     browser = await puppeteer.connect({
       browserWSEndpoint: BROWSERLESS_WS
     });
@@ -332,7 +331,15 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
-    addLog('info', '✅ Nova página criada');
+
+    // User Agent real para não ser bloqueado como bot
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-GB,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    });
+
+    addLog('info', '✅ Nova página criada com User Agent real');
 
     const LIST_URL = `https://greyhoundbet.racingpost.com/#meeting-list/view=time&r_date=${DATE}`;
 
@@ -396,6 +403,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
 
     if (races.count === 0) {
       addLog('err', '❌ Nenhuma corrida encontrada.');
+      addLog('info', '💡 O site pode estar bloqueando o acesso via bot.');
       robotStatus.running = false;
       await browser.disconnect();
       return;
