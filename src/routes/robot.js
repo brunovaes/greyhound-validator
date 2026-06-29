@@ -524,8 +524,25 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         }
 
       } catch(err) {
-        addLog('err', `❌ Erro: ${err.message.slice(0,120)}`);
-        errors++;
+        const msg = err.message || '';
+        if (msg.includes('detached') || msg.includes('Session closed') || msg.includes('Target closed')) {
+          addLog('info', '🔄 Sessão expirada, reconectando...');
+          try { await browser.disconnect(); } catch(e2) {}
+          try {
+            browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
+            page = await browser.newPage();
+            await page.setViewport({ width: 1280, height: 900 });
+            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+            addLog('ok', '✅ Reconectado! Retentando corrida...');
+            i--; // retenta a mesma corrida
+          } catch(reconnErr) {
+            addLog('err', '❌ Falha ao reconectar: ' + reconnErr.message.slice(0,80));
+            errors++;
+          }
+        } else {
+          addLog('err', `❌ Erro: ${err.message.slice(0,120)}`);
+          errors++;
+        }
       }
 
       await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
