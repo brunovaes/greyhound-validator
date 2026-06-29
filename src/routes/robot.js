@@ -472,13 +472,11 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     addLog('info', '🏇 Acessando Racing Post...');
     robotStatus.current = 'Carregando site...';
 
-    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: "networkidle0" });
-    addLog('ok', '✅ Site carregado: ' + page.url());
+    await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
+    await new Promise(r => setTimeout(r, 3000));
 
-    addLog('info', '📅 Navegando para data: ' + DATE);
-    await page.evaluate((date) => {
-      window.location.hash = 'meeting-list/view=time&r_date=' + date;
-    }, DATE);
+    addLog('ok', '✅ Site carregado: ' + page.url());
+    addLog('info', '📅 Data: ' + DATE);
 
     addLog('info', '⏳ Aguardando lista carregar (6s)...');
     await new Promise(r => setTimeout(r, 8000));
