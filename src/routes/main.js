@@ -7,19 +7,12 @@ const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
 function getLogo() {
+  const mainLogo = path.join(__dirname, '../../public/img/logo_main.png');
+  if (fs.existsSync(mainLogo)) return 'data:image/png;base64,' + fs.readFileSync(mainLogo).toString('base64');
+  const logoPath = path.join(__dirname, '../../public/img/logo.png');
+  if (fs.existsSync(logoPath)) return 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
   return '';
 }
-
-router.get('/logo-main', (req, res) => {
-  const mainLogo = path.join(__dirname, '../../public/img/logo_main.png');
-  const fallback = path.join(__dirname, '../../public/img/logo.png');
-  const file = fs.existsSync(mainLogo) ? mainLogo : fallback;
-  if (fs.existsSync(file)) {
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    fs.createReadStream(file).pipe(res);
-  } else res.status(404).send('Not found');
-});
 
 function navBar(user, active) {
   const isAdmin = user.role === 'admin';
@@ -138,7 +131,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
-<div class="hero"><img src="${BASE}/logo-main" alt="Greyhound Validator" style="width:100%;height:130px;object-fit:cover;object-position:center 30%;display:block"></div>
+<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
 ${navBar(user, 'analisar')}
 <div class="main">
   <div class="sidebar">
@@ -300,7 +293,7 @@ document.addEventListener('DOMContentLoaded',function(){
     }
   });
   document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
-  document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join('\r\n')],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
+  document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join('\n')],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
 });
 </script></body></html>`);
 });
