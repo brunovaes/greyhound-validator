@@ -257,8 +257,36 @@ async function runAnalysis(){
 }
 
 document.addEventListener('DOMContentLoaded',function(){
-  document.getElementById('race-input').addEventListener('change',async function(){
-    for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
+  // Handler robusto para upload de arquivos
+  async function handleFiles(files) {
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      if (!file.name.toLowerCase().endsWith('.pdf')) continue;
+      var id = 'f' + Date.now() + i;
+      addFI(file.name, id);
+      try {
+        var b64 = await readB64(file);
+        raceFiles.push({ name: file.name, b64: b64, id: id, mime: 'application/pdf' });
+        updFI(id, true);
+      } catch(e) {
+        updFI(id, false);
+      }
+    }
+    updCards();
+  }
+
+  var raceInput = document.getElementById('race-input');
+  raceInput.addEventListener('change', function() {
+    if (this.files && this.files.length > 0) {
+      handleFiles(this.files);
+      // Resetar o input para permitir selecionar os mesmos arquivos novamente
+      this.value = '';
+    }
+  });
+
+  // Clicar no div abre o seletor
+  document.getElementById('rz').addEventListener('click', function(e) {
+    if (e.target !== raceInput) raceInput.click();
   });
   document.getElementById('rz').addEventListener('dragover',function(e){e.preventDefault();this.classList.add('drag');});
   document.getElementById('rz').addEventListener('dragleave',function(){this.classList.remove('drag');});
