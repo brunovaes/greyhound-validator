@@ -481,6 +481,9 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         const filename = `${track} ${time}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
+        // Injetar CSS para forçar visibilidade (Racing Post esconde conteúdo no print)
+        await page.addStyleTag({ content: `* { visibility: visible !important; opacity: 1 !important; } @media print { * { visibility: visible !important; display: revert !important; } }` });
+
         // Browserless retorna buffer — não usar path diretamente
         const pdfBuffer = await page.pdf({
           format: 'A4',
