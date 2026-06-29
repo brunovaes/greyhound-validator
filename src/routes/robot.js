@@ -201,7 +201,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
       <div class="card-title">PDFs Coletados</div>
       <div class="pdf-list" id="pdf-list"><div class="empty">Nenhum PDF ainda</div></div>
       <div class="ab">
-        <button class="btn" onclick="analyzeAll()">&#x1F50D; Analisar Todos no Validator</button>
+        <button class="btn" id="btn-zip" onclick="downloadZip()">&#x2B07; Baixar Todos (ZIP)</button>
         <button class="btn btn-red" onclick="clearPdfs()">&#x1F5D1; Limpar PDFs</button>
       </div>
     </div>
@@ -316,6 +316,25 @@ async function clearPdfs() {
 
 function analyzeAll() {
   window.location.href = BASE + '?from=robot';
+}
+
+function downloadZip() {
+  var date = document.getElementById('race-date').value;
+  if (!date) { alert('Selecione uma data!'); return; }
+  var btn = document.getElementById('btn-zip');
+  btn.disabled = true;
+  btn.textContent = 'Preparando ZIP...';
+  // Cria link invisível e dispara download
+  var a = document.createElement('a');
+  a.href = BASE + '/robot/download-zip?date=' + date;
+  a.download = 'greyhound_' + date + '.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() {
+    btn.disabled = false;
+    btn.innerHTML = '&#x2B07; Baixar Todos (ZIP)';
+  }, 3000);
 }
 
 (async function() {
@@ -652,5 +671,36 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     robotStatus.current = 'Concluido';
   }
 }
+
+// ─── DOWNLOAD ZIP ───
+router.get('/download-zip', requireAdmin, async (req, res) => {
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const dir = path.join(__dirname, '../../public/pdfs', date);
+
+  if (!fs.existsSync(dir)) {
+    return res.status(404).json({ error: 'Nenhum PDF encontrado para esta data' });
+  }
+
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.pdf'));
+  if (files.length === 0) {
+    return res.status(404).json({ error: 'Nenhum PDF encontrado' });
+  }
+
+  const archiver = require('archiver');
+  const zipName = `greyhound_${date}.zip`;
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', err => { throw err; });
+  archive.pipe(res);
+
+  files.forEach(f => {
+    archive.file(path.join(dir, f), { name: f });
+  });
+
+  await archive.finalize();
+});
 
 module.exports = router;
