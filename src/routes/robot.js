@@ -488,6 +488,15 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
       const race = races.races[i];
       robotStatus.progress = i + 1;
       robotStatus.current = `[${i+1}/${races.count}] ${race.track} ${race.time}`;
+
+      // Filtro de horário antecipado — usa horário da lista sem visitar a página
+      if (!inTimeRange(race.time, TIME_FROM, TIME_TO)) {
+        const tf = formatTime(race.time);
+        addLog('skip', `⏭ ${race.track} ${tf} — fora do horário (pulando visita)`);
+        skipped++;
+        continue;
+      }
+
       addLog('info', `▶ [${i+1}/${races.count}] ${race.track} | ${race.time} | ${race.dist}m`);
 
       try {
