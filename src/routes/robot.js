@@ -346,7 +346,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     addLog('info', '🏇 Acessando Racing Post...');
     robotStatus.current = 'Carregando site...';
 
-    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: 'domcontentloaded' });
+    await page.goto('https://greyhoundbet.racingpost.com/', { timeout: 30000, waitUntil: "networkidle0" });
     addLog('ok', '✅ Site carregado: ' + page.url());
 
     addLog('info', '📅 Navegando para data: ' + DATE);
@@ -355,7 +355,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     }, DATE);
 
     addLog('info', '⏳ Aguardando lista carregar (6s)...');
-    await new Promise(r => setTimeout(r, 6000));
+    await new Promise(r => setTimeout(r, 8000));
     addLog('info', '🔗 URL atual: ' + await page.evaluate(() => window.location.href));
 
     addLog('info', '🔎 Buscando corridas na página...');
@@ -424,8 +424,8 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
           ? race.href
           : 'https://greyhoundbet.racingpost.com/' + race.href.replace(/^\//, '');
 
-        await page.goto(raceHref, { timeout: 30000, waitUntil: 'domcontentloaded' });
-        await new Promise(r => setTimeout(r, 4000));
+        await page.goto(raceHref, { timeout: 30000, waitUntil: "networkidle0" });
+        await new Promise(r => setTimeout(r, 7000));
 
         const info = await page.evaluate(() => {
           const body = document.body.textContent;
@@ -446,7 +446,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         if (dist > 0 && (dist < DIST_MIN || dist > DIST_MAX)) {
           addLog('skip', `⏭ ${track} ${time} — ${dist}m fora do filtro`);
           skipped++;
-          await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
           await new Promise(r => setTimeout(r, 3000));
           continue;
         }
@@ -477,7 +477,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
         errors++;
       }
 
-      await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'domcontentloaded' });
+      await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
       await new Promise(r => setTimeout(r, 3000));
     }
 
