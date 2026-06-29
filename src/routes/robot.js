@@ -592,10 +592,31 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
             { timeout: 15000 }
           );
           addLog('info', '   ✅ Tabela carregada');
-          await new Promise(r => setTimeout(r, 2000)); // extra para renderizar tudo
+          await new Promise(r => setTimeout(r, 1500));
         } catch(e) {
           addLog('info', '   ⚠️ Tabela não detectada, aguardando +5s...');
           await new Promise(r => setTimeout(r, 5000));
+        }
+
+        // Clicar na aba "Form" para mostrar histórico completo
+        try {
+          const formTab = await page.$('a[href*="form"], button[class*="form"], .RC-tabs__tab--form, [class*="tab"][class*="form"], a.RC-meetingTabs__tab');
+          if (formTab) {
+            await formTab.click();
+            addLog('info', '   ✅ Aba Form clicada');
+            await new Promise(r => setTimeout(r, 2000));
+          } else {
+            // Tentar pelo texto do link
+            await page.evaluate(() => {
+              const tabs = Array.from(document.querySelectorAll('a, button, [role="tab"]'));
+              const formTab = tabs.find(t => t.textContent.trim().toLowerCase() === 'form');
+              if (formTab) formTab.click();
+            });
+            await new Promise(r => setTimeout(r, 2000));
+            addLog('info', '   ✅ Aba Form clicada via texto');
+          }
+        } catch(e) {
+          addLog('info', '   ⚠️ Aba Form não encontrada: ' + e.message.slice(0,50));
         }
 
         const info = await page.evaluate(() => {
@@ -641,8 +662,14 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
         const filename = `${timeFormatted}_${track}.pdf`;
         const filepath = path.join(PDF_DIR, filename);
 
-        // Injetar CSS para forçar visibilidade (Racing Post esconde conteúdo no print)
-        await page.addStyleTag({ content: `* { visibility: visible !important; opacity: 1 !important; } @media print { * { visibility: visible !important; display: revert !important; } }` });
+        // CSS para impressão limpa — fundo branco, sem elementos desnecessários
+        await page.addStyleTag({ content: `
+          @media print {
+            body { background: white !important; color: black !important; }
+            nav, .RC-header, [class*="header__nav"], [class*="banner"], [class*="cookie"], 
+            [class*="advertisement"], [class*="sticky"], footer { display: none !important; }
+          }
+        `});
 
         // Browserless retorna buffer — não usar path diretamente
         const pdfBuffer = await page.pdf({
