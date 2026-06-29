@@ -11,12 +11,16 @@ const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb9819013
 const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
 
 // Converte "1:12" → "1_12PM", "10:30" → "10_30AM"
+// 10,11,12 = AM | 1-6 = PM | 7,8,9 = AM cedo
 function formatTime(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return t.replace(':', '_');
   const h = parseInt(m[1]);
   const min = m[2];
-  const ampm = (h >= 1 && h <= 9) ? 'PM' : 'AM';
+  let ampm;
+  if (h >= 10 && h <= 12) ampm = 'AM';
+  else if (h >= 1 && h <= 6) ampm = 'PM';
+  else ampm = 'AM'; // 7,8,9
   return h + '_' + min + ampm;
 }
 
@@ -25,27 +29,43 @@ function getPdfDir(date) {
   return path.join(__dirname, '../../public/pdfs', date);
 }
 
-// Filtra corrida pelo intervalo de horário (formato "HH:MM")
-function inTimeRange(raceTime, timeFrom, timeTo) {
-  if (!timeFrom && !timeTo) return true;
-  // Converte horário da corrida para minutos do dia (assumindo PM para 1-9, AM para 10-12)
+// Converte horário UK (12h sem AM/PM) para minutos do dia (24h)
+// Regra: 10,11,12 = AM; 1-6 = PM (tarde); 7,8,9 = AM (manhã cedo)
+function ukTimeTo24Mins(raceTime) {
   const m = raceTime.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return true;
+  if (!m) return -1;
   const h = parseInt(m[1]);
   const min = parseInt(m[2]);
-  const h24 = (h >= 1 && h <= 9) ? h + 12 : h; // 1-9 = PM = 13-21
-  const raceMins = h24 * 60 + min;
+  let h24;
+  if (h >= 10 && h <= 12) h24 = h;        // 10,11,12 = AM
+  else if (h >= 1 && h <= 6) h24 = h + 12; // 1-6 = PM (13-18)
+  else h24 = h;                             // 7,8,9 = AM cedo
+  return h24 * 60 + min;
+}
 
-  const toMins = (str) => {
+// Filtra corrida pelo intervalo de horário
+// timeFrom/timeTo estão em horário do BRASIL (HH:MM)
+// UK = Brasil + 3h (ajuste padrão; muda para 4 no horário de verão UK)
+const UK_OFFSET_MINS = 3 * 60; // UK está 3h à frente do Brasil
+
+function inTimeRange(raceTime, timeFrom, timeTo) {
+  if (!timeFrom && !timeTo) return true;
+
+  const raceUKMins = ukTimeTo24Mins(raceTime);
+  if (raceUKMins < 0) return true;
+
+  // Converter horário Brasil para minutos e somar offset para obter UK
+  const brToMins = (str) => {
     if (!str) return null;
     const p = str.match(/^(\d{1,2}):(\d{2})$/);
     if (!p) return null;
-    return parseInt(p[1]) * 60 + parseInt(p[2]);
+    return parseInt(p[1]) * 60 + parseInt(p[2]) + UK_OFFSET_MINS;
   };
-  const fromMins = toMins(timeFrom);
-  const toM = toMins(timeTo);
-  if (fromMins !== null && raceMins < fromMins) return false;
-  if (toM !== null && raceMins > toM) return false;
+
+  const fromMins = brToMins(timeFrom);
+  const toM = brToMins(timeTo);
+  if (fromMins !== null && raceUKMins < fromMins) return false;
+  if (toM !== null && raceUKMins > toM) return false;
   return true;
 }
 
