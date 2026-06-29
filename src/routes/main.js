@@ -7,8 +7,10 @@ const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
 function getLogo() {
+  // Logo da tela principal (diferente do login)
   const mainLogo = path.join(__dirname, '../../public/img/logo_main.png');
   if (fs.existsSync(mainLogo)) return 'data:image/png;base64,' + fs.readFileSync(mainLogo).toString('base64');
+  // Fallback para logo padrão
   const logoPath = path.join(__dirname, '../../public/img/logo.png');
   if (fs.existsSync(logoPath)) return 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
   return '';
