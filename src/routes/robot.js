@@ -349,15 +349,28 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
     // ── 2. Verificar caminho do Chromium ──
     addLog('info', '🔍 Localizando Chromium...');
     try {
-      const execPath = puppeteer.executablePath();
+      // executablePath() é async no puppeteer v20+
+      const execPath = typeof puppeteer.executablePath === 'function'
+        ? await Promise.resolve(puppeteer.executablePath())
+        : null;
       addLog('info', '✅ Chromium em: ' + execPath);
-      const exists = fs.existsSync(execPath);
-      addLog(exists ? 'ok' : 'err', exists ? '✅ Chromium encontrado no disco' : '❌ Chromium NÃO encontrado no disco!');
-      if (!exists) {
-        addLog('err', '   Execute: npx puppeteer browsers install chrome');
-        robotStatus.running = false;
-        robotStatus.error = 'Chromium não encontrado';
-        return;
+      if (execPath) {
+        const exists = fs.existsSync(execPath);
+        addLog(exists ? 'ok' : 'err', exists ? '✅ Chromium encontrado no disco' : '❌ Chromium NÃO encontrado no disco!');
+        if (!exists) {
+          addLog('err', '   Rodando: npx puppeteer browsers install chrome ...');
+          // Tentar instalar na hora
+          const { execSync } = require('child_process');
+          try {
+            execSync('npx puppeteer browsers install chrome', { stdio: 'pipe', timeout: 120000 });
+            addLog('ok', '✅ Chromium instalado com sucesso!');
+          } catch(ie) {
+            addLog('err', '❌ Falha ao instalar Chromium: ' + ie.message.slice(0,100));
+            robotStatus.running = false;
+            robotStatus.error = 'Chromium não encontrado';
+            return;
+          }
+        }
       }
     } catch(e) {
       addLog('err', '❌ Erro ao localizar Chromium: ' + e.message);
