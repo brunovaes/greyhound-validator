@@ -329,7 +329,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
 
     addLog('ok', '✅ Conectado ao Browserless!');
 
-    const page = await browser.newPage();
+    let page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
 
     // User Agent real para não ser bloqueado como bot
@@ -411,8 +411,27 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX) {
 
     let saved = 0, skipped = 0, errors = 0;
 
+    // Reconecta ao Browserless se a conexão cair (detached frame)
+    async function getActivePage(currentPage) {
+      try {
+        await currentPage.evaluate(() => true);
+        return currentPage;
+      } catch(e) {
+        addLog('info', '🔄 Reconectando ao Browserless...');
+        try { await browser.disconnect(); } catch(e2) {}
+        browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
+        const newPage = await browser.newPage();
+        await newPage.setViewport({ width: 1280, height: 900 });
+        await newPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+        addLog('ok', '✅ Reconectado!');
+        return newPage;
+      }
+    }
+
     for (let i = 0; i < races.races.length; i++) {
       if (!robotStatus.running) { addLog('info', '⏹ Parado pelo usuario'); break; }
+
+      page = await getActivePage(page);
 
       const race = races.races[i];
       robotStatus.progress = i + 1;
