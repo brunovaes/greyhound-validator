@@ -715,8 +715,18 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
         }
       }
 
-      await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
-      await new Promise(r => setTimeout(r, 3000));
+      try {
+        await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
+        await new Promise(r => setTimeout(r, 3000));
+      } catch(navErr) {
+        addLog('info', '🔄 Erro ao voltar para lista, reconectando...');
+        try { await browser.disconnect(); } catch(e2) {}
+        browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
+        page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 900 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+        addLog('ok', '✅ Reconectado após erro de navegação');
+      }
     }
 
     addLog('ok', `🏁 Concluido! ✅${saved} salvos | ⏭${skipped} pulados | ❌${errors} erros`);
