@@ -7,14 +7,22 @@ const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
 function getLogo() {
-  // Logo da tela principal (diferente do login)
-  const mainLogo = path.join(__dirname, '../../public/img/logo_main.png');
-  if (fs.existsSync(mainLogo)) return 'data:image/png;base64,' + fs.readFileSync(mainLogo).toString('base64');
-  // Fallback para logo padrão
-  const logoPath = path.join(__dirname, '../../public/img/logo.png');
-  if (fs.existsSync(logoPath)) return 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
-  return '';
+  return ''; // Logo servido via rota /logo-main
 }
+
+// Rota para servir logo principal
+router.get('/logo-main', (req, res) => {
+  const mainLogo = path.join(__dirname, '../../public/img/logo_main.png');
+  const fallback = path.join(__dirname, '../../public/img/logo.png');
+  const file = fs.existsSync(mainLogo) ? mainLogo : fallback;
+  if (fs.existsSync(file)) {
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fs.createReadStream(file).pipe(res);
+  } else {
+    res.status(404).send('Logo not found');
+  }
+});
 
 function navBar(user, active) {
   const isAdmin = user.role === 'admin';
@@ -133,7 +141,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
-<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
+<div class="hero"><img src="${BASE}/logo-main" alt="Greyhound Validator" style="width:100%;height:130px;object-fit:cover;object-position:center 30%;display:block"></div>
 ${navBar(user, 'analisar')}
 <div class="main">
   <div class="sidebar">
@@ -257,36 +265,8 @@ async function runAnalysis(){
 }
 
 document.addEventListener('DOMContentLoaded',function(){
-  // Handler robusto para upload de arquivos
-  async function handleFiles(files) {
-    for (var i = 0; i < files.length; i++) {
-      var file = files[i];
-      if (!file.name.toLowerCase().endsWith('.pdf')) continue;
-      var id = 'f' + Date.now() + i;
-      addFI(file.name, id);
-      try {
-        var b64 = await readB64(file);
-        raceFiles.push({ name: file.name, b64: b64, id: id, mime: 'application/pdf' });
-        updFI(id, true);
-      } catch(e) {
-        updFI(id, false);
-      }
-    }
-    updCards();
-  }
-
-  var raceInput = document.getElementById('race-input');
-  raceInput.addEventListener('change', function() {
-    if (this.files && this.files.length > 0) {
-      handleFiles(this.files);
-      // Resetar o input para permitir selecionar os mesmos arquivos novamente
-      this.value = '';
-    }
-  });
-
-  // Clicar no div abre o seletor
-  document.getElementById('rz').addEventListener('click', function(e) {
-    if (e.target !== raceInput) raceInput.click();
+  document.getElementById('race-input').addEventListener('change',async function(){
+    for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
   });
   document.getElementById('rz').addEventListener('dragover',function(e){e.preventDefault();this.classList.add('drag');});
   document.getElementById('rz').addEventListener('dragleave',function(){this.classList.remove('drag');});
@@ -335,7 +315,7 @@ router.get('/historico', (req, res) => {
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Historico - Greyhound Validator</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:130px;object-fit:cover;object-position:center 30%;display:block}.content{padding:24px;max-width:900px;margin:0 auto}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}.kpi{background:#111;border:1px solid #333;border-radius:8px;padding:14px;position:relative;overflow:hidden}.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}.kpi.g::before{background:#22c55e}.kpi.o::before{background:#f97316}.kpi.b::before{background:#3b82f6}.kpi-label{font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}.kpi-val{font-size:26px;font-weight:700}.kpi.g .kpi-val{color:#22c55e}.kpi.o .kpi-val{color:#f97316}.kpi.b .kpi-val{color:#60a5fa}h2{font-size:16px;font-weight:700;margin-bottom:12px}table{width:100%;border-collapse:collapse;background:#111;border:1px solid #333;border-radius:8px;overflow:hidden}th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}td{padding:10px 12px;border-bottom:1px solid #222;font-size:13px}tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}a{color:#22c55e;text-decoration:none}a:hover{text-decoration:underline}.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}</style></head><body>
-<div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
+<div class="hero"><img src="${BASE}/logo-main" alt="" style="width:100%;height:130px;object-fit:cover;display:block"></div>
 ${navBar(user, 'historico')}
 <div class="content">
 <div class="kpis">
@@ -361,7 +341,7 @@ router.get('/sessao/:id', (req, res) => {
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:130px;object-fit:cover;object-position:center 30%;display:block}.content{padding:24px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.kpi{background:#111;border:1px solid #333;border-radius:8px;padding:12px 14px;position:relative;overflow:hidden}.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}.kpi.g::before{background:#22c55e}.kpi.o::before{background:#f97316}.kpi.b::before{background:#3b82f6}.kpi-label{font-size:10px;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}.kpi-val{font-size:22px;font-weight:700}.kpi.g .kpi-val{color:#22c55e}.kpi.o .kpi-val{color:#f97316}.kpi.b .kpi-val{color:#60a5fa}table{width:100%;border-collapse:collapse;border:1px solid #333;border-radius:8px;overflow:hidden;background:#111}th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}tr:last-child td{border-bottom:none}.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}.t1{background:#dc2626;color:#fff}.t2{background:#2563eb;color:#fff}.t3{background:#e5e7eb;color:#111}.t4{background:#111;color:#fff;border:1px solid #444}.t5{background:#d97706;color:#000}.t6{background:#111;color:#f59e0b;border:1px solid #f59e0b}.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}.ba{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}.bm{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.25)}.bb{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25)}.sim{color:#22c55e;font-weight:700}.nao{color:#ef4444;font-weight:700}a{color:#22c55e;text-decoration:none}h2{font-size:16px;margin-bottom:12px}</style></head><body>
-<div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
+<div class="hero"><img src="${BASE}/logo-main" alt="" style="width:100%;height:130px;object-fit:cover;display:block"></div>
 ${navBar(user, 'historico')}
 <div class="content">
 <div style="margin-bottom:16px"><a href="${BASE}/historico" style="color:#666;font-size:12px">&#8592; Voltar</a></div>
