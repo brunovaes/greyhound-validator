@@ -37,9 +37,11 @@ HIERARQUIA (ordem obrigatoria):
 OBSERVACAO: explicar o criterio DECISIVO. Max 15 palavras em portugues.
 Termos: CalTm=Tempo Final, BRT=Melhor Tempo, SAw=Saida Lenta, RnOn=Acelerou no Final, FinWll=Terminou Bem, FcdCk=Forcado a Frear, Bmp=Tomou Contato, Fdd=Cansou no Final, NvrShwd=Nunca Apareceu.
 
-VENCEDOR: so incluir quando houver CLARA vantagem. Se parelha NAO incluir.
+RANKING TOP3: para cada corrida (mesmo quando descartada=skip, se possivel), liste os numeros de trap dos 3 galgos mais bem avaliados pela sua analise, em ordem do melhor para o terceiro melhor, baseado em TODOS os criterios da hierarquia acima. Campo "top3": array de 3 inteiros, ex: [4,2,1]. Se nao for possivel determinar 3 com confianca, preencha com os que houver e 0 para os faltantes. Isso e SEMPRE preenchido quando houver corrida valida, independente de existir AvB ou Vencedor.
 
-RANKING TOP3: para cada corrida (mesmo quando descartada=skip, se possivel), liste os numeros de trap dos 3 galgos mais bem avaliados pela sua analise, em ordem do melhor para o terceiro melhor, baseado em TODOS os criterios da hierarquia acima (nao apenas trapFav/trapUnd). Campo "top3": array de 3 inteiros, ex: [4,2,1]. Se nao for possivel determinar 3 com confianca, preencha com os que houver e 0 para os faltantes.
+AvB (tipo=avb): SEMPRE opor o MELHOR avaliado da corrida (top1 do ranking, vira trapFav) contra o PIOR avaliado da corrida inteira (o de menor chance entre os 6, vira trapUnd) - NUNCA contra o 2o ou 3o colocado do ranking. O objetivo e maximizar a distancia de qualidade entre fav e underdog para dar mais seguranca a aposta.
+
+VENCEDOR (tipo=vencedor, campo "Back"): so incluir quando o trapFav tiver vantagem MUITO CLARA E ABSURDA sobre TODOS os outros 5 galgos da corrida (nao apenas sobre o 2o colocado do ranking). Isso e um criterio MUITO mais rigoroso que o top1 do ranking - na maioria das corridas NAO devera ser preenchido. Se a vantagem for apenas "ele e o melhor mas os outros estao proximos", NAO incluir Vencedor.
 
 RESPOSTA: APENAS JSON PURO. Comece com { e termine com }. Zero texto antes ou depois.
 Para cada corrida: 1 objeto tipo=avb + 1 objeto tipo=vencedor (opcional).
