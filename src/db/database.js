@@ -71,28 +71,62 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS analysis_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER UNIQUE NOT NULL,
+    -- Pesos dos criterios (1-10)
     peso_categoria INTEGER DEFAULT 5,
     peso_caltm INTEGER DEFAULT 4,
     peso_bends INTEGER DEFAULT 3,
     peso_remarks INTEGER DEFAULT 3,
     peso_brt INTEGER DEFAULT 1,
+    peso_post_pick INTEGER DEFAULT 0,
+    -- Filtros de corrida
     dist_min INTEGER DEFAULT 400,
     dist_max INTEGER DEFAULT 575,
     classes_aceitas TEXT DEFAULT 'A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12',
     min_corridas_uteis INTEGER DEFAULT 3,
+    -- Thresholds de confianca
     pct_alta INTEGER DEFAULT 65,
     pct_media INTEGER DEFAULT 50,
     diff_caltm_significativa REAL DEFAULT 0.3,
     diff_caltm_empate REAL DEFAULT 0.1,
+    -- Regra categoria vs caltm
+    max_cat_diff_caltm INTEGER DEFAULT 1,
+    -- Remarks
     remarks_muito_positivos TEXT DEFAULT 'SAw+RnOn,SAw+FinWll,FcdCk+RnOn,Bmp+RnOn,Crd+FinWll,Blk+StydOn',
     remarks_positivos TEXT DEFAULT 'RnOn,FinWll,StydOn,EP,Led,Chl,AHandy,ClrRn',
     remarks_atenuantes TEXT DEFAULT 'Bmp,Crd,Blk,FcdCk,Ck,Stb,Imp',
     remarks_negativos TEXT DEFAULT 'Fdd,NvrShwd,Outpaced,WeakFinish,SoonOutpaced,DroppedAway',
-    max_cat_diff_caltm INTEGER DEFAULT 1,
+    -- MOTOR DE PONTUACAO (novos campos)
+    ajuste_classe_segundos REAL DEFAULT 0.20,
+    desconto_acidente_leve REAL DEFAULT 0.10,
+    desconto_acidente_medio REAL DEFAULT 0.20,
+    desconto_acidente_grave REAL DEFAULT 0.35,
+    proporcao_media_caltm REAL DEFAULT 0.60,
+    proporcao_melhor_caltm REAL DEFAULT 0.40,
+    teto_diff_normalizacao REAL DEFAULT 0.50,
+    threshold_skip_avb REAL DEFAULT 10.0,
+    threshold_back REAL DEFAULT 25.0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 `);
+
+// Migracoes seguras para banco existente
+const migrations = [
+  'ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0',
+  'ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1',
+  'ALTER TABLE analysis_config ADD COLUMN ajuste_classe_segundos REAL DEFAULT 0.20',
+  'ALTER TABLE analysis_config ADD COLUMN desconto_acidente_leve REAL DEFAULT 0.10',
+  'ALTER TABLE analysis_config ADD COLUMN desconto_acidente_medio REAL DEFAULT 0.20',
+  'ALTER TABLE analysis_config ADD COLUMN desconto_acidente_grave REAL DEFAULT 0.35',
+  'ALTER TABLE analysis_config ADD COLUMN proporcao_media_caltm REAL DEFAULT 0.60',
+  'ALTER TABLE analysis_config ADD COLUMN proporcao_melhor_caltm REAL DEFAULT 0.40',
+  'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
+  'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
+  'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
+];
+for (const sql of migrations) {
+  try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
+}
 
 // Funções de autenticação
 function hashPassword(password) {

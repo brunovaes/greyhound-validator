@@ -135,7 +135,60 @@ ${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_ca
 </div>
 
 <div class="section">
-<div class="sec-title">Remarks</div>
+<div class="sec-title">Motor de Pontuacao</div>
+<div class="info-box">Estes parametros controlam o calculo deterministico de scores. O Claude agora so extrai dados brutos — toda a decisao de favorito/ranking/AvB/Back e feita por codigo com base nesses valores.</div>
+<div class="grid">
+<div class="field"><label>Ajuste por nivel de classe (s)</label><input type="number" name="ajuste_classe_segundos" value="${config.ajuste_classe_segundos||0.20}" step="0.05" min="0.05" max="0.50"><span class="hint">Ex: galgo em A5 correu em A3 = +0.20s no tempo (normaliza pra comparar)</span></div>
+<div class="field"><label>Desconto acidente leve (s)</label><input type="number" name="desconto_acidente_leve" value="${config.desconto_acidente_leve||0.10}" step="0.02" min="0" max="0.30"><span class="hint">Bmp, SAw, MsdBrk — tempo ajustado para baixo</span></div>
+<div class="field"><label>Desconto acidente medio (s)</label><input type="number" name="desconto_acidente_medio" value="${config.desconto_acidente_medio||0.20}" step="0.02" min="0" max="0.50"><span class="hint">Crd, FcdCk — desconto maior</span></div>
+<div class="field"><label>Desconto acidente grave (s)</label><input type="number" name="desconto_acidente_grave" value="${config.desconto_acidente_grave||0.35}" step="0.05" min="0" max="0.70"><span class="hint">BdBmp, Stmb — desconto maximo</span></div>
+<div class="field"><label>Teto normalizacao CalTm (s)</label><input type="number" name="teto_diff_normalizacao" value="${config.teto_diff_normalizacao||0.50}" step="0.05" min="0.20" max="1.00"><span class="hint">Diferenca maxima relevante entre galgos (acima disso = 0 pts)</span></div>
+<div class="field"><label>Proporcao media / melhor CalTm</label>
+  <select name="proporcao_media_caltm">
+    <option value="0.50" ${(config.proporcao_media_caltm||0.60)==0.50?'selected':''}>50% media + 50% melhor</option>
+    <option value="0.60" ${(config.proporcao_media_caltm||0.60)==0.60?'selected':''}>60% media + 40% melhor (padrao)</option>
+    <option value="0.70" ${(config.proporcao_media_caltm||0.60)==0.70?'selected':''}>70% media + 30% melhor</option>
+    <option value="0.80" ${(config.proporcao_media_caltm||0.60)==0.80?'selected':''}>80% media + 20% melhor</option>
+  </select>
+  <span class="hint">Consistencia vs potencial — maior proporcao de media = mais conservador</span>
+</div>
+<div class="field"><label>Score minimo para gerar AvB (pts)</label><input type="number" name="threshold_skip_avb" value="${config.threshold_skip_avb||10}" step="1" min="1" max="30"><span class="hint">Abaixo disso = corrida parelha = skip automatico</span></div>
+<div class="field"><label>Score minimo para gerar Back (pts)</label><input type="number" name="threshold_back" value="${config.threshold_back||25}" step="1" min="10" max="50"><span class="hint">Diferenca entre 1o e 2o colocado — barra alta para Back</span></div>
+</div>
+</div>
+
+<div class="section">
+<div class="sec-title">&#128196; Documento de Regras</div>
+<details style="cursor:pointer">
+<summary style="font-size:12px;color:#22c55e;padding:4px 0">Ver como funciona o motor de pontuacao (clique para expandir)</summary>
+<div style="margin-top:14px;font-size:12px;color:#aaa;line-height:1.8;background:#0a0a0a;padding:14px;border-radius:8px">
+<p style="color:#f0f0f0;font-weight:700;margin-bottom:8px">Como o motor calcula o resultado de cada corrida:</p>
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 1 — Extracao (Claude)</p>
+O Claude le o PDF e extrai os dados brutos de cada galgo: historico de corridas, tempos CalTm, remarks, bends, splits, BRT. Zero julgamento nesta fase.
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 2 — Filtro de linhas validas (codigo)</p>
+Para cada galgo, cada linha do historico e avaliada. E descartada se: distancia for diferente da corrida atual (&gt;10%), classe invalida (HP, Trial, OR, Solo), acidente gravissimo (Fall, Stmb, RnUp), ou sem CalTm. Se o galgo tiver menos de 3 linhas validas, ele e eliminado da corrida. Se sobrar menos de 4 galgos, a corrida vira Skip.
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 3 — Ajuste de CalTm (codigo)</p>
+Cada linha valida tem seu CalTm ajustado: desconto por acidente (Bmp=-${config.desconto_acidente_leve||0.10}s, Crd=-${config.desconto_acidente_medio||0.20}s) e ajuste por nivel de classe (+${config.ajuste_classe_segundos||0.20}s por nivel de diferenca). Os 3 ajustados mais recentes sao agregados com peso por recencia (3x, 2x, 1x) em ${Math.round((config.proporcao_media_caltm||0.60)*100)}% media + ${Math.round((1-(config.proporcao_media_caltm||0.60))*100)}% melhor.
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 4 — Score por criterio (codigo)</p>
+Cada galgo recebe um score 0-100 em cada criterio, multiplicado pelo seu peso:<br>
+&bull; <strong>CalTm</strong> (peso ${config.peso_caltm||4}): normalizado pela diferenca para o melhor da corrida (teto ${config.teto_diff_normalizacao||0.50}s)<br>
+&bull; <strong>Categoria</strong> (peso ${config.peso_categoria||5}): considera nivel da classe historica vs classe atual e posicoes recentes<br>
+&bull; <strong>Bends/Perfil</strong> (peso ${config.peso_bends||3}): Recuperador=90pts, Frontrunner=80pts, Estavel=60pts, Fumador=20pts + bonus por split<br>
+&bull; <strong>Remarks</strong> (peso ${config.peso_remarks||3}): combos muito positivos +30pts, positivos +15pts, negativos -20pts<br>
+&bull; <strong>BRT</strong> (peso ${config.peso_brt||1}): comparativo entre galgos, penalizado se BRT em classe muito diferente ou galgo fora de forma<br>
+&bull; <strong>Post Pick</strong> (peso ${config.peso_post_pick||0}): 1a escolha=100pts, 2a=75pts, 3a=55pts, fora=30pts
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 5 — Ranking e decisao (codigo)</p>
+Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o menor score.<br>
+&bull; <strong>AvB</strong>: 1o vs ultimo. Se diferenca &lt; ${config.threshold_skip_avb||10}pts = Skip automatico (corrida parelha).<br>
+&bull; <strong>Back</strong>: So gerado se diferenca entre 1o e 2o &gt; ${config.threshold_back||25}pts (vantagem absurda).
+</div>
+</details>
+</div>
 <div class="grid" style="grid-template-columns:1fr 1fr">
 <div class="field"><label>Combinacoes muito positivas</label><textarea name="remarks_muito_positivos">${config.remarks_muito_positivos}</textarea><span class="hint">Ex: SAw+RnOn,Bmp+RnOn</span></div>
 <div class="field"><label>Remarks positivos</label><textarea name="remarks_positivos">${config.remarks_positivos}</textarea></div>
@@ -181,12 +234,25 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     const d = req.body;
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN ajuste_classe_segundos REAL DEFAULT 0.20').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN desconto_acidente_leve REAL DEFAULT 0.10').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN desconto_acidente_medio REAL DEFAULT 0.20').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN desconto_acidente_grave REAL DEFAULT 0.35').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN proporcao_media_caltm REAL DEFAULT 0.60').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN proporcao_melhor_caltm REAL DEFAULT 0.40').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0').run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_categoria,d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
       d.remarks_muito_positivos,d.remarks_positivos,d.remarks_atenuantes,d.remarks_negativos,
-      d.max_cat_diff_caltm||1, d.peso_post_pick||0, user.id
+      d.max_cat_diff_caltm||1, d.peso_post_pick||0,
+      d.ajuste_classe_segundos||0.20, d.desconto_acidente_leve||0.10, d.desconto_acidente_medio||0.20, d.desconto_acidente_grave||0.35,
+      d.proporcao_media_caltm||0.60, 1-(d.proporcao_media_caltm||0.60),
+      d.teto_diff_normalizacao||0.50, d.threshold_skip_avb||10, d.threshold_back||25,
+      user.id
     );
     res.json({ ok: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
