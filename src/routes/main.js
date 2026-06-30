@@ -346,43 +346,50 @@ document.addEventListener('DOMContentLoaded',function(){
     var rows=avbs.map(function(r){
       var tf=r.trapFav||'?', tu=r.trapUnd||'?';
       var avbStr='T'+tf+' > T'+tu;
-      var cat=r.grade||r.categoria||r.cat||'';
       var obsClean=(r.obs||'-').replace(/CalTm/gi,'Tempo');
       return'<tr>'
         +'<td style="text-align:center;vertical-align:middle">'+convertHora(r.hora||'-')+'<br><small style="color:#666">'+( r.hora||'')+'</small></td>'
         +'<td style="vertical-align:middle"><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td>'
-        +'<td style="text-align:center;vertical-align:middle;font-size:8px;color:#555">'+cat+'</td>'
         +'<td style="text-align:center;vertical-align:middle;font-weight:700;font-size:10px">'+avbStr+'</td>'
         +'<td style="text-align:center;vertical-align:middle">'+(r.pct||'-')+'%</td>'
         +'<td style="font-size:9px;line-height:1.5;vertical-align:middle">'+obsClean+'</td>'
         +'</tr>';
     }).join('');
     var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Analises Greyhound</title>'
-      +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}'
-      +'h2{font-size:13px;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px}'
+      +'<style>'
+      +'*{box-sizing:border-box;margin:0;padding:0}'
+      +'body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}'
+      +'h2{font-size:13px;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #333}'
       +'table{width:100%;border-collapse:collapse;font-size:9px}'
-      +'th{background:#555;color:#fff;border:1px solid #444;padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.6px;vertical-align:middle}'
+      +'thead tr{background:#555;color:#fff}'
+      +'th{background:#555;color:#fff;border:1px solid #444;padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.6px;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
       +'td{border:1px solid #ddd;padding:4px 6px;vertical-align:middle}'
-      +'tr:nth-child(even) td{background:#f9f9f9}'
-      +'small{color:#555}'
-      +'@media print{body{padding:0}}'
+      +'tr:nth-child(even) td{background:#f5f5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      +'small{color:#777;font-size:8px}'
+      +'@media print{'
+      +'body{padding:4px}'
+      +'thead tr{background:#555!important;color:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+      +'th{background:#555!important;color:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+      +'tr:nth-child(even) td{background:#f5f5f5!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+      +'}'
       +'</style></head><body>'
       +'<h2>Greyhound Factory — Analises do dia</h2>'
-      +'<table><thead><tr>'
+      +'<table>'
+      +'<thead><tr>'
       +'<th style="width:60px">Hora BR</th>'
-      +'<th style="width:110px">Corrida</th>'
-      +'<th style="width:45px">Cat.</th>'
+      +'<th style="width:130px">Corrida</th>'
       +'<th style="width:65px">AvB</th>'
       +'<th style="width:40px">Conf</th>'
       +'<th>Observacao</th>'
       +'</tr></thead>'
-      +'<tbody>'+rows+'</tbody></table>'
+      +'<tbody>'+rows+'</tbody>'
+      +'</table>'
       +'</body></html>';
-    var w=window.open('','_blank','width=900,height=700');
+    var w=window.open('','_blank');
     w.document.write(html);
     w.document.close();
     w.focus();
-    setTimeout(function(){w.print();},500);
+    setTimeout(function(){w.print();},600);
   });
   document.getElementById('btn-pdf-ready-ok').addEventListener('click',function(){document.getElementById('pdf-ready-modal').classList.remove('open');});
   document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
