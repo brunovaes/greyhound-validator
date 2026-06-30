@@ -413,7 +413,7 @@ router.get('/live', (req, res) => {
   const logoB64 = getLogo();
   // URLs fixas das pistas (ajustar aqui quando precisar trocar)
   const LIVE_URL_1 = 'https://www.sisracing.tv/';
-  const LIVE_URL_2 = process.env.LIVE_URL_2 || '';
+  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://greyhounds.attheraces.com/video/live-video';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
@@ -454,7 +454,7 @@ ${navBar(user, 'live')}
 
 router.get('/live/popup', (req, res) => {
   const LIVE_URL_1 = 'https://www.sisracing.tv/';
-  const LIVE_URL_2 = process.env.LIVE_URL_2 || '';
+  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://greyhounds.attheraces.com/video/live-video';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
