@@ -18,10 +18,10 @@ function navBar(user, active) {
     <div style="display:flex">
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
       <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Histórico</a>
-      <a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robô</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuários</a>` : ''}
+      <a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>
     </div>
     <div style="display:flex;align-items:center;gap:14px">
       <span style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${user.plan}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
@@ -427,25 +427,53 @@ h1{font-size:18px;font-weight:700;margin-bottom:12px}
 @media(max-width:900px){.live-grid{grid-template-columns:1fr}}
 .live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:var(--crop-top,-160px);left:0;width:100%;height:calc(100% + 400px);border:none}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
 .live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px}
 </style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'live')}
 <div class="content">
-<h1>Live — Acompanhamento Simultaneo</h1>
+<h1 style="display:flex;align-items:center;justify-content:space-between">Live — Acompanhamento Simultaneo
+  <a href="${BASE}/live/popup" target="_blank" rel="noopener" style="font-size:12px;background:#22c55e;color:#000;font-weight:700;padding:7px 14px;border-radius:6px;text-decoration:none">&#8599; Abrir em nova aba</a>
+</h1>
 <div class="live-grid">
   <div class="live-panel">
     <div class="live-crop">
-      ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
+      ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
     </div>
   </div>
   <div class="live-panel">
     <div class="live-crop">
-      ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada<br><small style="color:#666">Defina LIVE_URL_2 nas variaveis de ambiente do Railway</small></div>'}
+      ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada<br><small style="color:#666">Defina LIVE_URL_2 nas variaveis de ambiente do Railway</small></div>'}
     </div>
   </div>
 </div>
+</div>
+</body></html>`);
+});
+
+router.get('/live/popup', (req, res) => {
+  const LIVE_URL_1 = 'https://www.sisracing.tv/';
+  const LIVE_URL_2 = process.env.LIVE_URL_2 || '';
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live - Greyhound Validator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;height:100vh;overflow:hidden}
+.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;height:100vh}
+@media(max-width:900px){.live-grid{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+.live-crop{position:relative;width:100%;height:100%;overflow:hidden;background:#000}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:calc(100% + 240px);border:none}
+.live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:13px;text-align:center;padding:20px;font-family:sans-serif}
+</style></head><body>
+<div class="live-grid">
+  <div class="live-crop">
+    ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
+  </div>
+  <div class="live-crop">
+    ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada</div>'}
+  </div>
 </div>
 </body></html>`);
 });
