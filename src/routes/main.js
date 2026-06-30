@@ -225,6 +225,10 @@ ${navBar(user, 'analisar')}
 <script>
 var raceFiles=[],capFiles=[],results=[],capModalFilesList=[];
 var BASE='${BASE}';
+var SS_KEY='ghf_results_v1';
+function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})}));}catch(e){}}
+function clearSessionState(){try{sessionStorage.removeItem(SS_KEY);}catch(e){}}
+function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!raw)return false;var data=JSON.parse(raw);if(data&&Array.isArray(data.results)&&data.results.length){results=data.results;return true;}}catch(e){}return false;}
 
 function readB64(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result.split(',')[1]);};r.onerror=rej;r.readAsDataURL(file);});}
 function trapClass(n){return['','t1','t2','t3','t4','t5','t6'][n]||'t1';}
@@ -294,6 +298,7 @@ async function runAnalysis(){
     if(data.limitReached){alert('Limite de analises atingido! Fale com o administrador.');document.getElementById('btngo').disabled=false;document.getElementById('btngo').innerHTML='Analisar Corridas';return;}
     results=data.races||[];
     prog(95,'Montando...');renderTable();
+    saveSessionState();
     setSt('Concluido: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
     prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
@@ -302,6 +307,7 @@ async function runAnalysis(){
 }
 
 document.addEventListener('DOMContentLoaded',function(){
+  if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');}
   document.getElementById('race-input').addEventListener('change',async function(){
     for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
   });
@@ -310,10 +316,10 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
   document.getElementById('btngo').addEventListener('click',runAnalysis);
-  document.getElementById('btn-clear').addEventListener('click',function(){raceFiles=[];capFiles=[];results=[];document.getElementById('rlist').innerHTML='';document.getElementById('tb').innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3></div></td></tr>';document.getElementById('ab').style.display='none';document.getElementById('pw').style.display='none';setSt('');updCards();});
+  document.getElementById('btn-clear').addEventListener('click',function(){raceFiles=[];capFiles=[];results=[];clearSessionState();document.getElementById('rlist').innerHTML='';document.getElementById('tb').innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3></div></td></tr>';document.getElementById('ab').style.display='none';document.getElementById('pw').style.display='none';setSt('');updCards();});
   document.getElementById('btn-save').addEventListener('click',async function(){var name=prompt('Nome da sessao (ex: Clonmel 28/06):');if(!name)return;var avbs=results.filter(function(r){return r.tipo==='avb';});var resp=await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});if(resp.ok){alert('Sessao salva!');location.reload();}else alert('Erro ao salvar.');});
-  document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i])results[i][f]=el.value;});
-  document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}}});
+  document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;saveSessionState();}});
+  document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}saveSessionState();}});
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
   document.getElementById('cap-modal-inp').addEventListener('change',async function(){for(var i=0;i<this.files.length;i++){var file=this.files[i],id='cm'+Date.now()+i;try{var b64=await readB64(file);var isImg=/\.(jpg|jpeg|png|webp)$/i.test(file.name);capModalFilesList.push({name:file.name,b64:b64,id:id,mime:isImg?file.type:'application/pdf',isImg:isImg});var d=document.createElement('div');d.className='fi';d.innerHTML='<span class="fi-name">'+file.name+'</span><span class="fi-st fi-ok">OK</span>';document.getElementById('cap-modal-list').appendChild(d);document.getElementById('btn-cap-ok').disabled=false;}catch(e){alert('Erro ao ler.');}}});
   document.getElementById('btn-cap-cancel').addEventListener('click',function(){document.getElementById('cap-modal').classList.remove('open');});
