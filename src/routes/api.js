@@ -39,11 +39,13 @@ Termos: CalTm=Tempo Final, BRT=Melhor Tempo, SAw=Saida Lenta, RnOn=Acelerou no F
 
 VENCEDOR: so incluir quando houver CLARA vantagem. Se parelha NAO incluir.
 
+RANKING TOP3: para cada corrida (mesmo quando descartada=skip, se possivel), liste os numeros de trap dos 3 galgos mais bem avaliados pela sua analise, em ordem do melhor para o terceiro melhor, baseado em TODOS os criterios da hierarquia acima (nao apenas trapFav/trapUnd). Campo "top3": array de 3 inteiros, ex: [4,2,1]. Se nao for possivel determinar 3 com confianca, preencha com os que houver e 0 para os faltantes.
+
 RESPOSTA: APENAS JSON PURO. Comece com { e termine com }. Zero texto antes ou depois.
 Para cada corrida: 1 objeto tipo=avb + 1 objeto tipo=vencedor (opcional).
-Descartadas: tipo=avb, nivel=skip, pct=0, trapFav=0, trapUnd=0.
+Descartadas: tipo=avb, nivel=skip, pct=0, trapFav=0, trapUnd=0, top3=[].
 
-{"races":[{"hora":"8:24","corrida":"Kinsley A7","dist":"462m","tipo":"avb","trapFav":4,"nameFav":"Got The Ballymac","trapUnd":2,"nameUnd":"Hazelgrove Flash","pct":62,"nivel":"media","perfilFav":"Frontrunner","perfilUnd":"Recuperador","obs":"T4 Tempo Final 29.18 vs T2 29.38. Ambos validados A7.","needsCap":false}]}`;
+{"races":[{"hora":"8:24","corrida":"Kinsley A7","dist":"462m","tipo":"avb","trapFav":4,"nameFav":"Got The Ballymac","trapUnd":2,"nameUnd":"Hazelgrove Flash","pct":62,"nivel":"media","perfilFav":"Frontrunner","perfilUnd":"Recuperador","obs":"T4 Tempo Final 29.18 vs T2 29.38. Ambos validados A7.","needsCap":false,"top3":[4,2,1]}]}`;
 }
 
 router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req, res) => {

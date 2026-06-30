@@ -97,6 +97,7 @@ tr.sk td{opacity:.35}tr.sk td:first-child{border-left:3px solid var(--bdr2)}
 .p-rec{background:rgba(34,197,94,.15);color:var(--grn)}.p-fum{background:rgba(239,68,68,.12);color:var(--red)}
 .p-est{background:rgba(100,100,100,.15);color:var(--mut2)}.p-fro{background:rgba(249,115,22,.12);color:var(--org)}
 .win-tag{display:inline-flex;align-items:center;font-size:9px;color:rgba(249,115,22,.6);border:1px solid rgba(249,115,22,.2);border-radius:3px;padding:1px 5px;margin-top:3px;background:rgba(249,115,22,.04)}
+.top3-tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:4px;padding:2px 6px;margin-top:4px;background:rgba(251,191,36,.08)}
 .hora-br{font-size:10px;color:rgba(34,197,94,.5);margin-top:2px}
 .obs-c{font-size:11px;color:var(--mut2);line-height:1.5;max-width:175px}
 .obs-cap{font-size:11px;color:var(--org);line-height:1.5;max-width:175px}
@@ -138,7 +139,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   tr.sk{display:none!important}
   .obs-c,.obs-cap{max-width:none!important;font-size:9px!important;color:#000!important}
   .perfil-badge{display:none!important}
-  .win-tag,.hora-br{display:none!important}
+  .win-tag,.hora-br,.top3-tag{display:none!important}
 }
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--sur)}::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto}
@@ -255,7 +256,8 @@ function renderTable(){
     var tf=r.trapFav||0,tu=r.trapUnd||0,nf=r.nameFav||'',nu=r.nameUnd||'';
     var wd=winMap[(r.hora||'')+'_'+(r.corrida||'')];
     var wt=wd?'<div class="win-tag">&#127942; Back T'+wd.trapFav+' '+((wd.nameFav||'').split(' ')[0])+'</div>':'';
-    var hh='<strong style="color:var(--grn)">'+(r.hora||'-')+'</strong><div class="hora-br">'+convertHora(r.hora)+'</div>'+wt;
+    var hh='<strong style="color:var(--grn)">'+(r.hora||'-')+'</strong><div class="hora-br">'+convertHora(r.hora)+'</div>';
+    var top3=(r.top3&&r.top3.filter(function(x){return x>0;}).length)?'<div class="top3-tag">&#127942; '+r.top3.filter(function(x){return x>0;}).join('-')+'</div>':'';
     var sh=sk?'<span style="color:var(--mut)">Descartada</span>':'<div class="trap-row"><div class="trap-item"><div class="trap-badge '+trapClass(tf)+'">'+tf+'</div><div class="trap-name">'+nf+'</div></div><span class="trap-vs">vs</span><div class="trap-item"><div class="trap-badge '+trapClass(tu)+'">'+tu+'</div><div class="trap-name">'+nu+'</div></div></div>';
     var ph=perfilBadge(r.perfilFav)+(r.perfilUnd?'<br>'+perfilBadge(r.perfilUnd):'');
     var ch=sk?'':'<span class="badge '+bc+'">'+bt+'</span><br><span style="font-size:10px;color:var(--mut)">'+r.pct+'%</span><span class="cbar"><span class="cfill '+fc+'" style="width:'+r.pct+'%"></span></span>';
@@ -266,7 +268,7 @@ function renderTable(){
     var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div></div>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
       +'<td style="text-align:center">'+hh+'</td>'
-      +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div></td>'
+      +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
       +'<td style="text-align:center">'+sh+'</td>'
       +'<td style="text-align:center">'+ch+'</td>'
       +'<td style="font-size:12px;line-height:1.6">'+(r.needsCap?'<span class="obs-cap">'+obsText+'</span>':'<span class="obs-c">'+obsText+'</span>')+'</td>'
