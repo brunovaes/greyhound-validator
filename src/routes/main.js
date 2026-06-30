@@ -121,16 +121,24 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .pdf-ready-ok{padding:10px 28px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:14px}
 .pdf-ready-ok:hover{background:#16a34a}
 @media print{
-  .hero,.nl,.sidebar,.kpis,.pw,.st,.ab,nav,.bexp,.bsave,#btn-print,.cap-btn,.fi-rm{display:none!important}
-  body{background:#fff!important;color:#000!important}
+  .hero,.sidebar,.kpis,.pw,.st,.ab,nav,.bexp,.bsave,#btn-print,.cap-btn,.fi-rm,
+  .col-sel-full,.col-perf,.col-res,.col-bat,.col-cap,.col-odd,
+  th.th-sel,th.th-perf,th.th-res,th.th-bat,th.th-cap,th.th-odd,
+  td.td-sel,td.td-perf,td.td-res,td.td-bat,td.td-cap,td.td-odd{display:none!important}
+  body{background:#fff!important;color:#000!important;font-size:10px!important}
   .tw{border:none!important}
-  table{min-width:unset!important}
-  th{color:#333!important;background:#f5f5f5!important}
-  td{color:#000!important;border-color:#ddd!important}
+  table{min-width:unset!important;width:100%!important;font-size:9px!important}
+  th{color:#333!important;background:#f0f0f0!important;padding:4px 6px!important;font-size:8px!important}
+  td{color:#000!important;border-color:#ddd!important;padding:4px 6px!important;font-size:9px!important}
   .main{display:block!important}
-  .content{padding:8px!important}
-  .badge{border:1px solid #999!important}
-  .trap-badge{border:2px solid #999!important;color:#000!important;background:#eee!important}
+  .content{padding:4px!important}
+  .badge{border:1px solid #999!important;color:#000!important;background:#eee!important;font-size:8px!important}
+  .trap-badge{border:1px solid #999!important;color:#000!important;background:#eee!important;width:18px!important;height:18px!important;font-size:9px!important}
+  .trap-name{display:none!important}
+  tr.sk{display:none!important}
+  .obs-c,.obs-cap{max-width:none!important;font-size:9px!important;color:#000!important}
+  .perfil-badge{display:none!important}
+  .win-tag,.hora-br{display:none!important}
 }
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--sur)}::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto}
@@ -182,8 +190,7 @@ ${navBar(user, 'analisar')}
     </div>
     <div class="tw">
       <table><thead><tr>
-        <th>Hora</th><th>Corrida</th><th>Selecao</th><th>Confianca</th>
-        <th>Perfil</th><th style="min-width:220px">Observacao / Odd / Valor</th><th>Resultado</th><th>Bateu</th><th>Cap</th>
+        <th style="width:80px;text-align:center">Hora</th><th style="width:160px">Corrida</th><th style="width:180px;text-align:center">Selecao</th><th style="width:90px;text-align:center">Confianca</th><th style="min-width:280px">Observacao</th><th style="width:130px;text-align:center">Odd / Valor</th><th style="width:130px;text-align:center">Resultado</th><th style="width:70px;text-align:center">Bateu</th><th style="width:55px;text-align:center">Cap</th>
       </tr></thead>
       <tbody id="tb"><tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3><p>Carregue PDFs e clique em Analisar.</p></div></td></tr></tbody></table>
     </div>
@@ -251,8 +258,19 @@ function renderTable(){
     var oc=r.needsCap?'obs-cap':'obs-c';
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
-    var obsHtml='<div class="'+oc+'">'+(r.obs||'-').replace(/CalTm m[eé]dio/gi,'Tempo m\u00e9dio')+'</div>'+(sk?'':'<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:46px"></div><div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px"></div></div>');
-    rows+='<tr class="row-avb'+(sk?' sk':'')+'"><td>'+hh+'</td><td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div></td><td>'+sh+'</td><td>'+ch+'</td><td>'+ph+'</td><td>'+obsHtml+'</td><td>'+rh+'</td><td><select data-i="'+i+'" data-f="hit"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td><td>'+cap+'</td></tr>';
+    var obsText=(r.obs||'-').replace(/CalTm/gi,'Tempo');
+    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div></div>';
+    rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
+      +'<td style="text-align:center">'+hh+'</td>'
+      +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div></td>'
+      +'<td style="text-align:center">'+sh+'</td>'
+      +'<td style="text-align:center">'+ch+'</td>'
+      +'<td style="font-size:12px;line-height:1.6">'+(r.needsCap?'<span class="obs-cap">'+obsText+'</span>':'<span class="obs-c">'+obsText+'</span>')+'</td>'
+      +'<td style="text-align:center">'+oddValHtml+'</td>'
+      +'<td style="text-align:center">'+rh+'</td>'
+      +'<td style="text-align:center"><select data-i="'+i+'" data-f="hit" style="text-align:center"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td>'
+      +'<td style="text-align:center">'+cap+'</td>'
+      +'</tr>';
   });
   tb.innerHTML=rows;
   document.getElementById('ab').style.display='flex';
@@ -322,7 +340,41 @@ document.addEventListener('DOMContentLoaded',function(){
     }
   });
   document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
-  document.getElementById('btn-print').addEventListener('click',function(){window.print();});
+  document.getElementById('btn-print').addEventListener('click',function(){
+    var avbs=results.filter(function(r){return r.nivel!=='skip' && r.tipo==='avb';});
+    if(!avbs.length){alert('Nenhuma corrida para imprimir.');return;}
+    var rows=avbs.map(function(r){
+      var tf=r.trapFav||'?', tu=r.trapUnd||'?';
+      var avbStr='T'+tf+' > T'+tu;
+      var obsClean=(r.obs||'-').replace(/CalTm/gi,'Tempo');
+      return'<tr>'
+        +'<td>'+convertHora(r.hora||'-')+'<br><small style="color:#666">'+( r.hora||'')+'</small></td>'
+        +'<td><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td>'
+        +'<td style="text-align:center;font-weight:700;font-size:13px">'+avbStr+'</td>'
+        +'<td style="text-align:center">'+(r.pct||'-')+'%</td>'
+        +'<td style="font-size:10px;line-height:1.5">'+obsClean+'</td>'
+        +'</tr>';
+    }).join('');
+    var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Analises Greyhound</title>'
+      +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}'
+      +'h2{font-size:13px;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px}'
+      +'table{width:100%;border-collapse:collapse;font-size:9px}'
+      +'th{background:#f0f0f0;border:1px solid #ccc;padding:4px 6px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.5px}'
+      +'td{border:1px solid #ddd;padding:4px 6px;vertical-align:top}'
+      +'tr:nth-child(even) td{background:#f9f9f9}'
+      +'small{color:#555}'
+      +'@media print{body{padding:0}}'
+      +'</style></head><body>'
+      +'<h2>Greyhound Factory — Analises do dia</h2>'
+      +'<table><thead><tr><th style="width:60px">Hora BR</th><th style="width:100px">Corrida</th><th style="width:70px;text-align:center">AvB</th><th style="width:45px;text-align:center">Conf</th><th>Observacao</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table>'
+      +'</body></html>';
+    var w=window.open('','_blank','width=900,height=700');
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(function(){w.print();},500);
+  });
   document.getElementById('btn-pdf-ready-ok').addEventListener('click',function(){document.getElementById('pdf-ready-modal').classList.remove('open');});
   document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
 });
