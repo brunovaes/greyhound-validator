@@ -142,7 +142,26 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .ab{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
 .empty{text-align:center;padding:24px;color:#555;font-size:13px}
+
+/* Popup PDF pronto */
+.pdf-popup{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center}
+.pdf-popup.open{display:flex}
+.pdf-popup-box{background:#111;border:1px solid #333;border-radius:14px;padding:32px 36px;text-align:center;max-width:400px;border-top:3px solid #22c55e;animation:popIn .3s ease}
+@keyframes popIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+.pdf-popup-icon{font-size:52px;margin-bottom:14px}
+.pdf-popup-box h3{font-size:18px;font-weight:700;color:#f0f0f0;margin-bottom:8px}
+.pdf-popup-box p{font-size:13px;color:#888;line-height:1.6;margin-bottom:22px}
+.pdf-popup-ok{padding:11px 32px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:14px}
+.pdf-popup-ok:hover{background:#16a34a}
 </style></head><body>
+<div class="pdf-popup" id="pdf-ready-popup">
+  <div class="pdf-popup-box">
+    <div class="pdf-popup-icon">&#9989;</div>
+    <h3>Download concluido!</h3>
+    <p>Seus PDFs já estão disponíveis para realização das análises.</p>
+    <button class="pdf-popup-ok" onclick="document.getElementById('pdf-ready-popup').classList.remove('open')">OK</button>
+  </div>
+</div>
 <div class="hero"><img src="${logoB64}" alt="Greyhound Validator"></div>
 <nav>
   <div>
@@ -346,16 +365,24 @@ async function downloadAll() {
   var cnt = document.getElementById('dl-cnt');
   wrap.style.display = 'block';
 
+  // Formata a data da fila no formato DDMMYYYY para a pasta
+  var dateRaw = dlQueue[0] ? dlQueue[0].date : '';
+  var folderName = dateRaw;
+  if (dateRaw && dateRaw.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    var parts = dateRaw.split('-');
+    folderName = parts[2] + parts[1] + parts[0]; // DDMMYYYY
+  }
+
   for (var i = 0; i < dlQueue.length; i++) {
     var f = dlQueue[i];
     cur.textContent = f.filename;
     cnt.textContent = (i+1) + ' / ' + dlQueue.length;
     bar.style.width = Math.round((i / dlQueue.length) * 100) + '%';
 
-    // Dispara download do arquivo
+    // Dispara download do arquivo com pasta Racingpost\DDMMYYYY no nome
     var a = document.createElement('a');
     a.href = BASE + '/robot/download-pdf?date=' + f.date + '&file=' + encodeURIComponent(f.filename);
-    a.download = f.filename;
+    a.download = folderName + '\\' + f.filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -368,6 +395,9 @@ async function downloadAll() {
   cur.textContent = 'Concluido! ' + dlQueue.length + ' PDFs baixados.';
   cnt.textContent = dlQueue.length + ' / ' + dlQueue.length;
   btn.disabled = false;
+
+  // Exibe popup bonito de conclusao
+  document.getElementById('pdf-ready-popup').classList.add('open');
 }
 
 (async function() {

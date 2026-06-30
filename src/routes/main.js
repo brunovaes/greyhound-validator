@@ -112,6 +112,26 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .bexp:hover{border-color:var(--grn);color:var(--grn)}
 .bsave{padding:7px 14px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--grn);border-radius:var(--rad);cursor:pointer;font-size:12px;font-weight:600}
 .bsave:hover{background:rgba(34,197,94,.2)}
+.pdf-ready-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center}
+.pdf-ready-modal.open{display:flex}
+.pdf-ready-box{background:#111;border:1px solid #333;border-radius:12px;padding:28px 32px;text-align:center;max-width:420px;border-top:3px solid #22c55e}
+.pdf-ready-icon{font-size:48px;margin-bottom:12px}
+.pdf-ready-box h3{font-size:17px;font-weight:700;color:#f0f0f0;margin-bottom:8px}
+.pdf-ready-box p{font-size:13px;color:#888;margin-bottom:20px;line-height:1.6}
+.pdf-ready-ok{padding:10px 28px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:14px}
+.pdf-ready-ok:hover{background:#16a34a}
+@media print{
+  .hero,.nl,.sidebar,.kpis,.pw,.st,.ab,nav,.bexp,.bsave,#btn-print,.cap-btn,.fi-rm{display:none!important}
+  body{background:#fff!important;color:#000!important}
+  .tw{border:none!important}
+  table{min-width:unset!important}
+  th{color:#333!important;background:#f5f5f5!important}
+  td{color:#000!important;border-color:#ddd!important}
+  .main{display:block!important}
+  .content{padding:8px!important}
+  .badge{border:1px solid #999!important}
+  .trap-badge{border:2px solid #999!important;color:#000!important;background:#eee!important}
+}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--sur)}::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto}
 .modal-bg.open{display:flex}.modal{background:var(--sur);border:1px solid var(--bdr2);border-radius:10px;padding:22px;width:500px;max-width:95vw;border-top:3px solid var(--org)}
@@ -163,14 +183,24 @@ ${navBar(user, 'analisar')}
     <div class="tw">
       <table><thead><tr>
         <th>Hora</th><th>Corrida</th><th>Selecao</th><th>Confianca</th>
-        <th>Perfil</th><th>Observacao</th><th>Odd</th><th>Valor R$</th><th>Resultado</th><th>Bateu</th><th>Cap</th>
+        <th>Perfil</th><th style="min-width:220px">Observacao / Odd / Valor</th><th>Resultado</th><th>Bateu</th><th>Cap</th>
       </tr></thead>
       <tbody id="tb"><tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3><p>Carregue PDFs e clique em Analisar.</p></div></td></tr></tbody></table>
     </div>
     <div class="ab" id="ab" style="display:none">
       <button class="bexp" id="btn-exp">Exportar CSV</button>
+      <button class="bexp" id="btn-print" style="border-color:#a78bfa;color:#a78bfa">&#128438; Imprimir Analises</button>
       <button class="bsave" id="btn-save">Salvar Sessao</button>
     </div>
+  </div>
+</div>
+
+<div class="pdf-ready-modal" id="pdf-ready-modal">
+  <div class="pdf-ready-box">
+    <div class="pdf-ready-icon">&#9989;</div>
+    <h3>PDFs prontos!</h3>
+    <p>Seus PDFs já estão disponíveis para realização das análises.</p>
+    <button class="pdf-ready-ok" id="btn-pdf-ready-ok">OK</button>
   </div>
 </div>
 
@@ -221,7 +251,8 @@ function renderTable(){
     var oc=r.needsCap?'obs-cap':'obs-c';
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
-    rows+='<tr class="row-avb'+(sk?' sk':'')+'"><td>'+hh+'</td><td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div></td><td>'+sh+'</td><td>'+ch+'</td><td>'+ph+'</td><td class="'+oc+'">'+(r.obs||'-')+'</td><td><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:46px"></td><td><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px"></td><td>'+rh+'</td><td><select data-i="'+i+'" data-f="hit"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td><td>'+cap+'</td></tr>';
+    var obsHtml='<div class="'+oc+'">'+(r.obs||'-').replace(/CalTm m[eé]dio/gi,'Tempo m\u00e9dio')+'</div>'+(sk?'':'<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:46px"></div><div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px"></div></div>');
+    rows+='<tr class="row-avb'+(sk?' sk':'')+'"><td>'+hh+'</td><td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div></td><td>'+sh+'</td><td>'+ch+'</td><td>'+ph+'</td><td>'+obsHtml+'</td><td>'+rh+'</td><td><select data-i="'+i+'" data-f="hit"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td><td>'+cap+'</td></tr>';
   });
   tb.innerHTML=rows;
   document.getElementById('ab').style.display='flex';
@@ -291,6 +322,8 @@ document.addEventListener('DOMContentLoaded',function(){
     }
   });
   document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
+  document.getElementById('btn-print').addEventListener('click',function(){window.print();});
+  document.getElementById('btn-pdf-ready-ok').addEventListener('click',function(){document.getElementById('pdf-ready-modal').classList.remove('open');});
   document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
 });
 </script></body></html>`);
