@@ -460,11 +460,11 @@ router.get('/live/popup', (req, res) => {
 <title>Live - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;height:100vh;overflow:hidden}
-.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;height:100vh}
-@media(max-width:900px){.live-grid{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
-.live-crop{position:relative;width:100%;height:100%;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:calc(100% + 240px);border:none}
+body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:center}
+.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;width:100%}
+@media(max-width:900px){.live-grid{grid-template-columns:1fr}}
+.live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
 .live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:13px;text-align:center;padding:20px;font-family:sans-serif}
 </style></head><body>
 <div class="live-grid">
