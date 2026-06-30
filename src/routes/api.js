@@ -440,17 +440,23 @@ function sanitizeEliminatedTraps(races) {
 const BATCH_SIZE = 15;
 
 function parseClaudeJson(raw) {
-  const clean = raw.split('```json').join('').split('```').join('').trim();
+  // Limpa backticks de forma robusta com regex
+  let clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  // Remove qualquer texto antes do primeiro {
+  const start = clean.indexOf('{');
+  if (start > 0) clean = clean.slice(start);
+  // Remove qualquer texto depois do ultimo }
+  const end = clean.lastIndexOf('}');
+  if (end >= 0 && end < clean.length - 1) clean = clean.slice(0, end + 1);
+
   try { return JSON.parse(clean); } catch(e1) {
     try {
       const s1=clean.indexOf('{"races"'); const s2=clean.indexOf('{ "races"');
       const s=s1>=0?s1:s2; const e=clean.lastIndexOf('}');
       if(s>=0&&e>=0) return JSON.parse(clean.slice(s,e+1));
     } catch(e2) {
-      try {
-        const s=clean.indexOf('{'); const e=clean.lastIndexOf('}');
-        if(s>=0&&e>=0) return JSON.parse(clean.slice(s,e+1));
-      } catch(e3) { console.error('Parse falhou:', clean.slice(0,300)); return null; }
+      console.error('Parse falhou:', clean.slice(0,300));
+      return null;
     }
   }
   return null;
