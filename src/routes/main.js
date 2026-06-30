@@ -584,26 +584,65 @@ router.get('/api/atr-stream', async (req, res) => {
     browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
     const page = await browser.newPage();
 
+    // Stealth: user agent real de Chrome moderno
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 720 });
+
+    // Headers que um browser real enviaria
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-GB,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Upgrade-Insecure-Requests': '1'
+    });
+
+    // Mascara webdriver (Fastly detecta navigator.webdriver=true)
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-GB','en'] });
+      window.chrome = { runtime: {} };
+    });
+
     // Interceptar requisicoes de rede pra capturar o m3u8
     let streamUrl = null;
     await page.setRequestInterception(true);
     page.on('request', req2 => {
       const url = req2.url();
-      if (!streamUrl && url.includes('.m3u8')) {
-        // Pega a URL base (sem chunks, so o manifest principal)
-        if (!url.includes('chunks.m3u8')) streamUrl = url;
-        else if (!streamUrl) streamUrl = url; // fallback pro chunks se nao achar o manifest
+      if (!streamUrl && url.includes('.m3u8') && !url.includes('chunks.m3u8')) {
+        streamUrl = url; // prefere o manifest principal
+      } else if (!streamUrl && url.includes('chunks.m3u8')) {
+        streamUrl = url; // fallback chunks
       }
-      req2.continue();
+      req2.continue().catch(()=>{});
     });
 
-    await page.goto(ATR_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+    // Tambem escuta responses (alguns players carregam m3u8 via fetch, nao via tag)
+    page.on('response', async resp => {
+      try {
+        const url = resp.url();
+        if (!streamUrl && url.includes('.m3u8')) streamUrl = url;
+      } catch(e) {}
+    });
 
-    // Aguarda ate 15s pelo m3u8 aparecer (video carrega apos JS rodar)
+    // Vai primeiro pra home pra pegar cookies/fingerprint, depois pra pagina do video
+    try {
+      await page.goto('https://greyhounds.attheraces.com/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await new Promise(r => setTimeout(r, 2000)); // simula leitura humana
+    } catch(e) {}
+
+    await page.goto(ATR_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Aguarda ate 20s pelo m3u8 aparecer
     const waited = await new Promise(resolve => {
       if (streamUrl) return resolve(true);
       const check = setInterval(() => { if (streamUrl) { clearInterval(check); resolve(true); } }, 500);
-      setTimeout(() => { clearInterval(check); resolve(false); }, 15000);
+      setTimeout(() => { clearInterval(check); resolve(false); }, 20000);
     });
 
     await browser.disconnect();
