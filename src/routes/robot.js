@@ -12,7 +12,7 @@ const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb9819013
 const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
 
 // Converte "1:12" → "1_12PM", "10:30" → "10_30AM"
-// 10,11,12 = AM | 1-6 = PM | 7,8,9 = AM cedo
+// Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11,12 = AM (cedo) | 1-9 = PM (tarde/noite)
 function formatTime(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return t.replace(':', '.');
@@ -20,8 +20,7 @@ function formatTime(t) {
   const min = m[2];
   let ampm;
   if (h >= 10 && h <= 12) ampm = 'AM';
-  else if (h >= 1 && h <= 6) ampm = 'PM';
-  else ampm = 'AM'; // 7,8,9
+  else ampm = 'PM'; // 1-9 = PM (tarde/noite, ate ~21h59)
   return h + '.' + min + ampm;
 }
 
@@ -31,7 +30,7 @@ function getPdfDir(date) {
 }
 
 // Converte horário UK (12h sem AM/PM) para minutos do dia (24h)
-// Regra: 10,11,12 = AM; 1-6 = PM (tarde); 7,8,9 = AM (manhã cedo)
+// Corridas de galgo no UK rodam de ~10h ate ~meia-noite. Regra: 10,11,12 = AM (cedo); 1-9 = PM (tarde/noite)
 function ukTimeTo24Mins(raceTime) {
   const m = raceTime.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return -1;
@@ -39,8 +38,7 @@ function ukTimeTo24Mins(raceTime) {
   const min = parseInt(m[2]);
   let h24;
   if (h >= 10 && h <= 12) h24 = h;        // 10,11,12 = AM
-  else if (h >= 1 && h <= 6) h24 = h + 12; // 1-6 = PM (13-18)
-  else h24 = h;                             // 7,8,9 = AM cedo
+  else h24 = h + 12;                      // 1-9 = PM (13-21)
   return h24 * 60 + min;
 }
 
