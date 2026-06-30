@@ -427,7 +427,7 @@ h1{font-size:18px;font-weight:700;margin-bottom:12px}
 @media(max-width:900px){.live-grid{grid-template-columns:1fr}}
 .live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}.live-crop.c2 iframe{top:-225px;height:1450px}
 .live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px}
 </style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
@@ -443,7 +443,7 @@ ${navBar(user, 'live')}
     </div>
   </div>
   <div class="live-panel">
-    <div class="live-crop">
+    <div class="live-crop c2">
       ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada<br><small style="color:#666">Defina LIVE_URL_2 nas variaveis de ambiente do Railway</small></div>'}
     </div>
   </div>
@@ -464,14 +464,14 @@ body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:cente
 .live-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;width:100%}
 @media(max-width:900px){.live-grid{grid-template-columns:1fr}}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}.live-crop.c2 iframe{top:-225px;height:1450px}
 .live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:13px;text-align:center;padding:20px;font-family:sans-serif}
 </style></head><body>
 <div class="live-grid">
   <div class="live-crop">
     ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
   </div>
-  <div class="live-crop">
+  <div class="live-crop c2">
     ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada</div>'}
   </div>
 </div>
