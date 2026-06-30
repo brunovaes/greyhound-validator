@@ -427,8 +427,12 @@ h1{font-size:18px;font-weight:700;margin-bottom:12px}
 @media(max-width:900px){.live-grid{grid-template-columns:1fr}}
 .live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}.live-crop.c2 iframe{top:-225px;height:1450px}
-.live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
+.live-crop video{width:100%;height:100%;object-fit:cover}
+.live-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px;gap:10px}
+.spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#22c55e;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-retry{padding:6px 14px;background:transparent;border:1px solid #22c55e;color:#22c55e;border-radius:6px;cursor:pointer;font-size:11px}
 </style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'live')}
@@ -443,12 +447,50 @@ ${navBar(user, 'live')}
     </div>
   </div>
   <div class="live-panel">
-    <div class="live-crop c2">
-      ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada<br><small style="color:#666">Defina LIVE_URL_2 nas variaveis de ambiente do Railway</small></div>'}
+    <div class="live-crop" id="p2wrap">
+      <div class="live-empty" id="p2status">
+        <div class="spinner"></div>
+        <span>Buscando stream ATR...</span>
+      </div>
     </div>
   </div>
 </div>
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
+<script>
+var BASE='${BASE}';
+function loadATRStream(){
+  var wrap=document.getElementById('p2wrap');
+  var status=document.getElementById('p2status');
+  status.innerHTML='<div class="spinner"></div><span>Buscando stream ATR...</span>';
+  status.style.display='flex';
+  fetch(BASE+'/api/atr-stream')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data.url) throw new Error(data.error||'Stream nao encontrado');
+      var video=document.createElement('video');
+      video.controls=true; video.autoplay=true; video.muted=true;
+      status.style.display='none';
+      wrap.appendChild(video);
+      if(Hls.isSupported()){
+        var hls=new Hls();
+        hls.loadSource(data.url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED,function(){video.play();});
+        hls.on(Hls.Events.ERROR,function(e,d){
+          if(d.fatal){status.innerHTML='<span style="color:#ef4444">Erro no stream.</span><button class="btn-retry" onclick="loadATRStream()">Tentar novamente</button>';status.style.display='flex';}
+        });
+      } else if(video.canPlayType('application/vnd.apple.mpegurl')){
+        video.src=data.url; video.play();
+      }
+    })
+    .catch(function(err){
+      status.innerHTML='<span style="color:#ef4444">'+err.message+'</span><button class="btn-retry" onclick="loadATRStream()">Tentar novamente</button>';
+      status.style.display='flex';
+    });
+}
+loadATRStream();
+</script>
 </body></html>`);
 });
 
@@ -529,3 +571,50 @@ ${races.map(r=>{var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';return`
 });
 
 module.exports = router;
+
+// Rota separada exportada pra ser montada em /api no server.js
+// Mas como main.js ja cobre tudo, adiciono aqui mesmo
+router.get('/api/atr-stream', async (req, res) => {
+  const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
+  const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
+  const ATR_URL = 'https://greyhounds.attheraces.com/video/live-video';
+  let browser;
+  try {
+    const puppeteer = require('puppeteer');
+    browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
+    const page = await browser.newPage();
+
+    // Interceptar requisicoes de rede pra capturar o m3u8
+    let streamUrl = null;
+    await page.setRequestInterception(true);
+    page.on('request', req2 => {
+      const url = req2.url();
+      if (!streamUrl && url.includes('.m3u8')) {
+        // Pega a URL base (sem chunks, so o manifest principal)
+        if (!url.includes('chunks.m3u8')) streamUrl = url;
+        else if (!streamUrl) streamUrl = url; // fallback pro chunks se nao achar o manifest
+      }
+      req2.continue();
+    });
+
+    await page.goto(ATR_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Aguarda ate 15s pelo m3u8 aparecer (video carrega apos JS rodar)
+    const waited = await new Promise(resolve => {
+      if (streamUrl) return resolve(true);
+      const check = setInterval(() => { if (streamUrl) { clearInterval(check); resolve(true); } }, 500);
+      setTimeout(() => { clearInterval(check); resolve(false); }, 15000);
+    });
+
+    await browser.disconnect();
+
+    if (streamUrl) {
+      res.json({ url: streamUrl });
+    } else {
+      res.status(404).json({ error: 'Stream m3u8 nao encontrado. O site pode ter bloqueado o acesso.' });
+    }
+  } catch (err) {
+    if (browser) try { await browser.disconnect(); } catch(e) {}
+    res.status(500).json({ error: err.message });
+  }
+});
