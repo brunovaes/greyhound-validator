@@ -77,13 +77,14 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 <div class="sec-title">Pesos dos Criterios</div>
 <div class="info-box">Os pesos orientam o Claude sobre qual criterio priorizar. Valores maiores = mais importante no raciocinio.</div>
 <div class="grid">
-${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_categoria],
-   ['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm],
-   ['peso_bends','Bends / Arranque','Perfil e evolucao nas marcacoes',config.peso_bends],
-   ['peso_remarks','Remarks','Combinacoes positivas e negativas',config.peso_remarks],
-   ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt]].map(([n,l,h,v])=>
+${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_categoria,1,10],
+   ['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm,1,10],
+   ['peso_bends','Bends / Arranque','Perfil e evolucao nas marcacoes',config.peso_bends,1,10],
+   ['peso_remarks','Remarks','Combinacoes positivas e negativas',config.peso_remarks,1,10],
+   ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt,1,10],
+   ['peso_post_pick','Post Pick (Racing Post)','Indicacao dos 3 melhores no cabecalho do PDF',config.peso_post_pick||0,0,10]].map(([n,l,h,v,mn,mx])=>
 `<div class="field"><label>${l}</label>
-<input type="range" name="${n}" min="1" max="10" value="${v}" oninput="upR(this)">
+<input type="range" name="${n}" min="${mn}" max="${mx}" value="${v}" oninput="upR(this)">
 <div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">${h}</span><span class="rv" id="v_${n}">${v}</span></div>
 <div class="pbar"><div class="pfill" id="b_${n}" style="width:${v*10}%"></div></div>
 </div>`).join('')}
@@ -105,22 +106,6 @@ ${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_ca
     <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 niveis (ex: A5 vs A7) -- CalTm pode decidir</option>
   </select>
   <span class="hint">Com 2+ niveis de diferenca, categoria sempre prevalece independente do tempo</span>
-</div>
-</div>
-</div>
-
-<div class="section">
-<div class="sec-title">Post Pick (Indicacao Racing Post)</div>
-<div class="info-box">
-  O Post Pick e a indicacao dos 3 melhores galgos pelo Racing Post (ex: 2-3-1), geralmente no cabecalho do PDF.<br>
-  Defina o peso que esse criterio deve ter na analise -- 0 ignora completamente, 10 da maxima prioridade aos 3 galgos indicados.
-</div>
-<div class="grid">
-<div class="field">
-<label>Peso do Post Pick</label>
-<input type="range" name="peso_post_pick" min="0" max="10" value="${config.peso_post_pick||0}" oninput="upR(this)">
-<div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">0 = ignorar | 10 = peso maximo</span><span class="rv" id="v_peso_post_pick">${config.peso_post_pick||0}</span></div>
-<div class="pbar"><div class="pfill" id="b_peso_post_pick" style="width:${(config.peso_post_pick||0)*10}%"></div></div>
 </div>
 </div>
 </div>
