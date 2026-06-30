@@ -355,7 +355,8 @@ document.addEventListener('DOMContentLoaded',function(){
         +'<td style="font-size:9px;line-height:1.5;vertical-align:middle">'+obsClean+'</td>'
         +'</tr>';
     }).join('');
-    var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Analises Greyhound</title>'
+    var nowD=new Date();var ddmm=String(nowD.getDate()).padStart(2,'0')+String(nowD.getMonth()+1).padStart(2,'0')+nowD.getFullYear();
+    var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Analises_Greyhound_'+ddmm+'</title>'
       +'<style>'
       +'*{box-sizing:border-box;margin:0;padding:0}'
       +'body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}'

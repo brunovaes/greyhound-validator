@@ -106,7 +106,7 @@ router.get('/', requireAdmin, (req, res) => {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}
-.hero img{width:100%;height:130px;object-fit:cover;object-position:center 30%;display:block}
+.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
 nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
 .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
 .nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
@@ -379,10 +379,10 @@ async function downloadAll() {
     cnt.textContent = (i+1) + ' / ' + dlQueue.length;
     bar.style.width = Math.round((i / dlQueue.length) * 100) + '%';
 
-    // Dispara download do arquivo com pasta Racingpost\DDMMYYYY no nome
+    // Dispara download do arquivo dentro de Racingpost/DDMMYYYY (subpasta dentro de Downloads)
     var a = document.createElement('a');
     a.href = BASE + '/robot/download-pdf?date=' + f.date + '&file=' + encodeURIComponent(f.filename);
-    a.download = folderName + '_' + f.filename;
+    a.download = 'Racingpost/' + folderName + '/' + f.filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
