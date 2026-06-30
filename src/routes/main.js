@@ -462,32 +462,45 @@ var BASE='${BASE}';
 function loadATRStream(){
   var wrap=document.getElementById('p2wrap');
   var status=document.getElementById('p2status');
-  status.innerHTML='<div class="spinner"></div><span>Buscando stream ATR...</span>';
+  status.innerHTML='<div class="spinner"></div><span>Aguardando stream ATR...<br><small style="color:#666;margin-top:4px;display:block">Abra o ATR no Chrome com a extensao instalada</small></span>';
   status.style.display='flex';
-  fetch(BASE+'/api/atr-stream')
-    .then(function(r){return r.json();})
-    .then(function(data){
-      if(!data.url) throw new Error(data.error||'Stream nao encontrado');
-      var video=document.createElement('video');
-      video.controls=true; video.autoplay=true; video.muted=true;
-      status.style.display='none';
-      wrap.appendChild(video);
-      if(Hls.isSupported()){
-        var hls=new Hls();
-        hls.loadSource(data.url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED,function(){video.play();});
-        hls.on(Hls.Events.ERROR,function(e,d){
-          if(d.fatal){status.innerHTML='<span style="color:#ef4444">Erro no stream.</span><button class="btn-retry" onclick="loadATRStream()">Tentar novamente</button>';status.style.display='flex';}
-        });
-      } else if(video.canPlayType('application/vnd.apple.mpegurl')){
-        video.src=data.url; video.play();
-      }
-    })
-    .catch(function(err){
-      status.innerHTML='<span style="color:#ef4444">'+err.message+'</span><button class="btn-retry" onclick="loadATRStream()">Tentar novamente</button>';
-      status.style.display='flex';
-    });
+
+  // Consulta a cada 3s ate encontrar um stream
+  var tries=0;
+  var interval=setInterval(function(){
+    tries++;
+    fetch(BASE+'/api/atr-stream-status')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data.url){
+          clearInterval(interval);
+          var video=document.createElement('video');
+          video.controls=true; video.autoplay=true; video.muted=true;
+          status.style.display='none';
+          wrap.appendChild(video);
+          if(Hls.isSupported()){
+            var hls=new Hls();
+            hls.loadSource(data.url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED,function(){video.play();});
+            hls.on(Hls.Events.ERROR,function(e,d){
+              if(d.fatal){
+                status.innerHTML='<span style="color:#ef4444">Stream expirou.</span><button class="btn-retry" onclick="loadATRStream()">Atualizar</button>';
+                status.style.display='flex';
+                video.remove();
+              }
+            });
+          } else if(video.canPlayType('application/vnd.apple.mpegurl')){
+            video.src=data.url; video.play();
+          }
+        } else if(tries>60){
+          // Desiste apos 3 minutos sem receber stream
+          clearInterval(interval);
+          status.innerHTML='<span style="color:#888">Stream nao recebido.</span><button class="btn-retry" onclick="loadATRStream()">Tentar novamente</button>';
+        }
+      })
+      .catch(function(){});
+  }, 3000);
 }
 loadATRStream();
 </script>
@@ -570,90 +583,30 @@ ${races.map(r=>{var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';return`
 </div></body></html>`);
 });
 
-module.exports = router;
+// Cache em memoria do ultimo stream URL recebido da extensao Chrome
+var atrStreamCache = { url: null, ts: 0 };
 
-// Rota separada exportada pra ser montada em /api no server.js
-// Mas como main.js ja cobre tudo, adiciono aqui mesmo
-router.get('/api/atr-stream', async (req, res) => {
-  const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
-  const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
-  const ATR_URL = 'https://greyhounds.attheraces.com/video/live-video';
-  let browser;
-  try {
-    const puppeteer = require('puppeteer');
-    browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
-    const page = await browser.newPage();
-
-    // Stealth: user agent real de Chrome moderno
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.setViewport({ width: 1280, height: 720 });
-
-    // Headers que um browser real enviaria
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-GB,en;q=0.9',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Upgrade-Insecure-Requests': '1'
-    });
-
-    // Mascara webdriver (Fastly detecta navigator.webdriver=true)
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-GB','en'] });
-      window.chrome = { runtime: {} };
-    });
-
-    // Interceptar requisicoes de rede pra capturar o m3u8
-    let streamUrl = null;
-    await page.setRequestInterception(true);
-    page.on('request', req2 => {
-      const url = req2.url();
-      if (!streamUrl && url.includes('.m3u8') && !url.includes('chunks.m3u8')) {
-        streamUrl = url; // prefere o manifest principal
-      } else if (!streamUrl && url.includes('chunks.m3u8')) {
-        streamUrl = url; // fallback chunks
-      }
-      req2.continue().catch(()=>{});
-    });
-
-    // Tambem escuta responses (alguns players carregam m3u8 via fetch, nao via tag)
-    page.on('response', async resp => {
-      try {
-        const url = resp.url();
-        if (!streamUrl && url.includes('.m3u8')) streamUrl = url;
-      } catch(e) {}
-    });
-
-    // Vai primeiro pra home pra pegar cookies/fingerprint, depois pra pagina do video
-    try {
-      await page.goto('https://greyhounds.attheraces.com/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await new Promise(r => setTimeout(r, 2000)); // simula leitura humana
-    } catch(e) {}
-
-    await page.goto(ATR_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-    // Aguarda ate 20s pelo m3u8 aparecer
-    const waited = await new Promise(resolve => {
-      if (streamUrl) return resolve(true);
-      const check = setInterval(() => { if (streamUrl) { clearInterval(check); resolve(true); } }, 500);
-      setTimeout(() => { clearInterval(check); resolve(false); }, 20000);
-    });
-
-    await browser.disconnect();
-
-    if (streamUrl) {
-      res.json({ url: streamUrl });
-    } else {
-      res.status(404).json({ error: 'Stream m3u8 nao encontrado. O site pode ter bloqueado o acesso.' });
-    }
-  } catch (err) {
-    if (browser) try { await browser.disconnect(); } catch(e) {}
-    res.status(500).json({ error: err.message });
+// Recebe o stream URL da extensao Chrome
+router.post('/api/atr-stream-push', express.json(), (req, res) => {
+  const { url, ts } = req.body || {};
+  if (url && url.includes('.m3u8')) {
+    atrStreamCache = { url, ts: ts || Date.now() };
+    console.log('[ATR Extension] Stream recebido:', url.slice(0,80));
+    res.json({ ok: true });
+  } else {
+    res.status(400).json({ error: 'URL invalida' });
   }
 });
+
+// Frontend consulta essa rota pra saber se tem stream disponivel
+router.get('/api/atr-stream-status', (req, res) => {
+  const age = Date.now() - atrStreamCache.ts;
+  // Stream expira em 2 horas (nimblesessionid dura bastante mas nao e eterno)
+  if (atrStreamCache.url && age < 7200000) {
+    res.json({ url: atrStreamCache.url, age: Math.round(age/1000) });
+  } else {
+    res.json({ url: null });
+  }
+});
+
+module.exports = router;
