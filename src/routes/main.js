@@ -301,7 +301,8 @@ async function runAnalysis(){
     results=data.races||[];
     prog(95,'Montando...');renderTable();
     saveSessionState();
-    setSt('Concluido: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
+    if(data.partialErrors&&data.partialErrors.length){setSt('Concluido com avisos: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs. '+data.partialErrors.length+' lote(s) com erro.');console.warn('Erros parciais:',data.partialErrors);}
+    else setSt('Concluido: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
     prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;

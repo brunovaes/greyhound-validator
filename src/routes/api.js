@@ -56,10 +56,69 @@ Descartadas: tipo=avb, nivel=skip, pct=0, trapFav=0, trapUnd=0, top3=[].
 {"races":[{"hora":"8:24","corrida":"Kinsley A7","dist":"462m","tipo":"avb","trapFav":4,"nameFav":"Got The Ballymac","trapUnd":2,"nameUnd":"Hazelgrove Flash","pct":62,"nivel":"media","perfilFav":"Frontrunner","perfilUnd":"Recuperador","obs":"T4 Tempo Final 29.18 vs T2 29.38. Ambos validados A7.","needsCap":false,"top3":[4,2,1]}]}`;
 }
 
+const BATCH_SIZE = 15;
+
+function parseClaudeJson(raw) {
+  const clean = raw.split('```json').join('').split('```').join('').trim();
+  try {
+    return JSON.parse(clean);
+  } catch(e1) {
+    try {
+      const s1 = clean.indexOf('{"races"');
+      const s2 = clean.indexOf('{ "races"');
+      const s = s1 >= 0 ? s1 : s2;
+      const e = clean.lastIndexOf('}');
+      if (s >= 0 && e >= 0) return JSON.parse(clean.slice(s, e+1));
+    } catch(e2) {
+      try {
+        const s = clean.indexOf('{');
+        const e = clean.lastIndexOf('}');
+        if (s >= 0 && e >= 0) return JSON.parse(clean.slice(s, e+1));
+      } catch(e3) {
+        console.error('Raw response (parse falhou):', clean.slice(0, 500));
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+async function analyzeBatch(pdfFiles, capFiles, config, apiKey) {
+  const content = [];
+  for (const file of pdfFiles) {
+    content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.buffer.toString('base64') } });
+  }
+  for (const file of capFiles) {
+    const isImg = /\.(jpg|jpeg|png|webp)$/i.test(file.originalname);
+    if (isImg) content.push({ type: 'image', source: { type: 'base64', media_type: file.mimetype, data: file.buffer.toString('base64') } });
+    else content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.buffer.toString('base64') } });
+  }
+  content.push({ type: 'text', text: 'Analise os PDFs. Retorne SOMENTE o JSON. Zero texto antes ou depois.' + (capFiles.length ? ` ${capFiles.length} capivara(s) fornecida(s).` : '') });
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8000, system: buildPrompt(config), messages: [{ role: 'user', content }] })
+  });
+
+  if (!response.ok) {
+    const e = await response.json();
+    throw new Error(e.error?.message || ('Erro API ' + response.status));
+  }
+
+  const data = await response.json();
+  const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+  const parsed = parseClaudeJson(raw);
+  if (!parsed || !Array.isArray(parsed.races)) {
+    throw new Error('JSON nao encontrado/invalido na resposta do lote. Raw: ' + raw.slice(0, 200));
+  }
+  return parsed.races;
+}
+
 router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Verificar limite
     if (user.analyses_limit !== 999999 && user.analyses_used >= user.analyses_limit) {
       return res.json({ limitReached: true, races: [] });
@@ -73,60 +132,33 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const capFiles = req.files['caps'] || [];
     if (!pdfFiles.length) return res.status(400).json({ error: 'Nenhum PDF enviado.' });
 
-    const content = [];
-    for (const file of pdfFiles) {
-      content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.buffer.toString('base64') } });
+    // Capivaras vao sempre junto no PRIMEIRO lote (sao referencia geral, nao por corrida especifica)
+    const batches = [];
+    for (let i = 0; i < pdfFiles.length; i += BATCH_SIZE) {
+      batches.push(pdfFiles.slice(i, i + BATCH_SIZE));
     }
-    for (const file of capFiles) {
-      const isImg = /\.(jpg|jpeg|png|webp)$/i.test(file.originalname);
-      if (isImg) content.push({ type: 'image', source: { type: 'base64', media_type: file.mimetype, data: file.buffer.toString('base64') } });
-      else content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.buffer.toString('base64') } });
-    }
-    content.push({ type: 'text', text: 'Analise os PDFs. Retorne SOMENTE o JSON. Zero texto antes ou depois.' + (capFiles.length ? ` ${capFiles.length} capivara(s) fornecida(s).` : '') });
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 6000, system: buildPrompt(config), messages: [{ role: 'user', content }] })
-    });
-
-    if (!response.ok) { const e = await response.json(); return res.status(500).json({ error: e.error?.message || 'Erro API' }); }
-
-    const data = await response.json();
-    const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-    const clean = raw.split('```json').join('').split('```').join('').trim();
-    
-    // Parser robusto — tenta encontrar JSON de várias formas
-    let parsed = null;
-    try {
-      // Tentativa 1: JSON direto
-      parsed = JSON.parse(clean);
-    } catch(e1) {
+    let allRaces = [];
+    const errors = [];
+    for (let i = 0; i < batches.length; i++) {
+      const batchCaps = i === 0 ? capFiles : [];
       try {
-        // Tentativa 2: encontrar {"races"
-        const s1 = clean.indexOf('{"races"');
-        const s2 = clean.indexOf('{ "races"');
-        const s = s1 >= 0 ? s1 : s2;
-        const e = clean.lastIndexOf('}');
-        if (s >= 0 && e >= 0) parsed = JSON.parse(clean.slice(s, e+1));
-      } catch(e2) {
-        try {
-          // Tentativa 3: encontrar qualquer {
-          const s = clean.indexOf('{');
-          const e = clean.lastIndexOf('}');
-          if (s >= 0 && e >= 0) parsed = JSON.parse(clean.slice(s, e+1));
-        } catch(e3) {
-          console.error('Raw response:', clean.slice(0, 500));
-          return res.status(500).json({ error: 'JSON nao encontrado na resposta. Raw: ' + clean.slice(0, 200) });
-        }
+        const races = await analyzeBatch(batches[i], batchCaps, config, apiKey);
+        allRaces = allRaces.concat(races);
+      } catch (errBatch) {
+        console.error(`Erro no lote ${i+1}/${batches.length}:`, errBatch.message);
+        errors.push(`Lote ${i+1}: ${errBatch.message}`);
       }
     }
-    if (!parsed) return res.status(500).json({ error: 'JSON nao encontrado na resposta.' });
-    
-    // Incrementar contador de análises
+
+    if (!allRaces.length && errors.length) {
+      return res.status(500).json({ error: errors.join(' | ') });
+    }
+
+    // Incrementar contador de análises (1 por chamada do usuario, independente do numero de lotes)
     db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(user.id);
 
-    res.json(parsed);
+    res.json({ races: allRaces, partialErrors: errors.length ? errors : undefined });
   } catch (err) {
     console.error('Erro:', err);
     res.status(500).json({ error: err.message });
