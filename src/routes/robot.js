@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAdmin } = require('../middleware/auth');
+const { getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -98,6 +99,8 @@ router.get('/', requireAdmin, (req, res) => {
   const logoPath = path.join(__dirname, '../../public/img/logo.png');
   let logoB64 = '';
   if (fs.existsSync(logoPath)) logoB64 = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
+  let pastaDownload = 'Racingpost';
+  try { const cfg = getUserConfig(req.user.id); pastaDownload = cfg.pasta_download || 'Racingpost'; } catch(e) {}
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -242,6 +245,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 
 <script>
 var BASE = '${BASE}';
+var PASTA_DOWNLOAD = '${pastaDownload}';
 var poll = null;
 
 async function startRobot() {
@@ -379,10 +383,10 @@ async function downloadAll() {
     cnt.textContent = (i+1) + ' / ' + dlQueue.length;
     bar.style.width = Math.round((i / dlQueue.length) * 100) + '%';
 
-    // Dispara download do arquivo dentro de Racingpost/DDMMYYYY (subpasta dentro de Downloads)
+    // Dispara download do arquivo dentro de PASTA_DOWNLOAD/DDMMYYYY (subpasta dentro de Downloads)
     var a = document.createElement('a');
     a.href = BASE + '/robot/download-pdf?date=' + f.date + '&file=' + encodeURIComponent(f.filename);
-    a.download = 'Racingpost/' + folderName + '/' + f.filename;
+    a.download = PASTA_DOWNLOAD + '/' + folderName + '/' + f.filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

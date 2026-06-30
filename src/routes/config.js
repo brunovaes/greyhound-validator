@@ -111,6 +111,19 @@ ${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_ca
 </div>
 
 <div class="section">
+<div class="sec-title">Pasta de Downloads dos PDFs</div>
+<div class="info-box">
+  Para os PDFs caírem direto numa pasta organizada sem o navegador perguntar a cada arquivo:<br>
+  1. No Chrome, vá em Configuracoes → Downloads → DESLIGUE "Perguntar onde salvar".<br>
+  2. Defina a pasta de Downloads do Chrome como <b>C:\\Racingpost</b> (ou a pasta raiz que preferir).<br>
+  3. O nome abaixo define a subpasta criada automaticamente dentro dela, no formato <b>NomeDaPasta/DDMMYYYY/arquivo.pdf</b>.
+</div>
+<div class="grid">
+<div class="field"><label>Nome da subpasta</label><input type="text" name="pasta_download" value="${config.pasta_download||'Racingpost'}" placeholder="Racingpost"><span class="hint">Sem espacos ou caracteres especiais</span></div>
+</div>
+</div>
+
+<div class="section">
 <div class="sec-title">Filtros de Corrida</div>
 <div class="grid">
 <div class="field"><label>Distancia minima (m)</label><input type="number" name="dist_min" value="${config.dist_min}" min="200" max="600"><span class="hint">Corridas abaixo sao descartadas</span></div>
@@ -181,12 +194,13 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     const d = req.body;
     // Verificar se coluna existe, se nao adicionar
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN pasta_download TEXT DEFAULT \'Racingpost\'').run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,pasta_download=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_categoria,d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
       d.remarks_muito_positivos,d.remarks_positivos,d.remarks_atenuantes,d.remarks_negativos,
-      d.max_cat_diff_caltm||1, user.id
+      d.max_cat_diff_caltm||1, (d.pasta_download||'Racingpost').replace(/[^a-zA-Z0-9_-]/g,''), user.id
     );
     res.json({ ok: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
