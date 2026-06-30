@@ -31,7 +31,8 @@ HIERARQUIA (ordem obrigatoria):
    POSITIVOS: ${config.remarks_positivos}
    ATENUAM: ${config.remarks_atenuantes}
    NEGATIVOS: ${config.remarks_negativos}
-5. BRT peso ${config.peso_brt}x: desempate apenas.
+5. BRT peso ${config.peso_brt}x: desempate apenas.${(config.peso_post_pick && config.peso_post_pick > 0) ? `
+6. POST PICK peso ${config.peso_post_pick}x: O Racing Post indica no cabecalho do PDF os 3 melhores galgos da corrida (ex: "2-3-1" = traps 2, 3 e 1 nessa ordem de preferencia). Considere essa indicacao como sinal adicional: se o galgo favorito da sua analise tambem estiver entre os 3 do Post Pick, isso reforca a confianca. Se o Post Pick discordar fortemente da sua analise, mencione na observacao mas NAO ignore os outros criterios -- o peso ${config.peso_post_pick} (0-10) define o quanto essa indicacao deve pesar na decisao final.` : ''}
 
 OBSERVACAO: explicar o criterio DECISIVO. Max 15 palavras em portugues.
 Termos: CalTm=Tempo Final, BRT=Melhor Tempo, SAw=Saida Lenta, RnOn=Acelerou no Final, FinWll=Terminou Bem, FcdCk=Forcado a Frear, Bmp=Tomou Contato, Fdd=Cansou no Final, NvrShwd=Nunca Apareceu.

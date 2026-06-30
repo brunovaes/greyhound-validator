@@ -15,7 +15,6 @@ function getLogo() {
 // CONFIG SO PARA ADMIN
 router.get('/', requireAdmin, (req, res) => {
   const user = req.user;
-  // Config global (user_id=1 admin)
   const config = getUserConfig(user.id);
   const logoB64 = getLogo();
 
@@ -61,12 +60,12 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 <nav>
   <div>
     <a href="${BASE}" class="nl">Analisar</a>
-    <a href="${BASE}/historico" class="nl">Histórico</a>
-    <a href="${BASE}/config" class="nl na">Configurações</a>
-    <a href="${BASE}/robot" class="nl">Robô</a>
-    <a href="${BASE}/admin/usuarios" class="nl">Usuários</a>
+    <a href="${BASE}/historico" class="nl">Historico</a>
+    <a href="${BASE}/config" class="nl na">Configuracoes</a>
+    <a href="${BASE}/robot" class="nl">Robo</a>
+    <a href="${BASE}/admin/usuarios" class="nl">Usuarios</a>
   </div>
-  <span style="font-size:11px;color:#666;padding:12px">${user.name} · <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
+  <span style="font-size:11px;color:#666;padding:12px">${user.name} &middot; <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
 </nav>
 <div class="content">
 <h1>Configuracoes de Analise</h1>
@@ -95,15 +94,15 @@ ${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_ca
 <div class="sec-title">Regra de Categoria vs CalTm</div>
 <div class="info-box">
   Define quando o Tempo Final pode superar a vantagem de categoria.<br>
-  Ex: com valor 1 — um galgo A6 com CalTm melhor pode ser favorito sobre um A5. Com valor 0 — categoria sempre decide.
+  Ex: com valor 1 -- um galgo A6 com CalTm melhor pode ser favorito sobre um A5. Com valor 0 -- categoria sempre decide.
 </div>
 <div class="grid">
 <div class="field">
   <label>Diferenca maxima de categoria que CalTm pode superar</label>
   <select name="max_cat_diff_caltm">
-    <option value="0" ${(config.max_cat_diff_caltm||1)===0?'selected':''}>0 — Categoria sempre decide</option>
-    <option value="1" ${(config.max_cat_diff_caltm||1)===1?'selected':''}>1 nivel (ex: A5 vs A6) — CalTm pode decidir</option>
-    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 niveis (ex: A5 vs A7) — CalTm pode decidir</option>
+    <option value="0" ${(config.max_cat_diff_caltm||1)===0?'selected':''}>0 -- Categoria sempre decide</option>
+    <option value="1" ${(config.max_cat_diff_caltm||1)===1?'selected':''}>1 nivel (ex: A5 vs A6) -- CalTm pode decidir</option>
+    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 niveis (ex: A5 vs A7) -- CalTm pode decidir</option>
   </select>
   <span class="hint">Com 2+ niveis de diferenca, categoria sempre prevalece independente do tempo</span>
 </div>
@@ -111,15 +110,18 @@ ${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_ca
 </div>
 
 <div class="section">
-<div class="sec-title">Pasta de Downloads dos PDFs</div>
+<div class="sec-title">Post Pick (Indicacao Racing Post)</div>
 <div class="info-box">
-  Para os PDFs caírem direto numa pasta organizada sem o navegador perguntar a cada arquivo:<br>
-  1. No Chrome, vá em Configuracoes → Downloads → DESLIGUE "Perguntar onde salvar".<br>
-  2. Defina a pasta de Downloads do Chrome como <b>C:\\Racingpost</b> (ou a pasta raiz que preferir).<br>
-  3. O nome abaixo define a subpasta criada automaticamente dentro dela, no formato <b>NomeDaPasta/DDMMYYYY/arquivo.pdf</b>.
+  O Post Pick e a indicacao dos 3 melhores galgos pelo Racing Post (ex: 2-3-1), geralmente no cabecalho do PDF.<br>
+  Defina o peso que esse criterio deve ter na analise -- 0 ignora completamente, 10 da maxima prioridade aos 3 galgos indicados.
 </div>
 <div class="grid">
-<div class="field"><label>Nome da subpasta</label><input type="text" name="pasta_download" value="${config.pasta_download||'Racingpost'}" placeholder="Racingpost"><span class="hint">Sem espacos ou caracteres especiais</span></div>
+<div class="field">
+<label>Peso do Post Pick</label>
+<input type="range" name="peso_post_pick" min="0" max="10" value="${config.peso_post_pick||0}" oninput="upR(this)">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">0 = ignorar | 10 = peso maximo</span><span class="rv" id="v_peso_post_pick">${config.peso_post_pick||0}</span></div>
+<div class="pbar"><div class="pfill" id="b_peso_post_pick" style="width:${(config.peso_post_pick||0)*10}%"></div></div>
+</div>
 </div>
 </div>
 
@@ -192,15 +194,14 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
   try {
     const user = req.user;
     const d = req.body;
-    // Verificar se coluna existe, se nao adicionar
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1').run(); } catch(e) {}
-    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN pasta_download TEXT DEFAULT \'Racingpost\'').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,pasta_download=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0').run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_categoria,d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
       d.remarks_muito_positivos,d.remarks_positivos,d.remarks_atenuantes,d.remarks_negativos,
-      d.max_cat_diff_caltm||1, (d.pasta_download||'Racingpost').replace(/[^a-zA-Z0-9_-]/g,''), user.id
+      d.max_cat_diff_caltm||1, d.peso_post_pick||0, user.id
     );
     res.json({ ok: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
