@@ -11,47 +11,18 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 // Sem julgamento, sem decisao, sem ranking — apenas leitura factual
 // ============================================================
 function buildExtractionPrompt() {
-  return `Voce e um leitor especializado de PDFs de corridas de galgos do Racing Post.
-Sua UNICA funcao e extrair dados brutos de cada galgo e cada linha de historico.
-ZERO julgamento, ZERO analise, ZERO decisao de favorito.
-Apenas leia e transcreva o que esta no PDF.
+  return `Leitor de PDFs de corridas de galgos Racing Post. Extraia dados brutos. ZERO analise.
 
-Para cada corrida no PDF, extraia:
-- hora: horario da corrida (ex: "7:42")
-- corrida: nome da pista + classe (ex: "Towcester B5")
-- dist: distancia em metros como string (ex: "460m")
-- classe: classe da corrida (ex: "B5", "A3")
-- postPick: indicacao do Racing Post no cabecalho (ex: "5-3-2", ou null se nao houver)
-- trapsCard: array com numeros de trap que REALMENTE existem nessa corrida (ex: [1,2,3,5,6] se trap 4 estiver vago)
-- galgos: array com dados de cada galgo
+Para cada corrida extraia estes campos exatos:
+hora, corrida (pista+classe), dist (ex:"450m"), classe (ex:"A3"), postPick (ex:"2-1-4" ou null), trapsCard (array de traps reais da corrida, ex:[1,2,3,5,6]), galgos (array).
 
-Para cada galgo:
-- trap: numero do trap (inteiro)
-- nome: nome do galgo
-- brt: melhor tempo historico (numero, ex: 27.68)
-- brtClasse: classe onde fez o BRT (ex: "A4")
-- historico: array com as linhas de historico (maximo 5, da mais recente para a mais antiga)
+Para cada galgo: trap (int), nome, brt (float), brtClasse, historico (MAXIMO 3 linhas mais recentes).
 
-Para cada linha de historico:
-- data: data da corrida (ex: "23Jun26")
-- pista: nome da pista (ex: "Sland")
-- dist: distancia em metros (inteiro, ex: 450)
-- trap: trap que correu nessa corrida (inteiro)
-- split: tempo de saida (numero, ex: 5.16) ou null se nao informado
-- bends: sequencia de posicoes nos bends (string, ex: "2554") ou null
-- pos: posicao final (inteiro, ex: 2)
-- by: margem para o proximo (string, ex: "1 3/4") ou null
-- caltm: tempo calibrado CalTm (numero, ex: 27.77) — NUNCA usar WnTm
-- wntm: tempo do vencedor WnTm (numero, ex: 27.58)
-- going: condicao da pista (string, ex: "+10", "N", "-20") ou null
-- classe: classe da corrida (ex: "A3", "HP", "T3")
-- sp: cotacao (string, ex: "7/4F") ou null
-- remarks: observacoes da corrida (string, ex: "Crd1,RnOn") ou null
+Para cada linha de historico: data, pista, dist (int), trap (int), split (float ou null), bends (string ou null), pos (int), caltm (float — NUNCA wntm), going (string ou null), classe, remarks (string ou null).
 
-IMPORTANTE: Extraia TODOS os galgos de TODAS as corridas. Nao pule nenhum.
-RESPOSTA: APENAS JSON PURO. Zero texto antes ou depois.
-Formato:
-{"races":[{"hora":"7:42","corrida":"Star Pelaw A4","dist":"435m","classe":"A4","postPick":"5-3-2","trapsCard":[1,2,3,5,6],"galgos":[{"trap":1,"nome":"Caseys Jake","brt":26.01,"brtClasse":"A3","historico":[{"data":"26Jun26","pista":"Pelaw","dist":435,"trap":1,"split":5.76,"bends":"5355","pos":5,"by":"5 1/4","caltm":27.02,"wntm":26.60,"going":"N","classe":"A4","sp":"6/5F","remarks":"SAw,Rls,Bmp1,Fcd-Ck2"}]}]}]}`;
+OMITIR campos nulos para reduzir tamanho. Usar arrays compactos.
+RESPOSTA: JSON puro, sem markdown, sem backticks, sem texto.
+{"races":[{"hora":"7:42","corrida":"Star Pelaw A4","dist":"435m","classe":"A4","postPick":"5-3-2","trapsCard":[1,2,3,5,6],"galgos":[{"trap":1,"nome":"Caseys Jake","brt":26.01,"brtClasse":"A3","historico":[{"data":"26Jun26","pista":"Pelaw","dist":435,"trap":1,"split":5.76,"bends":"5355","pos":5,"caltm":27.02,"going":"N","classe":"A4","remarks":"SAw,Bmp1"}]}]}]}`;
 }
 
 // ============================================================
@@ -437,7 +408,7 @@ function sanitizeEliminatedTraps(races) {
 // ============================================================
 // ROTAS
 // ============================================================
-const BATCH_SIZE = 5; // Menor batch pra nao estourar tokens com o novo formato verboso
+const BATCH_SIZE = 3; // 3 PDFs por lote, processados em paralelo
 
 function parseClaudeJson(raw) {
   // Limpa backticks de forma robusta com regex
@@ -477,7 +448,7 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
-    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:16000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] })
+    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:8000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] })
   });
 
   if(!response.ok) { const e=await response.json(); throw new Error(e.error?.message||('Erro API '+response.status)); }
@@ -505,18 +476,17 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const batches = [];
     for(let i=0;i<pdfFiles.length;i+=BATCH_SIZE) batches.push(pdfFiles.slice(i,i+BATCH_SIZE));
 
+    // Processar todos os lotes EM PARALELO
+    const batchResults = await Promise.allSettled(
+      batches.map((batch, i) => extractBatch(batch, i===0?capFiles:[], apiKey))
+    );
+
     let allRawRaces = [];
     const errors = [];
-    for(let i=0;i<batches.length;i++) {
-      const batchCaps = i===0?capFiles:[];
-      try {
-        const races = await extractBatch(batches[i], batchCaps, apiKey);
-        allRawRaces = allRawRaces.concat(races);
-      } catch(errBatch) {
-        console.error(`Erro extracao lote ${i+1}:`, errBatch.message);
-        errors.push(`Lote ${i+1}: ${errBatch.message}`);
-      }
-    }
+    batchResults.forEach((r, i) => {
+      if (r.status === 'fulfilled') allRawRaces = allRawRaces.concat(r.value);
+      else { console.error('Erro lote '+(i+1)+':', r.reason&&r.reason.message); errors.push('Lote '+(i+1)+': '+(r.reason&&r.reason.message||'erro')); }
+    });
 
     if(!allRawRaces.length&&errors.length) return res.status(500).json({ error:errors.join(' | ') });
 
