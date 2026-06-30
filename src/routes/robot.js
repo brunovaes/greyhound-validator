@@ -382,7 +382,7 @@ async function downloadAll() {
     // Dispara download do arquivo com pasta Racingpost\DDMMYYYY no nome
     var a = document.createElement('a');
     a.href = BASE + '/robot/download-pdf?date=' + f.date + '&file=' + encodeURIComponent(f.filename);
-    a.download = folderName + '\\' + f.filename;
+    a.download = folderName + '_' + f.filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
