@@ -18,6 +18,7 @@ function navBar(user, active) {
     <div style="display:flex">
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
       <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Histórico</a>
+      <a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robô</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuários</a>` : ''}
@@ -405,6 +406,91 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btn-exp').addEventListener('click',function(){var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';var avbs=results.filter(function(r){return r.tipo==='avb';});var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();});
 });
 </script></body></html>`);
+});
+
+router.get('/live', (req, res) => {
+  const user = req.user;
+  const logoB64 = getLogo();
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live - Greyhound Validator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
+.content{padding:16px 20px;max-width:1600px;margin:0 auto}
+h1{font-size:18px;font-weight:700;margin-bottom:12px}
+.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.live-grid{grid-template-columns:1fr}}
+.live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.live-bar{display:flex;gap:8px;padding:10px;background:#1a1a1a;border-bottom:1px solid #333}
+.live-bar input{flex:1;padding:8px 10px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:12px}
+.live-bar input:focus{outline:none;border-color:#22c55e}
+.live-bar button{padding:8px 14px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}
+.live-bar button:hover{background:#16a34a}
+.live-bar .clr{background:transparent;color:#888;border:1px solid #333;font-weight:600}
+.live-frame-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+.live-frame-wrap iframe{width:100%;height:100%;border:none}
+.live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px}
+</style></head><body>
+<div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
+${navBar(user, 'live')}
+<div class="content">
+<h1>Live — Acompanhamento Simultaneo</h1>
+<div class="live-grid">
+  <div class="live-panel">
+    <div class="live-bar">
+      <input type="text" id="url1" placeholder="Cole o link da pista 1 (ex: https://www.sisracing.tv/)">
+      <button onclick="loadFrame(1)">Carregar</button>
+      <button class="clr" onclick="clearFrame(1)">Limpar</button>
+    </div>
+    <div class="live-frame-wrap" id="wrap1"><div class="live-empty">Cole um link acima e clique em Carregar</div></div>
+  </div>
+  <div class="live-panel">
+    <div class="live-bar">
+      <input type="text" id="url2" placeholder="Cole o link da pista 2">
+      <button onclick="loadFrame(2)">Carregar</button>
+      <button class="clr" onclick="clearFrame(2)">Limpar</button>
+    </div>
+    <div class="live-frame-wrap" id="wrap2"><div class="live-empty">Cole um link acima e clique em Carregar</div></div>
+  </div>
+</div>
+</div>
+<script>
+var LS_KEY='ghf_live_urls_v1';
+function loadFrame(n){
+  var input=document.getElementById('url'+n);
+  var url=input.value.trim();
+  if(!url)return;
+  if(!/^https?:\\/\\//i.test(url))url='https://'+url;
+  var wrap=document.getElementById('wrap'+n);
+  wrap.innerHTML='<iframe src="'+url.replace(/"/g,'&quot;')+'" allow="autoplay; fullscreen" allowfullscreen></iframe>';
+  saveUrls();
+}
+function clearFrame(n){
+  document.getElementById('url'+n).value='';
+  document.getElementById('wrap'+n).innerHTML='<div class="live-empty">Cole um link acima e clique em Carregar</div>';
+  saveUrls();
+}
+function saveUrls(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({u1:document.getElementById('url1').value,u2:document.getElementById('url2').value}));
+  }catch(e){}
+}
+function restoreUrls(){
+  try{
+    var raw=localStorage.getItem(LS_KEY);
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    if(data.u1){document.getElementById('url1').value=data.u1;loadFrame(1);}
+    if(data.u2){document.getElementById('url2').value=data.u2;loadFrame(2);}
+  }catch(e){}
+}
+document.getElementById('url1').addEventListener('keydown',function(e){if(e.key==='Enter')loadFrame(1);});
+document.getElementById('url2').addEventListener('keydown',function(e){if(e.key==='Enter')loadFrame(2);});
+restoreUrls();
+</script>
+</body></html>`);
 });
 
 router.get('/historico', (req, res) => {
