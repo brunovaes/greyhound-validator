@@ -822,12 +822,15 @@ router.get('/download-zip', requireAdmin, async (req, res) => {
   const subfolder = pastaDownload + '/' + ddmmyyyy;
 
   const archiver = require('archiver');
+  const ZipArchive = archiver.ZipArchive || archiver;
   const zipName = `${pastaDownload}_${ddmmyyyy}.zip`;
 
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
 
-  const archive = archiver('zip', { zlib: { level: 6 } });
+  const archive = typeof ZipArchive === 'function' && ZipArchive.prototype && ZipArchive.prototype.pipe
+    ? new ZipArchive({ zlib: { level: 6 } })
+    : archiver('zip', { zlib: { level: 6 } });
 
   archive.on('error', err => {
     console.error('[ZIP] Erro:', err.message);
