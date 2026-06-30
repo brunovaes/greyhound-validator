@@ -437,7 +437,7 @@ function sanitizeEliminatedTraps(races) {
 // ============================================================
 // ROTAS
 // ============================================================
-const BATCH_SIZE = 15;
+const BATCH_SIZE = 5; // Menor batch pra nao estourar tokens com o novo formato verboso
 
 function parseClaudeJson(raw) {
   // Limpa backticks de forma robusta com regex
@@ -477,7 +477,7 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
-    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:8000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] })
+    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:16000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] })
   });
 
   if(!response.ok) { const e=await response.json(); throw new Error(e.error?.message||('Erro API '+response.status)); }
