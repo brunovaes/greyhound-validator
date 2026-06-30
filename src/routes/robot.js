@@ -369,39 +369,44 @@ async function downloadAll() {
   var cnt = document.getElementById('dl-cnt');
   wrap.style.display = 'block';
 
-  // Formata a data da fila no formato DDMMYYYY para a pasta
   var dateRaw = dlQueue[0] ? dlQueue[0].date : '';
-  var folderName = dateRaw;
-  if (dateRaw && dateRaw.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    var parts = dateRaw.split('-');
-    folderName = parts[2] + parts[1] + parts[0]; // DDMMYYYY
-  }
 
-  for (var i = 0; i < dlQueue.length; i++) {
-    var f = dlQueue[i];
-    cur.textContent = f.filename;
-    cnt.textContent = (i+1) + ' / ' + dlQueue.length;
-    bar.style.width = Math.round((i / dlQueue.length) * 100) + '%';
+  cur.textContent = 'Gerando ZIP organizado (' + PASTA_DOWNLOAD + '/...)...';
+  cnt.textContent = dlQueue.length + ' PDFs';
+  bar.style.width = '30%';
 
-    // Dispara download do arquivo dentro de PASTA_DOWNLOAD/DDMMYYYY (subpasta dentro de Downloads)
+  try {
+    var r = await fetch(BASE + '/robot/download-zip?date=' + encodeURIComponent(dateRaw));
+    if (!r.ok) { var err = await r.json().catch(function(){return {error:'Erro ao gerar ZIP'};}); throw new Error(err.error || 'Erro ao gerar ZIP'); }
+    bar.style.width = '70%';
+    var blob = await r.blob();
+    bar.style.width = '95%';
+
+    var disposition = r.headers.get('Content-Disposition') || '';
+    var match = disposition.match(/filename="([^"]+)"/);
+    var zipName = match ? match[1] : ('greyhound_' + dateRaw + '.zip');
+
+    var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    a.href = BASE + '/robot/download-pdf?date=' + f.date + '&file=' + encodeURIComponent(f.filename);
-    a.download = PASTA_DOWNLOAD + '/' + folderName + '/' + f.filename;
+    a.href = url;
+    a.download = zipName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
-    // Aguarda 1.5s entre downloads para o navegador processar
-    await new Promise(r => setTimeout(r, 1500));
+    bar.style.width = '100%';
+    cur.textContent = 'Concluido! ZIP com ' + dlQueue.length + ' PDFs baixado.';
+    cnt.textContent = dlQueue.length + ' / ' + dlQueue.length;
+
+    // Exibe popup bonito de conclusao
+    document.getElementById('pdf-ready-popup').classList.add('open');
+  } catch(e) {
+    cur.textContent = 'Erro: ' + e.message;
+    alert('Erro ao baixar ZIP: ' + e.message);
   }
 
-  bar.style.width = '100%';
-  cur.textContent = 'Concluido! ' + dlQueue.length + ' PDFs baixados.';
-  cnt.textContent = dlQueue.length + ' / ' + dlQueue.length;
   btn.disabled = false;
-
-  // Exibe popup bonito de conclusao
-  document.getElementById('pdf-ready-popup').classList.add('open');
 }
 
 (async function() {
@@ -808,8 +813,16 @@ router.get('/download-zip', requireAdmin, async (req, res) => {
     return res.status(404).json({ error: 'Nenhum PDF encontrado' });
   }
 
+  let pastaDownload = 'Racingpost';
+  try { const cfg = getUserConfig(req.user.id); pastaDownload = (cfg.pasta_download || 'Racingpost').replace(/[^a-zA-Z0-9_-]/g,''); } catch(e) {}
+
+  // DDMMYYYY a partir da data YYYY-MM-DD
+  const dParts = date.split('-');
+  const ddmmyyyy = dParts.length === 3 ? dParts[2] + dParts[1] + dParts[0] : date;
+  const subfolder = pastaDownload + '/' + ddmmyyyy;
+
   const archiver = require('archiver');
-  const zipName = `greyhound_${date}.zip`;
+  const zipName = `${pastaDownload}_${ddmmyyyy}.zip`;
 
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
@@ -824,7 +837,7 @@ router.get('/download-zip', requireAdmin, async (req, res) => {
   archive.pipe(res);
 
   files.forEach(f => {
-    archive.file(path.join(dir, f), { name: f });
+    archive.file(path.join(dir, f), { name: subfolder + '/' + f });
   });
 
   // Aguardar o ZIP ser finalizado antes de fechar
