@@ -17,10 +17,10 @@ function navBar(user, active) {
   return `<nav style="background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
     <div style="display:flex">
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
-      <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Historico</a>
-      ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configuracoes</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robo</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuarios</a>` : ''}
+      <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Histórico</a>
+      ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
+      ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robô</a>` : ''}
+      ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuários</a>` : ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">
       <span style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${user.plan}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
