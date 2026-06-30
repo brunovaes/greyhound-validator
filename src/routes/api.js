@@ -9,7 +9,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 function buildPrompt(config) {
   return `Voce e um analisador especializado de corridas de galgos para apostas AvB e previsao de vencedor.
 
-PRE-FILTROS: Descartar OR, Maiden, HP, Final, Sprint S, Dash D, Trial, distancia menor que ${config.dist_min}m ou maior que ${config.dist_max}m. Classes aceitas: ${config.classes_aceitas}. Descartar galgos com menos de ${config.min_corridas_uteis} corridas uteis.
+PRE-FILTROS DE CORRIDA: Descartar corridas tipo OR, Maiden, Final, Sprint S, Dash D, Trial, distancia menor que ${config.dist_min}m ou maior que ${config.dist_max}m, classe fora de: ${config.classes_aceitas}.
+
+PRE-FILTRO POR LINHA (dentro do historico de cada galgo): uma linha de historico so e VALIDA para a analise se: NAO for HP, NAO for Trial/Solo isolado fora de padrao, distancia compativel com a corrida atual (mesma faixa, nao misturar ex: 261m com 450m), classe comparavel (nao usar corrida de classe muito distante para basear CalTm/Bends).
+
+ELIMINACAO INDIVIDUAL DE GALGO: cada galgo tem ate 5 linhas de historico. Conte quantas linhas sao VALIDAS (regra acima). Se um galgo tiver MENOS DE 3 linhas validas, ELIMINE esse galgo especifico da analise (ele nao participa do AvB, do top3 nem do Vencedor) - mas a corrida CONTINUA normalmente com os galgos restantes.
+
+ELIMINACAO DE CORRIDA INTEIRA: apos eliminar os galgos individuais que nao atingiram 3 linhas validas, se sobrarem MENOS DE 4 galgos elegiveis na corrida, descarte a corrida INTEIRA (nivel=skip, pct=0, trapFav=0, trapUnd=0, top3=[]). Com 4 ou mais galgos elegiveis, prossiga normalmente com a analise considerando APENAS os galgos elegiveis.
 
 PERFIL DO GALGO - CONTAR as ultimas 5 corridas:
 RECUPERADOR: maioria subindo posicoes nos bends (ex: 4332, 5431). Ideal para AvB.
@@ -34,12 +40,12 @@ HIERARQUIA (ordem obrigatoria):
 5. BRT peso ${config.peso_brt}x: desempate apenas.${(config.peso_post_pick && config.peso_post_pick > 0) ? `
 6. POST PICK peso ${config.peso_post_pick}x: O Racing Post indica no cabecalho do PDF os 3 melhores galgos da corrida (ex: "2-3-1" = traps 2, 3 e 1 nessa ordem de preferencia). Considere essa indicacao como sinal adicional: se o galgo favorito da sua analise tambem estiver entre os 3 do Post Pick, isso reforca a confianca. Se o Post Pick discordar fortemente da sua analise, mencione na observacao mas NAO ignore os outros criterios -- o peso ${config.peso_post_pick} (0-10) define o quanto essa indicacao deve pesar na decisao final.` : ''}
 
-OBSERVACAO: explicar o criterio DECISIVO. Max 15 palavras em portugues.
+OBSERVACAO: explicar o criterio DECISIVO. Max 15 palavras em portugues. Se algum galgo foi eliminado individualmente por falta de linhas validas, mencione resumidamente (ex: "T5 eliminado - so 1 linha valida na distancia").
 Termos: CalTm=Tempo Final, BRT=Melhor Tempo, SAw=Saida Lenta, RnOn=Acelerou no Final, FinWll=Terminou Bem, FcdCk=Forcado a Frear, Bmp=Tomou Contato, Fdd=Cansou no Final, NvrShwd=Nunca Apareceu.
 
 RANKING TOP3: para cada corrida (mesmo quando descartada=skip, se possivel), liste os numeros de trap dos 3 galgos mais bem avaliados pela sua analise, em ordem do melhor para o terceiro melhor, baseado em TODOS os criterios da hierarquia acima. Campo "top3": array de 3 inteiros, ex: [4,2,1]. Se nao for possivel determinar 3 com confianca, preencha com os que houver e 0 para os faltantes. Isso e SEMPRE preenchido quando houver corrida valida, independente de existir AvB ou Vencedor.
 
-AvB (tipo=avb): SEMPRE opor o MELHOR avaliado da corrida (top1 do ranking, vira trapFav) contra o PIOR avaliado da corrida inteira (o de menor chance entre os 6, vira trapUnd) - NUNCA contra o 2o ou 3o colocado do ranking. O objetivo e maximizar a distancia de qualidade entre fav e underdog para dar mais seguranca a aposta.
+AvB (tipo=avb): Quando houver AvB, SEMPRE opor o MELHOR avaliado da corrida (top1 do ranking, vira trapFav) contra o PIOR avaliado da corrida elegivel (o de menor chance, vira trapUnd) - NUNCA contra o 2o ou 3o colocado do ranking. O objetivo e maximizar a distancia de qualidade entre fav e underdog para dar mais seguranca a aposta. PORÉM: nem toda corrida precisa ter AvB. Mesmo comparando o melhor com o pior, se a diferenca entre eles for pequena/parelha (CalTm proximo, categoria igual, sem vantagem clara em nenhum criterio da hierarquia), marque nivel=skip e NAO force um AvB so para preencher a corrida. So gere AvB quando houver vantagem real e identificavel do trapFav sobre o trapUnd.
 
 VENCEDOR (tipo=vencedor, campo "Back"): so incluir quando o trapFav tiver vantagem MUITO CLARA E ABSURDA sobre TODOS os outros 5 galgos da corrida (nao apenas sobre o 2o colocado do ranking). Isso e um criterio MUITO mais rigoroso que o top1 do ranking - na maioria das corridas NAO devera ser preenchido. Se a vantagem for apenas "ele e o melhor mas os outros estao proximos", NAO incluir Vencedor.
 
