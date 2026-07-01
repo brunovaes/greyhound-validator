@@ -62,12 +62,55 @@ function renderTable(){
   updCards();
 }
 
+async function runChunk(files, caps){
+  var fd=new FormData();
+  files.forEach(function(f){fd.append('pdfs',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:'application/pdf'}),f.name);});
+  caps.forEach(function(f){fd.append('caps',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:f.mime}),f.name);});
+  var resp=await fetch(BASE+'/api/analyze',{method:'POST',body:fd});
+  if(!resp.ok){var e=await resp.json();throw new Error(e.error||'Erro '+resp.status);}
+  var reader=resp.body.getReader();
+  var decoder=new TextDecoder();
+  var buffer='';
+  while(true){
+    var _r=await reader.read();
+    if(_r.done) break;
+    buffer+=decoder.decode(_r.value,{stream:true});
+    var lines=buffer.split('\n');
+    buffer=lines.pop();
+    for(var li=0;li<lines.length;li++){
+      var line=lines[li].trim();
+      if(!line.startsWith('data:')) continue;
+      try{
+        var evt=JSON.parse(line.slice(5).trim());
+        if(evt.type==='races'){results=results.concat(evt.races||[]);renderTable();saveSessionState();updCards();}
+        else if(evt.type==='limitReached'){alert('Limite de analises atingido!');return false;}
+        else if(evt.type==='error'){throw new Error(evt.error);}
+      }catch(pe){}
+    }
+  }
+  return true;
+}
+
 async function runAnalysis(){
   if(!raceFiles.length){alert('Carregue pelo menos um PDF.');return;}
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
-  prog(5,'Preparando...');results=[];
-try{   var fd=new FormData();   raceFiles.forEach(function(f){fd.append('pdfs',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:'application/pdf'}),f.name);});   capFiles.forEach(function(f){fd.append('caps',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:f.mime}),f.name);});   prog(10,'Enviando...');   var resp=await fetch(BASE+'/api/analyze',{method:'POST',body:fd});   if(!resp.ok){var e=await resp.json();throw new Error(e.error||'Erro '+resp.status);}   results=[];   var reader=resp.body.getReader();   var decoder=new TextDecoder();   var buffer='';   var totalLotes=1;   while(true){    var _r=await reader.read();    if(_r.done) break;    buffer+=decoder.decode(_r.value,{stream:true});    var lines=buffer.split('\n');    buffer=lines.pop();    for(var li=0;li<lines.length;li++){     var line=lines[li].trim();     if(!line.startsWith('data:')) continue;     try{      var evt=JSON.parse(line.slice(5).trim());      if(evt.type==='start'){       totalLotes=evt.batches||1;       prog(15,'0/'+totalLotes+' lotes...');      } else if(evt.type==='progress'){       var pct=Math.round(15+(evt.lote/totalLotes)*70);       prog(pct,'Lote '+evt.lote+'/'+evt.totalLotes+'...');      } else if(evt.type==='races'){       results=results.concat(evt.races||[]);       prog(Math.round(15+(results.length/raceFiles.length)*70),'Recebendo... '+results.length+' corridas');       renderTable();       saveSessionState();       updCards();      } else if(evt.type==='limitReached'){       alert('Limite de analises atingido! Fale com o administrador.');       document.getElementById('btngo').disabled=false;       document.getElementById('btngo').innerHTML='Analisar Corridas';       return;      } else if(evt.type==='batchError'){       console.warn('Erro lote '+evt.lote+':',evt.error);      } else if(evt.type==='done'){       var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;       setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas'+(evt.errors&&evt.errors.length?' ('+evt.errors.length+' lotes com erro)':''));       prog(100,'');       setTimeout(function(){document.getElementById('pw').style.display='none';},1200);      } else if(evt.type==='error'){       throw new Error(evt.error);      }     }catch(parseErr){}    }   }   renderTable();   saveSessionState();  }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
+  prog(5,'Preparando...');
+  results=[];
+  var CHUNK=30;
+  var chunks=[];
+  for(var ci=0;ci<raceFiles.length;ci+=CHUNK) chunks.push(raceFiles.slice(ci,ci+CHUNK));
+  try{
+    for(var chunkIdx=0;chunkIdx<chunks.length;chunkIdx++){
+      prog(Math.round(5+(chunkIdx/chunks.length)*90),'Grupo '+(chunkIdx+1)+'/'+chunks.length+' ('+chunks[chunkIdx].length+' PDFs)...');
+      var ok=await runChunk(chunks[chunkIdx],chunkIdx===0?capFiles:[]);
+      if(ok===false) break;
+    }
+    var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;
+    setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');
+    prog(100,'');
+    setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
+  }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
 }
