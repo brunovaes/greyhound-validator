@@ -125,6 +125,86 @@ const REMARKS_POS = ['RnOn','FinWll','StydOn','EP','Led','Chl','AHandy','ClrRn',
 const REMARKS_NEG = ['Fdd','NvrShwd','Outpaced','WeakFinish','SoonOutpaced','DroppedAway','DropAway'];
 
 // ============================================================
+// CALCULO DE PERFIL A PARTIR DE BENDS (motor JS — sem Claude)
+// ============================================================
+
+// Atenuantes que justificam queda de posição (não é fumador real)
+const ATENUANTES_PERFIL = ['Bmp','Crd','Blk','FcdCk','Ck','Stb','Imp','Eased','Fcd-Ck'];
+
+function calcularPerfil(linhasValidas) {
+  if (!linhasValidas || !linhasValidas.length) return 'Estavel';
+
+  const cnt = { Frontrunner:0, Fumador:0, Recuperador:0, Estavel:0 };
+  let total = 0;
+
+  for (const linha of linhasValidas.slice(0, 5)) {
+    // Extrai apenas dígitos 1-6 da sequência de bends
+    const bends = (linha.bends||'').toString().replace(/[^1-6]/g,'');
+    if (bends.length < 2) continue;
+
+    const primeiro = parseInt(bends[0]);
+    const ultimo   = parseInt(bends[bends.length - 1]);
+    const temAtenuante = ATENUANTES_PERFIL.some(a => (linha.remarks||'').includes(a));
+    total++;
+
+    if (primeiro <= 2 && ultimo <= 2) {
+      cnt.Frontrunner++;
+    } else if (primeiro <= 2 && ultimo > primeiro + 1 && !temAtenuante) {
+      // Fumador só sem atenuante (queda real, não causada por colisão)
+      cnt.Fumador++;
+    } else if (primeiro >= 4 && ultimo <= Math.max(1, primeiro - 1)) {
+      cnt.Recuperador++;
+    } else {
+      cnt.Estavel++;
+    }
+  }
+
+  if (!total) return 'Estavel';
+
+  // Perfil dominante; em caso de empate Estavel tem prioridade
+  const sorted = Object.entries(cnt).sort((a,b) => b[1]-a[1]);
+  // Se dois empatados e Estavel é um deles, retorna Estavel
+  if (sorted[0][1] === sorted[1][1] && sorted.find(e=>e[0]==='Estavel'&&e[1]===sorted[0][1])) return 'Estavel';
+  return sorted[0][0];
+}
+
+// ============================================================
+// REGRA: SEQUENCIA DE CORRIDAS ABAIXO DA CLASSE DO CARD
+// ============================================================
+
+// Retorna true se o galgo tem 3+ corridas consecutivas abaixo da classe
+// do card, nas corridas ANTERIORES à mais recente (linhas 1, 2, 3...)
+function temSequenciaAbaixoClasse(linhasValidas, corridaClasse) {
+  if (!linhasValidas || linhasValidas.length < 4) return false;
+  const corridaNivel = getClassLevel(corridaClasse);
+  if (!corridaNivel) return false;
+  // Pula a mais recente (index 0), verifica as anteriores
+  let sequencia = 0;
+  for (let i = 1; i < linhasValidas.length; i++) {
+    const nivel = getClassLevel(linhasValidas[i].classe);
+    if (nivel && nivel > corridaNivel) {
+      sequencia++;
+      if (sequencia >= 3) return true;
+    } else {
+      break; // sequência quebrada
+    }
+  }
+  return false;
+}
+
+// ============================================================
+// TIEBREAKER: dias entre últimas corridas
+// ============================================================
+
+function getDiasEntreUltimas(linhasValidas) {
+  if (!linhasValidas || linhasValidas.length < 2) return 999;
+  const d1 = parseDateEntry(linhasValidas[0].data);
+  const d2 = parseDateEntry(linhasValidas[1].data);
+  if (!d1 || !d2) return 999;
+  return Math.round((d1 - d2) / 86400000);
+}
+
+// ============================================================
 // DETECCAO DE RETORNO POR INATIVIDADE
 // ============================================================
 
@@ -322,9 +402,9 @@ function calcularPerfil(linhasValidas) {
   return Object.entries(contagem).sort((a,b)=>b[1]-a[1])[0][0];
 }
 
-// Score 0-100 para Bends/Perfil
+// Score 0-100 para Bends/Perfil — perfil calculado pelo motor JS
 function scoreBends(galgo) {
-  const perfil = galgo.perfil;
+  const perfil = (calcularPerfil(galgo.linhasValidas)||'Estavel').toLowerCase();
   const baseScores = { frontrunner:80, recuperador:90, estavel:60, fumador:20 };
   let score = baseScores[perfil] || 50;
 
@@ -476,23 +556,64 @@ function processarCorrida(corridaRaw, config) {
 
   // Calcular scores com todos os elegiveis como referencia
   const comScores = elegiveis.map(g=>calcularScoreGalgo(g, elegiveis, classe, postPick, config));
-  comScores.sort((a,b)=>b.scoreFinal-a.scoreFinal);
+  // Sort com tiebreaker quando scores muito próximos (<= 5pts)
+  comScores.sort((a,b) => {
+    const diff = b.scoreFinal - a.scoreFinal;
+    if (Math.abs(diff) > 5) return diff;
+    // Tiebreaker 1: menor intervalo entre últimas = mais em forma
+    const diasA = getDiasEntreUltimas(a.linhasValidas);
+    const diasB = getDiasEntreUltimas(b.linhasValidas);
+    if (Math.abs(diasA-diasB) > 1) return diasA - diasB;
+    // Tiebreaker 2: melhor posição na última corrida
+    const posA = (a.linhasValidas&&a.linhasValidas[0]&&a.linhasValidas[0].pos)||6;
+    const posB = (b.linhasValidas&&b.linhasValidas[0]&&b.linhasValidas[0].pos)||6;
+    if (posA !== posB) return posA - posB;
+    // Tiebreaker 3: peso (maior peso = mais força = melhor)
+    const pA = parseFloat((a.linhasValidas&&a.linhasValidas[0]&&a.linhasValidas[0].peso)||0);
+    const pB = parseFloat((b.linhasValidas&&b.linhasValidas[0]&&b.linhasValidas[0].peso)||0);
+    if (Math.abs(pA-pB) > 0.3) return pB - pA;
+    return diff;
+  });
 
   const top3 = comScores.slice(0,3).map(g=>g.trap);
-  const melhor = comScores[0];
-  const segundo = comScores[1];
+
+  // Regra: melhor não pode ter 3+ corridas consecutivas abaixo da classe do card
+  let idxMelhor = 0;
+  while (idxMelhor < comScores.length - 2) {
+    const candidato = comScores[idxMelhor];
+    if (temSequenciaAbaixoClasse(candidato.linhasValidas, classe)) {
+      console.log(`[MELHOR] ${hora} ${corrida}: T${candidato.trap} ${candidato.nome||''} descartado como melhor — 3+ corridas abaixo de ${classe} antes da ultima`);
+      idxMelhor++;
+    } else {
+      break;
+    }
+  }
+  const melhor = comScores[idxMelhor];
+  const segundo = comScores[idxMelhor === 0 ? 1 : 0]; // segundo = próximo após melhor
 
   // Regra: se o underdog (pior do ranking) venceu a última corrida válida,
   // descarta ele como oponente e usa o penúltimo para o AvB
-  let pior = comScores[comScores.length - 1];
+  // Também garante que pior != melhor
+  const idxPiorInicial = comScores.length - 1;
+  let pior = comScores[idxPiorInicial];
   let notaReanalise = '';
+  // Se pior == melhor (não deveria, mas garante)
+  let idxPior = idxPiorInicial;
+  if (idxPior === idxMelhor) idxPior = Math.max(0, idxPior - 1);
+  pior = comScores[idxPior];
+
   if (comScores.length >= 3) {
     const ultimaLinhaPior = pior.linhasValidas && pior.linhasValidas[0];
     if (ultimaLinhaPior && ultimaLinhaPior.pos === 1) {
-      const penultimo = comScores[comScores.length - 2];
-      console.log(`[AvB] ${hora} ${corrida}: T${pior.trap} ${pior.nome} venceu ultima corrida — reanalise com T${penultimo.trap} ${penultimo.nome} como underdog`);
-      notaReanalise = ` Nota: T${pior.trap} venceu última — reanalise vs T${penultimo.trap}.`;
-      pior = penultimo;
+      // Usar penúltimo (evitando colidir com melhor)
+      let novoPiorIdx = idxPior - 1;
+      if (novoPiorIdx === idxMelhor) novoPiorIdx--;
+      if (novoPiorIdx >= 0 && novoPiorIdx < comScores.length) {
+        const penultimo = comScores[novoPiorIdx];
+        console.log(`[AvB] ${hora} ${corrida}: T${pior.trap} venceu ultima — reanalise com T${penultimo.trap} como underdog`);
+        notaReanalise = ` Nota: T${pior.trap} venceu última — reanalise vs T${penultimo.trap}.`;
+        pior = penultimo;
+      }
     }
   }
 
@@ -504,61 +625,72 @@ function processarCorrida(corridaRaw, config) {
   // obsElim mantido apenas internamente para debug no console
   const obsElimDebug = eliminados.length ? eliminados.map(e=>`T${e.trap}:(${e.motivo})`).join('; ') : '';
   if (obsElimDebug) console.log(`[ELIM] ${hora} ${corrida}: ${obsElimDebug}`);
-  const ranking = 'Galgos ativos: ' + comScores.map(g=>`T${g.trap}`).join('-');
+  const ranking = 'Chegada dos Ativos: ' + comScores.map(g=>g.trap).join('-');
 
-  // Narrativa rica do confronto AvB
+  // Narrativa rica do confronto AvB — tom narrativo
   function gerarNarrativaRica(fav, und, corrClasse) {
-    const pf = fav.perfil, pu = und.perfil;
+    const pf = (fav.perfil||'estavel').toLowerCase();
+    const pu = (und.perfil||'estavel').toLowerCase();
     const nf = `T${fav.trap}`, nu = `T${und.trap}`;
 
-    // Texto de perfil
-    const perfilTextos = {
-      frontrunner_fumador:    `${nf} dispara na largada e deve manter a liderança — ${nu} costuma começar forte mas perde ritmo nos bends finais.`,
-      frontrunner_estavel:    `${nf} busca a liderança imediata. ${nu} mantém ritmo constante, mas dificilmente terá explosão para alcançar.`,
-      frontrunner_recuperador:`${nf} tenta liderar desde a saída. ${nu} vem progressivamente de trás — tudo depende da margem que ${nf} abre nos primeiros bends.`,
-      frontrunner_frontrunner:`Dois galgos que buscam a frente. Disputa direta esperada na largada — score favorece ${nf}.`,
-      recuperador_fumador:    `${nf} ganha ritmo ao longo da corrida. ${nu} arranca bem mas tende a ceder — ${nf} deve passar na reta.`,
-      recuperador_estavel:    `${nf} acelera progressivamente. ${nu} é constante mas sem explosão final — ${nf} favorito na chegada.`,
-      recuperador_recuperador:`Ambos vêm de trás. ${nf} com histórico de aceleração mais consistente deve chegar primeiro.`,
-      recuperador_frontrunner:`${nu} larga à frente mas tende a cair. ${nf} pressiona de trás — se a margem do ${nu} não for grande, ${nf} deve ultrapassar.`,
-      estavel_fumador:        `${nf} mantém ritmo sólido e constante. ${nu} começa forte mas cansa nos bends finais — tendência favorece ${nf}.`,
-      estavel_recuperador:    `${nu} pode ameaçar na reta final. ${nf} precisa construir margem nos bends iniciais para segurar a posição.`,
-      estavel_estavel:        `Corrida equilibrada em ritmo. Nenhum dos dois tem mudança brusca de posição — score e CalTm devem definir.`,
-      estavel_frontrunner:    `${nu} tenta liderar mas tende a perder força. ${nf} consistente deve manter posição e passar.`,
-      fumador_fumador:        `Ambos arrancam forte mas podem desacelerar. ${nf} com melhor histórico deve aguentar melhor o ritmo.`,
-      fumador_recuperador:    `${nf} abre vantagem cedo, ${nu} tenta alcançar de trás. A decisão depende da margem inicial de ${nf}.`,
-      fumador_estavel:        `${nf} dominante nos bends iniciais. ${nu} constante sem recuperação — ${nf} favorito se mantiver o passo.`,
-      fumador_frontrunner:    `Dois galgos que lideram cedo. ${nf} com score superior deve prevalecer no duelo direto pela frente.`
-    };
-    let partes = [];
-    partes.push(perfilTextos[`${pf}_${pu}`] || `${nf} (${pf}) vs ${nu} (${pu}).`);
-
-    // Vantagem de CalTm
+    // Contexto de CalTm
+    let ctxCalTm = '';
     if (fav.caltmAgregado && und.caltmAgregado) {
       const diffCt = und.caltmAgregado - fav.caltmAgregado;
-      if (diffCt >= 0.10) partes.push(`${nf} com melhor tempo médio ajustado (+${diffCt.toFixed(2)}s de vantagem).`);
-      else if (diffCt <= -0.10) partes.push(`${nu} com leve vantagem de tempo (${Math.abs(diffCt).toFixed(2)}s) — atenção.`);
+      if (diffCt >= 0.15) ctxCalTm = `carregando uma vantagem real de tempo (+${diffCt.toFixed(2)}s no agregado)`;
+      else if (diffCt >= 0.10) ctxCalTm = `com leve superioridade de ritmo (+${diffCt.toFixed(2)}s)`;
+      else if (diffCt <= -0.10) ctxCalTm = `apesar de ${nu} mostrar tempo ligeiramente melhor (${Math.abs(diffCt).toFixed(2)}s)`;
     }
 
-    // Vantagem de categoria
+    // Contexto de categoria
     const favLv = getClassLevel(fav.histClasse), undLv = getClassLevel(und.histClasse);
     const corrLv = getClassLevel(corrClasse);
+    let ctxCat = '';
     if (favLv && corrLv) {
-      if (favLv < corrLv) partes.push(`${nf} descendo de ${fav.histClasse} — vantagem de categoria.`);
-      else if (favLv > corrLv) partes.push(`${nf} subindo de ${fav.histClasse} — classe em ascensão.`);
+      if (favLv < corrLv) ctxCat = `vindo de ${fav.histClasse} — um degrau acima desta categoria`;
+      else if (favLv > corrLv) ctxCat = `em ascensão vindo de ${fav.histClasse}`;
     }
-    if (undLv && corrLv && undLv < corrLv) partes.push(`${nu} também descendo de ${und.histClasse} — considerar.`);
+    if (!ctxCat && undLv && corrLv && undLv < corrLv) {
+      ctxCat = `enquanto ${nu} desce de ${und.histClasse} e pode surpreender`;
+    }
 
-    // Remarks recentes do favorito
+    // Contexto de remarks recentes do favorito
     const remarksRecentes = (fav.linhasValidas||[]).slice(0,2).flatMap(l=>parseRemarks(l.remarks));
+    const temComboPos = REMARKS_MUITO_POS_COMBOS.some(c=>c.every(r=>hasAnyRemark(remarksRecentes,[r])));
     const temPos = REMARKS_POS.some(r=>hasAnyRemark(remarksRecentes,[r]));
     const temNeg = REMARKS_NEG.some(r=>hasAnyRemark(remarksRecentes,[r]));
-    const temComboPos = REMARKS_MUITO_POS_COMBOS.some(c=>c.every(r=>hasAnyRemark(remarksRecentes,[r])));
-    if (temComboPos) partes.push(`${nf} com combinação muito positiva no histórico recente.`);
-    else if (temPos) partes.push(`${nf} com histórico de encerramento forte.`);
-    if (temNeg) partes.push(`Atenção: ${nf} apresentou queda de ritmo recentemente.`);
+    let ctxRemarks = '';
+    if (temComboPos) ctxRemarks = `O histórico recente de ${nf} é especialmente encorajador — combinou bem após contratempos.`;
+    else if (temPos) ctxRemarks = `${nf} vem encerrando corridas com força, o que reforça a confiança na escolha.`;
+    else if (temNeg) ctxRemarks = `Vale atenção: ${nf} mostrou sinais de queda de ritmo nas últimas saídas.`;
 
-    return `AvB ${nf} vs ${nu}: ` + partes.join(' ');
+    // Narrativas por combinação de perfil
+    const combos = {
+      frontrunner_fumador:     `${nf} é o tipo que decide a corrida nos primeiros metros — dispara, crava posição e não deixa espaço. ${nu} também arranca bem, mas a história mostra que perde força quando a exigência aumenta nos bends finais. ${nf} deve controlar do início ao fim${ctxCalTm ? ', ' + ctxCalTm : ''}${ctxCat ? ', ' + ctxCat : ''}.`,
+      frontrunner_estavel:     `${nf} vai buscar a frente desde a saída e tende a não ceder. ${nu} é constante e disciplinado, mas raramente tem o impulso para alcançar quem lidera com folga. Se ${nf} abrir margem nos primeiros bends${ctxCalTm ? ' — e o tempo sugere que sim (' + ctxCalTm + ')' : ''}, a corrida deve ser controlada${ctxCat ? ' — e ' + ctxCat + ' pesa a favor' : ''}.`,
+      frontrunner_recuperador: `A dinâmica aqui é clássica: ${nf} tenta cravar a liderança cedo enquanto ${nu} tenta recuperar posições ao longo da prova. Tudo depende da margem que ${nf} consegue construir nos primeiros bends${ctxCalTm ? '. ' + ctxCalTm.charAt(0).toUpperCase() + ctxCalTm.slice(1) + ' apoia' : ''}${ctxCat ? ' — ' + ctxCat : ''}.`,
+      frontrunner_frontrunner: `Dois galgos que querem a frente — a largada vai definir quem dita o ritmo. O score favorece ${nf}${ctxCalTm ? ', que também apresenta ' + ctxCalTm : ''}${ctxCat ? ', além de ' + ctxCat : ''}. Disputa direta esperada na saída, mas ${nf} tem argumentos para sair na frente.`,
+      recuperador_fumador:     `${nf} cresce ao longo da corrida e chega mais forte na reta. ${nu} tende a fazer uma largada vistosa mas vai perdendo o fio à medida que a prova avança. O momento do cruzamento entre os dois costuma ser decisivo — e ${nf} costuma chegar em melhor estado físico${ctxCalTm ? ', ' + ctxCalTm : ''}${ctxCat ? '. ' + ctxCat.charAt(0).toUpperCase() + ctxCat.slice(1) : ''}.`,
+      recuperador_estavel:     `${nf} não precisa estar na frente para vencer — ele cresce e vai buscar. ${nu} é sólido e regular, mas sem a explosão para reagir quando ${nf} aparece por fora. A tendência é que ${nf} domine a parte final da corrida${ctxCalTm ? ', ' + ctxCalTm : ''}${ctxCat ? ' — ' + ctxCat : ''}.`,
+      recuperador_recuperador: `Dois recuperadores — a diferença está em quem acelera com mais consistência. ${nf} apresenta histórico de aceleração mais assertivo${ctxCalTm ? ', reforçado por ' + ctxCalTm : ''}${ctxCat ? '. ' + ctxCat.charAt(0).toUpperCase() + ctxCat.slice(1) : ''}. Corrida que pode ser decidida no último bend.`,
+      recuperador_frontrunner: `${nu} vai tentar escapar pela frente, mas tende a ceder quando a exigência aumenta. ${nf} vem de trás, cresce e pressiona — se a margem inicial de ${nu} não for grande, a reta final pertence a ${nf}${ctxCalTm ? '. ' + ctxCalTm.charAt(0).toUpperCase() + ctxCalTm.slice(1) : ''}${ctxCat ? ' — ' + ctxCat : ''}.`,
+      estavel_fumador:         `${nf} é constante e não desperdiça energia. ${nu} começa bem mas vai dando sinais de fadiga quando a prova exige mais. Essa diferença de consistência tende a aparecer na parte final${ctxCalTm ? ', e ' + ctxCalTm + ' confirma a vantagem' : ''}${ctxCat ? '. ' + ctxCat.charAt(0).toUpperCase() + ctxCat.slice(1) : ''}.`,
+      estavel_recuperador:     `${nf} precisa construir margem nos bends iniciais, pois ${nu} vai crescer na reta. A consistência de ${nf} é o trunfo — se não ceder espaço no meio da corrida, deve segurar${ctxCalTm ? '. ' + ctxCalTm.charAt(0).toUpperCase() + ctxCalTm.slice(1) + ' dá suporte a essa leitura' : ''}${ctxCat ? ' — ' + ctxCat : ''}.`,
+      estavel_estavel:         `Corrida de ritmo — nenhum dos dois tem mudança brusca de posição. O que vai separar é a consistência acumulada de tempo e posicionamento. ${nf} leva vantagem no score${ctxCalTm ? ' e ' + ctxCalTm : ''}${ctxCat ? ', além de ' + ctxCat : ''}. Disputa equilibrada mas com ${nf} como referência.`,
+      estavel_frontrunner:     `${nu} vai tentar impor o ritmo desde a saída, mas o histórico mostra desgaste ao longo da prova. ${nf}, constante e eficiente, tende a se beneficiar dessa queda${ctxCalTm ? '. ' + ctxCalTm.charAt(0).toUpperCase() + ctxCalTm.slice(1) : ''}${ctxCat ? ' — ' + ctxCat : ''}.`,
+      fumador_fumador:         `Os dois têm punch na saída mas podem desacelerar. ${nf} tem melhor histórico de sustentar o ritmo${ctxCalTm ? ' e ' + ctxCalTm + ' reforça isso' : ''}${ctxCat ? '. ' + ctxCat.charAt(0).toUpperCase() + ctxCat.slice(1) : ''}. Corrida que pode ser decidida mais cedo do que parece.`,
+      fumador_recuperador:     `${nf} vai tentar decidir nos primeiros bends — se abrir margem suficiente, ${nu} não terá tempo de alcançar. A chave está em quão forte ${nf} sai${ctxCalTm ? ', e ' + ctxCalTm + ' indica capacidade para isso' : ''}${ctxCat ? ' — ' + ctxCat : ''}.`,
+      fumador_estavel:         `${nf} pode impressionar no início. ${nu} é mais regular mas sem explosão para reagir a uma largada dominante. Se ${nf} manter o ritmo além dos primeiros bends${ctxCalTm ? ' — e o tempo médio sugere que pode (' + ctxCalTm + ')' : ''}, a vantagem deve ser mantida${ctxCat ? '. ' + ctxCat.charAt(0).toUpperCase() + ctxCat.slice(1) : ''}.`,
+      fumador_frontrunner:     `Dois galgos explosivos na saída — mas ${nf} tem consistência superior no score${ctxCalTm ? ' e ' + ctxCalTm : ''}${ctxCat ? ', além de ' + ctxCat : ''}. O duelo pela frente deve ser intenso mas breve — ${nf} deve sair vencedor do confronto direto.`
+    };
+
+    const chave = `${pf}_${pu}`;
+    let narrativa = combos[chave] || `${nf} (${pf}) parte como favorito sobre ${nu} (${pu})${ctxCalTm ? ', ' + ctxCalTm : ''}${ctxCat ? ' — ' + ctxCat : ''}.`;
+
+    // Append remarks ao final
+    if (ctxRemarks) narrativa += ' ' + ctxRemarks;
+
+    return `AvB ${nf} vs ${nu}: ` + narrativa;
   }
 
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
