@@ -65,20 +65,20 @@ function injectStyles(){
     '.ghf-toast.t-err{background:#e53935;color:#fff;}',
     '.ghf-toast.t-show{opacity:1;}',
 
-    /* filter panel — barra discreta */
-    '#filter-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;margin-bottom:12px;background:rgba(255,255,255,.025);border-bottom:1px solid rgba(255,255,255,.06);}',
-    '#filter-panel .fp-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 12px;cursor:pointer;transition:all .2s;}',
-    '#filter-panel .fp-pill:hover{border-color:rgba(0,230,118,.4);background:rgba(0,230,118,.06);}',
-    '#filter-panel .fp-pill.active{border-color:rgba(0,230,118,.5);background:rgba(0,230,118,.1);}',
-    '#filter-panel .fp-icon{font-size:12px;opacity:.6;}',
-    '#filter-panel select,#filter-panel input[type=time]{background:transparent;border:none;color:#fff;font-size:12px;outline:none;cursor:pointer;max-width:120px;padding:0;}',
-    '#filter-panel select option{background:#1a1f2e;}',
-    '#filter-panel input[type=time]{color-scheme:dark;width:80px;}',
-    '.fp-sep{width:1px;height:18px;background:rgba(255,255,255,.1);flex-shrink:0;}',
+    /* filter panel — linha compacta */
+    '#filter-panel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);border-radius:8px;}',
+    '#filter-panel .fp-group{display:flex;align-items:center;gap:5px;}',
+    '#filter-panel .fp-label{font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}',
+    '#filter-panel select,#filter-panel input[type=time]{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:rgba(255,255,255,.8);font-size:11px;outline:none;cursor:pointer;padding:4px 6px;transition:border .15s;}',
+    '#filter-panel select{min-width:100px;}',
+    '#filter-panel input[type=time]{color-scheme:dark;width:78px;}',
+    '#filter-panel select:focus,#filter-panel input[type=time]:focus{border-color:rgba(0,230,118,.5);}',
+    '#filter-panel select option{background:#1a1f2e;font-size:12px;}',
+    '.fp-divider{width:1px;height:16px;background:rgba(255,255,255,.08);flex-shrink:0;margin:0 2px;}',
     '.fp-hora-pair{display:flex;align-items:center;gap:4px;}',
-    '.fp-hora-sep{color:rgba(255,255,255,.25);font-size:11px;}',
-    '#fp-count{font-size:11px;color:rgba(255,255,255,.3);margin-left:auto;white-space:nowrap;}',
-    '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.25);cursor:pointer;font-size:18px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
+    '.fp-hora-sep{color:rgba(255,255,255,.2);font-size:10px;}',
+    '#fp-count{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto;white-space:nowrap;}',
+    '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
     '#btn-fp-clear:hover{color:#e53935;}',
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
@@ -134,14 +134,14 @@ function injectFilterPanel(){
   var fp=document.createElement('div');
   fp.id='filter-panel';fp.style.display='none';
   fp.innerHTML=''
-    +'<div class="fp-pill"><span class="fp-icon">&#127937;</span>'
-    +'<select id="fp-pista"><option value="">Todas as pistas</option></select></div>'
-    +'<div class="fp-sep"></div>'
-    +'<div class="fp-pill"><span class="fp-icon">&#128336;</span>'
-    +'<div class="fp-hora-pair"><input type="time" id="fp-hora-min" title="Hora mínima BR"><span class="fp-hora-sep">–</span><input type="time" id="fp-hora-max" title="Hora máxima BR"></div></div>'
-    +'<div class="fp-sep"></div>'
-    +'<div class="fp-pill"><span class="fp-icon">&#127919;</span>'
-    +'<select id="fp-conf"><option value="">Confiança</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
+    +'<div class="fp-group"><span class="fp-label">Pista</span>'
+    +'<select id="fp-pista"><option value="">Todas</option></select></div>'
+    +'<div class="fp-divider"></div>'
+    +'<div class="fp-group"><span class="fp-label">Horário BR</span>'
+    +'<div class="fp-hora-pair"><input type="time" id="fp-hora-min" title="De"><span class="fp-hora-sep">–</span><input type="time" id="fp-hora-max" title="Até"></div></div>'
+    +'<div class="fp-divider"></div>'
+    +'<div class="fp-group"><span class="fp-label">Confiança</span>'
+    +'<select id="fp-conf"><option value="">Todas</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
     +'<button id="btn-fp-clear" title="Limpar filtros">✕</button>'
     +'<span id="fp-count"></span>';
   var table=tb.closest('table');
@@ -178,10 +178,7 @@ function updateFilterPanel(){
     sel.innerHTML='<option value="">Todas as pistas</option>';
     pistas.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;if(p===cur)o.selected=true;sel.appendChild(o);});
   }
-  // marca pills como active quando têm filtro ativo
-  var pillPista=sel&&sel.closest('.fp-pill');if(pillPista)pillPista.classList.toggle('active',!!filterState.pista);
-  var confSel=document.getElementById('fp-conf');var pillConf=confSel&&confSel.closest('.fp-pill');if(pillConf)pillConf.classList.toggle('active',!!filterState.confianca);
-  var horaPill=document.querySelector('#fp-hora-min')||null;var pillHora=horaPill&&horaPill.closest('.fp-pill');if(pillHora)pillHora.classList.toggle('active',!!(filterState.horaMin||filterState.horaMax));
+
   // contador
   var filtered=applyFiltersToAvbs(avbs);
   var countEl=document.getElementById('fp-count');
