@@ -31,6 +31,12 @@ function navBar(user, active) {
   <style>.nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}.nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}</style>`;
 }
 
+// Serve o JS do cliente como arquivo separado
+router.get('/app.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(require('path').join(__dirname, '../../src/app.js'));
+});
+
 router.get('/', (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
@@ -225,7 +231,7 @@ ${navBar(user, 'analisar')}
 </div>
 
 <script>var BASE='${BASE}';var SS_KEY='ghf_results_v1';</script>
-<script src="${BASE}/static/app.js"></script></body></html>`);
+<script src="${BASE}/app.js"></script></body></html>`);
 });
 
 router.get('/live', (req, res) => {
