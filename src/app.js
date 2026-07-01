@@ -144,9 +144,12 @@ function injectFilterPanel(){
     +'<select id="fp-conf"><option value="">Todas</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
     +'<button id="btn-fp-clear" title="Limpar filtros">✕</button>'
     +'<span id="fp-count"></span>';
+  // inserir ANTES do .tw (wrapper da tabela), não dentro dele
   var table=tb.closest('table');
-  if(table&&table.parentElement)table.parentElement.insertBefore(fp,table);
-  else tb.parentElement.insertBefore(fp,tb);
+  var tw=table?table.parentElement:null;       // .tw
+  var anchor=tw||table||tb;
+  var container=anchor.parentElement;          // .content
+  container.insertBefore(fp,anchor);
 
   document.getElementById('fp-pista').addEventListener('change',function(){filterState.pista=this.value;renderTable();});
   document.getElementById('fp-hora-min').addEventListener('change',function(){filterState.horaMin=this.value;renderTable();});
