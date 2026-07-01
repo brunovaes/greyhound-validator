@@ -66,14 +66,17 @@ async function runChunk(files, caps){
   var fd=new FormData();
   files.forEach(function(f){fd.append('pdfs',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:'application/pdf'}),f.name);});
   caps.forEach(function(f){fd.append('caps',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:f.mime}),f.name);});
+  console.log('[runChunk] enviando '+files.length+' PDFs...');
   var resp=await fetch(BASE+'/api/analyze',{method:'POST',body:fd});
+  console.log('[runChunk] resp.ok='+resp.ok+' status='+resp.status);
   if(!resp.ok){var e=await resp.json();throw new Error(e.error||'Erro '+resp.status);}
   var reader=resp.body.getReader();
   var decoder=new TextDecoder();
   var buffer='';
+  var evtCount=0;
   while(true){
     var _r=await reader.read();
-    if(_r.done) break;
+    if(_r.done){console.log('[runChunk] stream done, eventos:'+evtCount);break;}
     buffer+=decoder.decode(_r.value,{stream:true});
     var lines=buffer.split('\n');
     buffer=lines.pop();
@@ -82,10 +85,12 @@ async function runChunk(files, caps){
       if(!line.startsWith('data:')) continue;
       try{
         var evt=JSON.parse(line.slice(5).trim());
+        evtCount++;
+        console.log('[runChunk] evt:'+evt.type+(evt.races?' races:'+evt.races.length:''));
         if(evt.type==='races'){results=results.concat(evt.races||[]);renderTable();saveSessionState();updCards();}
         else if(evt.type==='limitReached'){alert('Limite de analises atingido!');return false;}
         else if(evt.type==='error'){throw new Error(evt.error);}
-      }catch(pe){}
+      }catch(pe){console.warn('[runChunk] parse err:',pe.message);}
     }
   }
   return true;
@@ -95,7 +100,7 @@ async function runAnalysis(){
   if(!raceFiles.length){alert('Carregue pelo menos um PDF.');return;}
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
-  document.querySelectorAll('nav a').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});
+  try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
   prog(5,'Preparando...');
   results=[];
   var CHUNK=30;
@@ -114,7 +119,7 @@ async function runAnalysis(){
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
-  document.querySelectorAll('nav a').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});
+  try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});}catch(e){}
 }
 
 document.addEventListener('DOMContentLoaded',function(){
