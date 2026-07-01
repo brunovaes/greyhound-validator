@@ -7,7 +7,7 @@ function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!ra
 function readB64(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result.split(',')[1]);};r.onerror=rej;r.readAsDataURL(file);});}
 function trapClass(n){return['','t1','t2','t3','t4','t5','t6'][n]||'t1';}
 function perfilBadge(p){if(!p)return'';var c=p==='Recuperador'?'p-rec':p==='Fumador'?'p-fum':p==='Frontrunner'?'p-fro':'p-est';var i=p==='Recuperador'?'&#128170;':p==='Fumador'?'&#128684;':p==='Frontrunner'?'&#9889;':'&#10145;';return'<span class="perfil-badge '+c+'">'+i+' '+p+'</span>';}
-function convertHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0])-4;if(hr<0)hr+=24;return hr+':'+p[1];}
+function convertHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;else if(hr===10||hr===11||hr===12)hr=hr;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
 function setSt(m){document.getElementById('st').textContent=m;}
 function prog(p,t){document.getElementById('pw').style.display='block';document.getElementById('pf').style.width=p+'%';document.getElementById('pt').textContent=t;}
 function addFI(name,id){var list=document.getElementById('rlist');var d=document.createElement('div');d.className='fi';d.id='fi-'+id;var sn=name.length>22?name.slice(0,20)+'...':name;d.innerHTML='<span class="fi-name">'+sn+'</span><span class="fi-st fi-load" id="fis-'+id+'">...</span><button class="fi-rm" data-id="'+id+'">x</button>';list.appendChild(d);}
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded',function(){
       var avbStr='T'+tf+' > T'+tu;
       var obsClean=(r.obs||'-').replace(/CalTm/gi,'Tempo');
       return'<tr>'
-        +'<td style="text-align:center;vertical-align:middle">'+convertHora(r.hora||'-')+'<br><small style="color:#666">'+( r.hora||'')+'</small></td>'
+        +'<td style="text-align:center;vertical-align:middle"><strong>'+convertHora(r.hora||'-')+'</strong><br><small style="color:#666">'+( r.hora||'')+'</small></td>'
         +'<td style="vertical-align:middle"><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td>'
         +'<td style="text-align:center;vertical-align:middle;font-weight:700;font-size:10px">'+avbStr+'</td>'
         +'<td style="text-align:center;vertical-align:middle">'+(r.pct||'-')+'%</td>'
