@@ -95,6 +95,7 @@ async function runAnalysis(){
   if(!raceFiles.length){alert('Carregue pelo menos um PDF.');return;}
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
+  document.querySelectorAll('nav a').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});
   prog(5,'Preparando...');
   results=[];
   var CHUNK=30;
@@ -113,6 +114,7 @@ async function runAnalysis(){
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
+  document.querySelectorAll('nav a').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});
 }
 
 document.addEventListener('DOMContentLoaded',function(){
