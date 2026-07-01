@@ -65,20 +65,21 @@ function injectStyles(){
     '.ghf-toast.t-err{background:#e53935;color:#fff;}',
     '.ghf-toast.t-show{opacity:1;}',
 
-    /* filter panel */
-    '#filter-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 18px;margin-bottom:14px;}',
-    '#filter-panel .fp-label{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;display:block;}',
-    '#filter-panel .fp-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}',
-    '#filter-panel .fp-group{display:flex;flex-direction:column;}',
-    '#filter-panel select,#filter-panel input[type=time]{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#fff;padding:7px 10px;font-size:13px;outline:none;min-width:130px;cursor:pointer;}',
-    '#filter-panel select:focus,#filter-panel input[type=time]:focus{border-color:#00e676;}',
+    /* filter panel — barra discreta */
+    '#filter-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;margin-bottom:12px;background:rgba(255,255,255,.025);border-bottom:1px solid rgba(255,255,255,.06);}',
+    '#filter-panel .fp-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 12px;cursor:pointer;transition:all .2s;}',
+    '#filter-panel .fp-pill:hover{border-color:rgba(0,230,118,.4);background:rgba(0,230,118,.06);}',
+    '#filter-panel .fp-pill.active{border-color:rgba(0,230,118,.5);background:rgba(0,230,118,.1);}',
+    '#filter-panel .fp-icon{font-size:12px;opacity:.6;}',
+    '#filter-panel select,#filter-panel input[type=time]{background:transparent;border:none;color:#fff;font-size:12px;outline:none;cursor:pointer;max-width:120px;padding:0;}',
     '#filter-panel select option{background:#1a1f2e;}',
-    '.fp-hora-wrap{display:flex;gap:6px;align-items:center;}',
-    '.fp-hora-wrap input[type=time]{min-width:90px!important;}',
-    '.fp-hora-sep{color:rgba(255,255,255,.3);font-size:12px;}',
-    '#fp-count{font-size:11px;color:rgba(255,255,255,.35);margin-left:auto;align-self:flex-end;padding-bottom:2px;}',
-    '#btn-fp-clear{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.4);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;align-self:flex-end;transition:all .2s;}',
-    '#btn-fp-clear:hover{border-color:#e53935;color:#e53935;}',
+    '#filter-panel input[type=time]{color-scheme:dark;width:80px;}',
+    '.fp-sep{width:1px;height:18px;background:rgba(255,255,255,.1);flex-shrink:0;}',
+    '.fp-hora-pair{display:flex;align-items:center;gap:4px;}',
+    '.fp-hora-sep{color:rgba(255,255,255,.25);font-size:11px;}',
+    '#fp-count{font-size:11px;color:rgba(255,255,255,.3);margin-left:auto;white-space:nowrap;}',
+    '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.25);cursor:pointer;font-size:18px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
+    '#btn-fp-clear:hover{color:#e53935;}',
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
@@ -132,16 +133,17 @@ function injectFilterPanel(){
   if(!tb)return;
   var fp=document.createElement('div');
   fp.id='filter-panel';fp.style.display='none';
-  fp.innerHTML='<div class="fp-row">'
-    +'<div class="fp-group"><span class="fp-label">&#127937; Pista</span>'
+  fp.innerHTML=''
+    +'<div class="fp-pill"><span class="fp-icon">&#127937;</span>'
     +'<select id="fp-pista"><option value="">Todas as pistas</option></select></div>'
-    +'<div class="fp-group"><span class="fp-label">&#128336; Horário BR</span>'
-    +'<div class="fp-hora-wrap"><input type="time" id="fp-hora-min"><span class="fp-hora-sep">até</span><input type="time" id="fp-hora-max"></div></div>'
-    +'<div class="fp-group"><span class="fp-label">&#127919; Confiança</span>'
-    +'<select id="fp-conf"><option value="">Todas</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
-    +'<button id="btn-fp-clear">✕ Limpar filtros</button>'
-    +'<span id="fp-count"></span>'
-    +'</div>';
+    +'<div class="fp-sep"></div>'
+    +'<div class="fp-pill"><span class="fp-icon">&#128336;</span>'
+    +'<div class="fp-hora-pair"><input type="time" id="fp-hora-min" title="Hora mínima BR"><span class="fp-hora-sep">–</span><input type="time" id="fp-hora-max" title="Hora máxima BR"></div></div>'
+    +'<div class="fp-sep"></div>'
+    +'<div class="fp-pill"><span class="fp-icon">&#127919;</span>'
+    +'<select id="fp-conf"><option value="">Confiança</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
+    +'<button id="btn-fp-clear" title="Limpar filtros">✕</button>'
+    +'<span id="fp-count"></span>';
   var table=tb.closest('table');
   if(table&&table.parentElement)table.parentElement.insertBefore(fp,table);
   else tb.parentElement.insertBefore(fp,tb);
@@ -176,6 +178,10 @@ function updateFilterPanel(){
     sel.innerHTML='<option value="">Todas as pistas</option>';
     pistas.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;if(p===cur)o.selected=true;sel.appendChild(o);});
   }
+  // marca pills como active quando têm filtro ativo
+  var pillPista=sel&&sel.closest('.fp-pill');if(pillPista)pillPista.classList.toggle('active',!!filterState.pista);
+  var confSel=document.getElementById('fp-conf');var pillConf=confSel&&confSel.closest('.fp-pill');if(pillConf)pillConf.classList.toggle('active',!!filterState.confianca);
+  var horaPill=document.querySelector('#fp-hora-min')||null;var pillHora=horaPill&&horaPill.closest('.fp-pill');if(pillHora)pillHora.classList.toggle('active',!!(filterState.horaMin||filterState.horaMax));
   // contador
   var filtered=applyFiltersToAvbs(avbs);
   var countEl=document.getElementById('fp-count');

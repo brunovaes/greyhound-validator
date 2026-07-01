@@ -80,7 +80,7 @@ router.get('/', (req, res) => {
 .pw{margin-bottom:10px;display:none}.pb{height:3px;background:var(--bdr2);border-radius:2px;overflow:hidden}
 .pf{height:100%;background:linear-gradient(90deg,var(--grn),var(--org));transition:width .4s}.pt{font-size:11px;color:var(--mut2);margin-top:3px}
 .st{font-size:12px;color:var(--mut2);margin-bottom:8px;min-height:16px}
-.tw{overflow-x:auto;border:1px solid var(--bdr2);border-radius:8px}
+.tw{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 255px);border:1px solid var(--bdr2);border-radius:8px}
 table{width:100%;border-collapse:collapse;min-width:880px}thead{background:var(--sur2)}
 th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--bdr2);white-space:nowrap}
 td{padding:8px 10px;border-bottom:1px solid var(--bdr);vertical-align:middle}tr:last-child td{border-bottom:none}
@@ -116,9 +116,9 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .empty{text-align:center;padding:50px 20px;color:var(--mut)}.empty h3{font-size:15px;color:var(--mut2);margin-bottom:6px}
 .empty p{font-size:12px;line-height:1.6;max-width:380px;margin:0 auto}
 .ab{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
-.bexp{padding:7px 14px;background:var(--sur2);border:1px solid var(--bdr2);color:var(--mut2);border-radius:var(--rad);cursor:pointer;font-size:12px}
+.bexp{padding:8px 18px;background:var(--sur2);border:1px solid var(--bdr2);color:var(--mut2);border-radius:var(--rad);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
 .bexp:hover{border-color:var(--grn);color:var(--grn)}
-.bsave{padding:7px 14px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--grn);border-radius:var(--rad);cursor:pointer;font-size:12px;font-weight:600}
+.bsave{padding:8px 18px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--grn);border-radius:var(--rad);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
 .bsave:hover{background:rgba(34,197,94,.2)}
 .pdf-ready-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center}
 .pdf-ready-modal.open{display:flex}
@@ -203,9 +203,9 @@ ${navBar(user, 'analisar')}
       <tbody id="tb"><tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3><p>Carregue PDFs e clique em Analisar.</p></div></td></tr></tbody></table>
     </div>
     <div class="ab" id="ab" style="display:none">
-      <button class="bexp" id="btn-exp">Exportar CSV</button>
+      <button class="bexp" id="btn-exp" style="border-color:#3b82f6;color:#60a5fa">Exportar CSV</button>
       <button class="bexp" id="btn-print" style="border-color:#a78bfa;color:#a78bfa">&#128438; Imprimir Analises</button>
-      <button class="bsave" id="btn-save">Salvar Sessao</button>
+      <button class="bsave" id="btn-save">&#128190; Salvar Sessao</button>
     </div>
   </div>
 </div>
@@ -438,7 +438,7 @@ router.get('/sessao/:id', (req, res) => {
   const ap = races.filter(r=>r.bateu).length;
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}.content{padding:24px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.kpi{background:#111;border:1px solid #333;border-radius:8px;padding:12px 14px;position:relative;overflow:hidden}.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}.kpi.g::before{background:#22c55e}.kpi.o::before{background:#f97316}.kpi.b::before{background:#3b82f6}.kpi-label{font-size:10px;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}.kpi-val{font-size:22px;font-weight:700}.kpi.g .kpi-val{color:#22c55e}.kpi.o .kpi-val{color:#f97316}.kpi.b .kpi-val{color:#60a5fa}table{width:100%;border-collapse:collapse;border:1px solid #333;border-radius:8px;overflow:hidden;background:#111}th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}tr:last-child td{border-bottom:none}.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}.t1{background:#dc2626;color:#fff}.t2{background:#2563eb;color:#fff}.t3{background:#e5e7eb;color:#111}.t4{background:#111;color:#fff;border:1px solid #444}.t5{background:#d97706;color:#000}.t6{background:#111;color:#f59e0b;border:1px solid #f59e0b}.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}.ba{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}.bm{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.25)}.bb{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25)}.sim{color:#22c55e;font-weight:700}.nao{color:#ef4444;font-weight:700}a{color:#22c55e;text-decoration:none}h2{font-size:16px;margin-bottom:12px}</style></head><body>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}.content{padding:24px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.kpi{background:#111;border:1px solid #333;border-radius:8px;padding:12px 14px;position:relative;overflow:hidden}.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}.kpi.g::before{background:#22c55e}.kpi.o::before{background:#f97316}.kpi.b::before{background:#3b82f6}.kpi-label{font-size:10px;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}.kpi-val{font-size:22px;font-weight:700}.kpi.g .kpi-val{color:#22c55e}.kpi.o .kpi-val{color:#f97316}.kpi.b .kpi-val{color:#60a5fa}table{width:100%;border-collapse:collapse;border:1px solid #333;border-radius:8px;overflow:hidden;background:#111}.tw-sess{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 280px);border:1px solid #333;border-radius:8px}th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:10}.btn-exp-h{padding:8px 18px;background:#1a1a1a;border:1px solid #3b82f6;color:#60a5fa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}.btn-exp-h:hover{background:rgba(59,130,246,.1)}.btn-prt-h{padding:8px 18px;background:#1a1a1a;border:1px solid #a78bfa;color:#a78bfa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}.btn-prt-h:hover{background:rgba(167,139,250,.1)}td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}tr:last-child td{border-bottom:none}.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}.t1{background:#dc2626;color:#fff}.t2{background:#2563eb;color:#fff}.t3{background:#e5e7eb;color:#111}.t4{background:#111;color:#fff;border:1px solid #444}.t5{background:#d97706;color:#000}.t6{background:#111;color:#f59e0b;border:1px solid #f59e0b}.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}.ba{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}.bm{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.25)}.bb{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25)}.sim{color:#22c55e;font-weight:700}.nao{color:#ef4444;font-weight:700}a{color:#22c55e;text-decoration:none}h2{font-size:16px;margin-bottom:12px}</style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
 <div class="content">
@@ -450,11 +450,37 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody>
+<div class="tw-sess"><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';var horaBr=r.hora_br||r.hora||'-';var horaUk=r.hora||'';return`<tr><td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">${horaBr}</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">${horaUk}</div></td><td><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div></td><td style="white-space:nowrap"><span class="trap-badge t${r.trap_fav}">${r.trap_fav}</span> vs <span class="trap-badge t${r.trap_und}">${r.trap_und}</span></td><td style="white-space:nowrap"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td><td style="font-size:10px;color:#888;white-space:nowrap">${r.perfil_fav||''}<br>${r.perfil_und||''}</td><td style="font-size:11px;color:#888;max-width:200px;line-height:1.4">${r.obs||'-'}</td><td style="text-align:center">${r.odd||'-'}</td><td style="text-align:center">${r.valor?'R$'+r.valor:'-'}</td><td style="font-size:11px;text-align:center">${[r.resultado_1,r.resultado_2,r.resultado_3].filter(Boolean).join('/')||'-'}</td><td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td></tr>`;}).join('')}
 ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
-</tbody></table>
-</div></body></html>`);
+</tbody></table></div>
+<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+  <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
+  <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
+</div>
+</div>
+<script>
+var SESSION_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0))};
+function cvHora(h){if(!h)return h;var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
+function exportCSV(){
+  var h='HoraBR,HoraUK,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';
+  var rows=SESSION_RACES.map(function(r){return[r.hora_br||cvHora(r.hora||''),r.hora||'',r.corrida||'',r.dist||'',r.trap_fav||'',r.name_fav||'',r.trap_und||'',r.name_und||'',r.pct||'',r.nivel||'',r.perfil_fav||'',r.perfil_und||'',(r.obs||'').replace(/,/g,';'),r.odd||'',r.valor||'',r.resultado_1||'',r.resultado_2||'',r.resultado_3||'',r.bateu||''].join(',');});
+  var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sessao_greyhound.csv';a.click();
+}
+function printAnalises(){
+  if(!SESSION_RACES.length){alert('Nenhum AvB para imprimir.');return;}
+  var rows=SESSION_RACES.map(function(r){
+    var avbStr='T'+r.trap_fav+' > T'+r.trap_und;
+    var obsClean=(r.obs||'-').replace(/CalTm/gi,'Tempo');
+    var horaBr=r.hora_br||cvHora(r.hora||'-');
+    return'<tr><td style="text-align:center;vertical-align:middle"><strong>'+horaBr+'</strong><br><small style="color:#666">'+(r.hora||'')+'</small></td><td style="vertical-align:middle"><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td><td style="text-align:center;vertical-align:middle;font-weight:700;font-size:10px">'+avbStr+'</td><td style="text-align:center;vertical-align:middle">'+(r.pct||'-')+'%</td><td style="font-size:9px;line-height:1.5;vertical-align:middle">'+obsClean+'</td></tr>';
+  }).join('');
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}h2{font-size:13px;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #333}table{width:100%;border-collapse:collapse}th{background:#555;color:#fff;border:1px solid #444;padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}td{border:1px solid #ddd;padding:4px 6px;vertical-align:middle}tr:nth-child(even) td{background:#f5f5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><h2>Greyhound Factory — Sessao</h2><table><thead><tr><th style="width:60px">Hora BR</th><th style="width:130px">Corrida</th><th style="width:65px">AvB</th><th style="width:40px">Conf</th><th>Observacao</th></tr></thead><tbody>'+rows+'</tbody></table></body></html>';
+  var w=window.open('','_blank');w.document.write(html);w.document.close();w.addEventListener('afterprint',function(){w.close();});setTimeout(function(){w.print();},600);
+}
+</script>
+</body></html>`);
 });
 
 // Cache em memoria do ultimo stream URL recebido da extensao Chrome
