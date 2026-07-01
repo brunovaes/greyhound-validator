@@ -65,7 +65,7 @@ function injectStyles(){
     '.ghf-toast.t-err{background:#e53935;color:#fff;}',
     '.ghf-toast.t-show{opacity:1;}',
 
-    /* filter panel — linha compacta */
+    /* filter panel — idêntico ao Histórico */
     '#filter-panel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);border-radius:8px;}',
     '#filter-panel .fp-group{display:flex;align-items:center;gap:5px;}',
     '#filter-panel .fp-label{font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}',
@@ -74,9 +74,9 @@ function injectStyles(){
     '#filter-panel input[type=time]{color-scheme:dark;width:78px;}',
     '#filter-panel select:focus,#filter-panel input[type=time]:focus{border-color:rgba(0,230,118,.5);}',
     '#filter-panel select option{background:#1a1f2e;font-size:12px;}',
-    '.fp-divider{width:1px;height:16px;background:rgba(255,255,255,.08);flex-shrink:0;margin:0 2px;}',
-    '.fp-hora-pair{display:flex;align-items:center;gap:4px;}',
-    '.fp-hora-sep{color:rgba(255,255,255,.2);font-size:10px;}',
+    '#filter-panel .fp-divider{width:1px;height:16px;background:rgba(255,255,255,.08);flex-shrink:0;margin:0 2px;}',
+    '#filter-panel .fp-hora-pair{display:flex;align-items:center;gap:4px;}',
+    '#filter-panel .fp-hora-sep{color:rgba(255,255,255,.2);font-size:10px;}',
     '#fp-count{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto;white-space:nowrap;}',
     '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
     '#btn-fp-clear:hover{color:#e53935;}',
@@ -135,7 +135,7 @@ function injectFilterPanel(){
   fp.id='filter-panel';fp.style.display='none';
   fp.innerHTML=''
     +'<div class="fp-group"><span class="fp-label">Pista</span>'
-    +'<select id="fp-pista"><option value="">Todas</option></select></div>'
+    +'<select id="fp-pista"><option value="">Todas as pistas</option></select></div>'
     +'<div class="fp-divider"></div>'
     +'<div class="fp-group"><span class="fp-label">Horário BR</span>'
     +'<div class="fp-hora-pair"><input type="time" id="fp-hora-min" title="De"><span class="fp-hora-sep">–</span><input type="time" id="fp-hora-max" title="Até"></div></div>'
