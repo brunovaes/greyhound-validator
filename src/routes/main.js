@@ -265,14 +265,25 @@ function renderTable(){
     var oc=r.needsCap?'obs-cap':'obs-c';
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
-    var obsText=(r.obs||'-').replace(/CalTm/gi,'Tempo');
+
+    // Separa ranking da narrativa (separados por \n no motor)
+    var obsParts=(r.obs||'-').replace(/CalTm/gi,'Tempo').split('\n');
+    var obsRanking=obsParts[0]||'';
+    var obsNarrativa=obsParts[1]||'';
+    // Perfis inline na selecao
+    var perfilFavLabel=r.perfilFav?'<span style="font-size:9px;color:var(--mut);display:block;margin-top:2px">'+r.perfilFav+'</span>':'';
+    var perfilUndLabel=r.perfilUnd?'<span style="font-size:9px;color:var(--mut);display:block;margin-top:2px">'+r.perfilUnd+'</span>':'';
+    var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':'<div class="trap-row"><div class="trap-item"><div class="trap-badge '+trapClass(tf)+'">'+tf+'</div><div class="trap-name">'+nf+'</div>'+perfilFavLabel+'</div><span class="trap-vs">vs</span><div class="trap-item"><div class="trap-badge '+trapClass(tu)+'">'+tu+'</div><div class="trap-name">'+nu+'</div>'+perfilUndLabel+'</div></div>';
+    var obsHtml=sk
+      ?'<span class="obs-c" style="font-size:10px;color:var(--mut)">'+obsRanking+'</span>'
+      :'<span class="obs-c" style="font-size:10px;color:var(--mut)">'+obsRanking+'</span>'+(obsNarrativa?'<div style="font-size:11px;color:var(--txt);margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.06);line-height:1.5;font-style:italic">'+obsNarrativa+'</div>':'');
     var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div></div>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
       +'<td style="text-align:center">'+hh+'</td>'
       +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
-      +'<td style="text-align:center">'+sh+'</td>'
+      +'<td style="text-align:center">'+shComPerfil+'</td>'
       +'<td style="text-align:center">'+ch+'</td>'
-      +'<td style="font-size:12px;line-height:1.6">'+(r.needsCap?'<span class="obs-cap">'+obsText+'</span>':'<span class="obs-c">'+obsText+'</span>')+'</td>'
+      +'<td style="font-size:12px;line-height:1.6">'+obsHtml+'</td>'
       +'<td style="text-align:center">'+oddValHtml+'</td>'
       +'<td style="text-align:center">'+rh+'</td>'
       +'<td style="text-align:center"><select data-i="'+i+'" data-f="hit" style="text-align:center"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td>'

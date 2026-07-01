@@ -364,6 +364,33 @@ function processarCorrida(corridaRaw, config) {
   const obsElim = eliminados.length ? eliminados.map(e=>`T${e.trap} elim.(${e.motivo})`).join('; ')+'. ' : '';
   const ranking = comScores.map(g=>`T${g.trap}:${g.scoreFinal}`).join(' > ');
 
+  // Narrativa curta do confronto AvB
+  function gerarNarrativa(fav, und) {
+    const pf = fav.perfil, pu = und.perfil;
+    const nf = `T${fav.trap}`, nu = `T${und.trap}`;
+    const combos = {
+      'frontrunner_fumador':    `${nf} lidera desde a saída. ${nu} começa bem mas tende a cair — corrida favorável ao ${nf}.`,
+      'frontrunner_estavel':    `${nf} na frente desde o início. ${nu} mantém ritmo mas dificilmente alcança — espaço deve crescer.`,
+      'frontrunner_recuperador':`${nf} tenta liderar desde a saída. ${nu} vem de trás e pode ameaçar na reta — depende da margem inicial do ${nf}.`,
+      'frontrunner_frontrunner':`Dois galgos que gostam de liderar. Disputa esperada pelos primeiros bends — vantagem de score para ${nf}.`,
+      'recuperador_fumador':    `${nf} vem de trás progressivamente. ${nu} começa forte mas perde ritmo — ${nf} tende a passar na reta final.`,
+      'recuperador_estavel':    `${nf} acelera ao longo da corrida. ${nu} constante mas sem explosão final — ${nf} favorito na reta.`,
+      'recuperador_recuperador':`Ambos vêm de trás. ${nf} com score superior deve ter aceleração mais consistente.`,
+      'recuperador_frontrunner':`${nu} larga na frente mas tende a cair. ${nf} vem por trás — se a vantagem inicial do ${nu} não for grande, ${nf} passa.`,
+      'estavel_fumador':        `${nf} mantém posição consistente. ${nu} começa bem mas cansa — ${nf} se beneficia no final.`,
+      'estavel_recuperador':    `${nu} pode ameaçar na reta. ${nf} precisa manter margem nos bends iniciais para segurar.`,
+      'estavel_estavel':        `Corrida equilibrada em ritmo. Diferença de score (${(fav.scoreFinal-und.scoreFinal).toFixed(1)}pts) deve definir.`,
+      'estavel_frontrunner':    `${nu} tenta liderar mas tende a cair. ${nf} consistente deve manter posição e passar.`,
+      'fumador_fumador':        `Ambos começam forte mas podem perder ritmo. ${nf} com score superior deve aguentar melhor.`,
+      'fumador_recuperador':    `${nf} lidera no início, ${nu} vem de trás. Risco de ${nu} alcançar — margem inicial do ${nf} é decisiva.`,
+      'fumador_estavel':        `${nf} forte nos bends iniciais. ${nu} constante mas sem recuperação — ${nf} favorito se segurar o ritmo.`,
+      'fumador_frontrunner':    `Dois galgos que lideram cedo. ${nf} com score maior deve prevalecer na disputa direta.`
+    };
+    return combos[`${pf}_${pu}`] || `${nf} (${pf}) vs ${nu} (${pu}) — diferença de ${(fav.scoreFinal-und.scoreFinal).toFixed(1)}pts no score.`;
+  }
+
+  const narrativa = gerarNarrativa(melhor, pior);
+
   if (diffAvB < thresholdSkip) {
     return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${obsElim}Parelha (dif ${diffAvB.toFixed(1)}pts). ${ranking}`, trapsCard:trapsCard||[], scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})) };
   }
@@ -377,7 +404,7 @@ function processarCorrida(corridaRaw, config) {
     pct, nivel,
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
     top3, trapsCard:trapsCard||[],
-    obs:`${obsElim}${ranking}`,
+    obs:`${obsElim}${ranking}\n${narrativa}`,
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores}))
   };
 
