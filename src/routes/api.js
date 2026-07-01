@@ -267,6 +267,31 @@ function hasAnyRemark(remarksList, targets) {
   return targets.some(t => remarksList.some(r => r.toUpperCase().includes(t.toUpperCase())));
 }
 
+// ============================================================
+// REGRA: NOVO NA CATEGORIA COM INATIVIDADE
+// Elimina galgo que tem muitas linhas em categoria inferior + gap grande
+// ============================================================
+
+function detectarNovoNaCategoriaComGap(linhasValidas, corridaClasse, config) {
+  const maxLinhasInferiores = config.max_linhas_cat_inferior != null ? config.max_linhas_cat_inferior : 3;
+  const maxDiasGap          = config.max_dias_gap_nova_cat   != null ? config.max_dias_gap_nova_cat   : 14;
+  if (!linhasValidas || linhasValidas.length < 2) return null;
+  const corridaNivel = getClassLevel(corridaClasse);
+  if (!corridaNivel) return null;
+  const anteriores = linhasValidas.slice(1);
+  const linhasInferiores = anteriores.filter(l => {
+    const lv = getClassLevel(l.classe);
+    return lv && lv > corridaNivel;
+  });
+  if (linhasInferiores.length < maxLinhasInferiores) return null;
+  const d1 = parseDateEntry(linhasValidas[0].data);
+  const d2 = parseDateEntry(linhasValidas[1].data);
+  if (!d1 || !d2) return null;
+  const gapDias = Math.round((d1 - d2) / 86400000);
+  if (gapDias <= maxDiasGap) return null;
+  return { linhasInferiores: linhasInferiores.length, gapDias, maxLinhasInferiores, maxDiasGap };
+}
+
 // CAMADA 1: Filtrar linhas validas do historico de cada galgo
 function filtrarLinhasValidas(historico, corridaDist, corridaClasse, config) {
   const classeLevel = getClassLevel(corridaClasse);
