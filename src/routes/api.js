@@ -85,7 +85,7 @@ Para cada galgo: trap (int — do campo [N] do cabecalho), nome, brt (float), br
 
 Para cada linha de historico: data, pista, dist (int), trap (int — campo Trp da linha), split (float ou null), bends (string ou null), pos (int), caltm (float — SEMPRE CalTm, NUNCA WnTm), going (string ou null), classe, remarks (string ou null).
 
-OMITIR campos nulos. NAO incluir linhas Trial/Solo/NR sem CalTm valido.
+OMITIR campos nulos. INCLUIR linhas Trial/Solo/NR mesmo sem CalTm (usar caltm:0) — sao necessarias para detectar inatividade. Grade 'T' ou 'S' no campo classe indica trial/solo.
 RESPOSTA: JSON puro, sem markdown, sem backticks, sem texto extra.
 {"races":[{"hora":"7:42","corrida":"Star Pelaw A4","dist":"435m","classe":"A4","postPick":"5-3-2","trapsCard":[1,2,3,5,6],"galgos":[{"trap":6,"nome":"All About Rosie","brt":29.34,"brtClasse":"A2","historico":[{"data":"18Jun26","pista":"Towc","dist":500,"trap":6,"split":4.16,"bends":"5443","pos":2,"caltm":29.34,"going":"N","classe":"A2","remarks":"Mid-W,SAw,RnOnWll"}]}]}]}`;
 }
@@ -124,6 +124,60 @@ const REMARKS_POS = ['RnOn','FinWll','StydOn','EP','Led','Chl','AHandy','ClrRn',
 // Remarks NEGATIVOS
 const REMARKS_NEG = ['Fdd','NvrShwd','Outpaced','WeakFinish','SoonOutpaced','DroppedAway','DropAway'];
 
+// ============================================================
+// DETECCAO DE RETORNO POR INATIVIDADE
+// ============================================================
+
+function parseDateEntry(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const m = dateStr.match(/(\d{1,2})([a-z]{3})(\d{2})/i);
+  if (!m) return null;
+  const mon = months[m[2].toLowerCase()];
+  if (mon === undefined) return null;
+  return new Date(2000 + parseInt(m[3]), mon, parseInt(m[1]));
+}
+
+const CLASSES_TRIAL_FLAG = ['T','HP','OR','TRIAL','SOLO'];
+function isTipoTrial(classe) {
+  const c = (classe||'').trim().toUpperCase();
+  return CLASSES_TRIAL_FLAG.some(t => c === t || c.startsWith(t+'1') || c.startsWith(t+'2') || c.startsWith(t+'3') || c.startsWith(t+'4') || c.startsWith(t+'5') || c.startsWith(t+'6'));
+}
+
+// Retorna objeto com detalhes se o galgo voltou de inatividade longa com poucas corridas pós-trial
+// Retorna null se tudo ok
+function detectarRetornoInatividade(historicoCompleto, config) {
+  const minCorridasRetorno = config.min_corridas_retorno != null ? config.min_corridas_retorno : 2;
+  const diasThreshold = config.dias_inatividade_threshold != null ? config.dias_inatividade_threshold : 25;
+  if (!historicoCompleto || historicoCompleto.length < 2) return null;
+
+  const comDatas = historicoCompleto
+    .map(l => ({ ...l, _date: parseDateEntry(l.data) }))
+    .filter(l => l._date);
+  if (comDatas.length < 2) return null;
+  comDatas.sort((a, b) => b._date - a._date); // mais recente primeiro
+
+  // Procurar trial/solo nas últimas 3 entradas
+  let idxTrial = -1;
+  for (let i = 0; i < Math.min(3, comDatas.length); i++) {
+    if (isTipoTrial(comDatas[i].classe)) { idxTrial = i; break; }
+  }
+  if (idxTrial === -1) return null;
+
+  // Última corrida competitiva ANTES do trial
+  const antesDoTrial = comDatas.slice(idxTrial + 1).filter(l => !isTipoTrial(l.classe));
+  if (!antesDoTrial.length) return null;
+
+  const gapDias = Math.round((comDatas[idxTrial]._date - antesDoTrial[0]._date) / 86400000);
+  if (gapDias < diasThreshold) return null; // gap pequeno = não é inatividade relevante
+
+  // Corridas competitivas APÓS o trial (entre o trial e hoje)
+  const aposDoTrial = comDatas.slice(0, idxTrial).filter(l => !isTipoTrial(l.classe));
+  if (aposDoTrial.length >= minCorridasRetorno) return null; // já tem corridas suficientes pós-retorno
+
+  return { gapDias, corridasAposTrial: aposDoTrial.length, minNecessario: minCorridasRetorno };
+}
+
 function parseRemarks(remarksStr) {
   if (!remarksStr) return [];
   return remarksStr.split(',').map(r => r.trim()).filter(Boolean);
@@ -141,7 +195,7 @@ function filtrarLinhasValidas(historico, corridaDist, corridaClasse, config) {
 
   return historico.filter(linha => {
     // Descartar classes invalidas (HP, Trial, Solo, OR)
-    const classeInvalida = ['HP','T1','T2','T3','T4','T5','T6','OR','Mdn','Trial','Solo'];
+    const classeInvalida = ['HP','T1','T2','T3','T4','T5','T6','OR','Mdn','Trial','Solo','T','S1','S2','S3','S4','S5','S6'];
     if (classeInvalida.some(c => (linha.classe||'').toUpperCase().includes(c.toUpperCase()))) return false;
 
     // Distancia compativel (+/- 10%)
@@ -396,6 +450,14 @@ function processarCorrida(corridaRaw, config) {
   for (const galgo of (galgos||[])) {
     if (trapsCard && trapsCard.length && !trapsCard.includes(galgo.trap)) continue;
     const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, config);
+
+    // Verificar retorno de inatividade longa (trial/solo após pausa >= threshold dias)
+    const inatividade = detectarRetornoInatividade(galgo.historico||[], config);
+    if (inatividade) {
+      eliminados.push({ trap:galgo.trap, motivo:`Ret.inatividade (${inatividade.gapDias}d parado, ${inatividade.corridasAposTrial}/${inatividade.minNecessario} corridas pos-trial)` });
+      continue;
+    }
+
     if (linhasValidas.length < 3) {
       eliminados.push({ trap:galgo.trap, motivo:`${linhasValidas.length} linha(s) valida(s)` });
       continue;
@@ -633,4 +695,4 @@ router.post('/session', express.json(), (req, res) => {
   } catch(err) { res.status(500).json({ error:err.message }); }
 });
 
-module.exports = router; 
+module.exports = router;

@@ -107,6 +107,8 @@ db.exec(`
     teto_diff_normalizacao REAL DEFAULT 0.50,
     threshold_skip_avb REAL DEFAULT 10.0,
     threshold_back REAL DEFAULT 25.0,
+    min_corridas_retorno INTEGER DEFAULT 2,
+    dias_inatividade_threshold INTEGER DEFAULT 25,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
@@ -125,6 +127,8 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
   'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
+  'ALTER TABLE analysis_config ADD COLUMN min_corridas_retorno INTEGER DEFAULT 2',
+  'ALTER TABLE analysis_config ADD COLUMN dias_inatividade_threshold INTEGER DEFAULT 25',
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
