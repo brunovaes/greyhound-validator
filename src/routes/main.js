@@ -299,19 +299,60 @@ async function runAnalysis(){
     var fd=new FormData();
     raceFiles.forEach(function(f){fd.append('pdfs',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:'application/pdf'}),f.name);});
     capFiles.forEach(function(f){fd.append('caps',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:f.mime}),f.name);});
-    prog(30,'Enviando...');
+    prog(10,'Enviando...');
     var resp=await fetch(BASE+'/api/analyze',{method:'POST',body:fd});
-    prog(80,'Processando...');
     if(!resp.ok){var e=await resp.json();throw new Error(e.error||'Erro '+resp.status);}
-    var raw=await resp.text();
-    var data=JSON.parse(raw.trim());
-    if(data.limitReached){alert('Limite de analises atingido! Fale com o administrador.');document.getElementById('btngo').disabled=false;document.getElementById('btngo').innerHTML='Analisar Corridas';return;}
-    results=data.races||[];
-    prog(95,'Montando...');renderTable();
+
+    // Lê SSE progressivamente — corridas chegam por lote
+    results=[];
+    var reader=resp.body.getReader();
+    var decoder=new TextDecoder();
+    var buffer='';
+    var totalLotes=1;
+
+    while(true){
+      var _r=await reader.read();
+      if(_r.done) break;
+      buffer+=decoder.decode(_r.value,{stream:true});
+      var lines=buffer.split('\n');
+      buffer=lines.pop();
+      for(var li=0;li<lines.length;li++){
+        var line=lines[li].trim();
+        if(!line.startsWith('data:')) continue;
+        try{
+          var evt=JSON.parse(line.slice(5).trim());
+          if(evt.type==='start'){
+            totalLotes=evt.batches||1;
+            prog(15,'0/'+totalLotes+' lotes...');
+          } else if(evt.type==='progress'){
+            var pct=Math.round(15+(evt.lote/totalLotes)*70);
+            prog(pct,'Lote '+evt.lote+'/'+evt.totalLotes+'...');
+          } else if(evt.type==='races'){
+            results=results.concat(evt.races||[]);
+            prog(Math.round(15+(results.length/raceFiles.length)*70),'Recebendo... '+results.length+' corridas');
+            renderTable();
+            saveSessionState();
+            updCards();
+          } else if(evt.type==='limitReached'){
+            alert('Limite de analises atingido! Fale com o administrador.');
+            document.getElementById('btngo').disabled=false;
+            document.getElementById('btngo').innerHTML='Analisar Corridas';
+            return;
+          } else if(evt.type==='batchError'){
+            console.warn('Erro lote '+evt.lote+':',evt.error);
+          } else if(evt.type==='done'){
+            var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;
+            setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas'+(evt.errors&&evt.errors.length?' ('+evt.errors.length+' lotes com erro)':''));
+            prog(100,'');
+            setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
+          } else if(evt.type==='error'){
+            throw new Error(evt.error);
+          }
+        }catch(parseErr){}
+      }
+    }
+    renderTable();
     saveSessionState();
-    if(data.partialErrors&&data.partialErrors.length){setSt('Concluido com avisos: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs. '+data.partialErrors.length+' lote(s) com erro.');console.warn('Erros parciais:',data.partialErrors);}
-    else setSt('Concluido: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
-    prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
