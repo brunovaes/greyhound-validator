@@ -269,7 +269,6 @@ function renderTable(){
     var obsParts=(r.obs||'-').replace(/CalTm/gi,'Tempo').split('\n');
     var obsRanking=obsParts[0]||'';
     var obsNarrativa=obsParts[1]||'';
-    // Perfis inline na selecao
     var perfilFavLabel=r.perfilFav?'<span style="font-size:9px;color:var(--mut);display:block;margin-top:2px">'+r.perfilFav+'</span>':'';
     var perfilUndLabel=r.perfilUnd?'<span style="font-size:9px;color:var(--mut);display:block;margin-top:2px">'+r.perfilUnd+'</span>':'';
     var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':'<div class="trap-row"><div class="trap-item"><div class="trap-badge '+trapClass(tf)+'">'+tf+'</div><div class="trap-name">'+nf+'</div>'+perfilFavLabel+'</div><span class="trap-vs">vs</span><div class="trap-item"><div class="trap-badge '+trapClass(tu)+'">'+tu+'</div><div class="trap-name">'+nu+'</div>'+perfilUndLabel+'</div></div>';
