@@ -505,17 +505,17 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const batches = [];
     for(let i=0;i<pdfFiles.length;i+=BATCH_SIZE) batches.push(pdfFiles.slice(i,i+BATCH_SIZE));
 
-    // Processar todos os lotes EM PARALELO
-    const batchResults = await Promise.allSettled(
-      batches.map((batch, i) => extractBatch(batch, i===0?capFiles:[], apiKey))
-    );
-
     let allRawRaces = [];
     const errors = [];
-    batchResults.forEach((r, i) => {
-      if (r.status === 'fulfilled') allRawRaces = allRawRaces.concat(r.value);
-      else { console.error('Erro lote '+(i+1)+':', r.reason&&r.reason.message); errors.push('Lote '+(i+1)+': '+(r.reason&&r.reason.message||'erro')); }
-    });
+    for(let i=0;i<batches.length;i++) {
+      try {
+        const races = await extractBatch(batches[i], i===0?capFiles:[], apiKey);
+        allRawRaces = allRawRaces.concat(races);
+      } catch(errBatch) {
+        console.error('Erro lote '+(i+1)+':', errBatch.message);
+        errors.push('Lote '+(i+1)+': '+errBatch.message);
+      }
+    }
 
     if(!allRawRaces.length&&errors.length) return res.status(500).json({ error:errors.join(' | ') });
 
