@@ -266,7 +266,6 @@ function renderTable(){
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
 
-    // Separa ranking da narrativa (separados por \n no motor)
     var obsParts=(r.obs||'-').replace(/CalTm/gi,'Tempo').split('\n');
     var obsRanking=obsParts[0]||'';
     var obsNarrativa=obsParts[1]||'';
