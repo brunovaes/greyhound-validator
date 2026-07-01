@@ -171,6 +171,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
     <a href="${BASE}/config" class="nl">Configurações</a>
     <a href="${BASE}/robot" class="nl na">Robô</a>
     <a href="${BASE}/admin/usuarios" class="nl">Usuários</a>
+    <a href="${BASE}/live" class="nl">Live</a>
   </div>
   <span style="font-size:11px;color:#666;padding:12px">Admin · <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
 </nav>

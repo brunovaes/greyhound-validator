@@ -108,6 +108,7 @@ td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:m
     <a href="${BASE}/config" class="nl">Configuracoes</a>
     <a href="${BASE}/robot" class="nl">Robo</a>
     <a href="${BASE}/admin/usuarios" class="nl na">Usuarios</a>
+    <a href="${BASE}/live" class="nl">Live</a>
   </div>
   <span style="font-size:11px;color:#666;padding:12px">Admin: ${req.user.name} &middot; <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
 </nav>

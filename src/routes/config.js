@@ -64,6 +64,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
     <a href="${BASE}/config" class="nl na">Configuracoes</a>
     <a href="${BASE}/robot" class="nl">Robo</a>
     <a href="${BASE}/admin/usuarios" class="nl">Usuarios</a>
+    <a href="${BASE}/live" class="nl">Live</a>
   </div>
   <span style="font-size:11px;color:#666;padding:12px">${user.name} &middot; <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
 </nav>
