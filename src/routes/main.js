@@ -303,7 +303,8 @@ async function runAnalysis(){
     var resp=await fetch(BASE+'/api/analyze',{method:'POST',body:fd});
     prog(80,'Processando...');
     if(!resp.ok){var e=await resp.json();throw new Error(e.error||'Erro '+resp.status);}
-    var data=await resp.json();
+    var raw=await resp.text();
+    var data=JSON.parse(raw.trim());
     if(data.limitReached){alert('Limite de analises atingido! Fale com o administrador.');document.getElementById('btngo').disabled=false;document.getElementById('btngo').innerHTML='Analisar Corridas';return;}
     results=data.races||[];
     prog(95,'Montando...');renderTable();

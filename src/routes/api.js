@@ -437,7 +437,7 @@ function sanitizeEliminatedTraps(races) {
 // ============================================================
 // ROTAS
 // ============================================================
-const BATCH_SIZE = 3; // 3 PDFs por lote, processados em paralelo
+const BATCH_SIZE = 10;
 
 function parseClaudeJson(raw) {
   // Limpa backticks de forma robusta com regex
@@ -474,10 +474,14 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   }
   content.push({ type:'text', text:'Extraia os dados de TODOS os PDFs enviados. Retorne SOMENTE JSON. Zero texto antes ou depois.' });
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 280000); // 4min 40s
+  try {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
-    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:8000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] })
+    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:8000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] }),
+    signal: controller.signal
   });
 
   if(!response.ok) { const e=await response.json(); throw new Error(e.error?.message||('Erro API '+response.status)); }
@@ -486,6 +490,9 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   const parsed = parseClaudeJson(raw);
   if(!parsed||!Array.isArray(parsed.races)) throw new Error('JSON de extracao invalido. Raw: '+raw.slice(0,200));
   return parsed.races;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req, res) => {
@@ -501,7 +508,10 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const capFiles = req.files['caps']||[];
     if(!pdfFiles.length) return res.status(400).json({ error:'Nenhum PDF enviado.' });
 
-    // FASE 1: Extracao de dados brutos via Claude
+    // Heartbeat: envia bytes periodicamente para manter conexao viva no Railway
+    res.setHeader('Content-Type', 'application/json');
+    const heartbeat = setInterval(() => { try { res.write(''); } catch(e) {} }, 15000);
+
     const batches = [];
     for(let i=0;i<pdfFiles.length;i+=BATCH_SIZE) batches.push(pdfFiles.slice(i,i+BATCH_SIZE));
 
@@ -517,9 +527,10 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
       }
     }
 
-    if(!allRawRaces.length&&errors.length) return res.status(500).json({ error:errors.join(' | ') });
+    clearInterval(heartbeat);
 
-    // FASE 2: Motor JS calcula tudo — zero arbitrio do Claude
+    if(!allRawRaces.length&&errors.length) return res.end(JSON.stringify({ error:errors.join(' | ') }));
+
     const allRaces = allRawRaces.map(corridaRaw => {
       try { return processarCorrida(corridaRaw, config); }
       catch(e) { console.error('Erro motor:', corridaRaw?.hora, e.message); return null; }
@@ -528,10 +539,10 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const sanitized = sanitizeEliminatedTraps(allRaces);
 
     db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(user.id);
-    res.json({ races:sanitized, partialErrors:errors.length?errors:undefined });
+    res.end(JSON.stringify({ races:sanitized, partialErrors:errors.length?errors:undefined }));
   } catch(err) {
     console.error('Erro geral:', err);
-    res.status(500).json({ error:err.message });
+    try { res.end(JSON.stringify({ error:err.message })); } catch(e) { res.status(500).json({ error:err.message }); }
   }
 });
 
