@@ -13,16 +13,18 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 function buildExtractionPrompt() {
   return `Leitor de PDFs de corridas de galgos Racing Post. Extraia dados brutos. ZERO analise.
 
-Para cada corrida extraia estes campos exatos:
-hora, corrida (pista+classe), dist (ex:"450m"), classe (ex:"A3"), postPick (ex:"2-1-4" ou null), trapsCard (array de traps reais da corrida, ex:[1,2,3,5,6]), galgos (array).
+ATENCAO CRITICA: O numero do TRAP de cada galgo esta no campo "Trp" do cabecalho de cada galgo no PDF (ex: [2] significa trap 2, [6] significa trap 6). NAO use a posicao do galgo na lista — use o numero real do trap impresso no card. Galgos com trap de fundo diferente (W = wide = fora) ainda tem seu numero de trap proprio.
 
-Para cada galgo: trap (int), nome, brt (float), brtClasse, historico (MAXIMO 3 linhas mais recentes).
+Para cada corrida extraia:
+hora, corrida (pista+classe), dist (ex:"450m"), classe (ex:"A3"), postPick (ex:"2-1-4" ou null), trapsCard (array dos numeros de trap reais — leia do campo [N] de cada galgo), galgos (array).
 
-Para cada linha de historico: data, pista, dist (int), trap (int), split (float ou null), bends (string ou null), pos (int), caltm (float — NUNCA wntm), going (string ou null), classe, remarks (string ou null).
+Para cada galgo: trap (int — do campo [N] do cabecalho), nome, brt (float), brtClasse, historico (3 linhas mais recentes validas).
 
-OMITIR campos nulos para reduzir tamanho. Usar arrays compactos.
-RESPOSTA: JSON puro, sem markdown, sem backticks, sem texto.
-{"races":[{"hora":"7:42","corrida":"Star Pelaw A4","dist":"435m","classe":"A4","postPick":"5-3-2","trapsCard":[1,2,3,5,6],"galgos":[{"trap":1,"nome":"Caseys Jake","brt":26.01,"brtClasse":"A3","historico":[{"data":"26Jun26","pista":"Pelaw","dist":435,"trap":1,"split":5.76,"bends":"5355","pos":5,"caltm":27.02,"going":"N","classe":"A4","remarks":"SAw,Bmp1"}]}]}]}`;
+Para cada linha de historico: data, pista, dist (int), trap (int — campo Trp da linha), split (float ou null), bends (string ou null), pos (int), caltm (float — SEMPRE CalTm, NUNCA WnTm), going (string ou null), classe, remarks (string ou null).
+
+OMITIR campos nulos. NAO incluir linhas Trial/Solo/NR sem CalTm valido.
+RESPOSTA: JSON puro, sem markdown, sem backticks, sem texto extra.
+{"races":[{"hora":"7:42","corrida":"Star Pelaw A4","dist":"435m","classe":"A4","postPick":"5-3-2","trapsCard":[1,2,3,5,6],"galgos":[{"trap":6,"nome":"All About Rosie","brt":29.34,"brtClasse":"A2","historico":[{"data":"18Jun26","pista":"Towc","dist":500,"trap":6,"split":4.16,"bends":"5443","pos":2,"caltm":29.34,"going":"N","classe":"A2","remarks":"Mid-W,SAw,RnOnWll"}]}]}]}`;
 }
 
 // ============================================================
