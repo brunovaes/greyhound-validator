@@ -437,48 +437,170 @@ router.get('/sessao/:id', (req, res) => {
   const ac = races.filter(r=>r.bateu==='sim').length;
   const ap = races.filter(r=>r.bateu).length;
   const logoB64 = getLogo();
+  const validRaces = races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0);
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}.content{padding:24px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.kpi{background:#111;border:1px solid #333;border-radius:8px;padding:12px 14px;position:relative;overflow:hidden}.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}.kpi.g::before{background:#22c55e}.kpi.o::before{background:#f97316}.kpi.b::before{background:#3b82f6}.kpi-label{font-size:10px;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}.kpi-val{font-size:22px;font-weight:700}.kpi.g .kpi-val{color:#22c55e}.kpi.o .kpi-val{color:#f97316}.kpi.b .kpi-val{color:#60a5fa}table{width:100%;border-collapse:collapse;border:1px solid #333;border-radius:8px;overflow:hidden;background:#111}.tw-sess{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 280px);border:1px solid #333;border-radius:8px}th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:10}.btn-exp-h{padding:8px 18px;background:#1a1a1a;border:1px solid #3b82f6;color:#60a5fa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}.btn-exp-h:hover{background:rgba(59,130,246,.1)}.btn-prt-h{padding:8px 18px;background:#1a1a1a;border:1px solid #a78bfa;color:#a78bfa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}.btn-prt-h:hover{background:rgba(167,139,250,.1)}td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}tr:last-child td{border-bottom:none}.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}.t1{background:#dc2626;color:#fff}.t2{background:#2563eb;color:#fff}.t3{background:#e5e7eb;color:#111}.t4{background:#111;color:#fff;border:1px solid #444}.t5{background:#d97706;color:#000}.t6{background:#111;color:#f59e0b;border:1px solid #f59e0b}.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}.ba{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}.bm{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.25)}.bb{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25)}.sim{color:#22c55e;font-weight:700}.nao{color:#ef4444;font-weight:700}a{color:#22c55e;text-decoration:none}h2{font-size:16px;margin-bottom:12px}</style></head><body>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}
+.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
+.content{padding:24px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.kpi{background:#111;border:1px solid #333;border-radius:8px;padding:12px 14px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.g::before{background:#22c55e}.kpi.o::before{background:#f97316}.kpi.b::before{background:#3b82f6}
+.kpi-label{font-size:10px;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.kpi-val{font-size:22px;font-weight:700}
+.kpi.g .kpi-val{color:#22c55e}.kpi.o .kpi-val{color:#f97316}.kpi.b .kpi-val{color:#60a5fa}
+/* tabela wrapper com scroll vertical para sticky funcionar */
+.tw-sess{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 310px);border:1px solid #333;border-radius:8px}
+table{width:100%;border-collapse:collapse;background:#111;min-width:760px}
+/* sticky: NÃO pode ter overflow:hidden no table — border-radius fica no wrapper */
+th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:10;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}
+.t1{background:#dc2626;color:#fff}.t2{background:#2563eb;color:#fff}.t3{background:#e5e7eb;color:#111}
+.t4{background:#111;color:#fff;border:1px solid #444}.t5{background:#d97706;color:#000}.t6{background:#111;color:#f59e0b;border:1px solid #f59e0b}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}
+.ba{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}
+.bm{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.25)}
+.bb{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25)}
+.sim{color:#22c55e;font-weight:700}.nao{color:#ef4444;font-weight:700}
+a{color:#22c55e;text-decoration:none}
+h2{font-size:16px;margin-bottom:12px}
+/* filtros — mesmo estilo da aba Analisar */
+.fp{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);border-radius:8px}
+.fp-group{display:flex;align-items:center;gap:5px}
+.fp-label{font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.fp select,.fp input[type=time]{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:rgba(255,255,255,.8);font-size:11px;outline:none;cursor:pointer;padding:4px 6px;transition:border .15s}
+.fp select{min-width:100px}.fp input[type=time]{color-scheme:dark;width:78px}
+.fp select:focus,.fp input[type=time]:focus{border-color:rgba(0,230,118,.5)}
+.fp select option{background:#1a1f2e;font-size:12px}
+.fp-divider{width:1px;height:16px;background:rgba(255,255,255,.08);flex-shrink:0;margin:0 2px}
+.fp-hora-pair{display:flex;align-items:center;gap:4px}
+.fp-hora-sep{color:rgba(255,255,255,.2);font-size:10px}
+#fp-count-h{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto;white-space:nowrap}
+#btn-fp-clr{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0}
+#btn-fp-clr:hover{color:#e53935}
+.btn-exp-h{padding:8px 18px;background:#0a0a0a;border:1px solid #3b82f6;color:#60a5fa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
+.btn-exp-h:hover{background:rgba(59,130,246,.08)}
+.btn-prt-h{padding:8px 18px;background:#0a0a0a;border:1px solid #a78bfa;color:#a78bfa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
+.btn-prt-h:hover{background:rgba(167,139,250,.08)}
+</style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
 <div class="content">
 <div style="margin-bottom:16px"><a href="${BASE}/historico" style="color:#666;font-size:12px">&#8592; Voltar</a></div>
 <h2>${sess.name||'Sessao '+sess.id}</h2>
 <div class="kpis">
-<div class="kpi b"><div class="kpi-label">Corridas</div><div class="kpi-val">${races.length}</div></div>
-<div class="kpi g"><div class="kpi-label">Acertos</div><div class="kpi-val">${ac}</div></div>
-<div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
-<div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
+  <div class="kpi b"><div class="kpi-label">Corridas</div><div class="kpi-val">${validRaces.length}</div></div>
+  <div class="kpi g"><div class="kpi-label">Acertos</div><div class="kpi-val">${ac}</div></div>
+  <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
+  <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<div class="tw-sess"><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody>
-${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';var horaBr=r.hora_br||r.hora||'-';var horaUk=r.hora||'';return`<tr><td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">${horaBr}</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">${horaUk}</div></td><td><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div></td><td style="white-space:nowrap"><span class="trap-badge t${r.trap_fav}">${r.trap_fav}</span> vs <span class="trap-badge t${r.trap_und}">${r.trap_und}</span></td><td style="white-space:nowrap"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td><td style="font-size:10px;color:#888;white-space:nowrap">${r.perfil_fav||''}<br>${r.perfil_und||''}</td><td style="font-size:11px;color:#888;max-width:200px;line-height:1.4">${r.obs||'-'}</td><td style="text-align:center">${r.odd||'-'}</td><td style="text-align:center">${r.valor?'R$'+r.valor:'-'}</td><td style="font-size:11px;text-align:center">${[r.resultado_1,r.resultado_2,r.resultado_3].filter(Boolean).join('/')||'-'}</td><td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td></tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
-</tbody></table></div>
+<div class="fp" id="fp-h">
+  <div class="fp-group"><span class="fp-label">Pista</span><select id="fph-pista"><option value="">Todas</option></select></div>
+  <div class="fp-divider"></div>
+  <div class="fp-group"><span class="fp-label">Horário BR</span>
+    <div class="fp-hora-pair"><input type="time" id="fph-min" title="De"><span class="fp-hora-sep">–</span><input type="time" id="fph-max" title="Até"></div>
+  </div>
+  <button id="btn-fp-clr" title="Limpar filtros">✕</button>
+  <span id="fp-count-h"></span>
+</div>
+<div class="tw-sess"><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
 </div>
 </div>
 <script>
-var SESSION_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0))};
-function cvHora(h){if(!h)return h;var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
+var ALL_RACES=${JSON.stringify(validRaces)};
+var fState={pista:'',horaMin:'',horaMax:''};
+
+function getPista(c){if(!c)return'';var p=c.trim().split(' ');if(p.length>1&&/^[A-Z]\d+$/i.test(p[p.length-1]))return p.slice(0,-1).join(' ');return c;}
+function cvHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
+function toMin(h){if(!h)return null;var p=h.split(':');return parseInt(p[0]||0)*60+parseInt(p[1]||0);}
+
+function getFiltered(){
+  return ALL_RACES.filter(function(r){
+    if(fState.pista&&getPista(r.corrida||'')!==fState.pista)return false;
+    if(fState.horaMin||fState.horaMax){
+      var hbr=r.hora_br||cvHora(r.hora||'');
+      var hm=toMin(hbr);
+      if(hm!==null){
+        if(fState.horaMin&&hm<toMin(fState.horaMin))return false;
+        if(fState.horaMax&&hm>toMin(fState.horaMax))return false;
+      }
+    }
+    return true;
+  });
+}
+
+function renderRows(){
+  var filtered=getFiltered();
+  var tb=document.getElementById('sess-tb');
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhuma corrida com os filtros selecionados</td></tr>';return;}
+  var trapCls=['','t1','t2','t3','t4','t5','t6'];
+  tb.innerHTML=filtered.map(function(r){
+    var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
+    var horaBr=r.hora_br||cvHora(r.hora||'-');
+    var horaUk=r.hora||'';
+    return'<tr>'
+      +'<td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">'+horaBr+'</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">'+horaUk+'</div></td>'
+      +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div></td>'
+      +'<td style="white-space:nowrap"><span class="trap-badge '+trapCls[r.trap_fav||0]+'">'+r.trap_fav+'</span> vs <span class="trap-badge '+trapCls[r.trap_und||0]+'">'+r.trap_und+'</span></td>'
+      +'<td style="white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
+      +'<td style="font-size:10px;color:#888;white-space:nowrap">'+(r.perfil_fav||'')+'<br>'+(r.perfil_und||'')+'</td>'
+      +'<td style="font-size:11px;color:#888;max-width:200px;line-height:1.4">'+(r.obs||'-')+'</td>'
+      +'<td style="text-align:center">'+(r.odd||'-')+'</td>'
+      +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
+      +'<td style="font-size:11px;text-align:center">'+([r.resultado_1,r.resultado_2,r.resultado_3].filter(Boolean).join('/')||'-')+'</td>'
+      +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
+      +'</tr>';
+  }).join('');
+  var cnt=document.getElementById('fp-count-h');
+  if(cnt)cnt.textContent=filtered.length<ALL_RACES.length?filtered.length+' de '+ALL_RACES.length:''+ALL_RACES.length+' corridas';
+}
+
+function initFilter(){
+  var pistaSet={};
+  ALL_RACES.forEach(function(r){var p=getPista(r.corrida||'');if(p)pistaSet[p]=1;});
+  var pistas=Object.keys(pistaSet).sort();
+  var sel=document.getElementById('fph-pista');
+  pistas.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);});
+  sel.addEventListener('change',function(){fState.pista=this.value;renderRows();});
+  document.getElementById('fph-min').addEventListener('change',function(){fState.horaMin=this.value;renderRows();});
+  document.getElementById('fph-max').addEventListener('change',function(){fState.horaMax=this.value;renderRows();});
+  document.getElementById('btn-fp-clr').addEventListener('click',function(){
+    fState={pista:'',horaMin:'',horaMax:''};
+    document.getElementById('fph-pista').value='';
+    document.getElementById('fph-min').value='';
+    document.getElementById('fph-max').value='';
+    renderRows();
+  });
+}
+
 function exportCSV(){
   var h='HoraBR,HoraUK,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';
-  var rows=SESSION_RACES.map(function(r){return[r.hora_br||cvHora(r.hora||''),r.hora||'',r.corrida||'',r.dist||'',r.trap_fav||'',r.name_fav||'',r.trap_und||'',r.name_und||'',r.pct||'',r.nivel||'',r.perfil_fav||'',r.perfil_und||'',(r.obs||'').replace(/,/g,';'),r.odd||'',r.valor||'',r.resultado_1||'',r.resultado_2||'',r.resultado_3||'',r.bateu||''].join(',');});
+  var rows=ALL_RACES.map(function(r){return[r.hora_br||cvHora(r.hora||''),r.hora||'',r.corrida||'',r.dist||'',r.trap_fav||'',r.name_fav||'',r.trap_und||'',r.name_und||'',r.pct||'',r.nivel||'',r.perfil_fav||'',r.perfil_und||'',(r.obs||'').replace(/,/g,';'),r.odd||'',r.valor||'',r.resultado_1||'',r.resultado_2||'',r.resultado_3||'',r.bateu||''].join(',');});
   var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});
   var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sessao_greyhound.csv';a.click();
 }
 function printAnalises(){
-  if(!SESSION_RACES.length){alert('Nenhum AvB para imprimir.');return;}
-  var rows=SESSION_RACES.map(function(r){
-    var avbStr='T'+r.trap_fav+' > T'+r.trap_und;
-    var obsClean=(r.obs||'-').replace(/CalTm/gi,'Tempo');
+  var data=getFiltered();
+  if(!data.length){alert('Nenhum AvB para imprimir.');return;}
+  var rows=data.map(function(r){
     var horaBr=r.hora_br||cvHora(r.hora||'-');
-    return'<tr><td style="text-align:center;vertical-align:middle"><strong>'+horaBr+'</strong><br><small style="color:#666">'+(r.hora||'')+'</small></td><td style="vertical-align:middle"><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td><td style="text-align:center;vertical-align:middle;font-weight:700;font-size:10px">'+avbStr+'</td><td style="text-align:center;vertical-align:middle">'+(r.pct||'-')+'%</td><td style="font-size:9px;line-height:1.5;vertical-align:middle">'+obsClean+'</td></tr>';
+    return'<tr><td style="text-align:center;vertical-align:middle"><strong>'+horaBr+'</strong><br><small style="color:#666">'+(r.hora||'')+'</small></td><td style="vertical-align:middle"><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td><td style="text-align:center;font-weight:700;font-size:10px">T'+r.trap_fav+' > T'+r.trap_und+'</td><td style="text-align:center">'+(r.pct||'-')+'%</td><td style="font-size:9px;line-height:1.5">'+(r.obs||'-').replace(/CalTm/gi,'Tempo')+'</td></tr>';
   }).join('');
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}h2{font-size:13px;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #333}table{width:100%;border-collapse:collapse}th{background:#555;color:#fff;border:1px solid #444;padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}td{border:1px solid #ddd;padding:4px 6px;vertical-align:middle}tr:nth-child(even) td{background:#f5f5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><h2>Greyhound Factory — Sessao</h2><table><thead><tr><th style="width:60px">Hora BR</th><th style="width:130px">Corrida</th><th style="width:65px">AvB</th><th style="width:40px">Conf</th><th>Observacao</th></tr></thead><tbody>'+rows+'</tbody></table></body></html>';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}h2{font-size:13px;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #333}table{width:100%;border-collapse:collapse}th{background:#555;color:#fff;border:1px solid #444;padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}td{border:1px solid #ddd;padding:4px 6px;vertical-align:middle}tr:nth-child(even) td{background:#f5f5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><h2>Greyhound Factory — ${sess.name||'Sessao'}</h2><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Observacao</th></tr></thead><tbody>'+rows+'</tbody></table></body></html>';
   var w=window.open('','_blank');w.document.write(html);w.document.close();w.addEventListener('afterprint',function(){w.close();});setTimeout(function(){w.print();},600);
 }
+
+initFilter();
+renderRows();
 </script>
 </body></html>`);
 });
