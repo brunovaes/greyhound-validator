@@ -109,6 +109,7 @@ db.exec(`
     threshold_back REAL DEFAULT 25.0,
     min_corridas_retorno INTEGER DEFAULT 2,
     dias_inatividade_threshold INTEGER DEFAULT 25,
+    max_niveis_pool INTEGER DEFAULT 2,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
@@ -129,6 +130,7 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
   'ALTER TABLE analysis_config ADD COLUMN min_corridas_retorno INTEGER DEFAULT 2',
   'ALTER TABLE analysis_config ADD COLUMN dias_inatividade_threshold INTEGER DEFAULT 25',
+  'ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2',
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

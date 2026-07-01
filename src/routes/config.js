@@ -78,8 +78,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 <div class="sec-title">Pesos dos Criterios</div>
 <div class="info-box">Os pesos orientam o Claude sobre qual criterio priorizar. Valores maiores = mais importante no raciocinio.</div>
 <div class="grid">
-${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_categoria,1,10],
-   ['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm,1,10],
+${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm,1,10],
    ['peso_bends','Bends / Arranque','Perfil e evolucao nas marcacoes',config.peso_bends,1,10],
    ['peso_remarks','Remarks','Combinacoes positivas e negativas',config.peso_remarks,1,10],
    ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt,1,10],
@@ -93,20 +92,32 @@ ${[['peso_categoria','Categoria','Galgo validado na classe atual',config.peso_ca
 </div>
 
 <div class="section">
-<div class="sec-title">Regra de Categoria vs CalTm</div>
+<div class="sec-title">Categoria</div>
 <div class="info-box">
-  Define quando o Tempo Final pode superar a vantagem de categoria.<br>
-  Ex: com valor 1 -- um galgo A6 com CalTm melhor pode ser favorito sobre um A5. Com valor 0 -- categoria sempre decide.
+  Controla como a classe historica dos galgos influencia a analise.<br>
+  <strong>Diferenca que CalTm pode superar:</strong> quantos niveis de classe o tempo pode compensar entre dois galgos.<br>
+  <strong>Niveis no pool:</strong> quantos niveis de diferenca em relacao a classe do card sao aceitos no historico valido.
 </div>
-<div class="grid">
+<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
 <div class="field">
   <label>Diferenca maxima de categoria que CalTm pode superar</label>
   <select name="max_cat_diff_caltm">
-    <option value="0" ${(config.max_cat_diff_caltm||1)===0?'selected':''}>0 -- Categoria sempre decide</option>
-    <option value="1" ${(config.max_cat_diff_caltm||1)===1?'selected':''}>1 nivel (ex: A5 vs A6) -- CalTm pode decidir</option>
-    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 niveis (ex: A5 vs A7) -- CalTm pode decidir</option>
+    <option value="0" ${(config.max_cat_diff_caltm||1)===0?'selected':''}>0 — Categoria sempre decide</option>
+    <option value="1" ${(config.max_cat_diff_caltm||1)===1?'selected':''}>1 nivel (ex: A5 vs A6)</option>
+    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 niveis (ex: A5 vs A7)</option>
+    <option value="3" ${(config.max_cat_diff_caltm||1)===3?'selected':''}>3 niveis (ex: A5 vs A8)</option>
   </select>
-  <span class="hint">Com 2+ niveis de diferenca, categoria sempre prevalece independente do tempo</span>
+  <span class="hint">Define quando o CalTm pode superar a diferenca de classe entre dois galgos comparados</span>
+</div>
+<div class="field">
+  <label>Niveis diferentes permitidos no pool</label>
+  <select name="max_niveis_pool">
+    <option value="1" ${(config.max_niveis_pool||2)===1?'selected':''}>1 nivel (apenas classe do card)</option>
+    <option value="2" ${(config.max_niveis_pool||2)===2?'selected':''}>2 niveis (ex: A7 aceita A8)</option>
+    <option value="3" ${(config.max_niveis_pool||2)===3?'selected':''}>3 niveis (ex: A7 aceita A8 e A9)</option>
+    <option value="4" ${(config.max_niveis_pool||2)===4?'selected':''}>4 niveis (historico amplo)</option>
+  </select>
+  <span class="hint">Quantos niveis abaixo ou acima da classe do card sao aceitos nas linhas validas do galgo</span>
 </div>
 </div>
 </div>
@@ -177,7 +188,7 @@ Cada linha valida tem seu CalTm ajustado: desconto por acidente (Bmp=-${config.d
 <p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 4 — Score por criterio (codigo)</p>
 Cada galgo recebe um score 0-100 em cada criterio, multiplicado pelo seu peso:<br>
 &bull; <strong>CalTm</strong> (peso ${config.peso_caltm||4}): normalizado pela diferenca para o melhor da corrida (teto ${config.teto_diff_normalizacao||0.50}s)<br>
-&bull; <strong>Categoria</strong> (peso ${config.peso_categoria||5}): considera nivel da classe historica vs classe atual e posicoes recentes<br>
+&bull; <strong>Categoria</strong>: influencia via ajuste de CalTm (${config.ajuste_classe_segundos||0.20}s/nivel) + pool limitado a ${config.max_niveis_pool||2} nivel(is) + CalTm pode superar ate ${config.max_cat_diff_caltm||1} nivel(is)<br>
 &bull; <strong>Bends/Perfil</strong> (peso ${config.peso_bends||3}): Recuperador=90pts, Frontrunner=80pts, Estavel=60pts, Fumador=20pts + bonus por split<br>
 &bull; <strong>Remarks</strong> (peso ${config.peso_remarks||3}): combos muito positivos +30pts, positivos +15pts, negativos -20pts<br>
 &bull; <strong>BRT</strong> (peso ${config.peso_brt||1}): comparativo entre galgos, penalizado se BRT em classe muito diferente ou galgo fora de forma<br>
@@ -244,8 +255,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_categoria=?,peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
-      d.peso_categoria,d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2').run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+      d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
       d.remarks_muito_positivos,d.remarks_positivos,d.remarks_atenuantes,d.remarks_negativos,
@@ -253,6 +265,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.ajuste_classe_segundos||0.20, d.desconto_acidente_leve||0.10, d.desconto_acidente_medio||0.20, d.desconto_acidente_grave||0.35,
       d.proporcao_media_caltm||0.60, 1-(d.proporcao_media_caltm||0.60),
       d.teto_diff_normalizacao||0.50, d.threshold_skip_avb||10, d.threshold_back||25,
+      d.max_niveis_pool||2,
       user.id
     );
     res.json({ ok: true });

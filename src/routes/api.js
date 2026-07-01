@@ -281,9 +281,9 @@ function filtrarLinhasValidas(historico, corridaDist, corridaClasse, config) {
     // Distancia compativel (+/- 10%)
     if (!linha.dist || linha.dist < distMin || linha.dist > distMax) return false;
 
-    // Classe comparavel (nao mais de 4 niveis de diferenca)
+    // Classe comparavel (max_niveis_pool configuravel, default 2)
     const linhaLevel = getClassLevel(linha.classe);
-    if (classeLevel && linhaLevel && Math.abs(linhaLevel - classeLevel) > 4) return false;
+    if (classeLevel && linhaLevel && Math.abs(linhaLevel - classeLevel) > (config.max_niveis_pool||2)) return false;
 
     // Sem acidente gravissimo
     const remarks = parseRemarks(linha.remarks);
@@ -480,7 +480,7 @@ function scorePostPick(trap, postPick) {
 function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
   const sc = {
     caltm: normalizarCaltm(galgo.caltmAgregado, elegiveis, config),
-    categoria: scoreCategoria(galgo.histClasse, corridaClasse, galgo.posicoes, config),
+    // categoria removida dos pesos — influencia via ajuste CalTm + max_niveis_pool + max_cat_diff_caltm
     bends: scoreBends(galgo),
     remarks: scoreRemarks(galgo.linhasValidas),
     brt: scoreBRT(galgo, elegiveis, corridaClasse, config),
@@ -488,7 +488,6 @@ function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
   };
   const pesos = {
     caltm: config.peso_caltm||4,
-    categoria: config.peso_categoria||5,
     bends: config.peso_bends||3,
     remarks: config.peso_remarks||3,
     brt: config.peso_brt||1,
