@@ -120,6 +120,34 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
   <span class="hint">Quantos niveis abaixo ou acima da classe do card sao aceitos nas linhas validas do galgo</span>
 </div>
 </div>
+<div style="margin-top:14px;padding-top:14px;border-top:1px solid #222">
+<div class="info-box" style="margin-bottom:12px">
+  <strong>Novo na categoria com gap:</strong> elimina galgo que tem muitas corridas em categoria inferior antes da ultima <em>e</em> ficou mais de X dias parado entre as duas ultimas corridas validas.
+</div>
+<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+<div class="field">
+  <label>Max. corridas em cat. inferior antes da ultima</label>
+  <select name="max_linhas_cat_inferior">
+    <option value="2" ${(config.max_linhas_cat_inferior||3)===2?'selected':''}>2 corridas</option>
+    <option value="3" ${(config.max_linhas_cat_inferior||3)===3?'selected':''}>3 corridas (padrao)</option>
+    <option value="4" ${(config.max_linhas_cat_inferior||3)===4?'selected':''}>4 corridas</option>
+    <option value="5" ${(config.max_linhas_cat_inferior||3)===5?'selected':''}>5 corridas</option>
+    <option value="99" ${(config.max_linhas_cat_inferior||3)===99?'selected':''}>Desativado</option>
+  </select>
+  <span class="hint">Quantas linhas em categoria inferior (excluindo a ultima) sao toleradas antes de eliminar o galgo</span>
+</div>
+<div class="field">
+  <label>Gap maximo entre as duas ultimas corridas (dias)</label>
+  <select name="max_dias_gap_nova_cat">
+    <option value="7"  ${(config.max_dias_gap_nova_cat||14)===7 ?'selected':''}>7 dias</option>
+    <option value="14" ${(config.max_dias_gap_nova_cat||14)===14?'selected':''}>14 dias (padrao)</option>
+    <option value="21" ${(config.max_dias_gap_nova_cat||14)===21?'selected':''}>21 dias</option>
+    <option value="28" ${(config.max_dias_gap_nova_cat||14)===28?'selected':''}>28 dias</option>
+  </select>
+  <span class="hint">Se o gap entre as duas ultimas corridas validas for maior que este valor, o galgo e eliminado</span>
+</div>
+</div>
+</div>
 </div>
 
 <div class="section">
@@ -256,7 +284,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_linhas_cat_inferior INTEGER DEFAULT 3').run(); } catch(e) {}
+    try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14').run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
@@ -266,6 +296,8 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.proporcao_media_caltm||0.60, 1-(d.proporcao_media_caltm||0.60),
       d.teto_diff_normalizacao||0.50, d.threshold_skip_avb||10, d.threshold_back||25,
       d.max_niveis_pool||2,
+      d.max_linhas_cat_inferior||3,
+      d.max_dias_gap_nova_cat||14,
       user.id
     );
     res.json({ ok: true });

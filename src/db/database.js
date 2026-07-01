@@ -110,6 +110,8 @@ db.exec(`
     min_corridas_retorno INTEGER DEFAULT 2,
     dias_inatividade_threshold INTEGER DEFAULT 25,
     max_niveis_pool INTEGER DEFAULT 2,
+    max_linhas_cat_inferior INTEGER DEFAULT 3,
+    max_dias_gap_nova_cat INTEGER DEFAULT 14,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
@@ -131,6 +133,8 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN min_corridas_retorno INTEGER DEFAULT 2',
   'ALTER TABLE analysis_config ADD COLUMN dias_inatividade_threshold INTEGER DEFAULT 25',
   'ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2',
+  'ALTER TABLE analysis_config ADD COLUMN max_linhas_cat_inferior INTEGER DEFAULT 3',
+  'ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14',
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

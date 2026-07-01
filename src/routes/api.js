@@ -537,6 +537,14 @@ function processarCorrida(corridaRaw, config) {
       continue;
     }
 
+    // Verificar: novo na categoria + gap grande entre últimas corridas
+    const novaCategoria = detectarNovoNaCategoriaComGap(linhasValidas, classe, config);
+    if (novaCategoria) {
+      console.log(`[NOVA_CAT] ${hora} ${corrida}: T${galgo.trap} eliminado — ${novaCategoria.linhasInferiores} linhas cat.inferior + gap ${novaCategoria.gapDias}d`);
+      eliminados.push({ trap:galgo.trap, motivo:`Novo na cat. (${novaCategoria.linhasInferiores} linhas inferiores + ${novaCategoria.gapDias}d de gap)` });
+      continue;
+    }
+
     if (linhasValidas.length < 3) {
       eliminados.push({ trap:galgo.trap, motivo:`${linhasValidas.length} linha(s) valida(s)` });
       continue;
