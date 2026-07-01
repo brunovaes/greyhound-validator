@@ -489,6 +489,8 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
   const parsed = parseClaudeJson(raw);
   if(!parsed||!Array.isArray(parsed.races)) throw new Error('JSON de extracao invalido. Raw: '+raw.slice(0,200));
+  console.log('[EXTRACAO] Lote com '+pdfFiles.length+' PDFs: '+parsed.races.length+' corridas extraidas');
+  parsed.races.forEach(r => console.log('  '+r.hora+' '+r.corrida+' classe:'+r.classe+' galgos:'+(r.galgos||[]).length));
   return parsed.races;
   } finally {
     clearTimeout(timeout);
@@ -537,6 +539,8 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     }).filter(Boolean);
 
     const sanitized = sanitizeEliminatedTraps(allRaces);
+    console.log('[MOTOR] '+allRaces.length+' corridas, '+sanitized.filter(r=>r.nivel!=='skip').length+' AvBs, '+sanitized.filter(r=>r.nivel==='skip').length+' skips');
+    sanitized.forEach(r=>console.log('  '+r.hora+' '+r.corrida+' nivel:'+r.nivel+(r.trapFav?' T'+r.trapFav+'vsT'+r.trapUnd:'')));
 
     db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(user.id);
     res.end(JSON.stringify({ races:sanitized, partialErrors:errors.length?errors:undefined }));
