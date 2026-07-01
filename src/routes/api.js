@@ -500,7 +500,7 @@ function sanitizeEliminatedTraps(races) {
 // ============================================================
 // ROTAS
 // ============================================================
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 5;
 
 function parseClaudeJson(raw) {
   // Limpa backticks de forma robusta com regex
@@ -541,7 +541,7 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   const timeout = setTimeout(() => controller.abort(), 280000);
   try {
   const data = await fetchAnthropicStream(apiKey, {
-    model:'claude-sonnet-4-6', max_tokens:8000,
+    model:'claude-sonnet-4-6', max_tokens:16000,
     system:buildExtractionPrompt(),
     messages:[{ role:'user', content }]
   });
