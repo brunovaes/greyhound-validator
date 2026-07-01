@@ -1,7 +1,70 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const fetch = require('node-fetch');
+const https = require('https');
+
+// Fetch com streaming da API Anthropic - evita timeout em respostas longas
+function fetchAnthropicStream(apiKey, body) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = JSON.stringify({ ...body, stream: true });
+    const options = {
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Length': Buffer.byteLength(bodyStr)
+      },
+      agent: new https.Agent({ keepAlive: true })
+    };
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode !== 200) {
+        let errData = '';
+        res.on('data', c => errData += c);
+        res.on('end', () => {
+          try { const e = JSON.parse(errData); reject(new Error(e.error?.message || 'Erro API ' + res.statusCode)); }
+          catch(e) { reject(new Error('Erro API ' + res.statusCode + ': ' + errData.slice(0,100))); }
+        });
+        return;
+      }
+
+      let fullText = '';
+      let buffer = '';
+
+      res.on('data', chunk => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // guarda linha incompleta
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const evt = JSON.parse(data);
+            // Acumula texto dos eventos de content_block_delta
+            if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+              fullText += evt.delta.text || '';
+            }
+          } catch(e) { /* ignora linhas malformadas */ }
+        }
+      });
+
+      res.on('end', () => {
+        resolve({ content: [{ type: 'text', text: fullText }] });
+      });
+
+      res.on('error', reject);
+    });
+
+    req.on('error', reject);
+    req.write(bodyStr);
+    req.end();
+  });
+}
 const { db, getUserConfig } = require('../db/database');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -475,17 +538,13 @@ async function extractBatch(pdfFiles, capFiles, apiKey) {
   content.push({ type:'text', text:'Extraia os dados de TODOS os PDFs enviados. Retorne SOMENTE JSON. Zero texto antes ou depois.' });
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 280000); // 4min 40s
+  const timeout = setTimeout(() => controller.abort(), 280000);
   try {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
-    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:8000, system:buildExtractionPrompt(), messages:[{ role:'user', content }] }),
-    signal: controller.signal
+  const data = await fetchAnthropicStream(apiKey, {
+    model:'claude-sonnet-4-6', max_tokens:8000,
+    system:buildExtractionPrompt(),
+    messages:[{ role:'user', content }]
   });
-
-  if(!response.ok) { const e=await response.json(); throw new Error(e.error?.message||('Erro API '+response.status)); }
-  const data = await response.json();
   const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
   const parsed = parseClaudeJson(raw);
   if(!parsed||!Array.isArray(parsed.races)) throw new Error('JSON de extracao invalido. Raw: '+raw.slice(0,200));
