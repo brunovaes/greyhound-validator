@@ -1,4 +1,5 @@
 var raceFiles=[],capFiles=[],results=[],capModalFilesList=[];
+var filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
 var SS_KEY='ghf_results_v1';
 function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})}));}catch(e){}}
 function clearSessionState(){try{sessionStorage.removeItem(SS_KEY);}catch(e){}}
@@ -14,14 +15,196 @@ function addFI(name,id){var list=document.getElementById('rlist');var d=document
 function updFI(id,ok){var el=document.getElementById('fis-'+id);if(!el)return;el.className='fi-st '+(ok?'fi-ok':'fi-err');el.textContent=ok?'OK':'erro';}
 function updCards(){var avbs=results.filter(function(r){return r.nivel!=='skip';});var alta=results.filter(function(r){return r.nivel==='alta';}).length;document.getElementById('sp').textContent=raceFiles.length||'-';document.getElementById('sa').textContent=avbs.length||'-';document.getElementById('sal').textContent=alta||'-';}
 
+/* ── helpers de filtro ─────────────────────────────────────── */
+function getPista(corrida){
+  if(!corrida)return'';
+  var p=corrida.trim().split(' ');
+  if(p.length>1&&/^[A-Z]\d+$/i.test(p[p.length-1]))return p.slice(0,-1).join(' ');
+  return corrida;
+}
+function horaToMin(h){if(!h)return null;var p=h.split(':');return parseInt(p[0]||0)*60+parseInt(p[1]||0);}
+function applyFiltersToAvbs(avbs){
+  return avbs.filter(function(r){
+    if(filterState.pista&&getPista(r.corrida||'')!==filterState.pista)return false;
+    if(filterState.confianca&&r.nivel!==filterState.confianca)return false;
+    if(filterState.horaMin||filterState.horaMax){
+      var hbr=convertHora(r.hora||'');
+      var hMin=horaToMin(hbr);
+      if(hMin!==null){
+        if(filterState.horaMin&&hMin<horaToMin(filterState.horaMin))return false;
+        if(filterState.horaMax&&hMin>horaToMin(filterState.horaMax))return false;
+      }
+    }
+    return true;
+  });
+}
+
+/* ── injeção de estilos ────────────────────────────────────── */
+function injectStyles(){
+  var css=[
+    /* sticky header */
+    'thead th{position:sticky!important;top:0!important;z-index:20!important;background:#0d1117!important;}',
+
+    /* modal overlay */
+    '.ghf-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px);}',
+    '.ghf-modal-box{background:#161b27;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:32px 36px;width:440px;max-width:92vw;box-shadow:0 24px 64px rgba(0,0,0,.6);}',
+    '.ghf-modal-title{font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;letter-spacing:.2px;}',
+    '.ghf-modal-sub{font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;}',
+    '.ghf-modal-inp{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:9px;color:#fff;padding:11px 15px;font-size:14px;outline:none;box-sizing:border-box;transition:border .2s;}',
+    '.ghf-modal-inp:focus{border-color:#00e676;}',
+    '.ghf-modal-inp::placeholder{color:rgba(255,255,255,.3);}',
+    '.ghf-modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;}',
+    '.ghf-btn-pri{background:linear-gradient(135deg,#00e676,#00c853);color:#000;border:none;padding:10px 26px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
+    '.ghf-btn-pri:hover{opacity:.88;}',
+    '.ghf-btn-sec{background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.15);padding:10px 22px;border-radius:9px;font-size:14px;cursor:pointer;transition:background .2s;}',
+    '.ghf-btn-sec:hover{background:rgba(255,255,255,.12);}',
+
+    /* toast */
+    '.ghf-toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);padding:13px 28px;border-radius:11px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}',
+    '.ghf-toast.t-ok{background:linear-gradient(135deg,#00e676,#00c853);color:#000;}',
+    '.ghf-toast.t-err{background:#e53935;color:#fff;}',
+    '.ghf-toast.t-show{opacity:1;}',
+
+    /* filter panel */
+    '#filter-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 18px;margin-bottom:14px;}',
+    '#filter-panel .fp-label{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;display:block;}',
+    '#filter-panel .fp-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}',
+    '#filter-panel .fp-group{display:flex;flex-direction:column;}',
+    '#filter-panel select,#filter-panel input[type=time]{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#fff;padding:7px 10px;font-size:13px;outline:none;min-width:130px;cursor:pointer;}',
+    '#filter-panel select:focus,#filter-panel input[type=time]:focus{border-color:#00e676;}',
+    '#filter-panel select option{background:#1a1f2e;}',
+    '.fp-hora-wrap{display:flex;gap:6px;align-items:center;}',
+    '.fp-hora-wrap input[type=time]{min-width:90px!important;}',
+    '.fp-hora-sep{color:rgba(255,255,255,.3);font-size:12px;}',
+    '#fp-count{font-size:11px;color:rgba(255,255,255,.35);margin-left:auto;align-self:flex-end;padding-bottom:2px;}',
+    '#btn-fp-clear{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.4);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;align-self:flex-end;transition:all .2s;}',
+    '#btn-fp-clear:hover{border-color:#e53935;color:#e53935;}',
+  ].join('');
+  var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+}
+
+/* ── modal de salvar sessão ───────────────────────────────── */
+function injectSaveModal(){
+  var d=document.createElement('div');
+  d.innerHTML='<div id="save-modal" class="ghf-modal-ov" style="display:none">'
+    +'<div class="ghf-modal-box">'
+    +'<div class="ghf-modal-title">&#128190; Salvar sessão</div>'
+    +'<div class="ghf-modal-sub">Dê um nome para identificar esta análise no Histórico</div>'
+    +'<input id="save-inp" class="ghf-modal-inp" type="text" placeholder="Ex.: Races 28/06/2026" maxlength="80">'
+    +'<div class="ghf-modal-foot">'
+    +'<button id="save-cancel" class="ghf-btn-sec">Cancelar</button>'
+    +'<button id="save-ok" class="ghf-btn-pri">Salvar</button>'
+    +'</div></div></div>'
+    +'<div id="ghf-toast" class="ghf-toast"></div>';
+  document.body.appendChild(d);
+  document.getElementById('save-cancel').addEventListener('click',closeSaveModal);
+  document.getElementById('save-ok').addEventListener('click',doSaveSession);
+  document.getElementById('save-inp').addEventListener('keydown',function(e){if(e.key==='Enter')doSaveSession();if(e.key==='Escape')closeSaveModal();});
+  document.getElementById('save-modal').addEventListener('click',function(e){if(e.target===this)closeSaveModal();});
+}
+function openSaveModal(){
+  document.getElementById('save-inp').value='';
+  document.getElementById('save-modal').style.display='flex';
+  setTimeout(function(){document.getElementById('save-inp').focus();},80);
+}
+function closeSaveModal(){document.getElementById('save-modal').style.display='none';}
+function showToast(msg,ok){
+  var t=document.getElementById('ghf-toast');
+  t.textContent=msg;t.className='ghf-toast '+(ok?'t-ok':'t-err');
+  requestAnimationFrame(function(){t.classList.add('t-show');});
+  setTimeout(function(){t.classList.remove('t-show');},2600);
+}
+async function doSaveSession(){
+  var name=document.getElementById('save-inp').value.trim();
+  if(!name){document.getElementById('save-inp').focus();return;}
+  closeSaveModal();
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  try{
+    var resp=await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    if(resp.ok){showToast('✓ Sessão "'+name+'" salva!',true);setTimeout(function(){location.reload();},1600);}
+    else showToast('Erro ao salvar sessão.',false);
+  }catch(e){showToast('Erro ao salvar sessão.',false);}
+}
+
+/* ── painel de filtros ────────────────────────────────────── */
+function injectFilterPanel(){
+  var tb=document.getElementById('tb');
+  if(!tb)return;
+  var fp=document.createElement('div');
+  fp.id='filter-panel';fp.style.display='none';
+  fp.innerHTML='<div class="fp-row">'
+    +'<div class="fp-group"><span class="fp-label">&#127937; Pista</span>'
+    +'<select id="fp-pista"><option value="">Todas as pistas</option></select></div>'
+    +'<div class="fp-group"><span class="fp-label">&#128336; Horário BR</span>'
+    +'<div class="fp-hora-wrap"><input type="time" id="fp-hora-min"><span class="fp-hora-sep">até</span><input type="time" id="fp-hora-max"></div></div>'
+    +'<div class="fp-group"><span class="fp-label">&#127919; Confiança</span>'
+    +'<select id="fp-conf"><option value="">Todas</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
+    +'<button id="btn-fp-clear">✕ Limpar filtros</button>'
+    +'<span id="fp-count"></span>'
+    +'</div>';
+  var table=tb.closest('table');
+  if(table&&table.parentElement)table.parentElement.insertBefore(fp,table);
+  else tb.parentElement.insertBefore(fp,tb);
+
+  document.getElementById('fp-pista').addEventListener('change',function(){filterState.pista=this.value;renderTable();});
+  document.getElementById('fp-hora-min').addEventListener('change',function(){filterState.horaMin=this.value;renderTable();});
+  document.getElementById('fp-hora-max').addEventListener('change',function(){filterState.horaMax=this.value;renderTable();});
+  document.getElementById('fp-conf').addEventListener('change',function(){filterState.confianca=this.value;renderTable();});
+  document.getElementById('btn-fp-clear').addEventListener('click',function(){
+    filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
+    document.getElementById('fp-pista').value='';
+    document.getElementById('fp-hora-min').value='';
+    document.getElementById('fp-hora-max').value='';
+    document.getElementById('fp-conf').value='';
+    renderTable();
+  });
+}
+
+function updateFilterPanel(){
+  var fp=document.getElementById('filter-panel');
+  if(!fp)return;
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  if(!avbs.length){fp.style.display='none';return;}
+  fp.style.display='block';
+  // atualiza opções de pista
+  var pistaSet={};
+  avbs.forEach(function(r){var p=getPista(r.corrida||'');if(p)pistaSet[p]=1;});
+  var pistas=Object.keys(pistaSet).sort();
+  var sel=document.getElementById('fp-pista');
+  if(sel){
+    var cur=sel.value;
+    sel.innerHTML='<option value="">Todas as pistas</option>';
+    pistas.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;if(p===cur)o.selected=true;sel.appendChild(o);});
+  }
+  // contador
+  var filtered=applyFiltersToAvbs(avbs);
+  var countEl=document.getElementById('fp-count');
+  if(countEl){
+    if(filtered.length<avbs.length)countEl.textContent='Exibindo '+filtered.length+' de '+avbs.length;
+    else countEl.textContent=avbs.length+' corridas';
+  }
+}
+
+/* ── render da tabela (com filtro) ───────────────────────── */
 function renderTable(){
   var tb=document.getElementById('tb');
-  if(!results.length){tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sem resultados</h3></div></td></tr>';document.getElementById('ab').style.display='none';return;}
+  if(!results.length){tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sem resultados</h3></div></td></tr>';document.getElementById('ab').style.display='none';updateFilterPanel();return;}
+
   var winMap={};
   results.forEach(function(r){if(r.tipo==='vencedor'&&r.nivel!=='skip'&&r.trapFav)winMap[(r.hora||'')+'_'+(r.corrida||'')]=r;});
+
   var avbs=results.filter(function(r){return r.tipo==='avb';});
+  var filtered=applyFiltersToAvbs(avbs);
+
+  if(!filtered.length){
+    tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida com os filtros selecionados</h3><p style="color:var(--mut);font-size:13px;margin-top:8px">Tente ampliar os filtros</p></div></td></tr>';
+    document.getElementById('ab').style.display='flex';
+    updateFilterPanel();return;
+  }
+
   var rows='';
-  avbs.forEach(function(r,i){
+  filtered.forEach(function(r){
+    var i=avbs.indexOf(r); // mantém índice original
     var sk=r.nivel==='skip';
     var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':r.nivel==='baixa'?'bb':'bs';
     var bt=r.nivel==='alta'?'Alta':r.nivel==='media'?'Media':r.nivel==='baixa'?'Baixa':'Skip';
@@ -31,13 +214,9 @@ function renderTable(){
     var wt=wd?'<div class="win-tag">&#127942; Back T'+wd.trapFav+' '+((wd.nameFav||'').split(' ')[0])+'</div>':'';
     var hh='<strong style="color:var(--grn)">'+(r.hora||'-')+'</strong><div class="hora-br">'+convertHora(r.hora)+'</div>';
     var top3=(r.top3&&r.top3.filter(function(x){return x>0;}).length)?'<div class="top3-tag">&#127942; '+r.top3.filter(function(x){return x>0;}).join('-')+'</div>':'';
-    var sh=sk?'<span style="color:var(--mut)">Descartada</span>':'<div class="trap-row"><div class="trap-item"><div class="trap-badge '+trapClass(tf)+'">'+tf+'</div><div class="trap-name">'+nf+'</div></div><span class="trap-vs">vs</span><div class="trap-item"><div class="trap-badge '+trapClass(tu)+'">'+tu+'</div><div class="trap-name">'+nu+'</div></div></div>';
-    var ph=perfilBadge(r.perfilFav)+(r.perfilUnd?'<br>'+perfilBadge(r.perfilUnd):'');
     var ch=sk?'':'<span class="badge '+bc+'">'+bt+'</span><br><span style="font-size:10px;color:var(--mut)">'+r.pct+'%</span><span class="cbar"><span class="cfill '+fc+'" style="width:'+r.pct+'%"></span></span>';
-    var oc=r.needsCap?'obs-cap':'obs-c';
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
-
     var obsText=(r.obs||'-').replace(/CalTm/gi,'Tempo');
     var obsParts=obsText.split('\\n');
     var obsHtml='<span style="font-size:10px;color:var(--mut)">'+obsParts[0]+'</span>'+(obsParts[1]?'<div style="font-size:11px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.06);font-style:italic">'+obsParts[1]+'</div>':'');
@@ -60,6 +239,7 @@ function renderTable(){
   tb.innerHTML=rows;
   document.getElementById('ab').style.display='flex';
   updCards();
+  updateFilterPanel();
 }
 
 async function runChunk(files, caps){
@@ -103,6 +283,7 @@ async function runAnalysis(){
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
   prog(5,'Preparando...');
   results=[];
+  filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
   var CHUNK=30;
   var chunks=[];
   for(var ci=0;ci<raceFiles.length;ci+=CHUNK) chunks.push(raceFiles.slice(ci,ci+CHUNK));
@@ -123,6 +304,10 @@ async function runAnalysis(){
 }
 
 document.addEventListener('DOMContentLoaded',function(){
+  injectStyles();
+  injectSaveModal();
+  injectFilterPanel();
+
   if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');}
   document.getElementById('race-input').addEventListener('change',async function(){
     for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
@@ -132,8 +317,25 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
   document.getElementById('btngo').addEventListener('click',runAnalysis);
-  document.getElementById('btn-clear').addEventListener('click',function(){raceFiles=[];capFiles=[];results=[];clearSessionState();document.getElementById('rlist').innerHTML='';document.getElementById('tb').innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3></div></td></tr>';document.getElementById('ab').style.display='none';document.getElementById('pw').style.display='none';setSt('');updCards();});
-  document.getElementById('btn-save').addEventListener('click',async function(){var name=prompt('Nome da sessao (ex: Clonmel 28/06):');if(!name)return;var avbs=results.filter(function(r){return r.tipo==='avb';});var resp=await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});if(resp.ok){alert('Sessao salva!');location.reload();}else alert('Erro ao salvar.');});
+  document.getElementById('btn-clear').addEventListener('click',function(){
+    raceFiles=[];capFiles=[];results=[];
+    filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
+    clearSessionState();
+    document.getElementById('rlist').innerHTML='';
+    document.getElementById('tb').innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3></div></td></tr>';
+    document.getElementById('ab').style.display='none';
+    document.getElementById('pw').style.display='none';
+    var fp=document.getElementById('filter-panel');if(fp)fp.style.display='none';
+    setSt('');updCards();
+  });
+
+  // ── Salvar sessão: modal customizado ──
+  document.getElementById('btn-save').addEventListener('click',function(){
+    var avbs=results.filter(function(r){return r.tipo==='avb';});
+    if(!avbs.length){showToast('Nenhuma corrida para salvar.',false);return;}
+    openSaveModal();
+  });
+
   document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;saveSessionState();}});
   document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}saveSessionState();}});
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
