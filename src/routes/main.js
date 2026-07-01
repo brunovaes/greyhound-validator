@@ -376,10 +376,20 @@ ${navBar(user, 'historico')}
 </div>
 <h2>Sessoes de analise</h2>
 <table><thead><tr><th>Data</th><th>Nome</th><th>AvBs</th><th>Acao</th></tr></thead><tbody>
-${sessions.map(s=>`<tr><td>${new Date(s.created_at).toLocaleDateString('pt-BR')}</td><td>${s.name||'Sem nome'}</td><td><span class="badge">${s.total_avbs||0}</span></td><td><a href="${BASE}/sessao/${s.id}">Ver detalhes</a></td></tr>`).join('')}
+${sessions.map(s=>`<tr><td>${new Date(s.created_at).toLocaleDateString('pt-BR')}</td><td>${s.name||'Sem nome'}</td><td><span class="badge">${s.total_avbs||0}</span></td><td style="display:flex;gap:10px;align-items:center"><a href="${BASE}/sessao/${s.id}">Ver detalhes</a><form method="POST" action="${BASE}/sessao/${s.id}/deletar" onsubmit="return confirm('Deletar esta sessao?')" style="display:inline"><button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0">&#128465; Deletar</button></form></td></tr>`).join('')}
 ${!sessions.length?'<tr><td colspan="4" style="text-align:center;color:#666;padding:30px">Nenhuma sessao salva</td></tr>':''}
 </tbody></table>
 </div></body></html>`);
+});
+
+router.post('/sessao/:id/deletar', (req, res) => {
+  const user = req.user;
+  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, user.id);
+  if (sess) {
+    db.prepare('DELETE FROM races WHERE session_id=?').run(sess.id);
+    db.prepare('DELETE FROM race_sessions WHERE id=?').run(sess.id);
+  }
+  res.redirect(BASE + '/historico');
 });
 
 router.get('/sessao/:id', (req, res) => {
@@ -403,8 +413,9 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<table><thead><tr><th>Hora</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody>
-${races.map(r=>{var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';return`<tr><td><strong style="color:#22c55e">${r.hora||'-'}</strong><div style="font-size:10px;color:rgba(34,197,94,.5)">${r.hora_br||''}</div></td><td><div style="font-weight:700">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div></td><td><span class="trap-badge t${r.trap_fav}">${r.trap_fav}</span> vs <span class="trap-badge t${r.trap_und}">${r.trap_und}</span></td><td><span class="badge ${bc}">${r.nivel}</span> ${r.pct}%</td><td style="font-size:10px">${r.perfil_fav||''}<br>${r.perfil_und||''}</td><td style="font-size:11px;color:#888;max-width:160px">${r.obs||'-'}</td><td>${r.odd||'-'}</td><td>${r.valor?'R$ '+r.valor:'-'}</td><td style="font-size:11px">${[r.resultado_1,r.resultado_2,r.resultado_3].filter(Boolean).join(' / ')||'-'}</td><td class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'&#10003; Sim':r.bateu==='nao'?'&#10007; Nao':'-'}</td></tr>`;}).join('')}
+<table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody>
+${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';var horaBr=r.hora_br||r.hora||'-';var horaUk=r.hora||'';return`<tr><td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">${horaBr}</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">${horaUk}</div></td><td><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div></td><td style="white-space:nowrap"><span class="trap-badge t${r.trap_fav}">${r.trap_fav}</span> vs <span class="trap-badge t${r.trap_und}">${r.trap_und}</span></td><td style="white-space:nowrap"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td><td style="font-size:10px;color:#888;white-space:nowrap">${r.perfil_fav||''}<br>${r.perfil_und||''}</td><td style="font-size:11px;color:#888;max-width:200px;line-height:1.4">${r.obs||'-'}</td><td style="text-align:center">${r.odd||'-'}</td><td style="text-align:center">${r.valor?'R$'+r.valor:'-'}</td><td style="font-size:11px;text-align:center">${[r.resultado_1,r.resultado_2,r.resultado_3].filter(Boolean).join('/')||'-'}</td><td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td></tr>`;}).join('')}
+${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table>
 </div></body></html>`);
 });
