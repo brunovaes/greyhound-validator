@@ -569,43 +569,50 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     const capFiles = req.files['caps']||[];
     if(!pdfFiles.length) return res.status(400).json({ error:'Nenhum PDF enviado.' });
 
-    // Heartbeat: envia bytes periodicamente para manter conexao viva no Railway
-    res.setHeader('Content-Type', 'application/json');
-    const heartbeat = setInterval(() => { try { res.write(''); } catch(e) {} }, 15000);
+    // SSE: envia resultados por lote, browser recebe progressivamente
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // desativa buffer do nginx/railway
+
+    const sendEvent = (data) => {
+      try { res.write('data: ' + JSON.stringify(data) + '\n\n'); } catch(e) {}
+    };
 
     const batches = [];
     for(let i=0;i<pdfFiles.length;i+=BATCH_SIZE) batches.push(pdfFiles.slice(i,i+BATCH_SIZE));
 
-    let allRawRaces = [];
+    sendEvent({ type:'start', total: pdfFiles.length, batches: batches.length });
+
+    let allRaces = [];
     const errors = [];
+
     for(let i=0;i<batches.length;i++) {
+      sendEvent({ type:'progress', lote: i+1, totalLotes: batches.length });
       try {
-        const races = await extractBatch(batches[i], i===0?capFiles:[], apiKey);
-        allRawRaces = allRawRaces.concat(races);
+        const rawRaces = await extractBatch(batches[i], i===0?capFiles:[], apiKey);
+        const processadas = rawRaces.map(corridaRaw => {
+          try { return processarCorrida(corridaRaw, config); }
+          catch(e) { console.error('Erro motor:', corridaRaw?.hora, e.message); return null; }
+        }).filter(Boolean);
+        const sanitizadas = sanitizeEliminatedTraps(processadas);
+        allRaces = allRaces.concat(sanitizadas);
+        // Envia corridas do lote imediatamente ao browser
+        sendEvent({ type:'races', races: sanitizadas });
       } catch(errBatch) {
         console.error('Erro lote '+(i+1)+':', errBatch.message);
         errors.push('Lote '+(i+1)+': '+errBatch.message);
+        sendEvent({ type:'batchError', lote: i+1, error: errBatch.message });
       }
     }
 
-    clearInterval(heartbeat);
-
-    if(!allRawRaces.length&&errors.length) return res.end(JSON.stringify({ error:errors.join(' | ') }));
-
-    const allRaces = allRawRaces.map(corridaRaw => {
-      try { return processarCorrida(corridaRaw, config); }
-      catch(e) { console.error('Erro motor:', corridaRaw?.hora, e.message); return null; }
-    }).filter(Boolean);
-
-    const sanitized = sanitizeEliminatedTraps(allRaces);
-    console.log('[MOTOR] '+allRaces.length+' corridas, '+sanitized.filter(r=>r.nivel!=='skip').length+' AvBs, '+sanitized.filter(r=>r.nivel==='skip').length+' skips');
-    sanitized.forEach(r=>console.log('  '+r.hora+' '+r.corrida+' nivel:'+r.nivel+(r.trapFav?' T'+r.trapFav+'vsT'+r.trapUnd:'')));
-
     db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(user.id);
-    res.end(JSON.stringify({ races:sanitized, partialErrors:errors.length?errors:undefined }));
+    sendEvent({ type:'done', totalRaces: allRaces.length, errors: errors.length ? errors : undefined });
+    res.end();
   } catch(err) {
     console.error('Erro geral:', err);
-    try { res.end(JSON.stringify({ error:err.message })); } catch(e) { res.status(500).json({ error:err.message }); }
+    try { res.write('data: ' + JSON.stringify({ type:'error', error: err.message }) + '\n\n'); res.end(); }
+    catch(e) {}
   }
 });
 
