@@ -127,9 +127,8 @@ function injectTooltip(){
   document.getElementById('val-modal').addEventListener('click',function(e){if(e.target===this)closeValModal();});
 }
 
-function openValModal(idx){
-  var avbs=results.filter(function(x){return x.tipo==='avb';});
-  var r=avbs[idx];
+function openValModal(key){
+  var r=results.find(function(x){return x.tipo==='avb'&&x.histFav&&(x.hora+'|'+x.corrida)===key;});
   if(!r)return;
   var trapCls=['','t1','t2','t3','t4','t5','t6'];
   document.getElementById('val-title').textContent='Validar dados — T'+r.trapFav+' vs T'+r.trapUnd+' | '+r.corrida;
@@ -144,18 +143,25 @@ function renderValDog(trap,nome,perfil,hist){
   var trapCls=['','t1','t2','t3','t4','t5','t6'];
   var pc=function(p){return p===1?' vp1':p===2?' vp2':p===3?' vp3':'';};
   var rows=(hist||[]).map(function(h){
-    var d=(h.data||'').replace(/^(\d{2})([A-Za-z]{3})(\d{2})$/,'$1$2');
+    var d=(h.data||'').replace(/^(\d{2})([A-Za-z]{3})(\d{2})$/,'$1 $2');
+    var posStr=h.pos>0?'<strong class="vpos'+pc(h.pos)+'">'+h.pos+'°</strong>':'Solo';
+    // Remarks pode conter "By Win/Sec Remarks" misturado — mostra tudo
+    var rem=(h.remarks||'').replace(/([A-Z][a-z]+(?:[A-Z][a-z]+)*)\s+/g,'$1 ');
     return'<tr>'
-      +'<td>'+d+'</td>'
+      +'<td style="white-space:nowrap">'+d+'</td>'
       +'<td>'+h.pista+'</td>'
       +'<td>'+h.dist+'m</td>'
-      +'<td>['+h.trap+']</td>'
-      +'<td>'+(h.split||'')+'</td>'
-      +'<td>'+(h.bends||'')+'</td>'
-      +'<td class="vpos'+pc(h.pos)+'">'+(h.pos>0?h.pos+'°':'—')+'</td>'
+      +'<td style="color:#aaa">['+h.trap+']</td>'
+      +'<td style="color:#888">'+(h.split||'')+'</td>'
+      +'<td style="font-family:monospace">'+(h.bends||'')+'</td>'
+      +'<td style="text-align:center">'+posStr+'</td>'
+      +'<td style="color:#888">'+(h.vencedorTm||'')+'</td>'
+      +'<td style="color:#888">'+(h.gng||'')+'</td>'
+      +'<td style="color:#888">'+(h.peso||'')+'</td>'
+      +'<td style="color:#aaa">'+(h.sp||'')+'</td>'
       +'<td><span class="vcls">'+(h.classe||'')+'</span></td>'
-      +'<td style="color:#888;font-size:9px">'+(h.remarks||'').substring(0,30)+'</td>'
-      +'<td style="color:#60a5fa">'+(h.caltm||'-')+'</td>'
+      +'<td style="color:#888;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+rem.substring(0,45)+'</td>'
+      +'<td style="color:#60a5fa;font-weight:600">'+(h.caltm||'-')+'</td>'
       +'</tr>';
   }).join('');
   return'<div class="val-dog">'
@@ -165,7 +171,7 @@ function renderValDog(trap,nome,perfil,hist){
     +(perfil?'<span class="val-dog-perfil">'+perfil+'</span>':'')
     +'</div>'
     +'<table class="val-table"><thead><tr>'
-    +'<th>Data</th><th>Pista</th><th>Dist</th><th>Trp</th><th>Split</th><th>Bends</th><th>Pos</th><th>Cls</th><th>Remarks</th><th>CalTm</th>'
+    +'<th>Data</th><th>Pista</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Fin</th><th>WnTm</th><th>Gng</th><th>Wght</th><th>SP</th><th>Grade</th><th>Remarks</th><th>CalTm</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>'
     +'</div>';
 }
