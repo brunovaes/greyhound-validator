@@ -127,19 +127,19 @@ function injectValModal(){
 .val-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
 .val-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
 .val-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
-.val-tbl{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.val-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
 .val-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
-.val-tbl th{font-size:9px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.5px;padding:5px 6px;text-align:left;white-space:nowrap}
-.val-tbl td{padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle}
+.val-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:sans-serif}
+.val-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:sans-serif;font-size:12px}
 .val-tbl tr:last-child td{border-bottom:none}
 .val-tbl tr:hover td{background:rgba(255,255,255,.025)}
-.val-td-date{color:rgba(255,255,255,.6);font-size:10px}
-.val-td-track{color:rgba(255,255,255,.7)}
-.val-td-muted{color:rgba(255,255,255,.4);font-size:10px}
-.val-td-bends{font-family:'Courier New',monospace;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:2px}
-.val-td-rem{color:rgba(255,255,255,.45);font-size:9.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 6px;font-size:9px;color:rgba(255,255,255,.55);letter-spacing:.3px}
-.val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:right;padding-right:4px}
+.val-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:sans-serif}
+.val-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:sans-serif}
+.val-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:sans-serif}
+.val-td-bends{font-family:sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
+.val-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
+.val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}
 .val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
 .val-link:hover{color:#60a5fa}.t1{background:radial-gradient(circle at 35% 35%,#ff4444,#c00 60%,#8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4)}.t2{background:radial-gradient(circle at 35% 35%,#4488ff,#1a3db5 60%,#0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3)}.t3{background:radial-gradient(circle at 35% 35%,#fff,#d0d0d0 60%,#a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8)}.t4{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a 60%,#000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15)}.t5{background:radial-gradient(circle at 35% 35%,#ffaa00,#e07000 60%,#a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4)}.t6{background:radial-gradient(circle at 50% 50%,#cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2)}
 `;
@@ -186,9 +186,9 @@ function buildDogCard(trap,nome,perfil,hist){
     +'</div>'
     +'<table class="val-tbl">'
     +'<colgroup>'
-    +'<col style="width:62px"><col style="width:46px"><col style="width:38px">'
-    +'<col style="width:34px"><col style="width:40px"><col style="width:52px">'
-    +'<col style="width:70px"><col style="width:40px"><col style="width:54px">'
+    +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
+    +'<col style="width:30px"><col style="width:40px"><col style="width:45px">'
+    +'<col style="width:50px"><col style="width:30px"><col style="width:40px">'
     +'</colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
