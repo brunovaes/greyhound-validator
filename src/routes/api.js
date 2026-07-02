@@ -81,7 +81,7 @@ ATENCAO CRITICA: O numero do TRAP de cada galgo esta no campo "Trp" do cabecalho
 Para cada corrida extraia:
 hora, corrida (pista+classe), dist (ex:"450m"), classe (ex:"A3"), postPick (ex:"2-1-4" ou null), trapsCard (array dos numeros de trap reais — leia do campo [N] de cada galgo), galgos (array).
 
-Para cada galgo: trap (int — do campo [N] do cabecalho), nome, brt (float), brtClasse, historico (3 linhas mais recentes validas).
+Para cada galgo: trap (int — do campo [N] do cabecalho), nome, brt (float), brtClasse, historico (ultimas 5 linhas mais recentes validas — necessario para regras de categoria e inatividade).
 
 Para cada linha de historico: data, pista, dist (int), trap (int — campo Trp da linha), split (float ou null), bends (string ou null), pos (int), caltm (float — SEMPRE CalTm, NUNCA WnTm), going (string ou null), classe, remarks (string ou null).
 
@@ -278,18 +278,28 @@ function detectarNovoNaCategoriaComGap(linhasValidas, corridaClasse, config) {
   if (!linhasValidas || linhasValidas.length < 2) return null;
   const corridaNivel = getClassLevel(corridaClasse);
   if (!corridaNivel) return null;
+
+  // Contar linhas em categoria inferior antes da ultima
   const anteriores = linhasValidas.slice(1);
   const linhasInferiores = anteriores.filter(l => {
     const lv = getClassLevel(l.classe);
     return lv && lv > corridaNivel;
   });
   if (linhasInferiores.length < maxLinhasInferiores) return null;
+
+  const venceuUltima = linhasValidas[0].pos === 1;
   const d1 = parseDateEntry(linhasValidas[0].data);
   const d2 = parseDateEntry(linhasValidas[1].data);
-  if (!d1 || !d2) return null;
-  const gapDias = Math.round((d1 - d2) / 86400000);
+  const gapDias = (d1 && d2) ? Math.round((d1 - d2) / 86400000) : 999;
+
+  // Ex1: nao venceu a ultima -> corta independente do gap
+  if (!venceuUltima) return { linhasInferiores: linhasInferiores.length, gapDias, motivo:'nao venceu ultima' };
+
+  // Ex2: venceu + gap <= maxDiasGap -> mantem (em forma e ativo)
   if (gapDias <= maxDiasGap) return null;
-  return { linhasInferiores: linhasInferiores.length, gapDias, maxLinhasInferiores, maxDiasGap };
+
+  // Ex3: venceu + gap > maxDiasGap -> corta (parado demais mesmo tendo vencido)
+  return { linhasInferiores: linhasInferiores.length, gapDias, motivo:'venceu mas gap longo' };
 }
 
 // CAMADA 1: Filtrar linhas validas do historico de cada galgo
