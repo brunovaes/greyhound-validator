@@ -276,19 +276,33 @@ function renderTable(){
     var obsHtml='<span style="font-size:10px;color:var(--mut)">'+obsParts[0]+'</span>'+(obsParts[1]?'<div style="font-size:11px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.06);font-style:italic">'+obsParts[1]+'</div>':'');
     var perfilFavLabel=r.perfilFav?'<div style="font-size:9px;color:var(--mut);margin-top:2px">'+r.perfilFav+'</div>':'';
     var perfilUndLabel=r.perfilUnd?'<div style="font-size:9px;color:var(--mut);margin-top:2px">'+r.perfilUnd+'</div>':'';
-    var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':'<div class="trap-row"><div class="trap-item"><div class="trap-badge '+trapClass(tf)+'">'+tf+'</div><div class="trap-name">'+nf+'</div>'+perfilFavLabel+'</div><span class="trap-vs">vs</span><div class="trap-item"><div class="trap-badge '+trapClass(tu)+'">'+tu+'</div><div class="trap-name">'+nu+'</div>'+perfilUndLabel+'</div></div>';
+    var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':
+      '<div style="display:flex;align-items:flex-start;justify-content:center;gap:10px">'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">'
+          +'<div class="trap-badge '+trapClass(tf)+'" style="width:30px;height:30px;font-size:14px">'+tf+'</div>'
+          +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">'+fn(nf)+'</div>'
+          +(r.perfilFav?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilFav+'</div>':'')
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--mut);padding-top:8px">vs</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">'
+          +'<div class="trap-badge '+trapClass(tu)+'" style="width:30px;height:30px;font-size:14px">'+tu+'</div>'
+          +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">'+fn(nu)+'</div>'
+          +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
+        +'</div>'
+      +'</div>';
+    var fn=function(n){return(n||'').split(' ')[0];};
     var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
-      +'<td style="text-align:center">'+hh+'</td>'
-      +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
-      +'<td style="text-align:center">'+shComPerfil+valLink+'</td>'
-      +'<td style="text-align:center">'+ch+'</td>'
-      +'<td style="font-size:12px;line-height:1.6">'+obsHtml+'</td>'
-      +'<td style="text-align:center">'+oddValHtml+'</td>'
-      +'<td style="text-align:center">'+rh+'</td>'
-      +'<td style="text-align:center"><select data-i="'+i+'" data-f="hit" style="text-align:center"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td>'
-      +'<td style="text-align:center">'+cap+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'
+      +'<td style="vertical-align:middle"><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+shComPerfil+'<div style="margin-top:4px">'+valLink+'</div></td>'
+      +'<td style="text-align:center;vertical-align:middle">'+ch+'</td>'
+      +'<td style="font-size:11px;line-height:1.5;vertical-align:middle;min-width:200px">'+obsHtml+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+oddValHtml+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+rh+'</td>'
+      +'<td style="text-align:center;vertical-align:middle"><select data-i="'+i+'" data-f="hit" style="text-align:center"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td>'
+      +'<td style="text-align:center;vertical-align:middle">'+cap+'</td>'
       +'</tr>';
   });
   tb.innerHTML=rows;
