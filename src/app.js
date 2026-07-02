@@ -126,27 +126,44 @@ async function runAnalysis(){
 function injectValModal(){var m=document.createElement('div');m.id='val-modal';m.innerHTML='<div id="val-box"><div id="val-hdr"><h3 id="val-title">Historico</h3><button id="val-xbtn" onclick="closeValModal()">X</button></div><div id="val-body"></div></div>';document.body.appendChild(m);m.addEventListener('click',function(e){if(e.target===this)closeValModal();});}
 function closeValModal(){var m=document.getElementById('val-modal');if(m)m.classList.remove('open');}
 function openValModal(key){var r=results.find(function(x){return x.tipo==='avb'&&x.histFav&&(x.hora+'|'+x.corrida)===key;});if(!r){console.warn('[VAL] nao achou:',key);return;}document.getElementById('val-title').textContent='T'+r.trapFav+' '+r.nameFav+' vs T'+r.trapUnd+' '+r.nameUnd;document.getElementById('val-body').innerHTML=buildDogCard(r.trapFav,r.nameFav,r.perfilFav,r.histFav)+'<div class="val-sep"></div>'+buildDogCard(r.trapUnd,r.nameUnd,r.perfilUnd,r.histUnd);document.getElementById('val-modal').classList.add('open');}
+// Extrai só os códigos reais de remarks (após By e Win/Sec)
+function extrairRemarks(mixed){
+  if(!mixed)return'';
+  var commaIdx=mixed.indexOf(',');
+  if(commaIdx>=0){
+    // Tem vírgula: volta até o início da palavra que contém a vírgula
+    var wordStart=mixed.lastIndexOf(' ',commaIdx)+1;
+    return mixed.substring(wordStart);
+  }
+  // Sem vírgula: pega o último "token" que parece código de corrida
+  var tokens=mixed.trim().split(' ');
+  // Busca o último token que começa com maiúscula e tem padrão de remark
+  for(var i=tokens.length-1;i>=0;i--){
+    if(/^[A-Z]/.test(tokens[i]))return tokens.slice(i).join(' ');
+  }
+  return mixed;
+}
 function buildDogCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   var rows=(hist||[]).map(function(h){
-    var rem=(h.remarks||'');
+    var rem=extrairRemarks(h.remarks||'');
     return'<tr>'
-      +'<td>'+h.data+'</td>'
+      +'<td style="white-space:nowrap">'+h.data+'</td>'
       +'<td>'+h.pista+'</td>'
       +'<td style="text-align:center">'+h.dist+'m</td>'
       +'<td style="text-align:center;color:#aaa">['+h.trap+']</td>'
       +'<td style="text-align:center;color:#888">'+(h.split||'')+'</td>'
       +'<td style="font-family:monospace;letter-spacing:1px;text-align:center">'+(h.bends||'')+'</td>'
-      +'<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;color:#888">'+rem.substring(0,55)+'</td>'
+      +'<td style="color:#888">'+rem+'</td>'
       +'<td style="text-align:center"><span class="vcls">'+(h.classe||'')+'</span></td>'
-      +'<td style="text-align:right;color:#60a5fa;font-weight:600">'+(h.caltm||'-')+'</td>'
+      +'<td style="text-align:right;color:#60a5fa;font-weight:600;padding-right:8px">'+(h.caltm||'-')+'</td>'
       +'</tr>';
   }).join('');
   return'<div class="val-dog">'
     +'<div class="val-dog-hdr"><span class="trap-badge '+tc[trap]+'">'+trap+'</span>'
     +'<span class="val-name">'+nome+'</span>'
     +(perfil?'<span class="val-perfil">'+perfil+'</span>':'')+'</div>'
-    +'<table class="val-tbl">'
+    +'<table class="val-tbl" style="width:100%">'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
     +'<th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
@@ -155,7 +172,7 @@ function buildDogCard(trap,nome,perfil,hist){
 
 document.addEventListener('DOMContentLoaded',function(){
   injectValModal();
-  var vs=document.createElement('style');vs.textContent='#val-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:9000}#val-modal.open{display:flex}#val-box{background:#161b27;border:1px solid rgba(255,255,255,.12);border-radius:14px;width:96vw;max-width:1100px;overflow:hidden;display:flex;flex-direction:column}#val-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,.08)}#val-hdr h3{font-size:13px;font-weight:700;color:#fff;margin:0}#val-xbtn{background:transparent;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 6px}#val-body{padding:14px 16px;display:flex;gap:12px}#val-body::-webkit-scrollbar{display:none}.val-dog{flex:1;min-width:0}.val-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.08)}.val-name{font-size:12px;font-weight:700;color:#fff}.val-perfil{font-size:10px;color:#888;margin-left:4px}.val-sep{width:1px;background:rgba(255,255,255,.07);flex-shrink:0;margin:0 4px}.val-tbl{width:100%;border-collapse:collapse;font-size:10px}.val-tbl th{font-size:8px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.4px;padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:left}.val-tbl td{padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8);white-space:nowrap}.val-tbl tr:last-child td{border-bottom:none}.val-tbl tr:hover td{background:rgba(255,255,255,.03)}.vcls{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:3px;font-size:9px;color:#aaa}.val-link{font-size:9px;color:rgba(96,165,250,.75);cursor:pointer;display:block;text-align:center;margin-top:3px}';document.head.appendChild(vs);
+  var vs=document.createElement('style');vs.textContent='#val-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:9000}#val-modal.open{display:flex}#val-box{background:#161b27;border:1px solid rgba(255,255,255,.12);border-radius:14px;width:90vw;max-width:900px;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column}#val-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,.08);position:sticky;top:0;background:#161b27;z-index:1}#val-hdr h3{font-size:13px;font-weight:700;color:#fff;margin:0}#val-xbtn{background:transparent;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 6px}#val-body{padding:14px 18px;display:flex;flex-direction:column;gap:0}.val-dog{width:100%}.val-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.08)}.val-name{font-size:12px;font-weight:700;color:#fff}.val-perfil{font-size:10px;color:#888;margin-left:4px}.val-sep{height:1px;background:rgba(255,255,255,.08);margin:12px 0}.val-tbl{width:100%;border-collapse:collapse;font-size:10.5px}.val-tbl th{font-size:8px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.4px;padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:left}.val-tbl td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8)}.val-tbl tr:last-child td{border-bottom:none}.val-tbl tr:hover td{background:rgba(255,255,255,.03)}.vcls{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:3px;font-size:9px;color:#aaa}.val-link{font-size:9px;color:rgba(96,165,250,.75);cursor:pointer;display:block;text-align:center;margin-top:3px}';document.head.appendChild(vs);
   if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');}
   document.getElementById('race-input').addEventListener('change',async function(){
     for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
