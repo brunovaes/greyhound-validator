@@ -197,7 +197,7 @@ async function parseRacingPostPDF(buffer) {
     corrida: `${trackAbbr} ${header.classe}`,
     dist: String(header.dist),
     classe: header.classe,
-    postPick: header.postPick,
+    postPick: header.postPick.join('-'),
     trapsCard: galgos.map(g => g.trap),
     galgos
   };
