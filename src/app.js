@@ -1,5 +1,5 @@
 var raceFiles=[],capFiles=[],results=[],capModalFilesList=[];
-var filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
+var filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
 var SS_KEY='ghf_results_v1';
 function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})}));}catch(e){}}
 function clearSessionState(){try{sessionStorage.removeItem(SS_KEY);}catch(e){}}
@@ -21,8 +21,9 @@ function getPista(corrida){if(!corrida)return'';var p=corrida.trim().split(' ');
 function horaToMin(h){if(!h)return null;var p=h.split(':');return parseInt(p[0]||0)*60+parseInt(p[1]||0);}
 function applyFiltersToAvbs(avbs){
   return avbs.filter(function(r){
+    if(!filterState.mostrarSkip&&r.nivel==='skip')return false;
     if(filterState.pista&&getPista(r.corrida||'')!==filterState.pista)return false;
-    if(filterState.confianca&&r.nivel!==filterState.confianca)return false;
+    if(filterState.confianca&&r.nivel!=='skip'&&filterState.confianca&&r.nivel!==filterState.confianca)return false;
     if(filterState.horaMin||filterState.horaMax){
       var hbr=convertHora(r.hora||'');var hMin=horaToMin(hbr);
       if(hMin!==null){
@@ -220,12 +221,15 @@ function injectFilterPanel(){
   document.getElementById('fp-hora-min').addEventListener('change',function(){filterState.horaMin=this.value;renderTable();});
   document.getElementById('fp-hora-max').addEventListener('change',function(){filterState.horaMax=this.value;renderTable();});
   document.getElementById('fp-conf').addEventListener('change',function(){filterState.confianca=this.value;renderTable();});
+  document.getElementById('fp-skip').addEventListener('change',function(){filterState.mostrarSkip=this.checked;renderTable();});
   document.getElementById('btn-fp-clear').addEventListener('click',function(){
     filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
     document.getElementById('fp-pista').value='';
     document.getElementById('fp-hora-min').value='';
     document.getElementById('fp-hora-max').value='';
     document.getElementById('fp-conf').value='';
+    var skipCb=document.getElementById('fp-skip');if(skipCb)skipCb.checked=false;
+    filterState.mostrarSkip=false;
     renderTable();
   });
 }
@@ -339,7 +343,7 @@ async function runAnalysis(){
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
-  prog(5,'Preparando...');results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
+  prog(5,'Preparando...');results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
   var CHUNK=30,chunks=[];
   for(var ci=0;ci<raceFiles.length;ci+=CHUNK)chunks.push(raceFiles.slice(ci,ci+CHUNK));
   try{
@@ -374,7 +378,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
   document.getElementById('btngo').addEventListener('click',runAnalysis);
   document.getElementById('btn-clear').addEventListener('click',function(){
-    raceFiles=[];capFiles=[];results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
+    raceFiles=[];capFiles=[];results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
     clearSessionState();
     document.getElementById('rlist').innerHTML='';
     document.getElementById('tb').innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3></div></td></tr>';
