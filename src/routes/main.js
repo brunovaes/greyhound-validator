@@ -94,9 +94,12 @@ tr.sk td{opacity:.35}tr.sk td:first-child{border-left:3px solid var(--bdr2)}
 .cbar{width:48px;height:3px;background:var(--bdr2);border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:4px}
 .cfill{height:100%;border-radius:2px}.cfg{background:var(--grn)}.cfa{background:var(--org)}.cfr{background:var(--red)}
 .trap-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-weight:700;font-size:12px;border:2px solid transparent}
-.t1{background:#dc2626;color:#fff;border-color:#ef4444}.t2{background:#2563eb;color:#fff;border-color:#3b82f6}
-.t3{background:#e5e7eb;color:#111;border-color:#d1d5db}.t4{background:#111;color:#fff;border-color:#444}
-.t5{background:#d97706;color:#000;border-color:#f59e0b}.t6{background:#111;color:#f59e0b;border-color:#f59e0b}
+.t1{background:radial-gradient(circle at 35% 35%, #ff4444, #c00 60%, #8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
+.t2{background:radial-gradient(circle at 35% 35%, #4488ff, #1a3db5 60%, #0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3),0 2px 4px rgba(0,0,0,.3)}
+.t3{background:radial-gradient(circle at 35% 35%, #ffffff, #d0d0d0 60%, #a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8),0 2px 4px rgba(0,0,0,.25)}
+.t4{background:radial-gradient(circle at 35% 35%, #444, #1a1a1a 60%, #000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15),0 2px 4px rgba(0,0,0,.4)}
+.t5{background:radial-gradient(circle at 35% 35%, #ffaa00, #e07000 60%, #a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
+.t6{background:radial-gradient(circle at 50% 50%, #cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2),0 2px 4px rgba(0,0,0,.4)}
 .trap-row{display:flex;align-items:center;gap:6px}.trap-item{display:flex;flex-direction:column;align-items:center;gap:2px}
 .trap-name{font-size:9px;color:var(--mut);text-align:center;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trap-vs{color:var(--mut);font-size:12px;font-weight:600}
@@ -461,8 +464,12 @@ td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:m
 tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(255,255,255,.02)}
 .trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}
-.t1{background:#dc2626;color:#fff}.t2{background:#2563eb;color:#fff}.t3{background:#e5e7eb;color:#111}
-.t4{background:#111;color:#fff;border:1px solid #444}.t5{background:#d97706;color:#000}.t6{background:#111;color:#f59e0b;border:1px solid #f59e0b}
+.t1{background:radial-gradient(circle at 35% 35%, #ff4444, #c00 60%, #8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
+.t2{background:radial-gradient(circle at 35% 35%, #4488ff, #1a3db5 60%, #0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3),0 2px 4px rgba(0,0,0,.3)}
+.t3{background:radial-gradient(circle at 35% 35%, #ffffff, #d0d0d0 60%, #a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8),0 2px 4px rgba(0,0,0,.25)}
+.t4{background:radial-gradient(circle at 35% 35%, #444, #1a1a1a 60%, #000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15),0 2px 4px rgba(0,0,0,.4)}
+.t5{background:radial-gradient(circle at 35% 35%, #ffaa00, #e07000 60%, #a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
+.t6{background:radial-gradient(circle at 50% 50%, #cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2),0 2px 4px rgba(0,0,0,.4)}
 .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}
 .ba{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}
 .bm{background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.25)}
@@ -488,6 +495,13 @@ h2{font-size:16px;margin-bottom:12px}
 .btn-exp-h:hover{background:rgba(59,130,246,.08)}
 .btn-prt-h{padding:8px 18px;background:#0a0a0a;border:1px solid #a78bfa;color:#a78bfa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
 .btn-prt-h:hover{background:rgba(167,139,250,.08)}
+.btn-edit{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;transition:all .2s;margin-right:4px}
+.btn-edit:hover{border-color:#60a5fa;color:#60a5fa}
+.btn-save-row{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;margin-right:3px}
+.btn-cancel-row{background:transparent;border:1px solid rgba(255,255,255,.15);color:#888;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px}
+.edit-inp{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;padding:3px 5px;font-size:11px;text-align:center;outline:none}
+.edit-inp:focus{border-color:#22c55e}
+.edit-sel{background:#1a1f2e;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;padding:3px 5px;font-size:11px;outline:none}
 </style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
@@ -509,7 +523,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th><th style="width:60px">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
@@ -541,13 +555,13 @@ function getFiltered(){
 function renderRows(){
   var filtered=getFiltered();
   var tb=document.getElementById('sess-tb');
-  if(!filtered.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhuma corrida com os filtros selecionados</td></tr>';return;}
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:#666;padding:20px">Nenhuma corrida com os filtros selecionados</td></tr>';return;}
   var trapCls=['','t1','t2','t3','t4','t5','t6'];
   tb.innerHTML=filtered.map(function(r){
     var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
     var horaBr=r.hora_br||cvHora(r.hora||'-');
     var horaUk=r.hora||'';
-    return'<tr>'
+    return'<tr data-id="'+r.id+'">' 
       +'<td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">'+horaBr+'</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">'+horaUk+'</div></td>'
       +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div></td>'
       +'<td style="white-space:nowrap"><span class="trap-badge '+trapCls[r.trap_fav||0]+'">'+r.trap_fav+'</span> vs <span class="trap-badge '+trapCls[r.trap_und||0]+'">'+r.trap_und+'</span></td>'
@@ -557,11 +571,48 @@ function renderRows(){
       +'<td style="text-align:center">'+(r.odd||'-')+'</td>'
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
       +'<td style="font-size:11px;text-align:center">'+([r.resultado_1,r.resultado_2,r.resultado_3].filter(Boolean).join('/')||'-')+'</td>'
-      +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
+      +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
+      +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
       +'</tr>';
   }).join('');
   var cnt=document.getElementById('fp-count-h');
   if(cnt)cnt.textContent=filtered.length<ALL_RACES.length?filtered.length+' de '+ALL_RACES.length:''+ALL_RACES.length+' corridas';
+}
+
+function editRace(id){
+  var tr=document.querySelector('tr[data-id="'+id+'"]');
+  if(!tr)return;
+  var r=ALL_RACES.find(function(x){return x.id==id;});
+  if(!r)return;
+  var cells=tr.querySelectorAll('td');
+  // Salvar conteúdo original
+  tr.setAttribute('data-orig','1');
+  // Células editáveis: odd(6), valor(7), resultado(8), bateu(9)
+  cells[6].innerHTML='<input class="edit-inp" id="ei-odd-'+id+'" value="'+(r.odd||'')+'" style="width:50px">';
+  cells[7].innerHTML='<input class="edit-inp" id="ei-val-'+id+'" value="'+(r.valor||'')+'" style="width:55px">';
+  cells[8].innerHTML='<input class="edit-inp" id="ei-r1-'+id+'" value="'+(r.resultado_1||'')+'" style="width:24px"> <input class="edit-inp" id="ei-r2-'+id+'" value="'+(r.resultado_2||'')+'" style="width:24px"> <input class="edit-inp" id="ei-r3-'+id+'" value="'+(r.resultado_3||'')+'" style="width:24px">';
+  cells[9].innerHTML='<select class="edit-sel" id="ei-bat-'+id+'"><option value="">-</option><option value="sim"'+(r.bateu==='sim'?' selected':'')+'>Sim</option><option value="nao"'+(r.bateu==='nao'?' selected':'')+'>Não</option></select>';
+  cells[10].innerHTML='<button class="btn-save-row" onclick="saveRace('+id+')">✓</button><button class="btn-cancel-row" onclick="renderRows()">✕</button>';
+  cells[6].querySelector('input').focus();
+}
+
+async function saveRace(id){
+  var data={
+    odd:document.getElementById('ei-odd-'+id)?.value||'',
+    valor:document.getElementById('ei-val-'+id)?.value||'',
+    resultado_1:document.getElementById('ei-r1-'+id)?.value||'',
+    resultado_2:document.getElementById('ei-r2-'+id)?.value||'',
+    resultado_3:document.getElementById('ei-r3-'+id)?.value||'',
+    bateu:document.getElementById('ei-bat-'+id)?.value||''
+  };
+  try{
+    var resp=await fetch(BASE+'/api/race/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(resp.ok){
+      var r=ALL_RACES.find(function(x){return x.id==id;});
+      if(r){Object.assign(r,{odd:data.odd,valor:data.valor,resultado_1:data.resultado_1,resultado_2:data.resultado_2,resultado_3:data.resultado_3,bateu:data.bateu});}
+      renderRows();
+    } else { alert('Erro ao salvar'); }
+  }catch(e){alert('Erro ao salvar: '+e.message);}
 }
 
 function initFilter(){
