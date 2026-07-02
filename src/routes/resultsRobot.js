@@ -2,7 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 const { requireAdmin } = require('../middleware/auth');
-const { getDb } = require('../db/database');
+const { db } = require('../db/database');
 
 const BASE               = process.env.BASE_PATH || '/greyhound';
 const BROWSERLESS_TOKEN  = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
@@ -104,7 +104,7 @@ async function runResultsRobot(targetDate) {
     }
 
     // ── 3. Buscar corridas sem resultado no banco ────────────────────────────
-    const db = getDb();
+    
     // Busca corridas do dia em sessões, sem resultado
     const dbRaces = db.prepare(`
       SELECT r.id, r.hora, r.corrida, r.trap_fav, r.trap_und, r.bateu
@@ -241,8 +241,7 @@ function startCron() {
     console.warn('[RESULTS-ROBOT] node-cron não disponível:', e.message);
   }
 }
-startCron();
-
+// cron iniciado via startCron() exportado
 // ── Rotas ─────────────────────────────────────────────────────────────────────
 router.get('/status', requireAdmin, (req, res) => {
   res.json(status);
@@ -259,3 +258,4 @@ router.post('/run', requireAdmin, (req, res) => {
 module.exports = router;
 module.exports.runResultsRobot = runResultsRobot;
 module.exports.getResultsStatus = () => ({ ...status });
+module.exports.startCron = startCron;
