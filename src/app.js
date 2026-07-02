@@ -115,7 +115,7 @@ function injectValModal(){
   vs.textContent=`
 #val-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}
 #val-modal.open{display:flex}
-#val-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:80vw;max-width:800px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+#val-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:86vw;max-width:860px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
 #val-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
 #val-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
 #val-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
@@ -186,9 +186,9 @@ function buildDogCard(trap,nome,perfil,hist){
     +'</div>'
     +'<table class="val-tbl">'
     +'<colgroup>'
-    +'<col style="width:60px"><col style="width:44px"><col style="width:36px">'
-    +'<col style="width:32px"><col style="width:38px"><col style="width:50px">'
-    +'<col><col style="width:38px"><col style="width:50px">'
+    +'<col style="width:62px"><col style="width:46px"><col style="width:38px">'
+    +'<col style="width:34px"><col style="width:40px"><col style="width:52px">'
+    +'<col style="width:160px"><col style="width:40px"><col style="width:54px">'
     +'</colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
