@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded',function(){
       +'<thead><tr>'
       +'<th style="width:60px">Hora BR</th>'
       +'<th style="width:130px">Corrida</th>'
-      +'<th style="width:65px">AvB</th>'
+      +'<th style="width:85px;white-space:nowrap">AvB</th>'
       +'<th style="width:40px">Conf</th>'
       +'<th>Observacao</th>'
       +'</tr></thead>'
