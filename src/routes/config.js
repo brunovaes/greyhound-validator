@@ -122,7 +122,7 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 </div>
 <div style="margin-top:14px;padding-top:14px;border-top:1px solid #222">
 <div class="info-box" style="margin-bottom:12px">
-  <strong>Novo na categoria com gap:</strong> elimina galgo que tem muitas corridas em categoria inferior antes da ultima <em>e</em> ficou mais de X dias parado entre as duas ultimas corridas validas.
+  <strong>Novo na categoria com gap:</strong> elimina galgo que tem <strong>${config.max_linhas_cat_inferior||3} corridas</strong> em categoria inferior antes da ultima, que nao foi vitorioso na ultima corrida ou ficou mais de <strong>${config.max_dias_gap_nova_cat||14} dias</strong> parado entre as duas ultimas corridas validas.
 </div>
 <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
 <div class="field">
