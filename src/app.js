@@ -274,6 +274,7 @@ function renderTable(){
     var obsText=(r.obs||'-').replace(/CalTm/gi,'Tempo');
     var obsParts=obsText.split('\n');
     var obsHtml='<span style="font-size:10px;color:var(--mut)">'+obsParts[0]+'</span>'+(obsParts[1]?'<div style="font-size:11px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.06);font-style:italic">'+obsParts[1]+'</div>':'');
+    var fn=function(n){return(n||'').split(' ')[0];};
     var perfilFavLabel=r.perfilFav?'<div style="font-size:9px;color:var(--mut);margin-top:2px">'+r.perfilFav+'</div>':'';
     var perfilUndLabel=r.perfilUnd?'<div style="font-size:9px;color:var(--mut);margin-top:2px">'+r.perfilUnd+'</div>':'';
     var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':
@@ -290,7 +291,6 @@ function renderTable(){
           +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
         +'</div>'
       +'</div>';
-    var fn=function(n){return(n||'').split(' ')[0];};
     var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
