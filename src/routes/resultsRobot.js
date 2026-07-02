@@ -41,7 +41,7 @@ function extractFinishingOrder(text) {
   const results = [];
   // Separar por marcadores de posição: "1 st", "2 nd", "3 rd", "4 th", etc.
   // Usar split para dividir o texto nas posições
-  const parts = text.split(/\b(\d)\s+(?:st|nd|rd|th)\s+/);
+  const parts = text.split(/\b(\d)\s*(?:st|nd|rd|th)\s+/);
   // parts[0] = antes de qualquer posição
   // parts[1] = "1", parts[2] = texto depois de "1 st"
   // parts[3] = "2", parts[4] = texto depois de "2 nd"
