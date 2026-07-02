@@ -140,7 +140,7 @@ async function runResultsRobot(targetDate) {
       addLog('info', 'Processando ' + link.rTime + ' -> ' + dbRace.corrida);
 
       try {
-        var FULL_URL = 'https://greyhoundbet.racingpost.com/' + link.href.replace(/^#/, '');
+        var FULL_URL = 'https://greyhoundbet.racingpost.com/' + (link.href.startsWith('#') ? link.href : '#' + link.href);
         await page.goto(FULL_URL, { timeout: 20000, waitUntil: 'networkidle0' });
         await new Promise(r => setTimeout(r, 6000));
 
