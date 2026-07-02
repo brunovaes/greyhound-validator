@@ -188,17 +188,17 @@ async function runResultsRobot(targetDate) {
           continue;
         }
 
-        var p1    = (positions.find(function(p) { return p.pos === 1; }) || {}).trap || null;
-        var p2    = (positions.find(function(p) { return p.pos === 2; }) || {}).trap || null;
-        var p3    = (positions.find(function(p) { return p.pos === 3; }) || {}).trap || null;
-        var bateu = (p1 !== null && p1 === dbRace.trap_fav) ? 'sim' : 'nao';
+        if (!namePositions.length) {
+          addLog('warn', link.rTime + ' - sem posicoes extraidas');
+          continue;
+        }
 
-        updateStmt.run(bateu, p1, p2, p3, pageResult.videoUrl || null, dbRace.id);
+        updateStmt.run(bateu, r1name, r2name, r3name, pageResult.videoUrl || null, dbRace.id);
         status.updated++;
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
-          (bateu === 'sim' ? 'BATEU' : 'NAO BATEU') + ' ' + dbRace.corrida + ' ' + link.rTime +
-          ' | 1:T' + p1 + ' 2:T' + p2 + ' 3:T' + p3 + ' | Fav:T' + dbRace.trap_fav
+          (bateu === 'sim' ? '✅ BATEU' : '❌ NAO') + ' ' + dbRace.corrida + ' ' + link.rTime +
+          ' | 1:"' + (r1name||'?') + '" | Fav:"' + nameFavDb + '"'
         );
 
       } catch (e) {
