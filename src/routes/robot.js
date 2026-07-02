@@ -263,16 +263,16 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   </div>
 </div>
 
-</div><!-- fim panel-pdfs -->
 
 <div class="robot-panel" id="panel-results">
-  <h1>&#127937; Rob\u00f4 de Resultados</h1>
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">&#127937; Rob\u00f4 de Resultados</h1>
   <p class="sub">Coleta automaticamente os resultados do Racing Post e atualiza o campo Bateu nas sess\u00f5es.</p>
   <div class="card">
     <div class="card-title">&#9881;&#65039; Executar</div>
     <div class="form-row" style="align-items:flex-end;gap:12px">
       <div class="field"><label>Data</label><input type="date" id="res-date" value="${today}"></div>
       <button class="btn" id="btn-res-start" onclick="startResultsRobot()">&#9654; Executar agora</button>
+      <button class="btn btn-red" id="btn-res-stop" onclick="stopResultsRobot()" style="display:none">&#9646;&#9646; Parar agora</button>
     </div>
     <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: 23:00 UK = 19:00 Rio de Janeiro</p>
   </div>
@@ -504,10 +504,19 @@ async function startResultsRobot() {
     });
     if (resPolling) clearInterval(resPolling);
     resPolling = setInterval(pollResultsStatus, 2000);
+    document.getElementById('btn-res-stop').style.display='';
+    document.getElementById('btn-res-start').style.display='none';
   } catch(e) {
     alert('Erro: ' + e.message);
     document.getElementById('btn-res-start').disabled = false;
   }
+}
+
+async function stopResultsRobot() {
+  try {
+    await fetch(BASE + '/robot/results/stop', { method: 'POST' });
+    document.getElementById('res-st-txt').textContent = 'Parando...';
+  } catch(e) {}
 }
 
 async function pollResultsStatus() {
@@ -525,6 +534,8 @@ async function pollResultsStatus() {
     const sbar = document.getElementById('res-sbar');
     if (!d.running) {
       clearInterval(resPolling);
+      document.getElementById('btn-res-start').style.display='';
+      document.getElementById('btn-res-stop').style.display='none';
       document.getElementById('btn-res-start').disabled = false;
       stEl.textContent = d.lastRun ? 'Concluído — ' + d.updated + ' corridas atualizadas' : 'Pronto';
       sbar.className = 'sbar sdone';
@@ -952,6 +963,14 @@ router.get('/download-zip', requireAdmin, async (req, res) => {
 });
 
 // ── Robô de Resultados ────────────────────────────────────────────────────────
+router.post('/results/stop', requireAdmin, (req, res) => {
+  const st = getResultsStatus();
+  if (!st.running) return res.json({ ok: true, msg: 'Não está rodando' });
+  // Sinalizar parada diretamente no módulo
+  resultsRobotModule.requestStop && resultsRobotModule.requestStop();
+  res.json({ ok: true });
+});
+
 router.post('/results/run', requireAdmin, express.json(), async (req, res) => {
   const date = req.body?.date || new Date().toISOString().slice(0, 10);
   try {
