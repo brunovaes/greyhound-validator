@@ -66,8 +66,8 @@ router.get('/', (req, res) => {
 .fi-rm{background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px;padding:0}.fi-rm:hover{color:var(--red)}
 .btn-go{width:100%;padding:11px;background:var(--grn);color:#000;font-weight:700;font-size:13px;border:none;border-radius:var(--rad);cursor:pointer}
 .btn-go:hover{background:var(--grn2)}.btn-go:disabled{opacity:.35;cursor:not-allowed}
-.btn-sm{width:100%;padding:6px;background:transparent;color:var(--mut2);font-size:11px;border:1px solid var(--bdr2);border-radius:var(--rad);cursor:pointer}
-.btn-sm:hover{color:var(--txt)}.dv{height:1px;background:var(--bdr2)}
+.btn-sm{width:100%;padding:6px;background:transparent;color:var(--grn);font-size:11px;border:1px solid rgba(34,197,94,.3);border-radius:var(--rad);cursor:pointer;font-weight:600;transition:all .2s}
+.btn-sm:hover{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.6)}.dv{height:1px;background:var(--bdr2)}
 .sess-link{display:block;font-size:11px;color:var(--mut2);text-decoration:none;padding:3px 0;border-bottom:1px solid var(--bdr)}
 .sess-link:hover{color:var(--grn)}.sess-link span{float:right;color:var(--mut)}
 .content{padding:18px;overflow-y:auto}
