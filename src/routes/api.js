@@ -1,4 +1,5 @@
 const express = require('express');
+const { parseRacingPostPDF } = require('../utils/pdfParser');
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
@@ -807,34 +808,19 @@ function parseClaudeJson(raw) {
 }
 
 async function extractBatch(pdfFiles, capFiles, apiKey) {
-  const content = [];
-  for (const file of pdfFiles) {
-    content.push({ type:'document', source:{ type:'base64', media_type:'application/pdf', data:file.buffer.toString('base64') } });
+  // Parser determinístico — zero tokens de API
+  const corridas = [];
+  for (const pdfFile of pdfFiles) {
+    try {
+      const buf = Buffer.from(pdfFile.buffer || pdfFile.data, pdfFile.buffer ? undefined : 'base64');
+      const result = await parseRacingPostPDF(buf);
+      if (result) corridas.push(result);
+      else console.warn('[PARSER] PDF sem resultado:', pdfFile.name || '?');
+    } catch(e) {
+      console.error('[PARSER] Erro ao parsear PDF:', pdfFile.name || '?', e.message);
+    }
   }
-  for (const file of capFiles) {
-    const isImg = /\.(jpg|jpeg|png|webp)$/i.test(file.originalname);
-    if(isImg) content.push({ type:'image', source:{ type:'base64', media_type:file.mimetype, data:file.buffer.toString('base64') } });
-    else content.push({ type:'document', source:{ type:'base64', media_type:'application/pdf', data:file.buffer.toString('base64') } });
-  }
-  content.push({ type:'text', text:'Extraia os dados de TODOS os PDFs enviados. Retorne SOMENTE JSON. Zero texto antes ou depois.' });
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 280000);
-  try {
-  const data = await fetchAnthropicStream(apiKey, {
-    model:'claude-sonnet-4-6', max_tokens:16000,
-    system:buildExtractionPrompt(),
-    messages:[{ role:'user', content }]
-  });
-  const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-  const parsed = parseClaudeJson(raw);
-  if(!parsed||!Array.isArray(parsed.races)) throw new Error('JSON de extracao invalido. Raw: '+raw.slice(0,200));
-  console.log('[EXTRACAO] Lote com '+pdfFiles.length+' PDFs: '+parsed.races.length+' corridas extraidas');
-  parsed.races.forEach(r => console.log('  '+r.hora+' '+r.corrida+' classe:'+r.classe+' galgos:'+(r.galgos||[]).length));
-  return parsed.races;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return corridas;
 }
 
 router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req, res) => {
