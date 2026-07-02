@@ -263,6 +263,29 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   </div>
 </div>
 
+</div><!-- fim panel-pdfs -->
+
+<div class="robot-panel" id="panel-results">
+  <h1>&#127937; Rob\u00f4 de Resultados</h1>
+  <p class="sub">Coleta automaticamente os resultados do Racing Post e atualiza o campo Bateu nas sess\u00f5es.</p>
+  <div class="card">
+    <div class="card-title">&#9881;&#65039; Executar</div>
+    <div class="form-row" style="align-items:flex-end;gap:12px">
+      <div class="field"><label>Data</label><input type="date" id="res-date" value="${today}"></div>
+      <button class="btn" id="btn-res-start" onclick="startResultsRobot()">&#9654; Executar agora</button>
+    </div>
+    <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: 23:00 UK = 19:00 Rio de Janeiro</p>
+  </div>
+  <div class="card" id="res-status-card" style="display:none">
+    <div class="card-title">&#128202; Status</div>
+    <div id="res-sbar" class="sbar srun"><span class="spin"></span><span id="res-st-txt"> Aguardando...</span></div>
+    <div class="res-log" id="res-log"></div>
+  </div>
+</div><!-- fim panel-results -->
+
+</div><!-- fim robot-content -->
+</div><!-- fim layout -->
+
 <script>
 var BASE = '${BASE}';
 var PASTA_DOWNLOAD = '${pastaDownload}';
@@ -941,27 +964,4 @@ router.get('/results/status', requireAdmin, (req, res) => {
   res.json(getResultsStatus());
 });
 
-module.exports = router
-</div><!-- fim panel-pdfs -->
-
-<div class="robot-panel" id="panel-results">
-  <h1>🏁 Robô de Resultados</h1>
-  <p class="sub">Coleta automaticamente os resultados do Racing Post e atualiza o campo Bateu nas sessões.</p>
-  <div class="card">
-    <div class="card-title">⚙️ Executar</div>
-    <div class="form-row" style="align-items:flex-end;gap:12px">
-      <div class="field"><label>Data</label><input type="date" id="res-date" value="${today}"></div>
-      <button class="btn" id="btn-res-start" onclick="startResultsRobot()">▶ Executar agora</button>
-    </div>
-    <p style="font-size:11px;color:#555;margin-top:12px">⏰ Roda automaticamente todo dia às 23:00 UK = 19:00 Rio de Janeiro</p>
-  </div>
-  <div class="card" id="res-status-card" style="display:none">
-    <div class="card-title">📊 Status</div>
-    <div id="res-sbar" class="sbar srun"><span class="spin"></span> <span id="res-st-txt">Aguardando...</span></div>
-    <div class="res-log" id="res-log"></div>
-  </div>
-</div><!-- fim panel-results -->
-
-</div><!-- fim robot-content -->
-</div><!-- fim layout -->
-;
+module.exports = router;
