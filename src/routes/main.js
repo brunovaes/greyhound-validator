@@ -499,6 +499,24 @@ h2{font-size:16px;margin-bottom:12px}
 .btn-edit:hover{border-color:#60a5fa;color:#60a5fa}
 .btn-save-row{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;margin-right:3px}
 .btn-cancel-row{background:transparent;border:1px solid rgba(255,255,255,.15);color:#888;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px}
+#sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}
+#sv-modal.open{display:flex}
+#sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+#sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
+#sv-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center}
+#sv-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
+#sv-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
+.sv-dog{width:100%}.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sv-name{font-size:13px;font-weight:700;color:#fff}.sv-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px}
+.sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
+.sv-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
+.sv-tbl th{font-size:9px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:center}
+.sv-tbl th:first-child,.sv-tbl th:nth-child(7){text-align:left}
+.sv-tbl td{padding:5px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);white-space:nowrap;text-align:center;font-size:12px}
+.sv-tbl td:first-child{text-align:left;color:rgba(255,255,255,.6)}.sv-tbl td:nth-child(7){text-align:left;color:rgba(255,255,255,.45);font-size:11px;max-width:70px;overflow:hidden;text-overflow:ellipsis}
+.sv-tbl tr:last-child td{border-bottom:none}.sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
+.sv-bends{font-weight:700;color:rgba(255,255,255,.85)}.sv-caltm{color:#60a5fa;font-weight:700}.sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:10px;color:rgba(255,255,255,.55)}
+.val-link{font-size:9px;color:rgba(96,165,250,.75);cursor:pointer;display:block;text-align:center;margin-top:3px}
 .edit-inp{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;padding:3px 5px;font-size:11px;text-align:center;outline:none}
 .edit-inp:focus{border-color:#22c55e}
 .edit-sel{background:#1a1f2e;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;padding:3px 5px;font-size:11px;outline:none}
@@ -523,7 +541,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th style="width:30px">Hora BR</th><th style="width:40px">Corrida</th><th style="width:40px">AvB</th><th style="width:30px">Conf</th><th style="width:40px">Perfis</th><th>Obs</th><th style="width:35px">Odd</th><th style="width:35px">Valor</th><th style="width:35px">Resultado</th><th style="width:30px">Bateu</th><th style="width:25px">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th style="width:35px;text-align:center">Hora BR</th><th style="width:45px;text-align:center">Corrida</th><th style="width:45px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
@@ -552,6 +570,65 @@ function getFiltered(){
   });
 }
 
+// Modal ver historico na sessão
+function injectSessValModal(){
+  if(document.getElementById('sv-modal'))return;
+  var m=document.createElement('div');m.id='sv-modal';
+  m.innerHTML='<div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Histórico</h3><button id="sv-xbtn" onclick="closeSessValModal()">&#x2715;</button></div><div id="sv-body"></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click',function(e){if(e.target===this)closeSessValModal();});
+}
+function closeSessValModal(){var m=document.getElementById('sv-modal');if(m)m.classList.remove('open');}
+function openSessValModal(id){
+  var r=ALL_RACES.find(function(x){return x.id==id;});
+  if(!r)return;
+  var hFav=r.hist_fav?JSON.parse(r.hist_fav):null;
+  var hUnd=r.hist_und?JSON.parse(r.hist_und):null;
+  if(!hFav&&!hUnd){alert('Histórico não disponível para esta corrida.');return;}
+  document.getElementById('sv-title').textContent='T'+r.trap_fav+' '+(r.name_fav||'')+'  vs  T'+r.trap_und+' '+(r.name_und||'');
+  document.getElementById('sv-body').innerHTML=
+    buildSvCard(r.trap_fav,r.name_fav,r.perfil_fav,hFav)
+    +'<div class="sv-sep"></div>'
+    +buildSvCard(r.trap_und,r.name_und,r.perfil_und,hUnd);
+  document.getElementById('sv-modal').classList.add('open');
+}
+function extrairRem(mixed){
+  if(!mixed)return'';
+  var ci=mixed.indexOf(',');
+  if(ci>=0){var ws=mixed.lastIndexOf(' ',ci)+1;return mixed.substring(ws);}
+  var tk=mixed.trim().split(' ');
+  for(var i=tk.length-1;i>=0;i--){if(/^[A-Z]/.test(tk[i]))return tk.slice(i).join(' ');}
+  return mixed;
+}
+function buildSvCard(trap,nome,perfil,hist){
+  var tc=['','t1','t2','t3','t4','t5','t6'];
+  if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:#666;font-size:11px;padding:8px 0">Sem histórico disponível</p></div>';
+  var rows=hist.map(function(h){
+    var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';
+    return'<tr>'
+      +'<td>'+h.data+'</td><td style="text-align:center">'+h.pista+'</td>'
+      +'<td style="text-align:center">'+h.dist+'m</td><td style="text-align:center;color:#aaa">['+h.trap+']</td>'
+      +'<td style="text-align:center;color:#888">'+(h.split||'')+'</td>'
+      +'<td class="sv-bends" style="text-align:center">'+(h.bends||'')+'</td>'
+      +'<td>'+extrairRem(h.remarks||'')+'</td>'
+      +'<td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td>'
+      +'<td class="sv-caltm" style="text-align:right">'+ct+'</td>'
+      +'</tr>';
+  }).join('');
+  return'<div class="sv-dog">'
+    +'<div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span>'
+    +'<span class="sv-name">'+(nome||'')+'</span>'
+    +(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div>'
+    +'<table class="sv-tbl"><colgroup>'
+    +'<col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px">'
+    +'<col style="width:38px"><col style="width:50px"><col style="width:70px"><col style="width:38px"><col style="width:50px">'
+    +'</colgroup><thead><tr>'
+    +'<th style="text-align:left">Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
+    +'<th>Split</th><th>Bends</th><th style="text-align:left">Remarks</th><th>Grade</th><th style="text-align:right">CalTm</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+injectSessValModal();
+
 function renderRows(){
   var filtered=getFiltered();
   var tb=document.getElementById('sess-tb');
@@ -564,9 +641,17 @@ function renderRows(){
     return'<tr data-id="'+r.id+'">' 
       +'<td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">'+horaBr+'</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">'+horaUk+'</div></td>'
       +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div></td>'
-      +'<td style="white-space:nowrap"><span class="trap-badge '+trapCls[r.trap_fav||0]+'">'+r.trap_fav+'</span> vs <span class="trap-badge '+trapCls[r.trap_und||0]+'">'+r.trap_und+'</span></td>'
+      +'<td style="text-align:center">'
+      +'<span class="trap-badge '+trapCls[r.trap_fav||0]+'">'+r.trap_fav+'</span> '
+      +'<span style="font-size:9px;color:#666">vs</span> '
+      +'<span class="trap-badge '+trapCls[r.trap_und||0]+'">'+r.trap_und+'</span>'
+      +(r.hist_fav?'<br><a class="val-link" onclick="openSessValModal('+r.id+')">ver hist</a>':'')+'</td>'
       +'<td style="white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
-      +'<td style="font-size:10px;color:#888;white-space:nowrap">'+(r.perfil_fav||'')+'<br>'+(r.perfil_und||'')+'</td>'
+      +'<td style="font-size:10px;color:#888">'
+      +(r.trap_fav?'<span style="color:rgba(255,255,255,.5);font-weight:600">'+r.trap_fav+'</span> - ':'')+(r.perfil_fav||'-')
+      +'<br>'
+      +(r.trap_und?'<span style="color:rgba(255,255,255,.5);font-weight:600">'+r.trap_und+'</span> - ':'')+(r.perfil_und||'-')
+      +'</td>'
       +'<td style="font-size:11px;color:#888;max-width:200px;line-height:1.4">'+(r.obs||'-')+'</td>'
       +'<td style="text-align:center">'+(r.odd||'-')+'</td>'
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'

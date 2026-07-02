@@ -127,6 +127,8 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN desconto_acidente_grave REAL DEFAULT 0.35',
   'ALTER TABLE analysis_config ADD COLUMN proporcao_media_caltm REAL DEFAULT 0.60',
   'ALTER TABLE analysis_config ADD COLUMN proporcao_melhor_caltm REAL DEFAULT 0.40',
+  "ALTER TABLE races ADD COLUMN hist_fav TEXT DEFAULT NULL",
+  "ALTER TABLE races ADD COLUMN hist_und TEXT DEFAULT NULL",
   'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
   'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
