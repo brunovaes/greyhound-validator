@@ -885,7 +885,8 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
   }
 });
 
-router.put('/race/:id', requireAuth, express.json(), (req, res) => {
+router.put('/race/:id', express.json(), (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
   const userId = req.user.id;
   const raceId = parseInt(req.params.id);
   if (!raceId) return res.status(400).json({ error: 'ID inválido' });
