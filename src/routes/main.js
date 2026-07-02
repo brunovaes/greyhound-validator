@@ -541,7 +541,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th style="width:25px;text-align:center">Hora BR</th><th style="width:35px;text-align:center">Corrida</th><th style="width:40px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="width:240px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th style="width:25px;text-align:center">Hora BR</th><th style="width:35px;text-align:center">Corrida</th><th style="width:140px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="width:260px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
@@ -639,14 +639,24 @@ function renderRows(){
     var horaBr=r.hora_br||cvHora(r.hora||'-');
     var horaUk=r.hora||'';
     return'<tr data-id="'+r.id+'">' 
-      +'<td style="white-space:nowrap"><strong style="color:#22c55e;font-size:13px">'+horaBr+'</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">'+horaUk+'</div></td>'
-      +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div></td>'
-      +'<td style="text-align:center">'
-      +'<span class="trap-badge '+trapCls[r.trap_fav||0]+'">'+r.trap_fav+'</span> '
-      +'<span style="font-size:9px;color:#666">vs</span> '
-      +'<span class="trap-badge '+trapCls[r.trap_und||0]+'">'+r.trap_und+'</span>'
-      +'<br><a style="font-size:9px;color:#60a5fa;cursor:pointer;text-decoration:none" onclick="openSessValModal('+r.id+')">&#128269; ver historico</a></td>'
-      +'<td style="white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
+      +'<td style="text-align:center;white-space:nowrap"><strong style="color:#22c55e;font-size:13px">'+horaBr+'</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">'+horaUk+'</div></td>'
+      +'<td style="text-align:center"><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div></td>'
+      +'<td style="text-align:center;vertical-align:middle">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:center;gap:10px">'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:55px">'
+          +'<div class="trap-badge '+trapCls[r.trap_fav||0]+'" style="width:30px;height:30px;font-size:14px">'+r.trap_fav+'</div>'
+          +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55px">'+(r.name_fav||'').split(' ')[0]+'</div>'
+          +(r.perfil_fav?'<div style="font-size:9px;color:#666;text-align:center">'+r.perfil_fav+'</div>':'')
+        +'</div>'
+        +'<div style="font-size:10px;color:#666;padding-top:8px">vs</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:55px">'
+          +'<div class="trap-badge '+trapCls[r.trap_und||0]+'" style="width:30px;height:30px;font-size:14px">'+r.trap_und+'</div>'
+          +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55px">'+(r.name_und||'').split(' ')[0]+'</div>'
+          +(r.perfil_und?'<div style="font-size:9px;color:#666;text-align:center">'+r.perfil_und+'</div>':'')
+        +'</div>'
+      +'</div>'
+      +'<a style="font-size:9px;color:#60a5fa;cursor:pointer;text-decoration:none;display:block;text-align:center;margin-top:4px" onclick="openSessValModal('+r.id+')">&#128269; ver historico</a></td>'
+      +'<td style="text-align:center;white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
       +'<td style="font-size:10px;color:#888">'
       +(r.trap_fav?'<span style="color:rgba(255,255,255,.5);font-weight:600">'+r.trap_fav+'</span> - ':'')+(r.perfil_fav||'-')
       +'<br>'
