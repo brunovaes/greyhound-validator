@@ -23,7 +23,7 @@ function applyFiltersToAvbs(avbs){
   return avbs.filter(function(r){
     if(!filterState.mostrarSkip&&r.nivel==='skip')return false;
     if(filterState.pista&&getPista(r.corrida||'')!==filterState.pista)return false;
-    if(filterState.confianca&&r.nivel!=='skip'&&filterState.confianca&&r.nivel!==filterState.confianca)return false;
+    if(filterState.confianca&&r.nivel!==filterState.confianca)return false;
     if(filterState.horaMin||filterState.horaMax){
       var hbr=convertHora(r.hora||'');var hMin=horaToMin(hbr);
       if(hMin!==null){
@@ -212,16 +212,16 @@ function injectFilterPanel(){
     +'<div class="fp-divider"></div>'
     +'<div class="fp-group"><span class="fp-label">Confian\u00e7a</span>'
     +'<select id="fp-conf"><option value="">Todas</option><option value="alta">Alta</option><option value="media">M\u00e9dia</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
-    +'<button id="btn-fp-clear" title="Limpar filtros">\u00d7</button>'
+    +'<div class="fp-divider"></div>'+'<div class="fp-group"><label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:rgba(255,255,255,.5);font-size:11px"><input type="checkbox" id="fp-skip" style="accent-color:#22c55e;cursor:pointer"> Descartadas</label></div>'+'<button id="btn-fp-clear" title="Limpar filtros">\u00d7</button>'
     +'<span id="fp-count"></span>';
   var table=tb.closest('table');
   if(table&&table.parentElement)table.parentElement.insertBefore(fp,table);
   else tb.parentElement.insertBefore(fp,tb);
   document.getElementById('fp-pista').addEventListener('change',function(){filterState.pista=this.value;renderTable();});
+  var skipEl=document.getElementById('fp-skip');if(skipEl)skipEl.addEventListener('change',function(){filterState.mostrarSkip=this.checked;renderTable();});
   document.getElementById('fp-hora-min').addEventListener('change',function(){filterState.horaMin=this.value;renderTable();});
   document.getElementById('fp-hora-max').addEventListener('change',function(){filterState.horaMax=this.value;renderTable();});
   document.getElementById('fp-conf').addEventListener('change',function(){filterState.confianca=this.value;renderTable();});
-  document.getElementById('fp-skip').addEventListener('change',function(){filterState.mostrarSkip=this.checked;renderTable();});
   document.getElementById('btn-fp-clear').addEventListener('click',function(){
     filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
     document.getElementById('fp-pista').value='';
