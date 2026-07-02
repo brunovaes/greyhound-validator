@@ -136,7 +136,7 @@ function parseHistoryLine(text) {
   const base = text.match(/^(\d{2}[A-Za-z]{3}\d{2})\s+(\w+)\s+(\d+)m\s+\[(\d)\]\s*(.*)/);
   if (!base) return null;
   const [, data, pista, distStr, trapStr, rest] = base;
-  const dist = parseInt(distStr), trap = parseInt(trapStr);
+  const dist = parseInt(distStr), trap = parseInt(trapStr); // dist como number para comparações
 
   if (/^NR\b/.test(rest)) {
     return { data, pista, dist, trap, pos: 0, bends: '', remarks: 'NR', caltm: 0, classe: '', peso: 0, gng: '', sp: '', split: null, vencedorTm: 0 };
@@ -195,7 +195,7 @@ async function parseRacingPostPDF(buffer) {
   return {
     hora: header.hora,
     corrida: `${trackAbbr} ${header.classe}`,
-    dist: header.dist,
+    dist: String(header.dist),
     classe: header.classe,
     postPick: header.postPick,
     trapsCard: galgos.map(g => g.trap),
