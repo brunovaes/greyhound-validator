@@ -752,8 +752,8 @@ function processarCorrida(corridaRaw, config) {
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
     top3, trapsCard:trapsCard||[],
     obs:`${ranking} | ${narrativa}${notaReanalise}`,
-    histFav:(melhor.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,pos:h.pos,classe:h.classe,caltm:h.caltm,bends:h.bends,remarks:(h.remarks||'').substring(0,40)})),
-    histUnd:(pior.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,pos:h.pos,classe:h.classe,caltm:h.caltm,bends:h.bends,remarks:(h.remarks||'').substring(0,40)})),
+    histFav:(melhor.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,remarks:(h.remarks||'').substring(0,50)})),
+    histUnd:(pior.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,remarks:(h.remarks||'').substring(0,50)})),
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores}))
   };
 

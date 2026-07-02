@@ -89,71 +89,86 @@ function injectStyles(){
     '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
     '#btn-fp-clear:hover{color:#e53935;}',
 
-    /* tooltip historico AvB */
-    '#avb-tooltip{position:fixed;z-index:9999;background:#161b27;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 16px;box-shadow:0 20px 60px rgba(0,0,0,.7);pointer-events:none;display:none;min-width:520px;max-width:680px;}',
-    '#avb-tooltip.show{display:flex;gap:16px;}',
-    '.tt-dog{flex:1;min-width:220px;}',
-    '.tt-dog-name{font-size:11px;font-weight:700;color:#fff;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1);}',
-    '.tt-dog-name span{font-size:10px;font-weight:400;color:#888;margin-left:6px;}',
-    '.tt-table{width:100%;border-collapse:collapse;font-size:9px;}',
-    '.tt-table th{color:rgba(255,255,255,.35);padding:2px 4px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid rgba(255,255,255,.06);}',
-    '.tt-table td{padding:3px 4px;color:rgba(255,255,255,.7);border-bottom:1px solid rgba(255,255,255,.04);}',
-    '.tt-table tr:last-child td{border-bottom:none;}',
-    '.tt-pos{font-weight:700;}',
-    '.tt-pos.p1{color:#22c55e;}.tt-pos.p2{color:#60a5fa;}.tt-pos.p3{color:#f97316;}',
-    '.tt-class{font-size:8px;background:rgba(255,255,255,.06);padding:1px 4px;border-radius:3px;color:#aaa;}',
-    '.tt-divider{width:1px;background:rgba(255,255,255,.06);flex-shrink:0;}',
+    /* modal validar dados no pdf */
+    '#val-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px);}',
+    '#val-modal.open{display:flex;}',
+    '#val-box{background:#161b27;border:1px solid rgba(255,255,255,.12);border-radius:14px;width:92vw;max-width:1000px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;}',
+    '#val-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.08);}',
+    '#val-header h3{font-size:14px;font-weight:700;color:#fff;margin:0;}',
+    '#val-close{background:transparent;border:none;color:#888;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;}',
+    '#val-close:hover{color:#fff;}',
+    '#val-body{overflow-y:auto;padding:16px 18px;display:flex;gap:16px;}',
+    '.val-dog{flex:1;min-width:0;}',
+    '.val-dog-title{display:flex;align-items:center;gap:8px;margin-bottom:10px;}',
+    '.val-dog-title .trap-badge{width:24px;height:24px;font-size:12px;}',
+    '.val-dog-name{font-size:13px;font-weight:700;color:#fff;}',
+    '.val-dog-perfil{font-size:10px;color:#888;margin-left:4px;}',
+    '.val-dog-brt{font-size:10px;color:#60a5fa;margin-left:auto;}',
+    '.val-sep{width:1px;background:rgba(255,255,255,.06);flex-shrink:0;}',
+    '.val-table{width:100%;border-collapse:collapse;font-size:10px;}',
+    '.val-table th{font-size:8px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap;}',
+    '.val-table td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.75);white-space:nowrap;}',
+    '.val-table tr:last-child td{border-bottom:none;}',
+    '.val-table tr:hover td{background:rgba(255,255,255,.03);}',
+    '.vpos{font-weight:700;}.vp1{color:#22c55e;}.vp2{color:#60a5fa;}.vp3{color:#f97316;}',
+    '.vcls{font-size:9px;background:rgba(255,255,255,.07);padding:1px 4px;border-radius:3px;}',
+    '.vlink{font-size:9px;color:rgba(96,165,250,.8);cursor:pointer;text-decoration:none;display:block;text-align:center;margin-top:4px;letter-spacing:.2px;}',
+    '.vlink:hover{color:#60a5fa;text-decoration:underline;}',
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
 /* ── modal de salvar sessão ───────────────────────────────── */
 function injectTooltip(){
-  var t=document.createElement('div');
-  t.id='avb-tooltip';
-  t.innerHTML='<div class="tt-dog" id="tt-fav"></div><div class="tt-divider"></div><div class="tt-dog" id="tt-und"></div>';
-  document.body.appendChild(t);
+  var m=document.createElement('div');
+  m.id='val-modal';
+  m.innerHTML='<div id="val-box"><div id="val-header"><h3 id="val-title">Histórico — AvB</h3><button id="val-close" onclick="closeValModal()">✕</button></div><div id="val-body"></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('val-modal').addEventListener('click',function(e){if(e.target===this)closeValModal();});
 }
 
-function renderDogHist(dog, hist, perfil){
+function openValModal(idx){
+  var avbs=results.filter(function(x){return x.tipo==='avb';});
+  var r=avbs[idx];
+  if(!r)return;
   var trapCls=['','t1','t2','t3','t4','t5','t6'];
-  var posClass=function(p){return p===1?'p1':p===2?'p2':p===3?'p3':'';};
+  document.getElementById('val-title').textContent='Validar dados — T'+r.trapFav+' vs T'+r.trapUnd+' | '+r.corrida;
+  document.getElementById('val-body').innerHTML=renderValDog(r.trapFav,r.nameFav,r.perfilFav,r.histFav)
+    +'<div class="val-sep"></div>'
+    +renderValDog(r.trapUnd,r.nameUnd,r.perfilUnd,r.histUnd);
+  document.getElementById('val-modal').classList.add('open');
+}
+function closeValModal(){document.getElementById('val-modal').classList.remove('open');}
+
+function renderValDog(trap,nome,perfil,hist){
+  var trapCls=['','t1','t2','t3','t4','t5','t6'];
+  var pc=function(p){return p===1?' vp1':p===2?' vp2':p===3?' vp3':'';};
   var rows=(hist||[]).map(function(h){
-    var dataShort=(h.data||'').replace(/^(\d{2})([A-Za-z]+)(\d{2})$/,'$1$2');
+    var d=(h.data||'').replace(/^(\d{2})([A-Za-z]{3})(\d{2})$/,'$1$2');
     return'<tr>'
-      +'<td>'+dataShort+'</td>'
+      +'<td>'+d+'</td>'
       +'<td>'+h.pista+'</td>'
-      +'<td><span class="tt-class">'+h.classe+'</span></td>'
-      +'<td class="tt-pos '+posClass(h.pos)+'">'+(h.pos||'—')+'°</td>'
-      +'<td>'+h.bends+'</td>'
-      +'<td style="color:#888;font-size:8px">'+(h.caltm||'-')+'</td>'
+      +'<td>'+h.dist+'m</td>'
+      +'<td>['+h.trap+']</td>'
+      +'<td>'+(h.split||'')+'</td>'
+      +'<td>'+(h.bends||'')+'</td>'
+      +'<td class="vpos'+pc(h.pos)+'">'+(h.pos>0?h.pos+'°':'—')+'</td>'
+      +'<td><span class="vcls">'+(h.classe||'')+'</span></td>'
+      +'<td style="color:#888;font-size:9px">'+(h.remarks||'').substring(0,30)+'</td>'
+      +'<td style="color:#60a5fa">'+(h.caltm||'-')+'</td>'
       +'</tr>';
   }).join('');
-  return'<div class="tt-dog-name">'
-    +'<span class="trap-badge '+trapCls[dog.trap]+'">'+dog.trap+'</span> '+dog.nome
-    +(perfil?'<span>'+perfil+'</span>':'')
+  return'<div class="val-dog">'
+    +'<div class="val-dog-title">'
+    +'<span class="trap-badge '+trapCls[trap]+'">'+trap+'</span>'
+    +'<span class="val-dog-name">'+nome+'</span>'
+    +(perfil?'<span class="val-dog-perfil">'+perfil+'</span>':'')
     +'</div>'
-    +'<table class="tt-table"><thead><tr><th>Data</th><th>Pista</th><th>Cls</th><th>Pos</th><th>Bends</th><th>CalTm</th></tr></thead><tbody>'
-    +rows+'</tbody></table>';
+    +'<table class="val-table"><thead><tr>'
+    +'<th>Data</th><th>Pista</th><th>Dist</th><th>Trp</th><th>Split</th><th>Bends</th><th>Pos</th><th>Cls</th><th>Remarks</th><th>CalTm</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'</div>';
 }
-
-function showTooltip(evt, r){
-  var t=document.getElementById('avb-tooltip');
-  if(!t||!r.histFav||!r.histUnd)return;
-  document.getElementById('tt-fav').innerHTML=renderDogHist({trap:r.trapFav,nome:r.nameFav},r.histFav,r.perfilFav);
-  document.getElementById('tt-und').innerHTML=renderDogHist({trap:r.trapUnd,nome:r.nameUnd},r.histUnd,r.perfilUnd);
-  t.classList.add('show');
-  positionTooltip(evt);
-}
-function positionTooltip(evt){
-  var t=document.getElementById('avb-tooltip');
-  if(!t)return;
-  var x=evt.clientX+15, y=evt.clientY-10;
-  if(x+t.offsetWidth>window.innerWidth-10)x=evt.clientX-t.offsetWidth-15;
-  if(y+t.offsetHeight>window.innerHeight-10)y=window.innerHeight-t.offsetHeight-10;
-  t.style.left=x+'px'; t.style.top=y+'px';
-}
-function hideTooltip(){var t=document.getElementById('avb-tooltip');if(t)t.classList.remove('show');}
 
 function injectSaveModal(){
   var d=document.createElement('div');
@@ -304,7 +319,7 @@ function renderTable(){
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
       +'<td style="text-align:center">'+hh+'</td>'
       +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
-      +'<td style="text-align:center;cursor:pointer" class="avb-cell" data-i="'+i+'" onmouseenter="showTooltip(event,results.filter(function(x){return x.tipo===\'avb\';})['+i+'])" onmousemove="positionTooltip(event)" onmouseleave="hideTooltip()">'+shComPerfil+'</td>'
+      +'<td style="text-align:center">'+shComPerfil+'<a class="vlink" onclick="openValModal('+i+')">&#128269; Validar dados no pdf</a></td>'
       +'<td style="text-align:center">'+ch+'</td>'
       +'<td style="font-size:12px;line-height:1.6">'+obsHtml+'</td>'
       +'<td style="text-align:center">'+oddValHtml+'</td>'
@@ -444,6 +459,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
   document.getElementById('btn-print').addEventListener('click',function(){
     var avbs=results.filter(function(r){return r.nivel!=='skip' && r.tipo==='avb';});
+    avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
     if(!avbs.length){alert('Nenhuma corrida para imprimir.');return;}
     var rows=avbs.map(function(r){
       var tf=r.trapFav||'?', tu=r.trapUnd||'?';
