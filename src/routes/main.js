@@ -523,7 +523,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th>Hora BR</th><th>Corrida</th><th>AvB</th><th>Conf</th><th>Perfis</th><th>Obs</th><th>Odd</th><th>Valor</th><th>Resultado</th><th>Bateu</th><th style="width:60px">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th style="width:30px">Hora BR</th><th style="width:40px">Corrida</th><th style="width:40px">AvB</th><th style="width:30px">Conf</th><th style="width:40px">Perfis</th><th>Obs</th><th style="width:35px">Odd</th><th style="width:35px">Valor</th><th style="width:35px">Resultado</th><th style="width:30px">Bateu</th><th style="width:25px">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
