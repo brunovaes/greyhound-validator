@@ -8,11 +8,12 @@ function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!ra
 function readB64(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result.split(',')[1]);};r.onerror=rej;r.readAsDataURL(file);});}
 function trapClass(n){return['','t1','t2','t3','t4','t5','t6'][n]||'t1';}
 function perfilBadge(p){if(!p)return'';var c=p==='Recuperador'?'p-rec':p==='Fumador'?'p-fum':p==='Frontrunner'?'p-fro':'p-est';var i=p==='Recuperador'?'&#128170;':p==='Fumador'?'&#128684;':p==='Frontrunner'?'&#9889;':'&#10145;';return'<span class="perfil-badge '+c+'">'+i+' '+p+'</span>';}
-function horaToMin(h){
+function ukHoraParaOrdem(h){
+  // Converte hora UK (1-9=PM, 10-12=AM) para minutos BR — só para ordenação
   if(!h)return 9999;
   var p=h.split(':');var hr=parseInt(p[0]);
-  if(hr>=1&&hr<=9)hr+=12;
-  hr=hr-4;if(hr<0)hr+=24;
+  if(hr>=1&&hr<=9)hr+=12;  // 1-9 = PM
+  hr=hr-4;if(hr<0)hr+=24;  // -4h para Brasil
   return hr*60+parseInt(p[1]||0);
 }
 function convertHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;else if(hr===10||hr===11||hr===12)hr=hr;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
@@ -207,7 +208,7 @@ function renderTable(){
   results.forEach(function(r){if(r.tipo==='vencedor'&&r.nivel!=='skip'&&r.trapFav)winMap[(r.hora||'')+'_'+(r.corrida||'')]=r;});
 
   var avbs=results.filter(function(r){return r.tipo==='avb';});
-  avbs.sort(function(a,b){return horaToMin(a.hora)-horaToMin(b.hora);});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
   var filtered=applyFiltersToAvbs(avbs);
 
   if(!filtered.length){
