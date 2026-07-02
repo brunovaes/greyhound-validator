@@ -541,7 +541,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th style="width:35px;text-align:center">Hora BR</th><th style="width:45px;text-align:center">Corrida</th><th style="width:45px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th style="width:35px;text-align:center">Hora BR</th><th style="width:45px;text-align:center">Corrida</th><th style="width:50px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:50px;text-align:center">Perfis</th><th style="width:190px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
@@ -645,7 +645,7 @@ function renderRows(){
       +'<span class="trap-badge '+trapCls[r.trap_fav||0]+'">'+r.trap_fav+'</span> '
       +'<span style="font-size:9px;color:#666">vs</span> '
       +'<span class="trap-badge '+trapCls[r.trap_und||0]+'">'+r.trap_und+'</span>'
-      +(r.hist_fav?'<br><a class="val-link" onclick="openSessValModal('+r.id+')">ver hist</a>':'')+'</td>'
+      +'<br><a style="font-size:9px;color:#60a5fa;cursor:pointer;text-decoration:none" onclick="openSessValModal('+r.id+')">&#128269; ver historico</a></td>'
       +'<td style="white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
       +'<td style="font-size:10px;color:#888">'
       +(r.trap_fav?'<span style="color:rgba(255,255,255,.5);font-weight:600">'+r.trap_fav+'</span> - ':'')+(r.perfil_fav||'-')
