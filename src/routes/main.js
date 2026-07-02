@@ -109,8 +109,8 @@ tr.sk td{opacity:.35}tr.sk td:first-child{border-left:3px solid var(--bdr2)}
 .win-tag{display:inline-flex;align-items:center;font-size:9px;color:rgba(249,115,22,.6);border:1px solid rgba(249,115,22,.2);border-radius:3px;padding:1px 5px;margin-top:3px;background:rgba(249,115,22,.04)}
 .top3-tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:4px;padding:2px 6px;margin-top:4px;background:rgba(251,191,36,.08)}
 .hora-br{font-size:10px;color:rgba(34,197,94,.5);margin-top:2px}
-.obs-c{font-size:11px;color:var(--mut2);line-height:1.5;max-width:175px}
-.obs-cap{font-size:11px;color:var(--org);line-height:1.5;max-width:175px}
+.obs-c{font-size:11px;color:var(--mut2);line-height:1.5}
+.obs-cap{font-size:11px;color:var(--org);line-height:1.5}
 td input[type=text]{width:50px;padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:11px}
 td input:focus{outline:none;border-color:var(--grn)}
 td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:11px;cursor:pointer}
@@ -201,7 +201,7 @@ ${navBar(user, 'analisar')}
     </div>
     <div class="tw">
       <table><thead><tr>
-        <th style="width:80px;text-align:center">Hora</th><th style="width:160px;text-align:center">Corrida</th><th style="width:180px;text-align:center">Selecao</th><th style="width:90px;text-align:center">Confianca</th><th style="min-width:280px;text-align:center">Observacao</th><th style="width:130px;text-align:center">Odd / Valor</th><th style="width:130px;text-align:center">Resultado</th><th style="width:70px;text-align:center">Bateu</th><th style="width:55px;text-align:center">Cap</th>
+        <th style="width:75px;text-align:center">Hora</th><th style="width:130px;text-align:center">Corrida</th><th style="width:170px;text-align:center">Selecao</th><th style="width:85px;text-align:center">Confianca</th><th style="text-align:left;padding-left:12px">Observacao</th><th style="width:105px;text-align:center">Odd / Valor</th><th style="width:105px;text-align:center">Resultado</th><th style="width:65px;text-align:center">Bateu</th><th style="width:50px;text-align:center">Cap</th>
       </tr></thead>
       <tbody id="tb"><tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3><p>Carregue PDFs e clique em Analisar.</p></div></td></tr></tbody></table>
     </div>

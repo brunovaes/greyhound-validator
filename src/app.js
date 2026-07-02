@@ -298,7 +298,7 @@ function renderTable(){
       +'<td style="vertical-align:middle"><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
       +'<td style="text-align:center;vertical-align:middle">'+shComPerfil+'<div style="margin-top:4px">'+valLink+'</div></td>'
       +'<td style="text-align:center;vertical-align:middle">'+ch+'</td>'
-      +'<td style="font-size:11px;line-height:1.5;vertical-align:middle;min-width:200px">'+obsHtml+'</td>'
+      +'<td style="font-size:11px;line-height:1.5;vertical-align:middle;padding-left:12px">'+obsHtml+'</td>'
       +'<td style="text-align:center;vertical-align:middle">'+oddValHtml+'</td>'
       +'<td style="text-align:center;vertical-align:middle">'+rh+'</td>'
       +'<td style="text-align:center;vertical-align:middle"><select data-i="'+i+'" data-f="hit" style="text-align:center"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td>'
