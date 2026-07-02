@@ -272,7 +272,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
     <div class="form-row" style="align-items:flex-end;gap:12px">
       <div class="field"><label>Data</label><input type="date" id="res-date" value="${today}"></div>
       <button class="btn" id="btn-res-start" onclick="startResultsRobot()">&#9654; Executar agora</button>
-      <button class="btn btn-red" id="btn-res-stop" onclick="stopResultsRobot()" style="display:none">&#9646;&#9646; Parar agora</button>
+      <button class="btn btn-red" id="btn-res-stop" onclick="stopResultsRobot()" disabled style="opacity:.35;cursor:not-allowed">&#9646;&#9646; Parar</button>
     </div>
     <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: 23:00 UK = 19:00 Rio de Janeiro</p>
   </div>
@@ -504,8 +504,10 @@ async function startResultsRobot() {
     });
     if (resPolling) clearInterval(resPolling);
     resPolling = setInterval(pollResultsStatus, 2000);
-    document.getElementById('btn-res-stop').style.display='';
-    document.getElementById('btn-res-start').style.display='none';
+    document.getElementById('btn-res-stop').disabled=false;
+    document.getElementById('btn-res-stop').style.opacity='';
+    document.getElementById('btn-res-stop').style.cursor='';
+    document.getElementById('btn-res-start').disabled=true;
   } catch(e) {
     alert('Erro: ' + e.message);
     document.getElementById('btn-res-start').disabled = false;
@@ -534,9 +536,10 @@ async function pollResultsStatus() {
     const sbar = document.getElementById('res-sbar');
     if (!d.running) {
       clearInterval(resPolling);
-      document.getElementById('btn-res-start').style.display='';
-      document.getElementById('btn-res-stop').style.display='none';
-      document.getElementById('btn-res-start').disabled = false;
+      document.getElementById('btn-res-start').disabled=false;
+      document.getElementById('btn-res-stop').disabled=true;
+      document.getElementById('btn-res-stop').style.opacity='.35';
+      document.getElementById('btn-res-stop').style.cursor='not-allowed';
       stEl.textContent = d.lastRun ? 'Concluído — ' + d.updated + ' corridas atualizadas' : 'Pronto';
       sbar.className = 'sbar sdone';
     } else {
