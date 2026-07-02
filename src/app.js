@@ -188,7 +188,7 @@ function buildDogCard(trap,nome,perfil,hist){
     +'<colgroup>'
     +'<col style="width:62px"><col style="width:46px"><col style="width:38px">'
     +'<col style="width:34px"><col style="width:40px"><col style="width:52px">'
-    +'<col style="width:160px"><col style="width:40px"><col style="width:54px">'
+    +'<col style="width:100px"><col style="width:40px"><col style="width:54px">'
     +'</colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
