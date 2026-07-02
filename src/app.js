@@ -112,7 +112,37 @@ function injectValModal(){
   document.body.appendChild(m);
   m.addEventListener('click',function(e){if(e.target===this)closeValModal();});
   var vs=document.createElement('style');
-  vs.textContent='#val-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:9000}#val-modal.open{display:flex}#val-box{background:#161b27;border:1px solid rgba(255,255,255,.12);border-radius:12px;width:82vw;max-width:820px;overflow:hidden;display:flex;flex-direction:column}#val-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.08)}#val-hdr h3{font-size:12px;font-weight:700;color:#fff;margin:0;flex:1;text-align:center}#val-xbtn{background:transparent;border:none;color:#888;font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0}#val-body{padding:10px 14px;display:flex;flex-direction:column;gap:0}.val-dog{width:100%}.val-dog-hdr{display:flex;align-items:center;gap:6px;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}.val-name{font-size:11px;font-weight:700;color:#fff}.val-perfil{font-size:9px;color:#888;margin-left:4px}.val-sep{height:1px;background:rgba(255,255,255,.07);margin:8px 0}.val-tbl{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}.val-tbl th{font-size:7.5px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.3px;padding:2px 4px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:left}.val-tbl td{padding:3px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8);white-space:nowrap}.val-tbl tr:last-child td{border-bottom:none}.val-tbl tr:hover td{background:rgba(255,255,255,.03)}.vcls{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:3px;font-size:9px;color:#aaa}.val-link{font-size:9px;color:rgba(96,165,250,.75);cursor:pointer;display:block;text-align:center;margin-top:3px}';
+  vs.textContent=`
+#val-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}
+#val-modal.open{display:flex}
+#val-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:80vw;max-width:800px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+#val-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
+#val-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
+#val-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
+#val-xbtn:hover{color:#fff}
+#val-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
+.val-dog{width:100%}
+.val-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
+.val-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
+.val-name{font-size:12px;font-weight:700;color:#fff;letter-spacing:.1px}
+.val-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
+.val-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
+.val-tbl{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed}
+.val-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
+.val-tbl th{font-size:8px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.6px;padding:4px 6px;text-align:left;white-space:nowrap}
+.val-tbl td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle}
+.val-tbl tr:last-child td{border-bottom:none}
+.val-tbl tr:hover td{background:rgba(255,255,255,.025)}
+.val-td-date{color:rgba(255,255,255,.6);font-size:10px}
+.val-td-track{color:rgba(255,255,255,.7)}
+.val-td-muted{color:rgba(255,255,255,.4);font-size:10px}
+.val-td-bends{font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.85);letter-spacing:2px}
+.val-td-rem{color:rgba(255,255,255,.45);font-size:9.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 6px;font-size:9px;color:rgba(255,255,255,.55);letter-spacing:.3px}
+.val-td-caltm{color:#60a5fa;font-weight:700;font-size:11px;text-align:right;padding-right:4px}
+.val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
+.val-link:hover{color:#60a5fa}
+`;
   document.head.appendChild(vs);
 }
 function closeValModal(){var m=document.getElementById('val-modal');if(m)m.classList.remove('open');}
@@ -135,25 +165,37 @@ function buildDogCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   var rows=(hist||[]).map(function(h){
     var rem=extrairRemarks(h.remarks||'');
+    var ct=h.caltm?parseFloat(h.caltm).toFixed(2):'-';
     return'<tr>'
-      +'<td style="white-space:nowrap">'+h.data+'</td>'
-      +'<td>'+h.pista+'</td>'
-      +'<td style="text-align:center">'+h.dist+'m</td>'
-      +'<td style="text-align:center;color:#aaa">['+h.trap+']</td>'
-      +'<td style="text-align:center;color:#888">'+(h.split||'')+'</td>'
-      +'<td style="font-family:monospace;letter-spacing:1px;text-align:center">'+(h.bends||'')+'</td>'
-      +'<td style="color:#888;max-width:120px;overflow:hidden;text-overflow:ellipsis">'+rem+'</td>'
-      +'<td style="text-align:center"><span class="vcls">'+(h.classe||'')+'</span></td>'
-      +'<td style="text-align:right;color:#60a5fa;font-weight:600;padding-right:8px">'+(h.caltm?parseFloat(h.caltm).toFixed(2):'-')+'</td>'
+      +'<td class="val-td-date">'+h.data+'</td>'
+      +'<td class="val-td-track">'+h.pista+'</td>'
+      +'<td class="val-td-muted" style="text-align:center">'+h.dist+'m</td>'
+      +'<td class="val-td-muted" style="text-align:center">['+h.trap+']</td>'
+      +'<td class="val-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
+      +'<td class="val-td-bends">'+( h.bends||'')+'</td>'
+      +'<td class="val-td-rem">'+rem+'</td>'
+      +'<td style="text-align:center"><span class="val-badge-grade">'+(h.classe||'')+'</span></td>'
+      +'<td class="val-td-caltm">'+ct+'</td>'
       +'</tr>';
   }).join('');
   return'<div class="val-dog">'
-    +'<div class="val-dog-hdr"><span class="trap-badge '+tc[trap]+'">'+trap+'</span>'
+    +'<div class="val-dog-hdr">'
+    +'<span class="trap-badge '+tc[trap]+'">'+trap+'</span>'
     +'<span class="val-name">'+nome+'</span>'
-    +(perfil?'<span class="val-perfil">'+perfil+'</span>':'')+'</div>'
-    +'<table class="val-tbl"><colgroup><col style="width:62px"><col style="width:42px"><col style="width:38px"><col style="width:32px"><col style="width:36px"><col style="width:44px"><col><col style="width:36px"><col style="width:48px"></colgroup>'
-    +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table></div>';
+    +(perfil?'<span class="val-perfil">'+perfil+'</span>':'')
+    +'</div>'
+    +'<table class="val-tbl">'
+    +'<colgroup>'
+    +'<col style="width:60px"><col style="width:44px"><col style="width:36px">'
+    +'<col style="width:32px"><col style="width:38px"><col style="width:50px">'
+    +'<col><col style="width:38px"><col style="width:50px">'
+    +'</colgroup>'
+    +'<thead><tr>'
+    +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
+    +'<th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'</div>';
 }
 
 /* filtro panel */
