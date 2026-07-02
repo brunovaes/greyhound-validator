@@ -115,7 +115,7 @@ function injectValModal(){
   vs.textContent=`
 #val-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}
 #val-modal.open{display:flex}
-#val-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:86vw;max-width:860px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+#val-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
 #val-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
 #val-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
 #val-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
@@ -124,22 +124,22 @@ function injectValModal(){
 .val-dog{width:100%}
 .val-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
 .val-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
-.val-name{font-size:12px;font-weight:700;color:#fff;letter-spacing:.1px}
+.val-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
 .val-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
 .val-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
-.val-tbl{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed}
+.val-tbl{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
 .val-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
-.val-tbl th{font-size:8px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.6px;padding:4px 6px;text-align:left;white-space:nowrap}
-.val-tbl td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle}
+.val-tbl th{font-size:9px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.5px;padding:5px 6px;text-align:left;white-space:nowrap}
+.val-tbl td{padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle}
 .val-tbl tr:last-child td{border-bottom:none}
 .val-tbl tr:hover td{background:rgba(255,255,255,.025)}
 .val-td-date{color:rgba(255,255,255,.6);font-size:10px}
 .val-td-track{color:rgba(255,255,255,.7)}
 .val-td-muted{color:rgba(255,255,255,.4);font-size:10px}
-.val-td-bends{font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:rgba(255,255,255,.85);letter-spacing:2px}
+.val-td-bends{font-family:'Courier New',monospace;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:2px}
 .val-td-rem{color:rgba(255,255,255,.45);font-size:9.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 6px;font-size:9px;color:rgba(255,255,255,.55);letter-spacing:.3px}
-.val-td-caltm{color:#60a5fa;font-weight:700;font-size:11px;text-align:right;padding-right:4px}
+.val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:right;padding-right:4px}
 .val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
 .val-link:hover{color:#60a5fa}
 `;
@@ -165,7 +165,7 @@ function buildDogCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   var rows=(hist||[]).map(function(h){
     var rem=extrairRemarks(h.remarks||'');
-    var ct=h.caltm?parseFloat(h.caltm).toFixed(2):'-';
+    var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
     return'<tr>'
       +'<td class="val-td-date">'+h.data+'</td>'
       +'<td class="val-td-track">'+h.pista+'</td>'
@@ -188,7 +188,7 @@ function buildDogCard(trap,nome,perfil,hist){
     +'<colgroup>'
     +'<col style="width:62px"><col style="width:46px"><col style="width:38px">'
     +'<col style="width:34px"><col style="width:40px"><col style="width:52px">'
-    +'<col style="width:100px"><col style="width:40px"><col style="width:54px">'
+    +'<col style="width:70px"><col style="width:40px"><col style="width:54px">'
     +'</colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
