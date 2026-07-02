@@ -524,7 +524,6 @@ h2{font-size:16px;margin-bottom:12px}
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
 <div class="content">
-<h2>${sess.name||'Sessao '+sess.id}</h2>
 <div class="kpis">
   <div class="kpi b"><div class="kpi-label">Corridas</div><div class="kpi-val">${validRaces.length}</div></div>
   <div class="kpi g"><div class="kpi-label">Acertos</div><div class="kpi-val">${ac}</div></div>
