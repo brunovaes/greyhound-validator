@@ -154,7 +154,7 @@ function buildDogCard(trap,nome,perfil,hist){
       +'<td style="text-align:center;color:#aaa">['+h.trap+']</td>'
       +'<td style="text-align:center;color:#888">'+(h.split||'')+'</td>'
       +'<td style="font-family:monospace;letter-spacing:1px;text-align:center">'+(h.bends||'')+'</td>'
-      +'<td style="color:#888">'+rem+'</td>'
+      +'<td style="color:#888;max-width:120px;overflow:hidden;text-overflow:ellipsis">'+rem+'</td>'
       +'<td style="text-align:center"><span class="vcls">'+(h.classe||'')+'</span></td>'
       +'<td style="text-align:right;color:#60a5fa;font-weight:600;padding-right:8px">'+(h.caltm?parseFloat(h.caltm).toFixed(2):'-')+'</td>'
       +'</tr>';
@@ -163,7 +163,8 @@ function buildDogCard(trap,nome,perfil,hist){
     +'<div class="val-dog-hdr"><span class="trap-badge '+tc[trap]+'">'+trap+'</span>'
     +'<span class="val-name">'+nome+'</span>'
     +(perfil?'<span class="val-perfil">'+perfil+'</span>':'')+'</div>'
-    +'<table class="val-tbl" style="width:100%">'
+    +'<table class="val-tbl" style="width:100%;table-layout:fixed">'+
+    '<colgroup><col style="width:68px"><col style="width:44px"><col style="width:38px"><col style="width:34px"><col style="width:38px"><col style="width:46px"><col><col style="width:38px"><col style="width:48px"></colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
     +'<th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
