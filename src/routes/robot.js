@@ -5,6 +5,7 @@ const { getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
+const { runResultsRobot, getResultsStatus } = require('./resultsRobot');
 
 // PDF_DIR é dinâmico por data — criado em runRobot
 
@@ -111,6 +112,15 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-seri
 nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
 .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
 .nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
+.layout{display:flex;min-height:calc(100vh - 210px)}
+.robot-sidebar{width:200px;flex-shrink:0;background:#111;border-right:1px solid #333;padding:16px}
+.robot-sidebar h3{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.robot-menu-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#888;border:1px solid transparent;transition:all .2s;margin-bottom:6px;text-decoration:none;width:100%}
+.robot-menu-item:hover{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.2);color:#fff}
+.robot-menu-item.active{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e}
+.robot-menu-item .icon{font-size:18px}
+.robot-content{flex:1;padding:24px;overflow-y:auto}
+.robot-panel{display:none}.robot-panel.active{display:block}
 .content{padding:24px;max-width:920px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .sub{font-size:13px;color:#888;margin-bottom:24px}
@@ -136,6 +146,8 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .pdf-name{font-size:12px;font-weight:600;color:#f0f0f0}
 .pdf-meta{font-size:10px;color:#666;margin-top:1px}
 .sbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px}
+.res-log{background:#050505;border:1px solid #222;border-radius:6px;padding:12px;height:280px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.8}
+.res-ok{color:#22c55e}.res-err{color:#ef4444}.res-info{color:#60a5fa}.res-warn{color:#f97316}
 .srun{background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);color:#60a5fa}
 .sdone{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:#22c55e}
 .serr{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444}
@@ -175,7 +187,14 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   </div>
   <span style="font-size:11px;color:#666;padding:12px">Admin · <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
 </nav>
-<div class="content">
+<div class="layout">
+<div class="robot-sidebar">
+  <h3>Robôs</h3>
+  <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">📥</span> Coletor de PDFs</button>
+  <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">🏁</span> Resultados</button>
+</div>
+<div class="robot-content">
+<div class="robot-panel active" id="panel-pdfs">
   <h1>&#x1F916; Robo Coletor de PDFs</h1>
   <p class="sub">Coleta automaticamente as corridas do Racing Post via Browserless.io.</p>
 
@@ -432,6 +451,63 @@ async function downloadAll() {
     }
   } catch(e) {}
 })();
+
+// ── Navegação entre painéis ──────────────────────────────────────────────────
+function showPanel(id) {
+  document.querySelectorAll('.robot-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.robot-menu-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  document.getElementById('mb-' + id).classList.add('active');
+}
+
+// ── Robô de Resultados ───────────────────────────────────────────────────────
+let resPolling = null;
+
+async function startResultsRobot() {
+  const date = document.getElementById('res-date').value;
+  if (!date) { alert('Selecione uma data'); return; }
+  document.getElementById('btn-res-start').disabled = true;
+  document.getElementById('res-status-card').style.display = 'block';
+  document.getElementById('res-log').innerHTML = '';
+  document.getElementById('res-st-txt').textContent = 'Iniciando...';
+
+  try {
+    await fetch(BASE + '/robot/results/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ date })
+    });
+    if (resPolling) clearInterval(resPolling);
+    resPolling = setInterval(pollResultsStatus, 2000);
+  } catch(e) {
+    alert('Erro: ' + e.message);
+    document.getElementById('btn-res-start').disabled = false;
+  }
+}
+
+async function pollResultsStatus() {
+  try {
+    const r = await fetch(BASE + '/robot/results/status');
+    const d = await r.json();
+    const logEl = document.getElementById('res-log');
+    logEl.innerHTML = (d.logs || []).map(l => {
+      const cls = l.type === 'ok' ? 'res-ok' : l.type === 'err' ? 'res-err' : l.type === 'warn' ? 'res-warn' : 'res-info';
+      return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
+    }).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+
+    const stEl = document.getElementById('res-st-txt');
+    const sbar = document.getElementById('res-sbar');
+    if (!d.running) {
+      clearInterval(resPolling);
+      document.getElementById('btn-res-start').disabled = false;
+      stEl.textContent = d.lastRun ? 'Concluído — ' + d.updated + ' corridas atualizadas' : 'Pronto';
+      sbar.className = 'sbar sdone';
+    } else {
+      stEl.textContent = 'Processando... ' + d.processed + ' corridas';
+    }
+  } catch(e) {}
+}
 </script></body></html>`);
 });
 
@@ -850,4 +926,40 @@ router.get('/download-zip', requireAdmin, async (req, res) => {
   });
 });
 
-module.exports = router;
+// ── Robô de Resultados ────────────────────────────────────────────────────────
+router.post('/results/run', requireAdmin, express.json(), async (req, res) => {
+  const date = req.body?.date || new Date().toISOString().slice(0, 10);
+  try {
+    runResultsRobot(date).catch(e => console.error('[RESULTS]', e.message));
+    res.json({ ok: true, date });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/results/status', requireAdmin, (req, res) => {
+  res.json(getResultsStatus());
+});
+
+module.exports = router
+</div><!-- fim panel-pdfs -->
+
+<div class="robot-panel" id="panel-results">
+  <h1>🏁 Robô de Resultados</h1>
+  <p class="sub">Coleta automaticamente os resultados do Racing Post e atualiza o campo Bateu nas sessões.</p>
+  <div class="card">
+    <div class="card-title">⚙️ Executar</div>
+    <div class="form-row" style="align-items:flex-end;gap:12px">
+      <div class="field"><label>Data</label><input type="date" id="res-date" value="${today}"></div>
+      <button class="btn" id="btn-res-start" onclick="startResultsRobot()">▶ Executar agora</button>
+    </div>
+    <p style="font-size:11px;color:#555;margin-top:12px">⏰ Roda automaticamente todo dia às 23:00 UK = 19:00 Rio de Janeiro</p>
+  </div>
+  <div class="card" id="res-status-card" style="display:none">
+    <div class="card-title">📊 Status</div>
+    <div id="res-sbar" class="sbar srun"><span class="spin"></span> <span id="res-st-txt">Aguardando...</span></div>
+    <div class="res-log" id="res-log"></div>
+  </div>
+</div><!-- fim panel-results -->
+
+</div><!-- fim robot-content -->
+</div><!-- fim layout -->
+;

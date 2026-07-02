@@ -516,7 +516,7 @@ h2{font-size:16px;margin-bottom:12px}
 .sv-tbl td:first-child{text-align:left;color:rgba(255,255,255,.6)}.sv-tbl td:nth-child(7){text-align:left;color:rgba(255,255,255,.45);font-size:11px;max-width:70px;overflow:hidden;text-overflow:ellipsis}
 .sv-tbl tr:last-child td{border-bottom:none}.sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
 .sv-bends{font-weight:700;color:rgba(255,255,255,.85)}.sv-caltm{color:#60a5fa;font-weight:700}.sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:10px;color:rgba(255,255,255,.55)}
-.val-link{font-size:9px;color:rgba(96,165,250,.75);cursor:pointer;display:block;text-align:center;margin-top:3px}
+.val-link{font-size:9px;color:rgba(96,165,250,.75);cursor:pointer;display:block;text-align:center;margin-top:3px}.btn-video{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;border-radius:5px;padding:2px 7px;cursor:pointer;font-size:9px;text-decoration:none;display:inline-block;margin-top:4px}.btn-video:hover{background:rgba(239,68,68,.22)}
 .edit-inp{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;padding:3px 5px;font-size:11px;text-align:center;outline:none}
 .edit-inp:focus{border-color:#22c55e}
 .edit-sel{background:#1a1f2e;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;padding:3px 5px;font-size:11px;outline:none}
@@ -653,7 +653,8 @@ function renderRows(){
           +(r.perfil_und?'<div style="font-size:9px;color:#666;text-align:center">'+r.perfil_und+'</div>':'')
         +'</div>'
       +'</div>'
-      +'<a style="font-size:9px;color:#60a5fa;cursor:pointer;text-decoration:none;display:block;text-align:center;margin-top:4px" onclick="openSessValModal('+r.id+')">&#128269; ver historico</a></td>'
+      +'<a style="font-size:9px;color:#60a5fa;cursor:pointer;text-decoration:none;display:block;text-align:center;margin-top:4px" onclick="openSessValModal('+r.id+')">&#128269; ver historico</a>'
+      +(r.video_url?'<a class="btn-video" href="'+r.video_url+'" target="_blank" rel="noopener">&#127909; replay</a>':'')+'</td>'
       +'<td style="text-align:center;white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
       +'<td style="font-size:10px;color:#888">'
       +(r.trap_fav?'<span style="color:rgba(255,255,255,.5);font-weight:600">'+r.trap_fav+'</span> - ':'')+(r.perfil_fav||'-')
