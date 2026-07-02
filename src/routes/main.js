@@ -463,7 +463,7 @@ th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing
 td{padding:8px 10px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(255,255,255,.02)}
-.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;font-size:11px}
+.trap-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-weight:700;font-size:13px;border:2px solid transparent}
 .t1{background:radial-gradient(circle at 35% 35%, #ff4444, #c00 60%, #8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
 .t2{background:radial-gradient(circle at 35% 35%, #4488ff, #1a3db5 60%, #0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3),0 2px 4px rgba(0,0,0,.3)}
 .t3{background:radial-gradient(circle at 35% 35%, #ffffff, #d0d0d0 60%, #a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8),0 2px 4px rgba(0,0,0,.25)}
@@ -541,7 +541,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th style="width:35px;text-align:center">Hora BR</th><th style="width:45px;text-align:center">Corrida</th><th style="width:50px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:50px;text-align:center">Perfis</th><th style="width:190px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th style="width:25px;text-align:center">Hora BR</th><th style="width:35px;text-align:center">Corrida</th><th style="width:40px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="width:240px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
@@ -584,7 +584,7 @@ function openSessValModal(id){
   if(!r)return;
   var hFav=r.hist_fav?JSON.parse(r.hist_fav):null;
   var hUnd=r.hist_und?JSON.parse(r.hist_und):null;
-  if(!hFav&&!hUnd){alert('Histórico não disponível para esta corrida.');return;}
+  if(!hFav&&!hUnd){document.getElementById('sv-title').textContent='Histórico indisponível';document.getElementById('sv-body').innerHTML='<p style="color:#888;font-size:12px;padding:20px;text-align:center">&#9432; Esta sessão foi salva antes do recurso de histórico ser ativado.<br><br>Salve uma nova sessão para ter acesso ao histórico completo dos galgos.</p>';document.getElementById('sv-modal').classList.add('open');return;}
   document.getElementById('sv-title').textContent='T'+r.trap_fav+' '+(r.name_fav||'')+'  vs  T'+r.trap_und+' '+(r.name_und||'');
   document.getElementById('sv-body').innerHTML=
     buildSvCard(r.trap_fav,r.name_fav,r.perfil_fav,hFav)
