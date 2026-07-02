@@ -88,11 +88,73 @@ function injectStyles(){
     '#fp-count{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto;white-space:nowrap;}',
     '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
     '#btn-fp-clear:hover{color:#e53935;}',
+
+    /* tooltip historico AvB */
+    '#avb-tooltip{position:fixed;z-index:9999;background:#161b27;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 16px;box-shadow:0 20px 60px rgba(0,0,0,.7);pointer-events:none;display:none;min-width:520px;max-width:680px;}',
+    '#avb-tooltip.show{display:flex;gap:16px;}',
+    '.tt-dog{flex:1;min-width:220px;}',
+    '.tt-dog-name{font-size:11px;font-weight:700;color:#fff;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1);}',
+    '.tt-dog-name span{font-size:10px;font-weight:400;color:#888;margin-left:6px;}',
+    '.tt-table{width:100%;border-collapse:collapse;font-size:9px;}',
+    '.tt-table th{color:rgba(255,255,255,.35);padding:2px 4px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid rgba(255,255,255,.06);}',
+    '.tt-table td{padding:3px 4px;color:rgba(255,255,255,.7);border-bottom:1px solid rgba(255,255,255,.04);}',
+    '.tt-table tr:last-child td{border-bottom:none;}',
+    '.tt-pos{font-weight:700;}',
+    '.tt-pos.p1{color:#22c55e;}.tt-pos.p2{color:#60a5fa;}.tt-pos.p3{color:#f97316;}',
+    '.tt-class{font-size:8px;background:rgba(255,255,255,.06);padding:1px 4px;border-radius:3px;color:#aaa;}',
+    '.tt-divider{width:1px;background:rgba(255,255,255,.06);flex-shrink:0;}',
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
 /* ── modal de salvar sessão ───────────────────────────────── */
+function injectTooltip(){
+  var t=document.createElement('div');
+  t.id='avb-tooltip';
+  t.innerHTML='<div class="tt-dog" id="tt-fav"></div><div class="tt-divider"></div><div class="tt-dog" id="tt-und"></div>';
+  document.body.appendChild(t);
+}
+
+function renderDogHist(dog, hist, perfil){
+  var trapCls=['','t1','t2','t3','t4','t5','t6'];
+  var posClass=function(p){return p===1?'p1':p===2?'p2':p===3?'p3':'';};
+  var rows=(hist||[]).map(function(h){
+    var dataShort=(h.data||'').replace(/^(\d{2})([A-Za-z]+)(\d{2})$/,'$1$2');
+    return'<tr>'
+      +'<td>'+dataShort+'</td>'
+      +'<td>'+h.pista+'</td>'
+      +'<td><span class="tt-class">'+h.classe+'</span></td>'
+      +'<td class="tt-pos '+posClass(h.pos)+'">'+(h.pos||'—')+'°</td>'
+      +'<td>'+h.bends+'</td>'
+      +'<td style="color:#888;font-size:8px">'+(h.caltm||'-')+'</td>'
+      +'</tr>';
+  }).join('');
+  return'<div class="tt-dog-name">'
+    +'<span class="trap-badge '+trapCls[dog.trap]+'">'+dog.trap+'</span> '+dog.nome
+    +(perfil?'<span>'+perfil+'</span>':'')
+    +'</div>'
+    +'<table class="tt-table"><thead><tr><th>Data</th><th>Pista</th><th>Cls</th><th>Pos</th><th>Bends</th><th>CalTm</th></tr></thead><tbody>'
+    +rows+'</tbody></table>';
+}
+
+function showTooltip(evt, r){
+  var t=document.getElementById('avb-tooltip');
+  if(!t||!r.histFav||!r.histUnd)return;
+  document.getElementById('tt-fav').innerHTML=renderDogHist({trap:r.trapFav,nome:r.nameFav},r.histFav,r.perfilFav);
+  document.getElementById('tt-und').innerHTML=renderDogHist({trap:r.trapUnd,nome:r.nameUnd},r.histUnd,r.perfilUnd);
+  t.classList.add('show');
+  positionTooltip(evt);
+}
+function positionTooltip(evt){
+  var t=document.getElementById('avb-tooltip');
+  if(!t)return;
+  var x=evt.clientX+15, y=evt.clientY-10;
+  if(x+t.offsetWidth>window.innerWidth-10)x=evt.clientX-t.offsetWidth-15;
+  if(y+t.offsetHeight>window.innerHeight-10)y=window.innerHeight-t.offsetHeight-10;
+  t.style.left=x+'px'; t.style.top=y+'px';
+}
+function hideTooltip(){var t=document.getElementById('avb-tooltip');if(t)t.classList.remove('show');}
+
 function injectSaveModal(){
   var d=document.createElement('div');
   d.innerHTML='<div id="save-modal" class="ghf-modal-ov" style="display:none">'
@@ -242,7 +304,7 @@ function renderTable(){
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
       +'<td style="text-align:center">'+hh+'</td>'
       +'<td><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
-      +'<td style="text-align:center">'+shComPerfil+'</td>'
+      +'<td style="text-align:center;cursor:pointer" class="avb-cell" data-i="'+i+'" onmouseenter="showTooltip(event,results.filter(function(x){return x.tipo===\'avb\';})['+i+'])" onmousemove="positionTooltip(event)" onmouseleave="hideTooltip()">'+shComPerfil+'</td>'
       +'<td style="text-align:center">'+ch+'</td>'
       +'<td style="font-size:12px;line-height:1.6">'+obsHtml+'</td>'
       +'<td style="text-align:center">'+oddValHtml+'</td>'
@@ -321,6 +383,7 @@ async function runAnalysis(){
 document.addEventListener('DOMContentLoaded',function(){
   injectStyles();
   injectSaveModal();
+  injectTooltip();
   injectFilterPanel();
 
   if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');}

@@ -752,6 +752,8 @@ function processarCorrida(corridaRaw, config) {
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
     top3, trapsCard:trapsCard||[],
     obs:`${ranking} | ${narrativa}${notaReanalise}`,
+    histFav:(melhor.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,pos:h.pos,classe:h.classe,caltm:h.caltm,bends:h.bends,remarks:(h.remarks||'').substring(0,40)})),
+    histUnd:(pior.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,pos:h.pos,classe:h.classe,caltm:h.caltm,bends:h.bends,remarks:(h.remarks||'').substring(0,40)})),
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores}))
   };
 
@@ -881,6 +883,18 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
     try { res.write('data: ' + JSON.stringify({ type:'error', error: err.message }) + '\n\n'); res.end(); }
     catch(e) {}
   }
+});
+
+router.put('/race/:id', requireAuth, express.json(), (req, res) => {
+  const userId = req.user.id;
+  const raceId = parseInt(req.params.id);
+  if (!raceId) return res.status(400).json({ error: 'ID inválido' });
+  const race = db.prepare('SELECT id FROM races WHERE id=? AND user_id=?').get(raceId, userId);
+  if (!race) return res.status(404).json({ error: 'Corrida não encontrada' });
+  const { odd, valor, resultado_1, resultado_2, resultado_3, bateu } = req.body;
+  db.prepare('UPDATE races SET odd=?,valor=?,resultado_1=?,resultado_2=?,resultado_3=?,bateu=? WHERE id=? AND user_id=?')
+    .run(odd||null, valor||null, resultado_1||null, resultado_2||null, resultado_3||null, bateu||null, raceId, userId);
+  res.json({ ok: true });
 });
 
 router.post('/session', express.json(), (req, res) => {
