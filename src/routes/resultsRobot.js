@@ -7,7 +7,6 @@ const { db } = require('../db/database');
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
 const BROWSERLESS_WS    = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
 
-// ── Status ───────────────────────────────────────────────────────────────────
 const status = { running: false, stopRequested: false, logs: [], lastRun: null, processed: 0, updated: 0 };
 
 function addLog(type, msg) {
@@ -17,9 +16,6 @@ function addLog(type, msg) {
   console.log(`[RESULTS] [${type}] ${msg}`);
 }
 
-// ── Helpers de hora ──────────────────────────────────────────────────────────
-// Racing Post usa 24h nos URLs (ex: "13:41")
-// Banco guarda 12h como vem do PDF (ex: "1:41" para 1:41 PM)
 function hora24To12(h24) {
   if (!h24) return '';
   const parts = h24.split(':');
@@ -35,27 +31,56 @@ function horaDBTo24(horaDB) {
   const parts = horaDB.split(':');
   const hr = parseInt(parts[0]);
   const min = parts[1] || '00';
-  // 10-12 = AM, 1-9 = PM
   const h24 = (hr >= 1 && hr <= 9) ? hr + 12 : hr;
   return h24 + ':' + min;
+}
+
+// ── Extrai nomes dos cães por posição ─────────────────────────────────────────
+// Formato da página: "1 st Dog Name bk d ... 2 nd Other Dog bd b ..."
+function extractFinishingOrder(text) {
+  const results = [];
+  // Separar por marcadores de posição: "1 st", "2 nd", "3 rd", "4 th", etc.
+  // Usar split para dividir o texto nas posições
+  const parts = text.split(/\b(\d)\s+(?:st|nd|rd|th)\s+/);
+  // parts[0] = antes de qualquer posição
+  // parts[1] = "1", parts[2] = texto depois de "1 st"
+  // parts[3] = "2", parts[4] = texto depois de "2 nd"
+  // etc.
+  for (let i = 1; i < parts.length - 1; i += 2) {
+    const pos = parseInt(parts[i]);
+    if (pos < 1 || pos > 6) continue;
+    const rest = parts[i + 1] || '';
+    // Pegar palavras do nome até encontrar token de cor/raça (minúsculo 2-3 letras) ou DNF
+    const words = rest.split(/\s+/);
+    const nameWords = [];
+    for (const word of words) {
+      // Parar em palavras de cor/raça: bk, bd, be, bef, bew, wbe, w, f, dkbd, etc.
+      if (/^(bk|bd|be|bef|bebd|bew|wbe|wbd|dkbd|dkbe|fawn|fw|DNF)$/i.test(word)) break;
+      // Parar se palavra é muito curta e minúscula (provavelmente não é nome)
+      if (word.length <= 2 && word === word.toLowerCase()) break;
+      // Parar se é número (ex: 29.41)
+      if (/^\d/.test(word)) break;
+      nameWords.push(word);
+      if (nameWords.length >= 4) break; // max 4 palavras no nome
+    }
+    const name = nameWords.join(' ').trim();
+    if (name.length > 1 && !results.find(r => r.pos === pos)) {
+      results.push({ pos, name });
+    }
+  }
+  return results;
 }
 
 // ── Robô principal ────────────────────────────────────────────────────────────
 async function runResultsRobot(targetDate) {
   if (status.running) { addLog('warn', 'Robo ja esta rodando.'); return; }
-
-  status.running       = true;
-  status.stopRequested = false;
-  status.logs          = [];
-  status.processed     = 0;
-  status.updated       = 0;
+  status.running = true; status.stopRequested = false;
+  status.logs = []; status.processed = 0; status.updated = 0;
 
   const DATE = targetDate || new Date().toISOString().slice(0, 10);
   addLog('info', 'Processando resultados de ' + DATE);
 
-  let browser = null;
-  let page    = null;
-
+  let browser = null, page = null;
   try {
     const puppeteer = require('puppeteer');
     addLog('info', 'Conectando ao Browserless...');
@@ -67,159 +92,113 @@ async function runResultsRobot(targetDate) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36');
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-GB,en;q=0.9' });
 
-    // 1. Abrir lista de resultados
-    const LIST_URL = 'https://greyhoundbet.racingpost.com/#results-list/r_date=' + DATE;
-    addLog('info', 'Abrindo: ' + LIST_URL);
-    await page.goto(LIST_URL, { timeout: 30000, waitUntil: 'networkidle0' });
+    // 1. Lista de resultados
+    await page.goto(`https://greyhoundbet.racingpost.com/#results-list/r_date=${DATE}`, { timeout: 30000, waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 7000));
 
-    addLog('info', 'URL: ' + await page.evaluate(() => window.location.href));
-
-    // 2. Extrair links de resultados
     const raceLinks = await page.evaluate(function() {
-      var links = [];
-      var seen  = new Set();
+      const links = [], seen = new Set();
       document.querySelectorAll('a[href]').forEach(function(a) {
-        var href = a.getAttribute('href') || '';
-        if (!href.includes('result-meeting-result')) return;
-        if (seen.has(href)) return;
+        const href = a.getAttribute('href') || '';
+        if (!href.includes('result-meeting-result') || seen.has(href)) return;
         seen.add(href);
-        var raceId  = (href.match(/race_id=(\d+)/)  || [])[1];
-        var rTime   = (href.match(/r_time=([^&]+)/) || [])[1];
-        var trackId = (href.match(/track_id=(\d+)/) || [])[1];
+        const raceId = (href.match(/race_id=(\d+)/) || [])[1];
+        const rTime  = (href.match(/r_time=([^&]+)/) || [])[1];
         if (!raceId || !rTime) return;
-        var ctx  = a.closest('li, tr, div') || a.parentElement;
-        var text = ((ctx || a).textContent || '').trim().slice(0, 60);
-        links.push({ href: href, raceId: raceId, rTime: rTime, trackId: trackId, text: text });
+        links.push({ href, raceId, rTime });
       });
       return links;
     });
 
-    addLog('info', raceLinks.length + ' links de resultados encontrados');
-    if (!raceLinks.length) {
-      addLog('warn', 'Nenhum resultado encontrado na pagina.');
-      return;
-    }
+    addLog('info', raceLinks.length + ' links encontrados');
+    if (!raceLinks.length) { addLog('warn', 'Nenhum resultado na pagina.'); return; }
 
-    // 3. Buscar corridas do dia no banco
+    // 2. Corridas do banco
     const dbRaces = db.prepare(
-      'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.trap_und, r.bateu ' +
-      'FROM races r ' +
-      'JOIN race_sessions s ON s.id = r.session_id ' +
-      'WHERE date(s.created_at) = ? AND r.nivel != ? ' +
-      'ORDER BY r.hora'
+      'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu ' +
+      'FROM races r JOIN race_sessions s ON s.id=r.session_id ' +
+      'WHERE date(s.created_at)=? AND r.nivel!=? ORDER BY r.hora'
     ).all(DATE, 'skip');
-
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
-    const updateStmt = db.prepare(
-      'UPDATE races SET bateu=?, resultado_1=?, resultado_2=?, resultado_3=?, video_url=? WHERE id=?'
-    );
+    const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=? WHERE id=?');
 
-    // 4. Processar cada corrida
-    for (var idx = 0; idx < raceLinks.length; idx++) {
-      var link = raceLinks[idx];
+    // 3. Processar cada link
+    for (const link of raceLinks) {
+      if (status.stopRequested) { addLog('warn', 'Parado pelo usuario.'); break; }
 
-      if (status.stopRequested) {
-        addLog('warn', 'Parado pelo usuario.');
-        break;
-      }
-
-      // Tentar match pelo horário
-      var hora12 = hora24To12(link.rTime);
-      var dbRace = dbRaces.find(function(r) {
+      const hora12 = hora24To12(link.rTime);
+      const dbRace = dbRaces.find(function(r) {
         return r.hora === hora12 || r.hora === link.rTime || horaDBTo24(r.hora) === link.rTime;
       });
-
-      if (!dbRace) {
-        addLog('info', 'Sem match: ' + link.rTime + ' (12h=' + hora12 + ')');
-        continue;
-      }
+      if (!dbRace) { addLog('info', 'Sem match: ' + link.rTime + ' (12h=' + hora12 + ')'); continue; }
 
       status.processed++;
       addLog('info', 'Processando ' + link.rTime + ' -> ' + dbRace.corrida);
 
       try {
-        var FULL_URL = 'https://greyhoundbet.racingpost.com/' + (link.href.startsWith('#') ? link.href : '#' + link.href);
-        await page.goto(FULL_URL, { timeout: 20000, waitUntil: 'networkidle0' });
-        await new Promise(r => setTimeout(r, 6000));
+        const url = 'https://greyhoundbet.racingpost.com/' + (link.href.startsWith('#') ? link.href : '#' + link.href);
+        await page.goto(url, { timeout: 20000, waitUntil: 'networkidle0' });
+        await new Promise(r => setTimeout(r, 5000));
 
-        // Extrair texto da página para debug e parsing
-        var pageResult = await page.evaluate(function() {
-          var title   = document.title || '';
-          var url     = window.location.href;
-          // Pegar texto limpo
-          var bodyText = (document.body.innerText || '').slice(0, 4000);
-          // Pegar HTML sem tags para busca mais robusta
-          var cleanHtml = (document.body.innerHTML || '')
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .slice(0, 4000);
-          // Link do vídeo
-          var videoEl  = document.querySelector('a[href*="replay"], a[href*="video"]');
-          var videoUrl = videoEl ? (videoEl.getAttribute('href') || videoEl.getAttribute('data-url') || '') : '';
-          return { title: title, url: url, text: bodyText, clean: cleanHtml, videoUrl: videoUrl };
+        const pageText = await page.evaluate(function() {
+          const videoEl = document.querySelector('a[href*="replay"], a[href*="video"]');
+          return {
+            text: (document.body.innerText || '').slice(0, 5000),
+            videoUrl: videoEl ? (videoEl.getAttribute('href') || '') : ''
+          };
         });
 
-        addLog('info', 'Titulo: "' + pageResult.title.slice(0, 60) + '"');
-        addLog('info', 'Texto: ' + pageResult.clean.slice(0, 300));
+        addLog('info', 'Texto: ' + pageText.text.slice(0, 200));
 
-        // Extrair posições via regex no texto limpo
-        var positions = [];
-        var cleanText = pageResult.clean;
+        // Extrair ordem de chegada por nome
+        const finishing = extractFinishingOrder(pageText.text);
+        addLog('info', 'Ordem: ' + JSON.stringify(finishing.slice(0, 4)));
 
-        // Padrão: número 1-6 seguido de outro número 1-6 (pos trap)
-        var re1 = /\b([1-6])\s+([1-6])\s+[A-Z]/g;
-        var m;
-        while ((m = re1.exec(cleanText)) !== null) {
-          var pos  = parseInt(m[1]);
-          var trap = parseInt(m[2]);
-          if (!positions.find(function(p) { return p.pos === pos; })) {
-            positions.push({ pos: pos, trap: trap });
-          }
-        }
-
-        addLog('info', 'Posicoes: ' + JSON.stringify(positions));
-
-        if (!positions.length) {
-          addLog('warn', link.rTime + ' - sem posicoes extraidas (pagina pode estar diferente)');
+        if (!finishing.length) {
+          addLog('warn', link.rTime + ' - sem posicoes (formato inesperado)');
           continue;
         }
 
-        if (!namePositions.length) {
-          addLog('warn', link.rTime + ' - sem posicoes extraidas');
-          continue;
+        // Determinar bateu comparando nome do vencedor com name_fav
+        const winner = finishing.find(f => f.pos === 1);
+        const p2     = finishing.find(f => f.pos === 2);
+        const p3     = finishing.find(f => f.pos === 3);
+        const winName  = (winner ? winner.name : '').toLowerCase().trim();
+        const favName  = (dbRace.name_fav || '').toLowerCase().trim();
+        const favFirst = favName.split(' ')[0];
+        const winFirst = winName.split(' ')[0];
+
+        let bateu = 'nao';
+        if (winFirst && favFirst && (winFirst === favFirst || winName.includes(favFirst) || favName.includes(winFirst))) {
+          bateu = 'sim';
         }
 
-        updateStmt.run(bateu, r1name, r2name, r3name, pageResult.videoUrl || null, dbRace.id);
+        const r1 = winner ? winner.name : null;
+        const r2 = p2 ? p2.name : null;
+        const r3 = p3 ? p3.name : null;
+
+        updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
         status.updated++;
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
-          (bateu === 'sim' ? '✅ BATEU' : '❌ NAO') + ' ' + dbRace.corrida + ' ' + link.rTime +
-          ' | 1:"' + (r1name||'?') + '" | Fav:"' + nameFavDb + '"'
+          (bateu === 'sim' ? 'BATEU' : 'NAO') + ' ' + dbRace.corrida + ' ' + link.rTime +
+          ' | Vencedor:"' + (r1||'?') + '" | Fav:"' + (dbRace.name_fav||'?') + '"'
         );
 
       } catch (e) {
         addLog('err', 'Erro ' + link.rTime + ': ' + e.message);
-        // Reconectar se frame detached
         if (e.message.includes('detached') || e.message.includes('Detached') || e.message.includes('Target')) {
-          addLog('info', 'Reconectando ao Browserless...');
+          addLog('info', 'Reconectando...');
           try {
-            var puppeteer2 = require('puppeteer');
-            browser = await puppeteer2.connect({ browserWSEndpoint: BROWSERLESS_WS });
-            page    = await browser.newPage();
+            browser = await require('puppeteer').connect({ browserWSEndpoint: BROWSERLESS_WS });
+            page = await browser.newPage();
             await page.setViewport({ width: 1280, height: 900 });
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36');
             addLog('ok', 'Reconectado!');
-          } catch (e2) {
-            addLog('err', 'Falha ao reconectar: ' + e2.message);
-            break;
-          }
+          } catch (e2) { addLog('err', 'Falha reconexao: ' + e2.message); break; }
         }
       }
-
       await new Promise(r => setTimeout(r, 2000));
     }
 
@@ -239,37 +218,32 @@ function startCron() {
   try {
     const cron = require('node-cron');
     cron.schedule('0 23 * * *', function() {
-      var date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+      const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
       addLog('info', 'Cron 23:00 UK para ' + date);
-      runResultsRobot(date).catch(function(e) { addLog('err', e.message); });
+      runResultsRobot(date).catch(e => addLog('err', e.message));
     }, { timezone: 'Europe/London' });
     console.log('[RESULTS-ROBOT] Cron agendado 23:00 UK');
-  } catch(e) {
-    console.warn('[RESULTS-ROBOT] node-cron indisponivel:', e.message);
-  }
+  } catch(e) { console.warn('[RESULTS-ROBOT] node-cron indisponivel:', e.message); }
 }
 
 // ── Rotas ─────────────────────────────────────────────────────────────────────
-router.post('/stop', requireAdmin, function(req, res) {
-  if (!status.running) return res.json({ ok: true, msg: 'Nao esta rodando' });
+router.post('/stop', requireAdmin, (req, res) => {
   status.stopRequested = true;
   addLog('warn', 'Parada solicitada...');
   res.json({ ok: true });
 });
 
-router.post('/run', requireAdmin, express.json(), function(req, res) {
-  var date = (req.body && req.body.date) || new Date().toISOString().slice(0, 10);
-  if (status.running) return res.status(409).json({ error: 'Robo ja esta rodando' });
-  runResultsRobot(date).catch(function(e) { addLog('err', e.message); });
-  res.json({ ok: true, date: date });
+router.post('/run', requireAdmin, express.json(), (req, res) => {
+  const date = (req.body && req.body.date) || new Date().toISOString().slice(0, 10);
+  if (status.running) return res.status(409).json({ error: 'Robo ja rodando' });
+  runResultsRobot(date).catch(e => addLog('err', e.message));
+  res.json({ ok: true, date });
 });
 
-router.get('/status', requireAdmin, function(req, res) {
-  res.json(status);
-});
+router.get('/status', requireAdmin, (req, res) => res.json(status));
 
 module.exports = router;
 module.exports.runResultsRobot  = runResultsRobot;
-module.exports.getResultsStatus = function() { return Object.assign({}, status); };
+module.exports.getResultsStatus = () => ({ ...status });
 module.exports.startCron        = startCron;
-module.exports.requestStop      = function() { status.stopRequested = true; };
+module.exports.requestStop      = () => { status.stopRequested = true; };
