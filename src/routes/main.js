@@ -499,13 +499,7 @@ h2{font-size:16px;margin-bottom:12px}
 .btn-edit:hover{border-color:#60a5fa;color:#60a5fa}
 .btn-save-row{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;margin-right:3px}
 .btn-cancel-row{background:transparent;border:1px solid rgba(255,255,255,.15);color:#888;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px}
-.btn-replay{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none;display:inline-block}
-.btn-replay:hover{background:rgba(239,68,68,.25)}
-#replay-modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9999}
-#replay-modal.open{display:flex}
-#replay-box{position:relative;width:90vw;max-width:960px;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden}
-#replay-iframe{width:100%;height:100%;border:none}
-#replay-close{position:absolute;top:10px;right:12px;background:rgba(0,0,0,.7);border:none;color:#fff;font-size:22px;cursor:pointer;border-radius:50%;width:34px;height:34px;line-height:34px;text-align:center;z-index:1}
+/* replay modal removido */
 #sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}
 #sv-modal.open{display:flex}
 #sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
@@ -546,7 +540,7 @@ ${navBar(user, 'historico')}
   <button id="btn-fp-clr" title="Limpar filtros">✕</button>
   <span id="fp-count-h"></span>
 </div>
-<div class="tw-sess"><table><thead><tr><th style="width:20px;text-align:center">Hora BR</th><th style="width:25px;text-align:center">Corrida</th><th style="width:140px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="width:310px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:30px;text-align:center">Replay</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
+<div class="tw-sess"><table><thead><tr><th style="width:20px;text-align:center">Hora BR</th><th style="width:25px;text-align:center">Corrida</th><th style="width:140px;text-align:center">AvB</th><th style="width:40px;text-align:center">Conf</th><th style="width:45px;text-align:center">Perfis</th><th style="width:310px;text-align:center">Obs</th><th style="width:35px;text-align:center">Odd</th><th style="width:35px;text-align:center">Valor</th><th style="width:45px;text-align:center">Resultado</th><th style="width:30px;text-align:center">Bateu</th><th style="width:25px;text-align:center">Ações</th></tr></thead><tbody id="sess-tb"></tbody></table></div>
 <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
   <button class="btn-exp-h" onclick="exportCSV()">Exportar CSV</button>
   <button class="btn-prt-h" onclick="printAnalises()">&#128438; Imprimir Analises</button>
@@ -556,7 +550,7 @@ ${navBar(user, 'historico')}
 var ALL_RACES=${JSON.stringify(validRaces)};
 var fState={pista:'',horaMin:'',horaMax:''};
 
-function getPista(c){if(!c)return'';var p=c.trim().split(' ');if(p.length>1&&/^[A-Z]\d+$/i.test(p[p.length-1]))return p.slice(0,-1).join(' ');return c;}
+function getPista(c){if(!c)return'';var p=c.trim().split(' ');if(p.length>1){var last=p[p.length-1];if(last.length>=2&&last.length<=4&&last[0]>='A'&&last[0]<='Z')return p.slice(0,-1).join(' ');}return c;}
 function cvHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
 function toMin(h){if(!h)return null;var p=h.split(':');return parseInt(p[0]||0)*60+parseInt(p[1]||0);}
 
@@ -650,12 +644,6 @@ function buildSvCard(trap,nome,perfil,hist){
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 injectSessValModal();
-// abrirReplay placeholder
-  // Garantir URL absoluta
-  var absUrl=url.startsWith('http')?url:'https://greyhoundbet.racingpost.com/'+url.replace(/^\/*/,'');
-  var w=window.open(absUrl,'_blank','width=960,height=540,resizable=yes,scrollbars=yes');
-  if(!w){window.open(absUrl,'_blank');}
-}
 
 function buildResultBadges(r1,r2,r3){
   var tc=['','t1','t2','t3','t4','t5','t6'];
@@ -710,7 +698,6 @@ function renderRows(){
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
       +'<td style="text-align:center">'+buildResultBadges(r.resultado_1,r.resultado_2,r.resultado_3)+'</td>'
       +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
-      +(r.video_url?'<td style="text-align:center"><a href="'+r.video_url+'" target="_blank" style="color:#ef4444;font-size:10px">&#9654;</a></td>':'<td style="text-align:center;color:#555">-</td>')
       +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
       +'</tr>';
   }).join('');
