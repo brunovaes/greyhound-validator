@@ -287,7 +287,7 @@ async function runResultsRobot(targetDate) {
           r3 = nameToTrap(p3 ? p3.name : null);
         }
 
-        updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
+        updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl ? (pageText.videoUrl.startsWith('#') ? 'https://greyhoundbet.racingpost.com/' + pageText.videoUrl : pageText.videoUrl) : null, dbRace.id);
         status.updated++;
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
