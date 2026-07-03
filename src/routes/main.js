@@ -240,7 +240,7 @@ ${navBar(user, 'analisar')}
 router.get('/live', (req, res) => {
   const user = req.user;
   const logoB64 = getLogo();
-  // URLs fixas das pistas (ajustar aqui quando precisar trocar)
+  // URLs fixas das pistas (ajustar aqui quando precisar trocar )
   const LIVE_URL_1 = 'https://www.sisracing.tv/';
   const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://greyhounds.attheraces.com/video/live-video';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
@@ -451,7 +451,7 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:55px">Hora BR</th><th style="width:75px">Corrida</th><th style="width:155px">AvB</th><th style="width:65px">Conf</th><th style="width:75px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:85px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:75px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
