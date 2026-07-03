@@ -451,7 +451,7 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:55px">Hora BR</th><th style="width:75px">Corrida</th><th style="width:155px">AvB</th><th style="width:65px">Conf</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th><th style="width:75px">Resultado</th><th style="width:50px">Bateu</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:60px">Hora BR</th><th style="width:80px">Corrida</th><th style="width:150px">AvB</th><th style="width:70px">Conf</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:45px">Valor</th><th style="width:80px">Resultado</th><th style="width:50px">Bateu</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -474,7 +474,6 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
 <td style="text-align:center"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td>
 <td style="font-size:11px;color:#888;text-align:left;line-height:1.5">${r.obs||'-'}</td>
-<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
 <td style="text-align:center">${r.odd||'-'}</td>
 <td style="text-align:center">${r.valor?'R$'+r.valor:'-'}</td>
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:20px;height:20px;font-size:10px;margin:0 1px">'+n+'</span>';}else{html+='<span style="font-size:9px;color:#888">'+String(v).split(" ")[0].slice(0,8)+'</span>';}});return html||"-";})()}</td>
