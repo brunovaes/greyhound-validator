@@ -182,19 +182,33 @@ async function runResultsRobot(targetDate) {
           continue;
         }
 
-        // Determinar bateu comparando nome do vencedor com name_fav
+        // Validar AvB: fav bateu se chegou ANTES do und
+        const favName = (dbRace.name_fav || '').toLowerCase().trim();
+        const undName = (dbRace.name_und || '').toLowerCase().trim();
+        const favFirst = favName.split(' ')[0];
+        const undFirst = undName.split(' ')[0];
+
+        let posFav = 99, posUnd = 99;
+        finishing.forEach(function(f) {
+          const nm = f.name.toLowerCase().trim();
+          const nmFirst = nm.split(' ')[0];
+          if (favFirst && (nmFirst === favFirst || nm.includes(favFirst) || favFirst.includes(nmFirst))) posFav = f.pos;
+          if (undFirst && (nmFirst === undFirst || nm.includes(undFirst) || undFirst.includes(nmFirst))) posUnd = f.pos;
+        });
+
+        // AvB: fav bateu = chegou na frente do und (posição menor = melhor)
+        let bateu = 'nao';
+        if (posFav < 99 && posUnd < 99) {
+          bateu = posFav < posUnd ? 'sim' : 'nao';
+        } else if (posFav < 99) {
+          bateu = posFav <= 3 ? 'sim' : 'nao'; // und não encontrado, heurística
+        }
+
+        addLog('info', 'Fav:"'+favName+'"=pos'+posFav+' Und:"'+undName+'"=pos'+posUnd+' → '+bateu.toUpperCase());
+
         const winner = finishing.find(f => f.pos === 1);
         const p2     = finishing.find(f => f.pos === 2);
         const p3     = finishing.find(f => f.pos === 3);
-        const winName  = (winner ? winner.name : '').toLowerCase().trim();
-        const favName  = (dbRace.name_fav || '').toLowerCase().trim();
-        const favFirst = favName.split(' ')[0];
-        const winFirst = winName.split(' ')[0];
-
-        let bateu = 'nao';
-        if (winFirst && favFirst && (winFirst === favFirst || winName.includes(favFirst) || favName.includes(winFirst))) {
-          bateu = 'sim';
-        }
 
         // Preferir trap numbers se disponíveis no HTML
         let r1, r2, r3;
@@ -217,7 +231,7 @@ async function runResultsRobot(targetDate) {
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
           (bateu === 'sim' ? 'BATEU' : 'NAO') + ' ' + dbRace.corrida + ' ' + link.rTime +
-          ' | Vencedor:"' + (r1||'?') + '" | Fav:"' + (dbRace.name_fav||'?') + '"'
+          ' | 1o:"'+(r1||'?')+'" Fav:pos'+posFav+' Und:pos'+posUnd
         );
 
       } catch (e) {
