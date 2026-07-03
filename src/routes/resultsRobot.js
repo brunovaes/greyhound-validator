@@ -261,19 +261,6 @@ async function runResultsRobot(targetDate) {
   }
 }
 
-// ── Cron 23:00 UK ────────────────────────────────────────────────────────────
-function startCron() {
-  try {
-    const cron = require('node-cron');
-    cron.schedule('0 23 * * *', function() {
-      const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
-      addLog('info', 'Cron 23:00 UK para ' + date);
-      runResultsRobot(date).catch(e => addLog('err', e.message));
-    }, { timezone: 'Europe/London' });
-    console.log('[RESULTS-ROBOT] Cron agendado 23:00 UK');
-  } catch(e) { console.warn('[RESULTS-ROBOT] node-cron indisponivel:', e.message); }
-}
-
 // ── Rotas ─────────────────────────────────────────────────────────────────────
 router.post('/stop', requireAdmin, (req, res) => {
   status.stopRequested = true;
@@ -293,5 +280,5 @@ router.get('/status', requireAdmin, (req, res) => res.json(status));
 module.exports = router;
 module.exports.runResultsRobot  = runResultsRobot;
 module.exports.getResultsStatus = () => ({ ...status });
-module.exports.startCron        = startCron;
+
 module.exports.requestStop      = () => { status.stopRequested = true; };
