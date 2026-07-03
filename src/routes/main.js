@@ -650,6 +650,13 @@ function buildSvCard(trap,nome,perfil,hist){
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 injectSessValModal();
+function abrirReplay(url){
+  if(!url||url==='undefined'||url==='null'){alert('Replay não disponível para esta corrida.');return;}
+  // Garantir URL absoluta
+  var absUrl=url.startsWith('http')?url:'https://greyhoundbet.racingpost.com/'+url.replace(/^\/*/,'');
+  var w=window.open(absUrl,'_blank','width=960,height=540,resizable=yes,scrollbars=yes');
+  if(!w){window.open(absUrl,'_blank');}
+}
 
 function buildResultBadges(r1,r2,r3){
   var tc=['','t1','t2','t3','t4','t5','t6'];
@@ -692,7 +699,7 @@ function renderRows(){
         +'</div>'
       +'</div>'
       +'<a style="font-size:9px;color:#60a5fa;cursor:pointer;text-decoration:none;display:block;text-align:center;margin-top:4px" onclick="openSessValModal('+r.id+')">&#128269; ver historico</a>'
-      +(r.video_url?'<a class="btn-video" href="'+r.video_url+'" target="_blank" rel="noopener">&#127909; replay</a>':'')+'</td>'
+      +'</td>'
       +'<td style="text-align:center;white-space:nowrap"><span class="badge '+bc+'">'+r.nivel+'</span><div style="font-size:10px;color:#888;margin-top:2px">'+r.pct+'%</div></td>'
       +'<td style="font-size:10px;color:#888">'
       +(r.trap_fav?'<span style="color:rgba(255,255,255,.5);font-weight:600">'+r.trap_fav+'</span> - ':'')+(r.perfil_fav||'-')
@@ -704,7 +711,7 @@ function renderRows(){
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
       +'<td style="text-align:center">'+buildResultBadges(r.resultado_1,r.resultado_2,r.resultado_3)+'</td>'
       +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
-      +(r.video_url?'<td style="text-align:center"><a class="btn-replay" href="'+r.video_url+'" target="_blank">&#9654; replay</a></td>':'<td style="text-align:center;color:#555">-</td>')
+      +(r.video_url?'<td style="text-align:center"><button class="btn-replay" onclick="abrirReplay(\"'+r.video_url+'\")" >&#9654; replay</button></td>':'<td style="text-align:center;color:#555">-</td>')
       +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
       +'</tr>';
   }).join('');
@@ -784,14 +791,6 @@ function printAnalises(){
 }
 
 initFilter();
-// DEBUG TEMPORARIO
-try {
-  var dbg = 'ALL_RACES=' + ALL_RACES.length + ' filtered=' + getFiltered().length;
-  document.getElementById('sess-tb').innerHTML = '<tr><td colspan="12" style="color:yellow;padding:10px">' + dbg + '</td></tr>';
-} catch(e) {
-  document.getElementById('sess-tb').innerHTML = '<tr><td colspan="12" style="color:red;padding:10px">ERRO: ' + e.message + '</td></tr>';
-}
-renderRows();
 </script>
 </body></html>`);
 });
