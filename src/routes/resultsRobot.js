@@ -142,10 +142,32 @@ async function runResultsRobot(targetDate) {
         await new Promise(r => setTimeout(r, 5000));
 
         const pageText = await page.evaluate(function() {
-          const videoEl = document.querySelector('a[href*="replay"], a[href*="video"]');
+          // Link do vídeo
+          const videoEl = document.querySelector('a[href*="replay"], a[href*="video"], button[class*="replay"]');
+          const videoUrl = videoEl ? (videoEl.getAttribute('href') || videoEl.getAttribute('data-url') || '') : '';
+          
+          // Tentar extrair trap numbers do HTML (elementos visuais)
+          const trapOrder = []; // [{pos, trap}]
+          // Procurar elementos de resultado com posição e trap
+          const runners = document.querySelectorAll(
+            '[class*="runner"],[class*="result"],[class*="rp-horse"],[class*="card-row"]'
+          );
+          runners.forEach(function(row) {
+            const posEl  = row.querySelector('[class*="pos"],[class*="position"],.pos');
+            const trapEl = row.querySelector('[class*="trap"],[data-trap]');
+            const pos  = parseInt((posEl  ? posEl.textContent  : '').trim());
+            const trap = parseInt((trapEl ? trapEl.textContent : '').trim());
+            if (pos >= 1 && pos <= 6 && trap >= 1 && trap <= 6) {
+              if (!trapOrder.find(function(t){ return t.pos === pos; })) {
+                trapOrder.push({ pos: pos, trap: trap });
+              }
+            }
+          });
+          
           return {
             text: (document.body.innerText || '').slice(0, 5000),
-            videoUrl: videoEl ? (videoEl.getAttribute('href') || '') : ''
+            videoUrl: videoUrl,
+            trapOrder: trapOrder
           };
         });
 
@@ -174,9 +196,21 @@ async function runResultsRobot(targetDate) {
           bateu = 'sim';
         }
 
-        const r1 = winner ? winner.name : null;
-        const r2 = p2 ? p2.name : null;
-        const r3 = p3 ? p3.name : null;
+        // Preferir trap numbers se disponíveis no HTML
+        let r1, r2, r3;
+        if (pageText.trapOrder && pageText.trapOrder.length >= 3) {
+          const t1 = pageText.trapOrder.find(function(t){ return t.pos === 1; });
+          const t2 = pageText.trapOrder.find(function(t){ return t.pos === 2; });
+          const t3 = pageText.trapOrder.find(function(t){ return t.pos === 3; });
+          r1 = t1 ? String(t1.trap) : (winner ? winner.name : null);
+          r2 = t2 ? String(t2.trap) : (p2 ? p2.name : null);
+          r3 = t3 ? String(t3.trap) : (p3 ? p3.name : null);
+          if (t1) addLog('info', 'Traps do HTML: 1o=T' + t1.trap + ' 2o=T' + (t2?t2.trap:'?') + ' 3o=T' + (t3?t3.trap:'?'));
+        } else {
+          r1 = winner ? winner.name : null;
+          r2 = p2 ? p2.name : null;
+          r3 = p3 ? p3.name : null;
+        }
 
         updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
         status.updated++;
