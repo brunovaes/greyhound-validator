@@ -650,12 +650,7 @@ function buildSvCard(trap,nome,perfil,hist){
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 injectSessValModal();
-function abrirReplay(url){
-  if(!url||url==='undefined'||url==='null'){alert('Replay nao disponivel para esta corrida.');return;}
-  var base='https://greyhoundbet.racingpost.com';
-  var absUrl=(url.indexOf('http')===0)?url:(base+(url.charAt(0)==='/'?'':'/')+url);
-  window.open(absUrl,'_blank');
-}
+// abrirReplay placeholder
   // Garantir URL absoluta
   var absUrl=url.startsWith('http')?url:'https://greyhoundbet.racingpost.com/'+url.replace(/^\/*/,'');
   var w=window.open(absUrl,'_blank','width=960,height=540,resizable=yes,scrollbars=yes');
@@ -715,7 +710,7 @@ function renderRows(){
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
       +'<td style="text-align:center">'+buildResultBadges(r.resultado_1,r.resultado_2,r.resultado_3)+'</td>'
       +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
-      +(r.video_url?'<td style="text-align:center"><button class="btn-replay" onclick="abrirReplay(this.dataset.url)" data-url="'+r.video_url+'">&#9654; replay</button></td>':'<td style="text-align:center;color:#555">-</td>')
+      +(r.video_url?'<td style="text-align:center"><a href="'+r.video_url+'" target="_blank" style="color:#ef4444;font-size:10px">&#9654;</a></td>':'<td style="text-align:center;color:#555">-</td>')
       +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
       +'</tr>';
   }).join('');
