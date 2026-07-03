@@ -143,8 +143,19 @@ async function runResultsRobot(targetDate) {
 
         const pageText = await page.evaluate(function() {
           // Link do vídeo
-          const videoEl = document.querySelector('a[href*="replay"], a[href*="video"], button[class*="replay"]');
-          const videoUrl = videoEl ? (videoEl.getAttribute('href') || videoEl.getAttribute('data-url') || '') : '';
+          // Capturar link de replay — múltiplas estratégias
+          let videoUrl = '';
+          const replaySels = ['a[href*="replay"]','a[href*="video"]','button[class*="replay"]','a[class*="replay"]','a[class*="watch"]'];
+          for (let s = 0; s < replaySels.length; s++) {
+            const el = document.querySelector(replaySels[s]);
+            if (el) { videoUrl = el.getAttribute('href') || el.getAttribute('data-url') || ''; if (videoUrl) break; }
+          }
+          // Fallback: qualquer link cujo texto contenha "replay" ou "watch"
+          if (!videoUrl) {
+            const allLinks = Array.from(document.querySelectorAll('a[href]'));
+            const rl = allLinks.find(function(a){ const t=(a.textContent||'').toLowerCase(); return t.includes('replay')||t.includes('watch'); });
+            if (rl) videoUrl = rl.getAttribute('href') || '';
+          }
           
           // Tentar extrair trap numbers do HTML (elementos visuais)
           const trapOrder = []; // [{pos, trap}]
@@ -172,6 +183,8 @@ async function runResultsRobot(targetDate) {
         });
 
         addLog('info', 'Texto: ' + pageText.text.slice(0, 200));
+        if (pageText.videoUrl) addLog('ok', 'Replay: ' + pageText.videoUrl);
+        else addLog('info', 'Sem link de replay encontrado');
 
         // Extrair ordem de chegada por nome
         const finishing = extractFinishingOrder(pageText.text);
