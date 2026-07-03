@@ -553,6 +553,7 @@ async function pollResultsStatus() {
       document.getElementById('btn-res-stop').style.cursor='not-allowed';
       stEl.textContent = d.lastRun ? 'Concluído — ' + d.updated + ' corridas atualizadas' : 'Pronto';
       sbar.className = 'sbar sdone';
+      var sp = sbar.querySelector('.spin'); if (sp) sp.remove();
       try { localStorage.setItem('gf_res_state', JSON.stringify({ txt: stEl.textContent })); } catch(e) {}
     } else {
       stEl.textContent = 'Processando... ' + d.processed + ' corridas';
@@ -574,6 +575,7 @@ async function pollResultsStatus() {
     }).join('');
     logEl.scrollTop = logEl.scrollHeight;
     document.getElementById('res-sbar').className = 'sbar sdone';
+    var sp2 = document.getElementById('res-sbar').querySelector('.spin'); if (sp2) sp2.remove();
     document.getElementById('res-st-txt').textContent = savedState ? savedState.txt : 'Log restaurado';
   }
 })();

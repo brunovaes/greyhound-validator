@@ -24,11 +24,45 @@ function navBar(user, active) {
       <a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>
     </div>
     <div style="display:flex;align-items:center;gap:14px">
+      <a href="${BASE}/robot" id="robot-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.08);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
+        <span style="display:inline-block;width:7px;height:7px;background:#60a5fa;border-radius:50%"></span>
+        <span id="robot-badge-txt">Robô rodando...</span>
+      </a>
       <span style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${user.plan}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
       <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
     </div>
   </nav>
-  <style>.nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}.nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}</style>`;
+  <style>
+    .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
+    .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+  </style>
+  <script>
+  (function() {
+    var BASE = '${BASE}';
+    var badge = document.getElementById('robot-badge');
+    var badgeTxt = document.getElementById('robot-badge-txt');
+    function checkRobots() {
+      Promise.all([
+        fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
+        fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).catch(function(){return {};})
+      ]).then(function(results) {
+        var pdf = results[0]; var res = results[1];
+        if (pdf.running) {
+          badge.style.display = 'flex';
+          badgeTxt.textContent = 'Robô PDF: ' + (pdf.progress||0) + '/' + (pdf.total||'?');
+        } else if (res.running) {
+          badge.style.display = 'flex';
+          badgeTxt.textContent = 'Robô Resultados rodando...';
+        } else {
+          badge.style.display = 'none';
+        }
+      });
+    }
+    checkRobots();
+    setInterval(checkRobots, 4000);
+  })();
+  </script>`;
 }
 
 // Serve o JS do cliente como arquivo separado
