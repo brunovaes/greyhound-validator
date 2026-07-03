@@ -711,7 +711,7 @@ function renderRows(){
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
       +'<td style="text-align:center">'+buildResultBadges(r.resultado_1,r.resultado_2,r.resultado_3)+'</td>'
       +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
-      +(r.video_url?'<td style="text-align:center"><button class="btn-replay" onclick="abrirReplay(\"'+r.video_url+'\")" >&#9654; replay</button></td>':'<td style="text-align:center;color:#555">-</td>')
+      +(r.video_url?'<td style="text-align:center"><button class="btn-replay" onclick="abrirReplay(this.dataset.url)" data-url="'+r.video_url+'">&#9654; replay</button></td>':'<td style="text-align:center;color:#555">-</td>')
       +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
       +'</tr>';
   }).join('');
