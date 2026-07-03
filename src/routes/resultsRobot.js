@@ -271,7 +271,7 @@ async function runResultsRobot(targetDate) {
         } else {
           r1 = nameToTrap(winner ? winner.name : null);
           r2 = nameToTrap(p2 ? p2.name : null);
-          r3 = p3 ? p3.name : null;
+          r3 = nameToTrap(p3 ? p3.name : null);
         }
 
         updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
