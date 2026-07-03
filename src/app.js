@@ -91,7 +91,15 @@ function injectSaveModal(){
   document.getElementById('save-inp').addEventListener('keydown',function(e){if(e.key==='Enter')doSaveSession();if(e.key==='Escape')closeSaveModal();});
   document.getElementById('save-modal').addEventListener('click',function(e){if(e.target===this)closeSaveModal();});
 }
-function openSaveModal(){document.getElementById('save-inp').value='';document.getElementById('save-modal').style.display='flex';setTimeout(function(){document.getElementById('save-inp').focus();},80);}
+function openSaveModal(){
+  var now=new Date();
+  var dd=String(now.getDate()).padStart(2,'0');
+  var mm=String(now.getMonth()+1).padStart(2,'0');
+  var yyyy=now.getFullYear();
+  document.getElementById('save-inp').value='Races_'+dd+mm+yyyy;
+  document.getElementById('save-modal').style.display='flex';
+  setTimeout(function(){var inp=document.getElementById('save-inp');inp.focus();inp.select();},80);
+}
 function closeSaveModal(){document.getElementById('save-modal').style.display='none';}
 function showToast(msg,ok){var t=document.getElementById('ghf-toast');t.textContent=msg;t.className='ghf-toast '+(ok?'t-ok':'t-err');requestAnimationFrame(function(){t.classList.add('t-show');});setTimeout(function(){t.classList.remove('t-show');},2600);}
 async function doSaveSession(){
