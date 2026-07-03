@@ -483,6 +483,14 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:#111;border:1px solid #2a3142;border-radius:8px;font-size:11px;color:#888">
+  <span style="color:#60a5fa;font-size:13px">&#9654;</span>
+  <span style="font-weight:600;color:#aaa">Tamanho do Replay</span>
+  <label style="display:flex;align-items:center;gap:5px">Largura <input id="rv-w" type="number" value="960" min="600" max="1920" step="10" style="width:68px;padding:3px 6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px" oninput="saveRvSize()"> px</label>
+  <span style="color:#444">&times;</span>
+  <label style="display:flex;align-items:center;gap:5px">Altura <input id="rv-h" type="number" value="640" min="400" max="1080" step="10" style="width:68px;padding:3px 6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px" oninput="saveRvSize()"> px</label>
+  <span style="color:#555;font-size:10px;margin-left:4px">&#128190; salvo automaticamente</span>
+</div>
 <div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
@@ -552,19 +560,24 @@ function svCard(trap,nome,perfil,hist){
   return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span>'+(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div><table class="sv-tbl"><colgroup><col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px"><col style="width:38px"><col style="width:46px"><col><col style="width:36px"><col style="width:48px"></colgroup><thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 document.addEventListener('click',function(e){if(e.target.id==='sv-modal')closeSvModal();});
+function saveRvSize(){
+  try{localStorage.setItem('gf_rv_w',document.getElementById('rv-w').value);localStorage.setItem('gf_rv_h',document.getElementById('rv-h').value);}catch(e){}
+}
+(function(){
+  try{
+    var w=localStorage.getItem('gf_rv_w');var h=localStorage.getItem('gf_rv_h');
+    if(w)document.getElementById('rv-w').value=w;
+    if(h)document.getElementById('rv-h').value=h;
+  }catch(e){}
+})();
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  // Remover videoFileName expirado — Racing Post busca token fresco com a sessão do usuário
   var vu=r.video_url;
   var vfIdx=vu.indexOf('&videoFileName=');
-  if(vfIdx>=0){
-    var afterVf=vu.slice(vfIdx+15);
-    var nextAmp=afterVf.indexOf('&');
-    vu=vu.slice(0,vfIdx)+(nextAmp>=0?'&'+afterVf.slice(nextAmp+1):'');
-  }
-  // Popup herdando a sessão do browser (login Racing Post válido)
-  var w=960,h=640;
+  if(vfIdx>=0){var afterVf=vu.slice(vfIdx+15);var nextAmp=afterVf.indexOf('&');vu=vu.slice(0,vfIdx)+(nextAmp>=0?'&'+afterVf.slice(nextAmp+1):'');}
+  var w=parseInt(document.getElementById('rv-w').value)||960;
+  var h=parseInt(document.getElementById('rv-h').value)||640;
   var left=Math.round((screen.width-w)/2);
   var top=Math.round((screen.height-h)/2);
   window.open(vu,'gf_replay','width='+w+',height='+h+',left='+left+',top='+top+',scrollbars=no,resizable=yes');
