@@ -547,7 +547,7 @@ ${navBar(user, 'historico')}
 </div>
 </div>
 <script>
-var ALL_RACES=${JSON.stringify(validRaces)};
+var ALL_RACES=JSON.parse('${JSON.stringify(validRaces).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'\\u003c').replace(/>/g,'\\u003e')}');
 var fState={pista:'',horaMin:'',horaMax:''};
 
 function getPista(c){if(!c)return'';var p=c.trim().split(' ');if(p.length>1){var last=p[p.length-1];if(last.length>=2&&last.length<=4&&last[0]>='A'&&last[0]<='Z')return p.slice(0,-1).join(' ');}return c;}
