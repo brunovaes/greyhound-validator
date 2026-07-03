@@ -451,13 +451,13 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:85px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:75px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:105px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:75px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
   return`<tr>
-<td style="text-align:center;white-space:nowrap"><strong style="color:#22c55e;font-size:13px">${horaBr}</strong><div style="font-size:9px;color:rgba(34,197,94,.4)">${horaUk}</div></td>
+<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaBr}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${horaUk}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div></td>
 <td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:12px">
 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">
@@ -473,7 +473,7 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 </div></div>
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
 <td style="text-align:center"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td>
-<td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{html+='<span style="font-size:9px;color:#888">'+String(v).split(" ")[0].slice(0,8)+'</span>';}});return html||"-";})()}</td>
+<td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});return html||"-";})()}</td>
 <td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
 <td style="text-align:center">${r.odd||'-'}</td>
