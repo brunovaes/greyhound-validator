@@ -536,8 +536,6 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 #rv-hdr h3{font-size:13px;font-weight:700;color:#60a5fa;margin:0}
 #rv-xbtn{background:transparent;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
 #rv-xbtn:hover{color:#fff}
-#rv-video{width:100%;aspect-ratio:16/9;background:#000;display:block}
-#rv-err{display:none;padding:40px;text-align:center;color:#ef4444;font-size:13px}
 </style>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <div id="rv-modal">
@@ -546,11 +544,9 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
       <h3 id="rv-title">&#9654; Replay</h3>
       <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
     </div>
-    <video id="rv-video" controls autoplay></video>
-    <div id="rv-err">Não foi possível carregar o vídeo.</div>
+    <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen" style="width:100%;aspect-ratio:16/9;border:none;background:#000;display:block"></iframe>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
@@ -577,49 +573,16 @@ var hlsInstance = null;
 function closeReplayModal(){
   var modal=document.getElementById('rv-modal');
   modal.classList.remove('open');
-  var vid=document.getElementById('rv-video');
-  vid.pause();
-  vid.src='';
+  var fr=document.getElementById('rv-frame');
+  if(fr)fr.src='about:blank';
   if(hlsInstance){hlsInstance.destroy();hlsInstance=null;}
 }
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  var vu=r.video_url;
-  // Extrair videoFileName do URL sem regex
-  var m3u8='';
-  var vfIdx=vu.indexOf('videoFileName=');
-  if(vfIdx>=0){
-    var vfRaw=vu.slice(vfIdx+14);
-    var ampIdx=vfRaw.indexOf('&');
-    if(ampIdx>=0)vfRaw=vfRaw.slice(0,ampIdx);
-    m3u8=decodeURIComponent(vfRaw);
-  }
-  var title=document.getElementById('rv-title');
-  var vid=document.getElementById('rv-video');
-  var err=document.getElementById('rv-err');
-  title.textContent='\u25B6 '+( r.corrida||'Replay');
-  err.style.display='none';
-  vid.style.display='block';
+  document.getElementById('rv-title').textContent='\u25B6 '+(r.corrida||'Replay');
+  document.getElementById('rv-frame').src=r.video_url;
   document.getElementById('rv-modal').classList.add('open');
-  if(hlsInstance){hlsInstance.destroy();hlsInstance=null;}
-  if(m3u8){
-    if(typeof Hls!=='undefined'&&Hls.isSupported()){
-      hlsInstance=new Hls();
-      hlsInstance.loadSource(m3u8);
-      hlsInstance.attachMedia(vid);
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED,function(){vid.play();});
-      hlsInstance.on(Hls.Events.ERROR,function(e,d){if(d.fatal){vid.style.display='none';err.style.display='block';}});
-    } else if(vid.canPlayType('application/vnd.apple.mpegurl')){
-      vid.src=m3u8; vid.play();
-    } else {
-      vid.style.display='none'; err.style.display='block';
-    }
-  } else {
-    // Fallback: abrir URL original em nova aba
-    window.open(vu,'_blank');
-    closeReplayModal();
-  }
 }
 </script>
 </div></body></html>`);
