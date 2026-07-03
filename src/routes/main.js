@@ -473,7 +473,6 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 </div></div>
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
 <td style="text-align:center"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td>
-<td style="font-size:11px;color:#888;text-align:left;line-height:1.5">${r.obs||'-'}</td>
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:20px;height:20px;font-size:10px;margin:0 1px">'+n+'</span>';}else{html+='<span style="font-size:9px;color:#888">'+String(v).split(" ")[0].slice(0,8)+'</span>';}});return html||"-";})()}</td>
 <td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
