@@ -213,6 +213,7 @@ async function runResultsRobot(targetDate) {
         // Lookup nome→trap via race_card (todos os 6 galgos da corrida)
         var raceCard = [];
         try { if (dbRace.race_card) raceCard = JSON.parse(dbRace.race_card); } catch(e) {}
+        addLog('info', 'race_card: ' + (raceCard.length ? raceCard.map(function(g){return 'T'+g.trap+':'+g.nome;}).join(', ') : 'VAZIO - sessao antiga sem race_card'));
 
         // Similaridade entre dois strings (chars em comum / max length)
         function similarity(a, b) {
