@@ -704,7 +704,7 @@ function renderRows(){
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
       +'<td style="text-align:center">'+buildResultBadges(r.resultado_1,r.resultado_2,r.resultado_3)+'</td>'
       +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
-      +(r.video_url?'<td style="text-align:center"><a class="btn-replay" onclick="openReplay(\'' + (r.video_url||'').replace(/'/g,'') + '\')">▶ replay</a></td>':'<td style="text-align:center;color:#555">-</td>')
+      +(r.video_url?'<td style="text-align:center"><a class="btn-replay" href="'+r.video_url+'" target="_blank">&#9654; replay</a></td>':'<td style="text-align:center;color:#555">-</td>')
       +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
       +'</tr>';
   }).join('');
@@ -784,6 +784,13 @@ function printAnalises(){
 }
 
 initFilter();
+// DEBUG TEMPORARIO
+try {
+  var dbg = 'ALL_RACES=' + ALL_RACES.length + ' filtered=' + getFiltered().length;
+  document.getElementById('sess-tb').innerHTML = '<tr><td colspan="12" style="color:yellow;padding:10px">' + dbg + '</td></tr>';
+} catch(e) {
+  document.getElementById('sess-tb').innerHTML = '<tr><td colspan="12" style="color:red;padding:10px">ERRO: ' + e.message + '</td></tr>';
+}
 renderRows();
 </script>
 </body></html>`);
