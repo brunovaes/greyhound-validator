@@ -505,7 +505,7 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 </div></div>
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
 <td style="text-align:center"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td>
-<td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><a href="'+r.video_url+'" target="_blank" style="font-size:9px;color:#60a5fa;text-decoration:none;display:inline-flex;align-items:center;gap:3px;border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:1px 6px;background:rgba(96,165,250,.06)">&#9654; Replay</a></div>';}return html||"-";})()}</td>
+<td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
 <td style="text-align:center">${r.odd||'-'}</td>
@@ -514,8 +514,43 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
 
-<style>#sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}#sv-modal.open{display:flex}#sv-box{background:#12172a;border:1px solid rgba(255,255,255,.12);border-radius:12px;width:88vw;max-width:920px;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column}#sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:#12172a}#sv-hdr h3{font-size:13px;font-weight:700;color:#fff;margin:0}#sv-xbtn{background:transparent;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px}#sv-body{padding:14px 16px;display:flex;flex-direction:column;gap:0}.sv-dog{width:100%}.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}.sv-name{font-size:12px;font-weight:700;color:#fff}.sv-perfil{font-size:10px;color:#888;margin-left:4px}.sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}.sv-tbl{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}.sv-tbl th{font-size:8px;color:rgba(255,255,255,.3);text-transform:uppercase;padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:left}.sv-tbl td{padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8);white-space:nowrap}.sv-tbl tr:last-child td{border-bottom:none}.sv-bends{font-weight:700}.sv-caltm{color:#60a5fa;font-weight:700}.sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,.55)}</style>
+<style>
+#sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}#sv-modal.open{display:flex}
+#sv-box{background:#12172a;border:1px solid rgba(255,255,255,.12);border-radius:12px;width:88vw;max-width:920px;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column}
+#sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:#12172a}
+#sv-hdr h3{font-size:13px;font-weight:700;color:#fff;margin:0}
+#sv-xbtn{background:transparent;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px}
+#sv-body{padding:14px 16px;display:flex;flex-direction:column;gap:0}
+.sv-dog{width:100%}.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sv-name{font-size:12px;font-weight:700;color:#fff}.sv-perfil{font-size:10px;color:#888;margin-left:4px}
+.sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
+.sv-tbl{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+.sv-tbl th{font-size:8px;color:rgba(255,255,255,.3);text-transform:uppercase;padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:left}
+.sv-tbl td{padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8);white-space:nowrap}
+.sv-tbl tr:last-child td{border-bottom:none}.sv-bends{font-weight:700}.sv-caltm{color:#60a5fa;font-weight:700}
+.sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,.55)}
+#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9100}
+#rv-modal.open{display:flex}
+#rv-box{background:#0a0a0a;border:1px solid rgba(96,165,250,.2);border-radius:14px;width:90vw;max-width:900px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 60px rgba(96,165,250,.1)}
+#rv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#111}
+#rv-hdr h3{font-size:13px;font-weight:700;color:#60a5fa;margin:0}
+#rv-xbtn{background:transparent;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
+#rv-xbtn:hover{color:#fff}
+#rv-video{width:100%;aspect-ratio:16/9;background:#000;display:block}
+#rv-err{display:none;padding:40px;text-align:center;color:#ef4444;font-size:13px}
+</style>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
+<div id="rv-modal">
+  <div id="rv-box">
+    <div id="rv-hdr">
+      <h3 id="rv-title">&#9654; Replay</h3>
+      <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
+    </div>
+    <video id="rv-video" controls autoplay></video>
+    <div id="rv-err">Não foi possível carregar o vídeo.</div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
@@ -536,7 +571,56 @@ function svCard(trap,nome,perfil,hist){
   var rows=hist.map(function(h){var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}return'<tr><td>'+h.data+'</td><td>'+h.pista+'</td><td style="text-align:center">'+h.dist+'m</td><td style="text-align:center;color:#aaa">['+h.trap+']</td><td style="text-align:center;color:#888">'+(h.split||'')+'</td><td class="sv-bends" style="text-align:center">'+(h.bends||'')+'</td><td style="color:#888">'+rem+'</td><td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td><td class="sv-caltm" style="text-align:right">'+ct+'</td></tr>';}).join('');
   return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span>'+(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div><table class="sv-tbl"><colgroup><col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px"><col style="width:38px"><col style="width:46px"><col><col style="width:36px"><col style="width:48px"></colgroup><thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-document.addEventListener('click',function(e){if(e.target.id==='sv-modal')closeSvModal();});
+document.addEventListener('click',function(e){if(e.target.id==='sv-modal')closeSvModal();if(e.target.id==='rv-modal')closeReplayModal();});
+
+var hlsInstance = null;
+function closeReplayModal(){
+  var modal=document.getElementById('rv-modal');
+  modal.classList.remove('open');
+  var vid=document.getElementById('rv-video');
+  vid.pause();
+  vid.src='';
+  if(hlsInstance){hlsInstance.destroy();hlsInstance=null;}
+}
+function openReplay(id){
+  var r=ALL_RACES.find(function(x){return x.id==id;});
+  if(!r||!r.video_url)return;
+  var vu=r.video_url;
+  // Extrair videoFileName do URL sem regex
+  var m3u8='';
+  var vfIdx=vu.indexOf('videoFileName=');
+  if(vfIdx>=0){
+    var vfRaw=vu.slice(vfIdx+14);
+    var ampIdx=vfRaw.indexOf('&');
+    if(ampIdx>=0)vfRaw=vfRaw.slice(0,ampIdx);
+    m3u8=decodeURIComponent(vfRaw);
+  }
+  var title=document.getElementById('rv-title');
+  var vid=document.getElementById('rv-video');
+  var err=document.getElementById('rv-err');
+  title.textContent='\u25B6 '+( r.corrida||'Replay');
+  err.style.display='none';
+  vid.style.display='block';
+  document.getElementById('rv-modal').classList.add('open');
+  if(hlsInstance){hlsInstance.destroy();hlsInstance=null;}
+  if(m3u8){
+    if(typeof Hls!=='undefined'&&Hls.isSupported()){
+      hlsInstance=new Hls();
+      hlsInstance.loadSource(m3u8);
+      hlsInstance.attachMedia(vid);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED,function(){vid.play();});
+      hlsInstance.on(Hls.Events.ERROR,function(e,d){if(d.fatal){vid.style.display='none';err.style.display='block';}});
+    } else if(vid.canPlayType('application/vnd.apple.mpegurl')){
+      vid.src=m3u8; vid.play();
+    } else {
+      vid.style.display='none'; err.style.display='block';
+    }
+  } else {
+    // Fallback: abrir URL original em nova aba
+    window.open(vu,'_blank');
+    closeReplayModal();
+  }
+}
 </script>
 </div></body></html>`);
 });
