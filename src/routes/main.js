@@ -529,24 +529,8 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 .sv-tbl td{padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8);white-space:nowrap}
 .sv-tbl tr:last-child td{border-bottom:none}.sv-bends{font-weight:700}.sv-caltm{color:#60a5fa;font-weight:700}
 .sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,.55)}
-#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9100}
-#rv-modal.open{display:flex}
-#rv-box{background:#0a0a0a;border:1px solid rgba(96,165,250,.2);border-radius:14px;width:90vw;max-width:900px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 60px rgba(96,165,250,.1)}
-#rv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#111}
-#rv-hdr h3{font-size:13px;font-weight:700;color:#60a5fa;margin:0}
-#rv-xbtn{background:transparent;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
-#rv-xbtn:hover{color:#fff}
 </style>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
-<div id="rv-modal">
-  <div id="rv-box">
-    <div id="rv-hdr">
-      <h3 id="rv-title">&#9654; Replay</h3>
-      <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
-    </div>
-    <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen" style="width:100%;aspect-ratio:16/9;border:none;background:#000;display:block"></iframe>
-  </div>
-</div>
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
@@ -567,20 +551,11 @@ function svCard(trap,nome,perfil,hist){
   var rows=hist.map(function(h){var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}return'<tr><td>'+h.data+'</td><td>'+h.pista+'</td><td style="text-align:center">'+h.dist+'m</td><td style="text-align:center;color:#aaa">['+h.trap+']</td><td style="text-align:center;color:#888">'+(h.split||'')+'</td><td class="sv-bends" style="text-align:center">'+(h.bends||'')+'</td><td style="color:#888">'+rem+'</td><td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td><td class="sv-caltm" style="text-align:right">'+ct+'</td></tr>';}).join('');
   return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span>'+(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div><table class="sv-tbl"><colgroup><col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px"><col style="width:38px"><col style="width:46px"><col><col style="width:36px"><col style="width:48px"></colgroup><thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-document.addEventListener('click',function(e){if(e.target.id==='sv-modal')closeSvModal();if(e.target.id==='rv-modal')closeReplayModal();});
-
-var hlsInstance = null;
-function closeReplayModal(){
-  var modal=document.getElementById('rv-modal');
-  modal.classList.remove('open');
-  var fr=document.getElementById('rv-frame');
-  if(fr)fr.src='about:blank';
-  if(hlsInstance){hlsInstance.destroy();hlsInstance=null;}
-}
+document.addEventListener('click',function(e){if(e.target.id==='sv-modal')closeSvModal();});
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  // Remove videoFileName (token expira) — Racing Post busca token fresco sozinho
+  // Remover videoFileName expirado — Racing Post busca token fresco com a sessão do usuário
   var vu=r.video_url;
   var vfIdx=vu.indexOf('&videoFileName=');
   if(vfIdx>=0){
@@ -588,9 +563,11 @@ function openReplay(id){
     var nextAmp=afterVf.indexOf('&');
     vu=vu.slice(0,vfIdx)+(nextAmp>=0?'&'+afterVf.slice(nextAmp+1):'');
   }
-  document.getElementById('rv-title').textContent='\u25B6 '+(r.corrida||'Replay');
-  document.getElementById('rv-frame').src=vu;
-  document.getElementById('rv-modal').classList.add('open');
+  // Popup herdando a sessão do browser (login Racing Post válido)
+  var w=960,h=640;
+  var left=Math.round((screen.width-w)/2);
+  var top=Math.round((screen.height-h)/2);
+  window.open(vu,'gf_replay','width='+w+',height='+h+',left='+left+',top='+top+',scrollbars=no,resizable=yes');
 }
 </script>
 </div></body></html>`);
