@@ -96,7 +96,7 @@ function openSaveModal(){
   var dd=String(now.getDate()).padStart(2,'0');
   var mm=String(now.getMonth()+1).padStart(2,'0');
   var yyyy=now.getFullYear();
-  document.getElementById('save-inp').value='Races_'+dd+mm+yyyy;
+  document.getElementById('save-inp').value='Races '+dd+'/'+mm+'/'+yyyy;
   document.getElementById('save-modal').style.display='flex';
   setTimeout(function(){var inp=document.getElementById('save-inp');inp.focus();inp.select();},80);
 }
