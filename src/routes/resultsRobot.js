@@ -244,16 +244,19 @@ async function runResultsRobot(targetDate) {
           // Buscar melhor match no race_card pelos 6 galgos da corrida
           var bestTrap = null;
           var bestScore = 0.5; // threshold mínimo
+          var scores = [];
           for (var i = 0; i < raceCard.length; i++) {
             var cardNome = (raceCard[i].nome || '');
             var score = similarity(name, cardNome);
+            scores.push('T'+raceCard[i].trap+'='+cardNome+'('+score.toFixed(2)+')');
             if (score > bestScore) {
               bestScore = score;
               bestTrap = String(raceCard[i].trap);
             }
           }
+          addLog('info', 'Match "'+name+'" → '+scores.join(' | ')+' → BEST:'+bestTrap+'('+bestScore.toFixed(2)+')');
           if (bestTrap) return bestTrap;
-          return name; // sem match suficiente → mostra nome
+          return name;
         }
 
         let r1, r2, r3;
