@@ -214,24 +214,45 @@ async function runResultsRobot(targetDate) {
         var raceCard = [];
         try { if (dbRace.race_card) raceCard = JSON.parse(dbRace.race_card); } catch(e) {}
 
+        // Similaridade entre dois strings (chars em comum / max length)
+        function similarity(a, b) {
+          a = a.toLowerCase().replace(/\s/g, '');
+          b = b.toLowerCase().replace(/\s/g, '');
+          if (!a || !b) return 0;
+          if (a === b) return 1;
+          if (b.includes(a) || a.includes(b)) return 0.9;
+          var matches = 0;
+          var shorter = a.length < b.length ? a : b;
+          var longer  = a.length < b.length ? b : a;
+          for (var k = 0; k < shorter.length; k++) {
+            if (longer.includes(shorter[k])) matches++;
+          }
+          return matches / longer.length;
+        }
+
         function nameToTrap(name) {
           if (!name) return null;
-          const nm = name.toLowerCase().trim();
-          const nmF = nm.split(' ')[0];
-          // 1. Buscar no race_card (todos os galgos)
+          if (!raceCard.length) {
+            // sem race_card: fallback fav/und
+            const nm = name.toLowerCase().trim();
+            const nmF = nm.split(' ')[0];
+            if (favFirst && (nmF === favFirst || nm.includes(favFirst))) return String(dbRace.trap_fav);
+            if (undFirst && (nmF === undFirst || nm.includes(undFirst))) return String(dbRace.trap_und);
+            return name;
+          }
+          // Buscar melhor match no race_card pelos 6 galgos da corrida
+          var bestTrap = null;
+          var bestScore = 0.5; // threshold mínimo
           for (var i = 0; i < raceCard.length; i++) {
-            const cardNm = (raceCard[i].nome || '').toLowerCase().trim();
-            const cardF  = cardNm.split(' ')[0];
-            if (nmF && cardF && (nmF === cardF || nm.includes(cardF) || cardNm.includes(nmF))) {
-              return String(raceCard[i].trap);
+            var cardNome = (raceCard[i].nome || '');
+            var score = similarity(name, cardNome);
+            if (score > bestScore) {
+              bestScore = score;
+              bestTrap = String(raceCard[i].trap);
             }
           }
-          // 2. Fallback: fav/und direto
-          if (favFirst && (nmF === favFirst || nm.includes(favFirst) || favFirst.includes(nmF)))
-            return String(dbRace.trap_fav);
-          if (undFirst && (nmF === undFirst || nm.includes(undFirst) || undFirst.includes(nmF)))
-            return String(dbRace.trap_und);
-          return name; // nome se não encontrado
+          if (bestTrap) return bestTrap;
+          return name; // sem match suficiente → mostra nome
         }
 
         let r1, r2, r3;
