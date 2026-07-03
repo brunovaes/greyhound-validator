@@ -1,0 +1,110 @@
+/* ============================================================
+   Greyhound Factory — Shared CSS
+   Carregado por todas as páginas via <link>
+   ============================================================ */
+
+/* ── Variáveis globais ── */
+:root {
+  --bg: #0D1117;
+  --sur: #161b27;
+  --sur2: #1e2433;
+  --bdr: #2a3142;
+  --bdr2: #323a4a;
+  --grn: #22c55e;
+  --grn2: #16a34a;
+  --org: #f97316;
+  --txt: #f0f0f0;
+  --mut: #666;
+  --mut2: #888;
+  --red: #ef4444;
+  --rad: 6px;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Base ── */
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+a { color: var(--grn); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Hero (logo banner) ── */
+.hero { width: 100%; background: #000; border-bottom: 2px solid var(--grn); overflow: hidden; }
+.hero img { width: 100%; height: auto; max-height: 160px; object-fit: contain; object-position: center; display: block; background: #000; }
+
+/* ── Nav ── */
+.nl { padding: 12px 18px; color: #888; text-decoration: none; font-size: 13px; border-bottom: 2px solid transparent; display: inline-block; }
+.nl:hover, .na { color: var(--grn) !important; border-bottom-color: var(--grn) !important; }
+
+/* ── KPI cards ── */
+.kpi { background: var(--sur); border: 1px solid var(--bdr2); border-radius: 8px; padding: 10px 14px; position: relative; overflow: hidden; }
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+.kpi.g::before { background: var(--grn); }
+.kpi.o::before { background: var(--org); }
+.kpi.b::before { background: #3b82f6; }
+.kpi.p::before { background: #8b5cf6; }
+.kpi-label { font-size: 10px; color: var(--mut2); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px; }
+.kpi-val { font-size: 22px; font-weight: 700; }
+.kpi.g .kpi-val { color: var(--grn); }
+.kpi.o .kpi-val { color: var(--org); }
+.kpi.b .kpi-val { color: #60a5fa; }
+.kpi.p .kpi-val { color: #a78bfa; }
+
+/* ── Badges de confiança ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.ba { background: rgba(34,197,94,.15); color: var(--grn); border: 1px solid rgba(34,197,94,.3); }
+.bm { background: rgba(249,115,22,.12); color: var(--org); border: 1px solid rgba(249,115,22,.25); }
+.bb { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.25); }
+.bs { background: rgba(100,100,100,.1); color: var(--mut2); border: 1px solid var(--bdr2); }
+
+/* ── Resultado: sim / não ── */
+.sim { color: var(--grn); font-weight: 700; }
+.nao { color: var(--red); font-weight: 700; }
+
+/* ── Trap badges (bolinhas coloridas) ── */
+.trap-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  font-weight: 700; font-size: 12px; border: 2px solid transparent;
+}
+.t1 { background: radial-gradient(circle at 35% 35%, #ff4444, #c00 60%, #8b0000); color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.4), inset 1px 1px 3px rgba(255,255,255,.4), 0 2px 4px rgba(0,0,0,.3); }
+.t2 { background: radial-gradient(circle at 35% 35%, #4488ff, #1a3db5 60%, #0a1f6b); color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.4), inset 1px 1px 3px rgba(255,255,255,.3), 0 2px 4px rgba(0,0,0,.3); }
+.t3 { background: radial-gradient(circle at 35% 35%, #fff, #d0d0d0 60%, #a0a0a0); color: #111; box-shadow: inset -2px -2px 4px rgba(0,0,0,.2), inset 1px 1px 3px rgba(255,255,255,.8), 0 2px 4px rgba(0,0,0,.25); }
+.t4 { background: radial-gradient(circle at 35% 35%, #444, #1a1a1a 60%, #000); color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.6), inset 1px 1px 3px rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.4); }
+.t5 { background: radial-gradient(circle at 35% 35%, #ffaa00, #e07000 60%, #a04800); color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.3), inset 1px 1px 3px rgba(255,255,255,.4), 0 2px 4px rgba(0,0,0,.3); }
+.t6 { background: radial-gradient(circle at 50% 50%, #cc0000 0%, #cc0000 38%, transparent 38%), repeating-linear-gradient(90deg, #111 0%, #111 50%, #f0f0f0 50%, #f0f0f0 100%) 0/10px; color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.4), inset 1px 1px 3px rgba(255,255,255,.2), 0 2px 4px rgba(0,0,0,.4); }
+
+/* ── Perfil badges ── */
+.perfil-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.p-rec { background: rgba(34,197,94,.15); color: var(--grn); }
+.p-fum { background: rgba(239,68,68,.12); color: var(--red); }
+.p-est { background: rgba(100,100,100,.15); color: var(--mut2); }
+.p-fro { background: rgba(249,115,22,.12); color: var(--org); }
+
+/* ── Tags da coluna CORRIDA ── */
+.top3-tag {
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-weight: 700; color: #fbbf24;
+  border: 1px solid rgba(251,191,36,.5); border-radius: 6px;
+  padding: 3px 8px; margin-top: 5px;
+  background: rgba(251,191,36,.15);
+}
+.win-tag {
+  display: inline-flex; align-items: center;
+  font-size: 9px; color: rgba(249,115,22,.6);
+  border: 1px solid rgba(249,115,22,.2); border-radius: 3px;
+  padding: 1px 5px; margin-top: 3px;
+  background: rgba(249,115,22,.04);
+}
+.hora-br { font-size: 10px; color: rgba(34,197,94,.5); margin-top: 2px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--sur); }
+::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
