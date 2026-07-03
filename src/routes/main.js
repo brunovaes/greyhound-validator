@@ -651,6 +651,20 @@ function buildSvCard(trap,nome,perfil,hist){
 }
 injectSessValModal();
 
+function buildResultBadges(r1,r2,r3){
+  var tc=['','t1','t2','t3','t4','t5','t6'];
+  var html='';
+  [r1,r2,r3].forEach(function(res){
+    if(!res)return;
+    var n=parseInt(res);
+    if(n>=1&&n<=6){
+      html+='<span class="trap-badge '+tc[n]+'" style="width:20px;height:20px;font-size:10px;margin:0 1px">'+n+'</span>';
+    } else {
+      html+='<span style="font-size:9px;color:#888;margin:0 2px">'+(res||'').split(' ')[0].slice(0,8)+'</span>';
+    }
+  });
+  return html||'-';
+}
 function renderRows(){
   var filtered=getFiltered();
   var tb=document.getElementById('sess-tb');
@@ -688,20 +702,7 @@ function renderRows(){
       +'<td style="font-size:11px;color:#888;max-width:200px;line-height:1.4">'+(r.obs||'-')+'</td>'
       +'<td style="text-align:center">'+(r.odd||'-')+'</td>'
       +'<td style="text-align:center">'+(r.valor?'R$'+r.valor:'-')+'</td>'
-      +'<td style="text-align:center">'+(function(){
-        var tc=["","t1","t2","t3","t4","t5","t6"];
-        var badges="";
-        [r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(res){
-          if(!res)return;
-          var n=parseInt(res);
-          if(n>=1&&n<=6){
-            badges+='<span class="trap-badge '+tc[n]+'" style="width:20px;height:20px;font-size:10px;margin:0 1px">'+n+'</span>';
-          } else {
-            badges+='<span style="font-size:9px;color:#888;margin:0 2px">'+(res||'').split(' ')[0].slice(0,8)+'</span>';
-          }
-        });
-        return badges||'-';
-      }())+'</td>'
+      +'<td style="text-align:center">'+buildResultBadges(r.resultado_1,r.resultado_2,r.resultado_3)+'</td>'
       +'<td style="text-align:center" class="'+(r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':'')+'" id="bateu-cell-'+r.id+'">'+(r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-')+'</td>'
       +(r.video_url?'<td style="text-align:center"><a class="btn-replay" onclick="openReplay(\'' + (r.video_url||'').replace(/'/g,'') + '\')">▶ replay</a></td>':'<td style="text-align:center;color:#555">-</td>')
       +'<td style="text-align:center"><button class="btn-edit" onclick="editRace('+r.id+')" title="Editar">&#9998;</button></td>'
