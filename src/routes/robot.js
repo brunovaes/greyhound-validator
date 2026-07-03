@@ -6,8 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 const resultsRobotModule = require('./resultsRobot');
-const { runResultsRobot, getResultsStatus, startCron: startResultsCron } = resultsRobotModule;
-try { startResultsCron(); } catch(e) { console.warn('[CRON]', e.message); }
+const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
 // PDF_DIR é dinâmico por data — criado em runRobot
 
