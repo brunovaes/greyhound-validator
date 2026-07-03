@@ -115,7 +115,7 @@ async function runResultsRobot(targetDate) {
 
     // 2. Corridas do banco
     const dbRaces = db.prepare(
-      'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu ' +
+      'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card ' +
       'FROM races r JOIN race_sessions s ON s.id=r.session_id ' +
       'WHERE date(s.created_at)=? AND r.nivel!=? ORDER BY r.hora'
     ).all(DATE, 'skip');
@@ -210,19 +210,42 @@ async function runResultsRobot(targetDate) {
         const p2     = finishing.find(f => f.pos === 2);
         const p3     = finishing.find(f => f.pos === 3);
 
-        // Preferir trap numbers se disponíveis no HTML
+        // Lookup nome→trap via race_card (todos os 6 galgos da corrida)
+        var raceCard = [];
+        try { if (dbRace.race_card) raceCard = JSON.parse(dbRace.race_card); } catch(e) {}
+
+        function nameToTrap(name) {
+          if (!name) return null;
+          const nm = name.toLowerCase().trim();
+          const nmF = nm.split(' ')[0];
+          // 1. Buscar no race_card (todos os galgos)
+          for (var i = 0; i < raceCard.length; i++) {
+            const cardNm = (raceCard[i].nome || '').toLowerCase().trim();
+            const cardF  = cardNm.split(' ')[0];
+            if (nmF && cardF && (nmF === cardF || nm.includes(cardF) || cardNm.includes(nmF))) {
+              return String(raceCard[i].trap);
+            }
+          }
+          // 2. Fallback: fav/und direto
+          if (favFirst && (nmF === favFirst || nm.includes(favFirst) || favFirst.includes(nmF)))
+            return String(dbRace.trap_fav);
+          if (undFirst && (nmF === undFirst || nm.includes(undFirst) || undFirst.includes(nmF)))
+            return String(dbRace.trap_und);
+          return name; // nome se não encontrado
+        }
+
         let r1, r2, r3;
         if (pageText.trapOrder && pageText.trapOrder.length >= 3) {
           const t1 = pageText.trapOrder.find(function(t){ return t.pos === 1; });
           const t2 = pageText.trapOrder.find(function(t){ return t.pos === 2; });
           const t3 = pageText.trapOrder.find(function(t){ return t.pos === 3; });
-          r1 = t1 ? String(t1.trap) : (winner ? winner.name : null);
-          r2 = t2 ? String(t2.trap) : (p2 ? p2.name : null);
-          r3 = t3 ? String(t3.trap) : (p3 ? p3.name : null);
+          r1 = t1 ? String(t1.trap) : nameToTrap(winner ? winner.name : null);
+          r2 = t2 ? String(t2.trap) : nameToTrap(p2 ? p2.name : null);
+          r3 = t3 ? String(t3.trap) : nameToTrap(p3 ? p3.name : null);
           if (t1) addLog('info', 'Traps do HTML: 1o=T' + t1.trap + ' 2o=T' + (t2?t2.trap:'?') + ' 3o=T' + (t3?t3.trap:'?'));
         } else {
-          r1 = winner ? winner.name : null;
-          r2 = p2 ? p2.name : null;
+          r1 = nameToTrap(winner ? winner.name : null);
+          r2 = nameToTrap(p2 ? p2.name : null);
           r3 = p3 ? p3.name : null;
         }
 
