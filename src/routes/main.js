@@ -580,8 +580,16 @@ function closeReplayModal(){
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
+  // Remove videoFileName (token expira) — Racing Post busca token fresco sozinho
+  var vu=r.video_url;
+  var vfIdx=vu.indexOf('&videoFileName=');
+  if(vfIdx>=0){
+    var afterVf=vu.slice(vfIdx+15);
+    var nextAmp=afterVf.indexOf('&');
+    vu=vu.slice(0,vfIdx)+(nextAmp>=0?'&'+afterVf.slice(nextAmp+1):'');
+  }
   document.getElementById('rv-title').textContent='\u25B6 '+(r.corrida||'Replay');
-  document.getElementById('rv-frame').src=r.video_url;
+  document.getElementById('rv-frame').src=vu;
   document.getElementById('rv-modal').classList.add('open');
 }
 </script>
