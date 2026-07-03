@@ -105,24 +105,17 @@ router.get('/', requireAdmin, (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Robo - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
-.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}
-.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
-nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
-.nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
-.nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
 .layout{display:flex;min-height:calc(100vh - 210px)}
 .robot-sidebar{width:200px;flex-shrink:0;background:#111;border-right:1px solid #333;padding:16px}
 .robot-sidebar h3{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
-.robot-menu-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#888;border:1px solid transparent;transition:all .2s;margin-bottom:6px;text-decoration:none;width:100%}
+.robot-menu-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#888;border:1px solid transparent;transition:all .2s;margin-bottom:6px;text-decoration:none;width:100%;background:transparent}
 .robot-menu-item:hover{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.2);color:#fff}
 .robot-menu-item.active{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e}
 .robot-menu-item .icon{font-size:18px}
 .robot-content{flex:1;padding:24px;overflow-y:auto}
 .robot-panel{display:none}.robot-panel.active{display:block}
-.content{padding:24px;max-width:920px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .sub{font-size:13px;color:#888;margin-bottom:24px}
 .card{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:16px}
@@ -156,8 +149,6 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .ab{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
 .empty{text-align:center;padding:24px;color:#555;font-size:13px}
-
-/* Popup PDF pronto */
 .pdf-popup{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center}
 .pdf-popup.open{display:flex}
 .pdf-popup-box{background:#111;border:1px solid #333;border-radius:14px;padding:32px 36px;text-align:center;max-width:400px;border-top:3px solid #22c55e;animation:popIn .3s ease}
@@ -305,6 +296,7 @@ async function startRobot() {
   document.getElementById('prog-cur').textContent = 'Iniciando...';
   document.getElementById('prog-cnt').textContent = '0 / 0';
   setSbar('run', 'Iniciando robo...');
+  try { localStorage.removeItem('gf_pdf_log'); localStorage.removeItem('gf_pdf_state'); } catch(e) {}
 
   try {
     var r = await fetch(BASE + '/robot/start', {
@@ -350,6 +342,7 @@ function updateUI(s) {
       return '<div class="' + c + '">' + escHtml(l.msg) + '</div>';
     }).join('');
     log.scrollTop = log.scrollHeight;
+    try { if (s.log.length) localStorage.setItem('gf_pdf_log', JSON.stringify(s.log)); } catch(e) {}
   }
 }
 
@@ -364,6 +357,7 @@ function finishUI(s) {
     document.getElementById('pdf-list').innerHTML = s.pdfs.map(function(p) {
       return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">✅</span></div>';
     }).join('');
+    try { localStorage.setItem('gf_pdf_state', JSON.stringify({ pdfs: s.pdfs, date: date })); } catch(e) {}
   }
 }
 
@@ -472,6 +466,22 @@ async function downloadAll() {
           return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">✅</span></div>';
         }).join('');
       }
+    } else {
+      // Servidor sem log (reiniciou?) — restaurar do localStorage
+      var savedLog = null; var savedState = null;
+      try { savedLog = JSON.parse(localStorage.getItem('gf_pdf_log') || 'null'); } catch(e) {}
+      try { savedState = JSON.parse(localStorage.getItem('gf_pdf_state') || 'null'); } catch(e) {}
+      if (savedLog && savedLog.length) {
+        s.log = savedLog; s.pdfs = []; updateUI(s);
+        setSbar('done', 'Log restaurado — inicie nova coleta para atualizar.');
+        if (savedState && savedState.pdfs && savedState.pdfs.length) {
+          dlQueue = savedState.pdfs.map(function(p) { return { filename: p.name, date: savedState.date || '' }; });
+          document.getElementById('results-wrap').style.display = 'block';
+          document.getElementById('pdf-list').innerHTML = savedState.pdfs.map(function(p) {
+            return '<div class="pdf-item"><div><div class="pdf-name">' + escHtml(p.name) + '</div><div class="pdf-meta">' + escHtml(p.track) + ' · ' + p.dist + 'm</div></div><span style="font-size:10px;color:#22c55e">✅</span></div>';
+          }).join('');
+        }
+      }
     }
   } catch(e) {}
 })();
@@ -494,6 +504,7 @@ async function startResultsRobot() {
   document.getElementById('res-status-card').style.display = 'block';
   document.getElementById('res-log').innerHTML = '';
   document.getElementById('res-st-txt').textContent = 'Iniciando...';
+  try { localStorage.removeItem('gf_res_log'); localStorage.removeItem('gf_res_state'); } catch(e) {}
 
   try {
     await fetch(BASE + '/robot/results/run', {
@@ -530,6 +541,7 @@ async function pollResultsStatus() {
       return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
     }).join('');
     logEl.scrollTop = logEl.scrollHeight;
+    try { if (d.logs && d.logs.length) localStorage.setItem('gf_res_log', JSON.stringify(d.logs)); } catch(e) {}
 
     const stEl = document.getElementById('res-st-txt');
     const sbar = document.getElementById('res-sbar');
@@ -541,11 +553,30 @@ async function pollResultsStatus() {
       document.getElementById('btn-res-stop').style.cursor='not-allowed';
       stEl.textContent = d.lastRun ? 'Concluído — ' + d.updated + ' corridas atualizadas' : 'Pronto';
       sbar.className = 'sbar sdone';
+      try { localStorage.setItem('gf_res_state', JSON.stringify({ txt: stEl.textContent })); } catch(e) {}
     } else {
       stEl.textContent = 'Processando... ' + d.processed + ' corridas';
     }
   } catch(e) {}
 }
+
+// Restaurar log de resultados do localStorage no load da página
+(function() {
+  var savedLog = null; var savedState = null;
+  try { savedLog = JSON.parse(localStorage.getItem('gf_res_log') || 'null'); } catch(e) {}
+  try { savedState = JSON.parse(localStorage.getItem('gf_res_state') || 'null'); } catch(e) {}
+  if (savedLog && savedLog.length) {
+    document.getElementById('res-status-card').style.display = 'block';
+    var logEl = document.getElementById('res-log');
+    logEl.innerHTML = savedLog.map(function(l) {
+      var cls = l.type === 'ok' ? 'res-ok' : l.type === 'err' ? 'res-err' : l.type === 'warn' ? 'res-warn' : 'res-info';
+      return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
+    }).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+    document.getElementById('res-sbar').className = 'sbar sdone';
+    document.getElementById('res-st-txt').textContent = savedState ? savedState.txt : 'Log restaurado';
+  }
+})();
 </script></body></html>`);
 });
 

@@ -41,6 +41,7 @@ a:hover { text-decoration: underline; }
 /* ── Nav ── */
 .nl { padding: 12px 18px; color: #888; text-decoration: none; font-size: 13px; border-bottom: 2px solid transparent; display: inline-block; }
 .nl:hover, .na { color: var(--grn) !important; border-bottom-color: var(--grn) !important; }
+nav { background: #111; border-bottom: 1px solid var(--bdr); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
 
 /* ── KPI cards ── */
 .kpi { background: var(--sur); border: 1px solid var(--bdr2); border-radius: 8px; padding: 10px 14px; position: relative; overflow: hidden; }
