@@ -651,7 +651,11 @@ function buildSvCard(trap,nome,perfil,hist){
 }
 injectSessValModal();
 function abrirReplay(url){
-  if(!url||url==='undefined'||url==='null'){alert('Replay não disponível para esta corrida.');return;}
+  if(!url||url==='undefined'||url==='null'){alert('Replay nao disponivel para esta corrida.');return;}
+  var base='https://greyhoundbet.racingpost.com';
+  var absUrl=(url.indexOf('http')===0)?url:(base+(url.charAt(0)==='/'?'':'/')+url);
+  window.open(absUrl,'_blank');
+}
   // Garantir URL absoluta
   var absUrl=url.startsWith('http')?url:'https://greyhoundbet.racingpost.com/'+url.replace(/^\/*/,'');
   var w=window.open(absUrl,'_blank','width=960,height=540,resizable=yes,scrollbars=yes');
