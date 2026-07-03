@@ -117,9 +117,9 @@ async function runResultsRobot(targetDate) {
     const dbRaces = db.prepare(
       'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card ' +
       'FROM races r JOIN race_sessions s ON s.id=r.session_id ' +
-      'WHERE date(s.created_at)=? AND r.nivel!=? ORDER BY r.hora'
+      'WHERE date(datetime(s.created_at, \'-3 hours\'))=? AND r.nivel!=? ORDER BY r.hora'
     ).all(DATE, 'skip');
-    addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
+    addLog('info', dbRaces.length + ' corridas no banco para ' + DATE + (dbRaces.length ? ' → horas: ' + dbRaces.map(function(r){return r.hora;}).join(', ') : ' — verifique se a sessão foi salva nesta data'));
 
     const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=? WHERE id=?');
 
