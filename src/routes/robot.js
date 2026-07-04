@@ -21,7 +21,7 @@ function getTodayDate() {
 function scheduleCronRobot() {
   const now = new Date();
   const nextRun = new Date();
-  nextRun.setUTCHours(16, 30, 0, 0);
+  nextRun.setUTCHours(6, 0, 0, 0);
   if (nextRun <= now) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
   const msUntil = nextRun - now;
   console.log('[CRON] Próxima coleta automática em ' + Math.round(msUntil/60000) + ' minutos (' + nextRun.toISOString() + ')');
@@ -81,7 +81,6 @@ function scheduleResultsCron() {
   setTimeout(async function() {
     const utcHNow = new Date().getUTCHours();
     if (utcHNow >= 8 && utcHNow <= 17) {
-      const { runResultsRobot, getResultsStatus } = require('./resultsRobot');
       const st = getResultsStatus();
       if (!st.running) {
         const date = getTodayDate();
@@ -95,8 +94,10 @@ function scheduleResultsCron() {
       } else {
         console.log('[CRON-RES] Robô de resultados já rodando, pulando.');
       }
+    } else {
+      console.log('[CRON-RES] Fora da janela UTC (' + new Date().getUTCHours() + 'h), pulando.');
     }
-    scheduleResultsCron(); // reagenda para próximos 30 min
+    scheduleResultsCron();
   }, msUntil);
 }
 scheduleResultsCron();
