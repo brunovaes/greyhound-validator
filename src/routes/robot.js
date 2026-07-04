@@ -21,7 +21,7 @@ function getTodayDate() {
 function scheduleCronRobot() {
   const now = new Date();
   const nextRun = new Date();
-  nextRun.setUTCHours(16, 10, 0, 0);
+  nextRun.setUTCHours(16, 30, 0, 0);
   if (nextRun <= now) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
   const msUntil = nextRun - now;
   console.log('[CRON] Próxima coleta automática em ' + Math.round(msUntil/60000) + ' minutos (' + nextRun.toISOString() + ')');
