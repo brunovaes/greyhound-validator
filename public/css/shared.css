@@ -71,8 +71,8 @@ nav { background: #111; border-bottom: 1px solid var(--bdr); padding: 0 20px; di
 /* ── Trap badges (bolinhas coloridas) ── */
 .trap-badge {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 50%;
-  font-weight: 700; font-size: 12px; border: 2px solid transparent;
+  width: 28px; height: 28px; border-radius: 50%;
+  font-weight: 700; font-size: 13px; border: 2px solid transparent;
 }
 .t1 { background: radial-gradient(circle at 35% 35%, #ff4444, #c00 60%, #8b0000); color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.4), inset 1px 1px 3px rgba(255,255,255,.4), 0 2px 4px rgba(0,0,0,.3); }
 .t2 { background: radial-gradient(circle at 35% 35%, #4488ff, #1a3db5 60%, #0a1f6b); color: #fff; box-shadow: inset -2px -2px 4px rgba(0,0,0,.4), inset 1px 1px 3px rgba(255,255,255,.3), 0 2px 4px rgba(0,0,0,.3); }

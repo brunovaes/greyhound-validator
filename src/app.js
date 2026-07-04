@@ -390,13 +390,13 @@ function renderTable(){
     var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':
       '<div style="display:flex;align-items:flex-start;justify-content:center;gap:10px">'
         +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">'
-          +'<div class="trap-badge '+trapClass(tf)+'" style="width:30px;height:30px;font-size:14px">'+tf+'</div>'
+          +'<div class="trap-badge '+trapClass(tf)+'" style="width:28px;height:28px;font-size:13px">'+tf+'</div>'
           +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">'+fn(nf)+'</div>'
           +(r.perfilFav?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilFav+'</div>':'')
         +'</div>'
         +'<div style="font-size:10px;color:var(--mut);padding-top:8px">vs</div>'
         +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">'
-          +'<div class="trap-badge '+trapClass(tu)+'" style="width:30px;height:30px;font-size:14px">'+tu+'</div>'
+          +'<div class="trap-badge '+trapClass(tu)+'" style="width:28px;height:28px;font-size:13px">'+tu+'</div>'
           +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">'+fn(nu)+'</div>'
           +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
         +'</div>'
