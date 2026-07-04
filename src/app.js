@@ -445,18 +445,36 @@ async function runChunk(files,caps){
 }
 
 async function runAnalysis(){
-  if(!raceFiles.length){alert('Carregue pelo menos um PDF.');return;}
+  var usandoPasta=false;
+  if(!raceFiles.length){
+    // Sem PDFs upados — verifica pasta do dia
+    setSt('Verificando PDFs de hoje na pasta...');
+    try{
+      var r=await fetch(BASE+'/api/pdfs/hoje');
+      var d=await r.json();
+      if(!d.count){setSt('Nenhum PDF encontrado. Faça upload ou rode o Robô primeiro.');return;}
+      setSt(d.count+' PDFs encontrados na pasta de hoje. Iniciando análise...');
+      usandoPasta=true;
+    }catch(e){setSt('Erro ao verificar pasta. Faça upload manual.');return;}
+  }
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
   prog(5,'Preparando...');results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
-  var CHUNK=30,chunks=[];
-  for(var ci=0;ci<raceFiles.length;ci+=CHUNK)chunks.push(raceFiles.slice(ci,ci+CHUNK));
   try{
-    for(var chunkIdx=0;chunkIdx<chunks.length;chunkIdx++){
-      prog(Math.round(5+(chunkIdx/chunks.length)*90),'Grupo '+(chunkIdx+1)+'/'+chunks.length+' ('+chunks[chunkIdx].length+' PDFs)...');
-      var ok=await runChunk(chunks[chunkIdx],chunkIdx===0?capFiles:[]);
-      if(ok===false)break;
+    if(usandoPasta){
+      // Análise da pasta — chama sem arquivos, servidor lê da pasta
+      prog(10,'Lendo PDFs da pasta...');
+      var ok=await runChunk([],[]);
+      if(ok===false){}
+    } else {
+      var CHUNK=30,chunks=[];
+      for(var ci=0;ci<raceFiles.length;ci+=CHUNK)chunks.push(raceFiles.slice(ci,ci+CHUNK));
+      for(var chunkIdx=0;chunkIdx<chunks.length;chunkIdx++){
+        prog(Math.round(5+(chunkIdx/chunks.length)*90),'Grupo '+(chunkIdx+1)+'/'+chunks.length+' ('+chunks[chunkIdx].length+' PDFs)...');
+        var ok2=await runChunk(chunks[chunkIdx],chunkIdx===0?capFiles:[]);
+        if(ok2===false)break;
+      }
     }
     var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;
     setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');

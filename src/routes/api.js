@@ -785,6 +785,36 @@ function sanitizeEliminatedTraps(races) {
 // ============================================================
 // ROTAS
 // ============================================================
+const fs = require('fs');
+const PDF_PATH = process.env.PDF_PATH || require('path').join(__dirname, '../../public/pdfs');
+
+function getPdfFolder(date) {
+  const d = date || new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return require('path').join(PDF_PATH, `${yyyy}-${mm}-${dd}`);
+}
+
+function readFolderPdfs(folder) {
+  if (!fs.existsSync(folder)) return [];
+  return fs.readdirSync(folder)
+    .filter(f => f.toLowerCase().endsWith('.pdf'))
+    .map(f => ({
+      buffer: fs.readFileSync(require('path').join(folder, f)),
+      name: f,
+      originalname: f
+    }));
+}
+
+router.get('/pdfs/hoje', (req, res) => {
+  const folder = getPdfFolder();
+  const files = readFolderPdfs(folder);
+  res.json({ count: files.length, folder, files: files.map(f=>f.name) });
+});
+
+
+
 const BATCH_SIZE = 5;
 
 function parseClaudeJson(raw) {
@@ -837,7 +867,17 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
 
     const pdfFiles = req.files['pdfs']||[];
     const capFiles = req.files['caps']||[];
-    if(!pdfFiles.length) return res.status(400).json({ error:'Nenhum PDF enviado.' });
+
+    // Se não vieram PDFs no upload, tenta ler da pasta do dia
+    let pdfsParaAnalise = pdfFiles;
+    let usandoPasta = false;
+    if (!pdfFiles.length) {
+      const folder = getPdfFolder();
+      const folderPdfs = readFolderPdfs(folder);
+      if (!folderPdfs.length) return res.status(400).json({ error: 'Nenhum PDF enviado e nenhum PDF encontrado na pasta de hoje (' + folder + ').' });
+      pdfsParaAnalise = folderPdfs;
+      usandoPasta = true;
+    }
 
     // SSE: envia resultados por lote, browser recebe progressivamente
     res.setHeader('Content-Type', 'text/event-stream');
@@ -849,10 +889,12 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
       try { res.write('data: ' + JSON.stringify(data) + '\n\n'); } catch(e) {}
     };
 
-    const batches = [];
-    for(let i=0;i<pdfFiles.length;i+=BATCH_SIZE) batches.push(pdfFiles.slice(i,i+BATCH_SIZE));
+    if (usandoPasta) sendEvent({ type:'info', msg: pdfsParaAnalise.length + ' PDFs encontrados na pasta de hoje' });
 
-    sendEvent({ type:'start', total: pdfFiles.length, batches: batches.length });
+    const batches = [];
+    for(let i=0;i<pdfsParaAnalise.length;i+=BATCH_SIZE) batches.push(pdfsParaAnalise.slice(i,i+BATCH_SIZE));
+
+    sendEvent({ type:'start', total: pdfsParaAnalise.length, batches: batches.length });
 
     let allRaces = [];
     const errors = [];
