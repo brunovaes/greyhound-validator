@@ -826,6 +826,7 @@ router.get('/pdfs/hoje/zip', (req, res) => {
 });
 
 
+router.get('/pdfs/hoje', (req, res) => {
   const folder = getPdfFolder();
   const files = readFolderPdfs(folder);
   res.json({ count: files.length, folder, files: files.map(f=>f.name) });
