@@ -65,14 +65,16 @@ function scheduleResultsCron() {
     nextRun.setUTCHours(nextRun.getUTCHours() + 1);
   }
 
-  // Se próximo horário está fora da janela (>17 UTC), agenda para 08:00 UTC amanhã
-  if (nextRun.getUTCHours() > 17 || (nextRun.getUTCHours() === 17 && nextRun.getUTCMinutes() > 0)) {
-    nextRun.setUTCDate(nextRun.getUTCDate() + 1);
-    nextRun.setUTCHours(8, 0, 0, 0);
-  }
-  // Se próximo horário está antes da janela (<8 UTC), agenda para 08:00 UTC hoje
-  if (nextRun.getUTCHours() < 8) {
-    nextRun.setUTCHours(8, 0, 0, 0);
+  // Janela: 12:00–21:30 UTC (09:00–18:30 BRT)
+  const h = nextRun.getUTCHours();
+  const m = nextRun.getUTCMinutes();
+  const fora = h < 12 || h > 21 || (h === 21 && m > 30);
+  if (fora) {
+    // Agenda para 12:00 UTC do próximo dia ou hoje se ainda não chegou
+    if (h > 21 || (h === 21 && m > 30)) {
+      nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+    }
+    nextRun.setUTCHours(12, 0, 0, 0);
   }
 
   const msUntil = nextRun - now;
@@ -80,7 +82,9 @@ function scheduleResultsCron() {
 
   setTimeout(async function() {
     const utcHNow = new Date().getUTCHours();
-    if (utcHNow >= 8 && utcHNow <= 17) {
+    const utcMNow = new Date().getUTCMinutes();
+    const dentroJanela = utcHNow >= 12 && (utcHNow < 21 || (utcHNow === 21 && utcMNow <= 30));
+    if (dentroJanela) {
       const st = getResultsStatus();
       if (!st.running) {
         const date = getTodayDate();
@@ -95,7 +99,7 @@ function scheduleResultsCron() {
         console.log('[CRON-RES] Robô de resultados já rodando, pulando.');
       }
     } else {
-      console.log('[CRON-RES] Fora da janela UTC (' + new Date().getUTCHours() + 'h), pulando.');
+      console.log('[CRON-RES] Fora da janela BRT (' + (utcHNow-3) + 'h BRT), pulando.');
     }
     scheduleResultsCron();
   }, msUntil);
