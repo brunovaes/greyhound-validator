@@ -541,7 +541,8 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 #rv-newtab:hover{color:#aaa;border-color:#555}
 #rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
 #rv-xbtn:hover{color:#f0f0f0}
-#rv-frame{flex:1;border:none;background:#000;display:block;width:100%}
+#rv-crop{flex:1;overflow:hidden;position:relative}
+#rv-frame{position:absolute;top:-220px;left:0;width:125%;height:calc(125% + 275px);border:none;background:#000;display:block;transform:scale(0.8);transform-origin:0 0}
 </style>
 <div id="rv-modal">
   <div id="rv-box">
@@ -551,7 +552,9 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
       <a id="rv-newtab" href="#" target="_blank">&#8599; Nova aba</a>
       <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
     </div>
-    <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
+    <div id="rv-crop">
+      <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
+    </div>
   </div>
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
