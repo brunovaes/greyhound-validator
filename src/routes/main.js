@@ -542,7 +542,7 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 #rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
 #rv-xbtn:hover{color:#f0f0f0}
 #rv-crop{flex:1;overflow:hidden;position:relative}
-#rv-frame{position:absolute;top:-220px;left:0;width:125%;height:calc(125% + 275px);border:none;background:#000;display:block;transform:scale(0.8);transform-origin:0 0}
+#rv-frame{position:absolute;top:-75px;left:0;width:149%;height:calc(149% + 75px);border:none;background:#000;display:block;transform:scale(0.67);transform-origin:0 0}
 </style>
 <div id="rv-modal">
   <div id="rv-box">
