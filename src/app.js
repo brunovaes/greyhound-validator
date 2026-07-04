@@ -67,9 +67,107 @@ function injectStyles(){
     '#filter-panel .fp-hora-sep{color:rgba(255,255,255,.2);font-size:10px;}',
     '#fp-count{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto;white-space:nowrap;}',
     '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
-    '#btn-fp-clear:hover{color:#e53935;}'
+    '#btn-fp-clear:hover{color:#e53935;}',
+    /* popup pós-análise */
+    '.ps-ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9500;display:none;align-items:center;justify-content:center;}',
+    '.ps-ov.open{display:flex;}',
+    '.ps-box{background:#111;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:36px 40px;text-align:center;max-width:400px;width:90%;animation:psIn .25s ease;}',
+    '@keyframes psIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}',
+    '.ps-icon{font-size:52px;margin-bottom:16px;display:block;}',
+    '.ps-title{font-size:18px;font-weight:700;color:#fff;margin-bottom:8px;}',
+    '.ps-sub{font-size:13px;color:rgba(255,255,255,.5);margin-bottom:24px;line-height:1.6;}',
+    '.ps-inp{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:9px;color:#fff;padding:11px 15px;font-size:14px;outline:none;box-sizing:border-box;transition:border .2s;text-align:left;display:block;}',
+    '.ps-inp:focus{border-color:#22c55e;}',
+    '.ps-inp::placeholder{color:rgba(255,255,255,.3);}',
+    '.ps-btns{display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap;}',
+    '.ps-btn-pri{background:#22c55e;color:#000;border:none;padding:10px 24px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
+    '.ps-btn-pri:hover{opacity:.88;}',
+    '.ps-btn-sec{background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.15);padding:10px 20px;border-radius:9px;font-size:14px;cursor:pointer;}',
+    '.ps-btn-warn{background:#f97316;color:#000;border:none;padding:10px 20px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
+    '.ps-btn-warn:hover{opacity:.88;}'
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+}
+
+/* ── Popup pós-análise (3 etapas) ───────────────────────────────────── */
+function injectPostSaveModal(){
+  var d=document.createElement('div');
+  d.innerHTML='<div id="ps-modal" class="ps-ov">'
+    +'<div class="ps-box" id="ps-box">'
+    +'<span class="ps-icon" id="ps-icon">&#128190;</span>'
+    +'<div class="ps-title" id="ps-title">Sessão analisada!</div>'
+    +'<div class="ps-sub" id="ps-sub"></div>'
+    +'<input class="ps-inp" id="ps-inp" type="text" maxlength="80" style="display:none" placeholder="Ex.: Races 03/07/2026">'
+    +'<div class="ps-btns" id="ps-btns"></div>'
+    +'</div></div>';
+  document.body.appendChild(d);
+  document.getElementById('ps-modal').addEventListener('click',function(e){if(e.target===this)closePsModal();});
+}
+function closePsModal(){var m=document.getElementById('ps-modal');if(m)m.classList.remove('open');}
+function openPsModal(){
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  var alta=results.filter(function(r){return r.nivel==='alta';}).length;
+  showPsStep1(avbs.length,alta);
+  document.getElementById('ps-modal').classList.add('open');
+}
+function showPsStep1(avbs,alta){
+  document.getElementById('ps-icon').textContent='\uD83D\uDCBE';
+  document.getElementById('ps-title').textContent='Sessão analisada!';
+  document.getElementById('ps-sub').innerHTML='<strong style="color:#22c55e">'+avbs+'</strong> AvBs encontrados, <strong style="color:#f97316">'+alta+'</strong> de alta confiança.<br>Deseja salvar esta sessão no Histórico?';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var no=document.createElement('button');no.className='ps-btn-sec';no.textContent='Não, obrigado';no.onclick=closePsModal;btns.appendChild(no);
+  var yes=document.createElement('button');yes.className='ps-btn-pri';yes.textContent='Sim, salvar ✓';yes.onclick=showPsStep2;btns.appendChild(yes);
+}
+function showPsStep2(){
+  document.getElementById('ps-icon').textContent='\u270F\uFE0F';
+  document.getElementById('ps-title').textContent='Nome da sessão';
+  document.getElementById('ps-sub').textContent='Escolha um nome para identificar esta análise no Histórico.';
+  var inp=document.getElementById('ps-inp');
+  inp.style.display='block';
+  var now=new Date();
+  inp.value='Races '+String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+  setTimeout(function(){inp.focus();inp.select();},80);
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var back=document.createElement('button');back.className='ps-btn-sec';back.textContent='← Voltar';back.onclick=function(){var avbs=results.filter(function(r){return r.tipo==='avb';});var alta=results.filter(function(r){return r.nivel==='alta';}).length;showPsStep1(avbs,alta);};btns.appendChild(back);
+  var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='Salvar';ok.onclick=psSaveCheck;btns.appendChild(ok);
+  inp.onkeydown=function(e){if(e.key==='Enter')psSaveCheck();if(e.key==='Escape')closePsModal();};
+}
+async function psSaveCheck(){
+  var name=document.getElementById('ps-inp').value.trim();
+  if(!name){document.getElementById('ps-inp').focus();return;}
+  try{
+    var r=await fetch(BASE+'/api/sessions');
+    var sessions=await r.json();
+    var existing=sessions.find(function(s){return s.name.trim().toLowerCase()===name.toLowerCase();});
+    if(existing){showPsStep3(name,existing.id);}
+    else{await psSaveNew(name);}
+  }catch(e){await psSaveNew(name);}
+}
+function showPsStep3(name,existingId){
+  document.getElementById('ps-icon').textContent='\u26A0\uFE0F';
+  document.getElementById('ps-title').textContent='Nome já existe';
+  document.getElementById('ps-sub').innerHTML='Já existe uma sessão chamada <strong style="color:#fff">"'+name+'"</strong>.<br>O que deseja fazer?';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var cancel=document.createElement('button');cancel.className='ps-btn-sec';cancel.textContent='Cancelar';cancel.onclick=closePsModal;btns.appendChild(cancel);
+  var update=document.createElement('button');update.className='ps-btn-warn';update.textContent='Atualizar';update.title='Mantém o nome e substitui os dados';update.onclick=async function(){await psReplace(name,existingId);};btns.appendChild(update);
+  var replace=document.createElement('button');replace.className='ps-btn-pri';replace.textContent='Substituir';replace.title='Remove a sessão antiga e cria uma nova';replace.onclick=async function(){await psReplace(name,existingId);};btns.appendChild(replace);
+}
+async function psSaveNew(name){
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  try{
+    var r=await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    if(r.ok){closePsModal();showToast('\u2713 Sessão "'+name+'" salva!',true);setTimeout(function(){location.reload();},1600);}
+    else showToast('Erro ao salvar sessão.',false);
+  }catch(e){showToast('Erro ao salvar sessão.',false);}
+}
+async function psReplace(name,oldId){
+  try{await fetch(BASE+'/api/session/'+oldId,{method:'DELETE'});}catch(e){}
+  await psSaveNew(name);
 }
 
 /* modal salvar */
@@ -363,6 +461,7 @@ async function runAnalysis(){
     var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;
     setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');
     prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
+    setTimeout(function(){openPsModal();},1400);
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
@@ -371,6 +470,7 @@ async function runAnalysis(){
 
 document.addEventListener('DOMContentLoaded',function(){
   injectStyles();
+  injectPostSaveModal();
   injectSaveModal();
   injectValModal();
   injectFilterPanel();

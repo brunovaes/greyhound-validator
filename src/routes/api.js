@@ -905,15 +905,32 @@ router.post('/session', express.json(), (req, res) => {
     const { name, races } = req.body;
     const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(user.id, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
     const sessionId = result.lastInsertRowid;
-    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for(const r of races) {
       const p=(r.hora||'').split(':');
       let h=parseInt(p[0]||0)-4; if(h<0)h+=24;
       const horaBr=p.length>=2?h+':'+p[1]:'';
-      const top3Str = (r.top3 && r.top3.filter(x=>x>0).length) ? r.top3.filter(x=>x>0).join('-') : null;
-      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str);
+      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null);
     }
     res.json({ ok:true, sessionId });
+  } catch(err) { res.status(500).json({ error:err.message }); }
+});
+
+router.get('/sessions', (req, res) => {
+  try {
+    const sessions = db.prepare('SELECT id, name, created_at FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(req.user.id);
+    res.json(sessions);
+  } catch(err) { res.status(500).json({ error:err.message }); }
+});
+
+router.delete('/session/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const sess = db.prepare('SELECT id FROM race_sessions WHERE id=? AND user_id=?').get(id, req.user.id);
+    if (!sess) return res.status(404).json({ error: 'Sessão não encontrada' });
+    db.prepare('DELETE FROM races WHERE session_id=?').run(id);
+    db.prepare('DELETE FROM race_sessions WHERE id=?').run(id);
+    res.json({ ok: true });
   } catch(err) { res.status(500).json({ error:err.message }); }
 });
 
