@@ -807,7 +807,25 @@ function readFolderPdfs(folder) {
     }));
 }
 
-router.get('/pdfs/hoje', (req, res) => {
+router.get('/pdfs/hoje/zip', (req, res) => {
+  const folder = getPdfFolder();
+  const files = readFolderPdfs(folder);
+  if (!files.length) return res.status(404).json({ error: 'Nenhum PDF encontrado para hoje' });
+  const d = new Date();
+  const today = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="PDFs_${today}.zip"`);
+  const archiver = require('archiver');
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', e => { console.error('[ZIP]', e.message); });
+  archive.pipe(res);
+  for (const f of files) {
+    archive.append(f.buffer, { name: f.name });
+  }
+  archive.finalize();
+});
+
+
   const folder = getPdfFolder();
   const files = readFolderPdfs(folder);
   res.json({ count: files.length, folder, files: files.map(f=>f.name) });

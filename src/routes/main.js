@@ -35,7 +35,7 @@ function navBar(user, active) {
   <div id="pdf-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(34,197,94,.08);border-bottom:1px solid rgba(34,197,94,.2)">
     <span style="font-size:12px;color:#22c55e">📄 <strong><span id="pdf-banner-cnt">0</span> PDFs</strong> disponíveis para hoje — prontos para análise</span>
     <div style="display:flex;align-items:center;gap:10px">
-      <a href="${BASE}" style="font-size:11px;color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:3px 10px;border-radius:4px;font-weight:600">Analisar agora →</a>
+      <button onclick="downloadAndAnalyze()" style="font-size:11px;color:#22c55e;background:none;cursor:pointer;border:1px solid rgba(34,197,94,.3);padding:3px 10px;border-radius:4px;font-weight:600">⬇ Baixar ZIP + Analisar →</button>
       <button onclick="document.getElementById('pdf-banner').style.display='none'" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
@@ -57,6 +57,17 @@ function navBar(user, active) {
     var badge = document.getElementById('robot-badge');
     var badgeTxt = document.getElementById('robot-badge-txt');
     var pdfBanner = document.getElementById('pdf-banner');
+    function downloadAndAnalyze() {
+      // Dispara download do ZIP
+      var a = document.createElement('a');
+      a.href = BASE + '/api/pdfs/hoje/zip';
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Navega para Analisar após 1s
+      setTimeout(function() { window.location.href = BASE; }, 1000);
+    }
     function checkRobots() {
       Promise.all([
         fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
