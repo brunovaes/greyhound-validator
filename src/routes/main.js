@@ -483,14 +483,6 @@ ${navBar(user, 'historico')}
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
 </div>
-<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:#111;border:1px solid #2a3142;border-radius:8px;font-size:11px;color:#888">
-  <span style="color:#60a5fa;font-size:13px">&#9654;</span>
-  <span style="font-weight:600;color:#aaa">Tamanho do Replay</span>
-  <label style="display:flex;align-items:center;gap:5px">Largura <input id="rv-w" type="number" value="960" min="600" max="1920" step="10" style="width:68px;padding:3px 6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px" oninput="saveRvSize()"> px</label>
-  <span style="color:#444">&times;</span>
-  <label style="display:flex;align-items:center;gap:5px">Altura <input id="rv-h" type="number" value="640" min="400" max="1080" step="10" style="width:68px;padding:3px 6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px" oninput="saveRvSize()"> px</label>
-  <span style="color:#555;font-size:10px;margin-left:4px">&#128190; salvo automaticamente</span>
-</div>
 <div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
@@ -538,6 +530,30 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 .sv-tbl tr:last-child td{border-bottom:none}.sv-bends{font-weight:700}.sv-caltm{color:#60a5fa;font-weight:700}
 .sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,.55)}
 </style>
+<style>
+#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
+#rv-modal.open{display:flex}
+#rv-box{background:#0d0d0d;border:1px solid rgba(96,165,250,.25);border-radius:14px;width:100%;max-width:1000px;height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 80px rgba(96,165,250,.08)}
+#rv-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#111;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
+#rv-dot{width:8px;height:8px;border-radius:50%;background:#60a5fa;flex-shrink:0}
+#rv-title{font-size:13px;font-weight:700;color:#60a5fa;flex:1;margin:0}
+#rv-newtab{font-size:11px;color:#555;text-decoration:none;padding:4px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap}
+#rv-newtab:hover{color:#aaa;border-color:#555}
+#rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
+#rv-xbtn:hover{color:#f0f0f0}
+#rv-frame{flex:1;border:none;background:#000;display:block;width:100%}
+</style>
+<div id="rv-modal">
+  <div id="rv-box">
+    <div id="rv-hdr">
+      <div id="rv-dot"></div>
+      <h3 id="rv-title">Replay</h3>
+      <a id="rv-newtab" href="#" target="_blank">&#8599; Nova aba</a>
+      <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
+    </div>
+    <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
+  </div>
+</div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
@@ -559,28 +575,18 @@ function svCard(trap,nome,perfil,hist){
   var rows=hist.map(function(h){var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}return'<tr><td>'+h.data+'</td><td>'+h.pista+'</td><td style="text-align:center">'+h.dist+'m</td><td style="text-align:center;color:#aaa">['+h.trap+']</td><td style="text-align:center;color:#888">'+(h.split||'')+'</td><td class="sv-bends" style="text-align:center">'+(h.bends||'')+'</td><td style="color:#888">'+rem+'</td><td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td><td class="sv-caltm" style="text-align:right">'+ct+'</td></tr>';}).join('');
   return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span>'+(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div><table class="sv-tbl"><colgroup><col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px"><col style="width:38px"><col style="width:46px"><col><col style="width:36px"><col style="width:48px"></colgroup><thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-document.addEventListener('click',function(e){if(e.target.id==='sv-modal')closeSvModal();});
-function saveRvSize(){
-  try{localStorage.setItem('gf_rv_w',document.getElementById('rv-w').value);localStorage.setItem('gf_rv_h',document.getElementById('rv-h').value);}catch(e){}
+document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});
+function closeReplayModal(){
+  document.getElementById('rv-modal').classList.remove('open');
+  document.getElementById('rv-frame').src='about:blank';
 }
-(function(){
-  try{
-    var w=localStorage.getItem('gf_rv_w');var h=localStorage.getItem('gf_rv_h');
-    if(w)document.getElementById('rv-w').value=w;
-    if(h)document.getElementById('rv-h').value=h;
-  }catch(e){}
-})();
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  var vu=r.video_url;
-  var vfIdx=vu.indexOf('&videoFileName=');
-  if(vfIdx>=0){var afterVf=vu.slice(vfIdx+15);var nextAmp=afterVf.indexOf('&');vu=vu.slice(0,vfIdx)+(nextAmp>=0?'&'+afterVf.slice(nextAmp+1):'');}
-  var w=parseInt(document.getElementById('rv-w').value)||960;
-  var h=parseInt(document.getElementById('rv-h').value)||640;
-  var left=Math.round((screen.width-w)/2);
-  var top=Math.round((screen.height-h)/2);
-  window.open(vu,'gf_replay','width='+w+',height='+h+',left='+left+',top='+top+',scrollbars=no,resizable=yes');
+  document.getElementById('rv-title').textContent='\u25B6 '+(r.corrida||'Replay');
+  document.getElementById('rv-newtab').href=r.video_url;
+  document.getElementById('rv-frame').src=r.video_url;
+  document.getElementById('rv-modal').classList.add('open');
 }
 </script>
 </div></body></html>`);

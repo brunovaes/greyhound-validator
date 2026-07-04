@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "ATR Stream Relay",
+  "version": "1.0",
+  "description": "Captura o stream m3u8 do ATR e manda pro Greyhound Factory",
+  "permissions": [
+    "webRequest",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.vermantiagaming.com/*",
+    "https://greyhounds.attheraces.com/*",
+    "https://greyhound-validator-production.up.railway.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon.png"
+    }
+  }
+}

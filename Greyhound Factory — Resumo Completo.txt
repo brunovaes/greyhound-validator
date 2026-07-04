@@ -1,0 +1,134 @@
+Greyhound Factory — Resumo Completo
+O Projeto
+Plataforma de análise de corridas de galgos chamada Greyhound Factory.
+
+Stack: Node.js + Express + SQLite
+Deploy: Railway (greyhound-validator-production.up.railway.app/greyhound)
+GitHub: brunovaes/greyhound-validator (projeto noble-delight)
+Local: C:\Users\Energisa\Desktop\greyhound
+Deploy: git add ... && git commit -m "..." && git push
+Admin: brunao@greyhound.com / greyhound2024
+
+
+Arquivos Principais
+src/routes/main.js
+Rotas HTML do servidor. Gera as páginas:
+
+/historico → lista de sessões salvas
+/sessao/:id → detalhe de uma sessão (tabela com todas as corridas)
+
+A página de sessão é server-side rendering — o HTML é montado no servidor com template literals e os dados das corridas são injetados diretamente. NÃO usa renderização client-side.
+Atenção crítica: Nunca usar regex /pattern/ dentro do template literal da sessão. Causa SyntaxError: Invalid regular expression: missing / no browser e esvazia a tabela. Usar .indexOf(), .charAt(), comparações de string puras.
+
+src/app.js
+JavaScript client-side da aba Analisar. Servido como arquivo estático.
+Responsabilidades:
+
+Upload e leitura dos PDFs
+Chamada à API de análise
+Renderização da tabela de corridas em tempo real (SSE streaming)
+Modal "ver histórico" dos galgos
+Salvar sessão no banco
+
+
+src/routes/api.js
+Motor de análise e rotas da API.
+Responsabilidades:
+
+Recebe os dados dos PDFs parseados
+Calcula scores, rankings, AvB (favorito vs underdog)
+Define perfil dos galgos (frontrunner, estável, recuperador, fumador)
+Gera narrativa (campo obs)
+Salva sessão no banco com todos os campos incluindo race_card (todos os 6 galgos com trap+nome)
+
+Campo importante: race_card — JSON com [{trap:1, nome:"Dog Name"}, ...] de TODOS os 6 galgos da corrida (não só os elegíveis). Salvo para o robô de resultados usar no match.
+
+src/utils/pdfParser.js
+Parser de PDF determinístico usando pdfjs-dist.
+
+Zero tokens da API Claude na extração
+Extrai: data, pista, dist, trap, split, bends, pos, classe, caltm, sp, gng, peso, vencedorTm, remarks
+dist salvo como String
+postPick como string "3-2-1"
+
+
+src/routes/robot.js
+Robô coletor de PDFs via Browserless.io.
+
+Abre greyhoundbet.racingpost.com via WebSocket CDP
+Baixa até 85 PDFs por sessão
+PDFs nomeados como 3.22PM_Doncaster.pdf
+Salvos em pdfs/YYYY-MM-DD/
+Converte hora UK → Brasil (+4h)
+Download sequencial com barra de progresso
+Reconexão automática em "Navigating frame was detached"
+Sidebar com dois painéis: "Coletor de PDFs" e "Resultados"
+
+
+src/routes/resultsRobot.js
+Robô de resultados — coleta automaticamente os resultados do Racing Post.
+Fluxo:
+
+Abre greyhoundbet.racingpost.com/#results-list/r_date=DATA
+Extrai links de todas as corridas do dia
+Para cada corrida → abre a página de resultado
+Extrai ordem de chegada pelo texto (formato: 1st Dog Name bk d ...)
+Para cada posição, usa nameToTrap() para converter nome → número do trap
+Atualiza banco: bateu, resultado_1/2/3, video_url
+
+nameToTrap(): Compara o nome extraído com os 6 nomes do race_card usando similaridade de strings. Retorna o número do trap do melhor match (threshold 50%).
+Bateu: Valida o AvB — favorito bateu se chegou antes do underdog (posição menor), não necessariamente em 1° lugar.
+Cron: Removido. Execução apenas manual pelo painel do Robô.
+
+src/db/database.js
+Configuração e migrações do banco SQLite.
+Banco em: /data/greyhound.db (Railway Volume — persistente entre deploys)
+Tabela races — campos principais:
+id, session_id, user_id
+hora, hora_br, corrida, dist
+trap_fav, name_fav, trap_und, name_und
+pct, nivel, perfil_fav, perfil_und
+obs, need_cap, odd, valor
+resultado_1, resultado_2, resultado_3
+bateu, video_url
+hist_fav, hist_und (JSON com histórico dos 2 galgos)
+race_card (JSON com todos os 6 galgos: [{trap, nome}])
+
+Infraestrutura
+Browserless.io
+
+URL: wss://production-sfo.browserless.io
+Token: 2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1
+Usado por AMBOS os robôs (PDF e Resultados)
+Railway bloqueia Chromium local — Browserless é obrigatório
+
+Railway Volume
+
+Persiste o SQLite entre deploys
+Sem Volume → banco reseta a cada deploy e perde todos os dados
+DB_PATH = process.env.DB_PATH || '/data/greyhound.db'
+
+
+Dificuldades Conhecidas
+1. Regex em template literals — CRÍTICO
+Qualquer regex /pattern/ dentro dos template literals do main.js causa SyntaxError: Invalid regular expression: missing / e esvazia a tabela do histórico. Isso aconteceu várias vezes durante o desenvolvimento. A solução é NUNCA usar regex literal no script client-side injetado via template literal.
+2. Browserless "Detached Frame"
+O browser via Browserless cai após algumas páginas. Ambos os robôs têm reconexão automática implementada.
+3. race_card só em sessões novas
+Sessões salvas antes do campo race_card ser criado não têm os 6 nomes dos galgos. Para essas sessões, o robô de resultados só consegue identificar trap_fav e trap_und pelo nome — os outros 4 galgos mostram nome abreviado no Resultado.
+4. Resultado mostra nome em vez de bolinha
+Ocorre quando: (a) sessão antiga sem race_card, ou (b) o nome extraído do Racing Post é muito diferente do nome no PDF.
+5. Bolas no Resultado — bug corrigido
+O r3 (3° lugar) estava sendo atribuído com o nome bruto (p3.name) em vez de passar pelo nameToTrap(). Corrigido.
+6. Bateu — lógica corrigida
+Antes validava só se o fav chegou em 1° lugar. Agora valida se o fav chegou antes do und (independente da posição absoluta).
+
+Fluxo Completo do Sistema
+1. ANALISAR
+PDFs → pdfParser.js → api.js (motor) → race_card salvo → sessão no banco
+
+2. HISTÓRICO
+/sessao/:id → main.js → renderiza server-side → tabela com AvB, conf, obs, resultado, bateu
+
+3. ROBÔ DE RESULTADOS (manual)
+Racing Post → extrai nomes → nameToTrap() → cruza com race_card → atualiza banco

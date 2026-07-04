@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  body{width:280px;background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',sans-serif;padding:16px;margin:0}
+  h2{font-size:13px;color:#22c55e;margin:0 0 12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .status{background:#111;border:1px solid #333;border-radius:8px;padding:12px;font-size:12px;line-height:1.6}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:#555}
+  .dot.ok{background:#22c55e}
+  .dot.err{background:#ef4444}
+  .url{font-size:10px;color:#666;word-break:break-all;margin-top:6px}
+  .hint{font-size:11px;color:#666;margin-top:10px;line-height:1.5}
+  a{color:#22c55e;font-size:11px}
+</style>
+</head>
+<body>
+<h2>🐕 ATR Stream Relay</h2>
+<div class="status" id="status">
+  <span class="dot" id="dot"></span>
+  <span id="msg">Aguardando stream...</span>
+  <div class="url" id="url"></div>
+</div>
+<p class="hint">Abra <a href="https://greyhounds.attheraces.com/video/live-video" target="_blank">greyhounds.attheraces.com/video/live-video</a> no Chrome. Quando o vídeo carregar, o stream é enviado automaticamente pro app.</p>
+<script>
+chrome.storage.local.get(['streamUrl','sentAt','ok','error'], function(data) {
+  var dot = document.getElementById('dot');
+  var msg = document.getElementById('msg');
+  var url = document.getElementById('url');
+  if (data.streamUrl) {
+    dot.className = 'dot ' + (data.ok ? 'ok' : 'err');
+    msg.textContent = data.ok ? 'Stream enviado pro app!' : 'Erro ao enviar: ' + (data.error||'?');
+    var ago = data.sentAt ? Math.round((Date.now()-data.sentAt)/1000) + 's atrás' : '';
+    url.textContent = data.streamUrl.slice(0,60) + '... ' + ago;
+  } else {
+    dot.className = 'dot';
+    msg.textContent = 'Aguardando stream do ATR...';
+  }
+});
+</script>
+</body>
+</html>
