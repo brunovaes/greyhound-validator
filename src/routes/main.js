@@ -530,33 +530,6 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 .sv-tbl tr:last-child td{border-bottom:none}.sv-bends{font-weight:700}.sv-caltm{color:#60a5fa;font-weight:700}
 .sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,.55)}
 </style>
-<style>
-#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
-#rv-modal.open{display:flex}
-#rv-box{background:#0d0d0d;border:1px solid rgba(96,165,250,.25);border-radius:14px;width:100%;max-width:1000px;height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 80px rgba(96,165,250,.08)}
-#rv-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#111;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
-#rv-dot{width:8px;height:8px;border-radius:50%;background:#60a5fa;flex-shrink:0}
-#rv-title{font-size:13px;font-weight:700;color:#60a5fa;flex:1;margin:0}
-#rv-newtab{font-size:11px;color:#555;text-decoration:none;padding:4px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap}
-#rv-newtab:hover{color:#aaa;border-color:#555}
-#rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
-#rv-xbtn:hover{color:#f0f0f0}
-#rv-crop{flex:1;overflow:hidden;position:relative}
-#rv-frame{position:absolute;top:-75px;left:0;width:149%;height:calc(149% + 75px);border:none;background:#000;display:block;transform:scale(0.67);transform-origin:0 0}
-</style>
-<div id="rv-modal">
-  <div id="rv-box">
-    <div id="rv-hdr">
-      <div id="rv-dot"></div>
-      <h3 id="rv-title">Replay</h3>
-      <a id="rv-newtab" href="#" target="_blank">&#8599; Nova aba</a>
-      <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
-    </div>
-    <div id="rv-crop">
-      <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
-    </div>
-  </div>
-</div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
@@ -578,18 +551,14 @@ function svCard(trap,nome,perfil,hist){
   var rows=hist.map(function(h){var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}return'<tr><td>'+h.data+'</td><td>'+h.pista+'</td><td style="text-align:center">'+h.dist+'m</td><td style="text-align:center;color:#aaa">['+h.trap+']</td><td style="text-align:center;color:#888">'+(h.split||'')+'</td><td class="sv-bends" style="text-align:center">'+(h.bends||'')+'</td><td style="color:#888">'+rem+'</td><td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td><td class="sv-caltm" style="text-align:right">'+ct+'</td></tr>';}).join('');
   return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span>'+(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div><table class="sv-tbl"><colgroup><col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px"><col style="width:38px"><col style="width:46px"><col><col style="width:36px"><col style="width:48px"></colgroup><thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});
-function closeReplayModal(){
-  document.getElementById('rv-modal').classList.remove('open');
-  document.getElementById('rv-frame').src='about:blank';
-}
+function closeReplayModal(){}
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  document.getElementById('rv-title').textContent='\u25B6 '+(r.corrida||'Replay');
-  document.getElementById('rv-newtab').href=r.video_url;
-  document.getElementById('rv-frame').src=r.video_url;
-  document.getElementById('rv-modal').classList.add('open');
+  var w=900,h=750;
+  var left=Math.round((screen.width-w)/2);
+  var top=Math.round((screen.height-h)/2);
+  window.open(r.video_url,'gf_replay','width='+w+',height='+h+',left='+left+',top='+top+',scrollbars=yes,resizable=yes');
 }
 </script>
 </div></body></html>`);
