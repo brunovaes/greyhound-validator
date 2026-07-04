@@ -516,19 +516,31 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 
 <style>
 #sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}#sv-modal.open{display:flex}
-#sv-box{background:#12172a;border:1px solid rgba(255,255,255,.12);border-radius:12px;width:88vw;max-width:920px;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column}
-#sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:#12172a}
-#sv-hdr h3{font-size:13px;font-weight:700;color:#fff;margin:0}
-#sv-xbtn{background:transparent;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px}
-#sv-body{padding:14px 16px;display:flex;flex-direction:column;gap:0}
-.sv-dog{width:100%}.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}
-.sv-name{font-size:12px;font-weight:700;color:#fff}.sv-perfil{font-size:10px;color:#888;margin-left:4px}
+#sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+#sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
+#sv-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
+#sv-xbtn{background:transparent;border:none;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer;padding:0 4px}
+#sv-xbtn:hover{color:#fff}
+#sv-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a;max-height:80vh;overflow-y:auto}
+.sv-dog{width:100%}
+.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
+.sv-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
+.sv-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
+.sv-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
 .sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
-.sv-tbl{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
-.sv-tbl th{font-size:8px;color:rgba(255,255,255,.3);text-transform:uppercase;padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.07);white-space:nowrap;text-align:left}
-.sv-tbl td{padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.8);white-space:nowrap}
-.sv-tbl tr:last-child td{border-bottom:none}.sv-bends{font-weight:700}.sv-caltm{color:#60a5fa;font-weight:700}
-.sv-grade{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,.55)}
+.sv-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
+.sv-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
+.sv-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap}
+.sv-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-size:12px}
+.sv-tbl tr:last-child td{border-bottom:none}
+.sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
+.sv-td-date{color:rgba(255,255,255,.6);text-align:left}
+.sv-td-track{color:rgba(255,255,255,.7);text-align:center}
+.sv-td-muted{color:rgba(255,255,255,.4);text-align:center}
+.sv-bends{font-weight:700;color:rgba(255,255,255,.85);text-align:center}
+.sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55)}
+.sv-caltm{color:#60a5fa;font-weight:700;text-align:center}
 </style>
 <style>
 #rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
@@ -575,9 +587,37 @@ function openSessValModal(id){
 }
 function svCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
-  if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:#666;font-size:11px;padding:8px">Sem historico</p></div>';
-  var rows=hist.map(function(h){var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}return'<tr><td>'+h.data+'</td><td>'+h.pista+'</td><td style="text-align:center">'+h.dist+'m</td><td style="text-align:center;color:#aaa">['+h.trap+']</td><td style="text-align:center;color:#888">'+(h.split||'')+'</td><td class="sv-bends" style="text-align:center">'+(h.bends||'')+'</td><td style="color:#888">'+rem+'</td><td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td><td class="sv-caltm" style="text-align:right">'+ct+'</td></tr>';}).join('');
-  return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span>'+(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')+'</div><table class="sv-tbl"><colgroup><col style="width:60px"><col style="width:44px"><col style="width:38px"><col style="width:32px"><col style="width:38px"><col style="width:46px"><col><col style="width:36px"><col style="width:48px"></colgroup><thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:rgba(255,255,255,.3);font-size:11px;padding:8px 0">Sem histórico</p></div>';
+  var rows=hist.map(function(h){
+    var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';
+    var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}
+    return'<tr>'
+      +'<td class="sv-td-date">'+h.data+'</td>'
+      +'<td class="sv-td-track">'+h.pista+'</td>'
+      +'<td class="sv-td-muted">'+h.dist+'m</td>'
+      +'<td class="sv-td-muted">['+h.trap+']</td>'
+      +'<td class="sv-td-muted">'+(h.split||'')+'</td>'
+      +'<td class="sv-bends">'+(h.bends||'')+'</td>'
+      +'<td class="sv-td-rem">'+rem+'</td>'
+      +'<td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td>'
+      +'<td class="sv-caltm">'+ct+'</td>'
+      +'</tr>';
+  }).join('');
+  return'<div class="sv-dog">'
+    +'<div class="sv-dog-hdr">'
+    +'<span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span>'
+    +'<span class="sv-name">'+(nome||'')+'</span>'
+    +(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')
+    +'</div>'
+    +'<table class="sv-tbl">'
+    +'<colgroup>'
+    +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
+    +'<col style="width:30px"><col style="width:40px"><col style="width:45px">'
+    +'<col><col style="width:36px"><col style="width:48px">'
+    +'</colgroup>'
+    +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'</div>';
 }
 function closeReplayModal(){
   document.getElementById('rv-modal').classList.remove('open');
