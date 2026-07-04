@@ -32,6 +32,13 @@ function navBar(user, active) {
       <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
     </div>
   </nav>
+  <div id="pdf-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(34,197,94,.08);border-bottom:1px solid rgba(34,197,94,.2)">
+    <span style="font-size:12px;color:#22c55e">📄 <strong><span id="pdf-banner-cnt">0</span> PDFs</strong> disponíveis para hoje — prontos para análise</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="${BASE}" style="font-size:11px;color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:3px 10px;border-radius:4px;font-weight:600">Analisar agora →</a>
+      <button onclick="document.getElementById('pdf-banner').style.display='none'" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
+    </div>
+  </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
@@ -42,6 +49,7 @@ function navBar(user, active) {
     var BASE = '${BASE}';
     var badge = document.getElementById('robot-badge');
     var badgeTxt = document.getElementById('robot-badge-txt');
+    var pdfBanner = document.getElementById('pdf-banner');
     function checkRobots() {
       Promise.all([
         fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
@@ -59,7 +67,16 @@ function navBar(user, active) {
         }
       });
     }
+    function checkPdfBanner() {
+      fetch(BASE + '/api/pdfs/hoje').then(function(r){return r.json();}).then(function(d){
+        if (d.count > 0 && pdfBanner) {
+          document.getElementById('pdf-banner-cnt').textContent = d.count;
+          pdfBanner.style.display = 'flex';
+        }
+      }).catch(function(){});
+    }
     checkRobots();
+    checkPdfBanner();
     setInterval(checkRobots, 4000);
   })();
   </script>`;
