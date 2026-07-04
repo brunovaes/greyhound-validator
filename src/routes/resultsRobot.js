@@ -287,18 +287,9 @@ async function runResultsRobot(targetDate) {
           r3 = nameToTrap(p3 ? p3.name : null);
         }
 
-        // Salvar video_url sem videoFileName (token expira) — Racing Post busca token fresco
-        var rawVu = pageText.videoUrl || null;
-        if (rawVu) {
-          if (rawVu.startsWith('#')) rawVu = 'https://greyhoundbet.racingpost.com/' + rawVu;
-          var vfIdx2 = rawVu.indexOf('&videoFileName=');
-          if (vfIdx2 >= 0) {
-            var afterVf2 = rawVu.slice(vfIdx2 + 15);
-            var nextAmp2 = afterVf2.indexOf('&');
-            rawVu = rawVu.slice(0, vfIdx2) + (nextAmp2 >= 0 ? '&' + afterVf2.slice(nextAmp2 + 1) : '');
-          }
-        }
-        updateStmt.run(bateu, r1, r2, r3, rawVu, dbRace.id);
+        // Salvar URL da página de resultado (não expira) — usuário clica Watch Replay lá
+        var resultUrl = 'https://greyhoundbet.racingpost.com/' + (link.href.startsWith('#') ? link.href : '#' + link.href);
+        updateStmt.run(bateu, r1, r2, r3, resultUrl, dbRace.id);
         status.updated++;
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
