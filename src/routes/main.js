@@ -39,6 +39,13 @@ function navBar(user, active) {
       <button onclick="document.getElementById('pdf-banner').style.display='none'" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
+  <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
+    <span style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="${BASE}/historico" style="font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Histórico →</a>
+      <button onclick="document.getElementById('res-banner').style.display='none'" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
+    </div>
+  </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
@@ -75,8 +82,26 @@ function navBar(user, active) {
         }
       }).catch(function(){});
     }
+    function checkResultsBanner() {
+      fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).then(function(d){
+        if (!d.lastRun || !d.updated) return;
+        var resBanner = document.getElementById('res-banner');
+        if (!resBanner) return;
+        var lastRun = new Date(d.lastRun);
+        var diff = (Date.now() - lastRun) / 60000;
+        if (diff < 65) { // dentro da última hora
+          var h = String(lastRun.getHours()).padStart(2,'0');
+          var m = String(lastRun.getMinutes()).padStart(2,'0');
+          document.getElementById('res-banner-time').textContent = h + ':' + m;
+          document.getElementById('res-banner-cnt').textContent = d.updated;
+          resBanner.style.display = 'flex';
+        }
+      }).catch(function(){});
+    }
     checkRobots();
     checkPdfBanner();
+    checkResultsBanner();
+    setInterval(function(){ checkRobots(); checkResultsBanner(); }, 60000);
     setInterval(checkRobots, 4000);
   })();
   </script>`;
