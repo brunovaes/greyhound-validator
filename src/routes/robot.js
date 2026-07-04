@@ -21,7 +21,7 @@ function getTodayDate() {
 function scheduleCronRobot() {
   const now = new Date();
   const nextRun = new Date();
-  nextRun.setUTCHours(6, 0, 0, 0);
+  nextRun.setUTCHours(16, 10, 0, 0);
   if (nextRun <= now) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
   const msUntil = nextRun - now;
   console.log('[CRON] Próxima coleta automática em ' + Math.round(msUntil/60000) + ' minutos (' + nextRun.toISOString() + ')');
@@ -51,23 +51,26 @@ function scheduleCronRobot() {
 scheduleCronRobot();
 
 
-// ─── CRON RESULTADOS — a cada hora entre 08:00–17:00 UTC ──────────────────
+// ─── CRON RESULTADOS — a cada 30 min entre 08:00–17:00 UTC ───────────────────
 function scheduleResultsCron() {
   const now = new Date();
-  const utcH = now.getUTCHours();
-  const utcM = now.getUTCMinutes();
 
-  // Próxima hora cheia dentro da janela 08-17 UTC
+  // Próxima meia hora (HH:00 ou HH:30)
   let nextRun = new Date(now);
-  nextRun.setUTCMinutes(0, 0, 0);
-  nextRun.setUTCHours(nextRun.getUTCHours() + 1);
+  const mins = nextRun.getUTCMinutes();
+  if (mins < 30) {
+    nextRun.setUTCMinutes(30, 0, 0);
+  } else {
+    nextRun.setUTCMinutes(0, 0, 0);
+    nextRun.setUTCHours(nextRun.getUTCHours() + 1);
+  }
 
-  // Se próxima hora está fora da janela (>17 UTC), agenda para 08:00 UTC amanhã
-  if (nextRun.getUTCHours() > 17) {
+  // Se próximo horário está fora da janela (>17 UTC), agenda para 08:00 UTC amanhã
+  if (nextRun.getUTCHours() > 17 || (nextRun.getUTCHours() === 17 && nextRun.getUTCMinutes() > 0)) {
     nextRun.setUTCDate(nextRun.getUTCDate() + 1);
     nextRun.setUTCHours(8, 0, 0, 0);
   }
-  // Se próxima hora está antes da janela (<8 UTC), agenda para 08:00 UTC hoje
+  // Se próximo horário está antes da janela (<8 UTC), agenda para 08:00 UTC hoje
   if (nextRun.getUTCHours() < 8) {
     nextRun.setUTCHours(8, 0, 0, 0);
   }
@@ -93,7 +96,7 @@ function scheduleResultsCron() {
         console.log('[CRON-RES] Robô de resultados já rodando, pulando.');
       }
     }
-    scheduleResultsCron(); // reagenda para próxima hora
+    scheduleResultsCron(); // reagenda para próximos 30 min
   }, msUntil);
 }
 scheduleResultsCron();
