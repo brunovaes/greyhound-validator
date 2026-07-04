@@ -519,9 +519,9 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 #sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
 #sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
 #sv-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
-#sv-xbtn{background:transparent;border:none;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer;padding:0 4px}
+#sv-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
 #sv-xbtn:hover{color:#fff}
-#sv-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a;max-height:80vh;overflow-y:auto}
+#sv-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
 .sv-dog{width:100%}
 .sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
 .sv-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
@@ -530,17 +530,17 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="9" s
 .sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
 .sv-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
 .sv-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
-.sv-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap}
-.sv-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-size:12px}
+.sv-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:sans-serif}
+.sv-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:sans-serif;font-size:12px}
 .sv-tbl tr:last-child td{border-bottom:none}
 .sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
-.sv-td-date{color:rgba(255,255,255,.6);text-align:left}
-.sv-td-track{color:rgba(255,255,255,.7);text-align:center}
-.sv-td-muted{color:rgba(255,255,255,.4);text-align:center}
-.sv-bends{font-weight:700;color:rgba(255,255,255,.85);text-align:center}
-.sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55)}
-.sv-caltm{color:#60a5fa;font-weight:700;text-align:center}
+.sv-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:sans-serif}
+.sv-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:sans-serif}
+.sv-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:sans-serif}
+.sv-bends{font-family:sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
+.sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
+.sv-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}
 </style>
 <style>
 #rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
@@ -585,18 +585,26 @@ function openSessValModal(id){
   document.getElementById('sv-body').innerHTML=svCard(r.trap_fav,r.name_fav,r.perfil_fav,hf)+'<div class="sv-sep"></div>'+svCard(r.trap_und,r.name_und,r.perfil_und,hu);
   document.getElementById('sv-modal').classList.add('open');
 }
+function svExtrairRemarks(mixed){
+  if(!mixed)return'';
+  var ci=mixed.indexOf(',');
+  if(ci>=0){var ws=mixed.lastIndexOf(' ',ci)+1;return mixed.substring(ws);}
+  var tokens=mixed.trim().split(' ');
+  for(var i=tokens.length-1;i>=0;i--){if(tokens[i]&&tokens[i][0]===tokens[i][0].toUpperCase()&&tokens[i][0]!==tokens[i][0].toLowerCase())return tokens.slice(i).join(' ');}
+  return mixed;
+}
 function svCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:rgba(255,255,255,.3);font-size:11px;padding:8px 0">Sem histórico</p></div>';
   var rows=hist.map(function(h){
-    var ct=h.caltm&&parseFloat(h.caltm)>0?parseFloat(h.caltm).toFixed(2):'-';
-    var rem=h.remarks||'';var ci=rem.indexOf(',');if(ci>=0){var ws=rem.lastIndexOf(' ',ci)+1;rem=rem.substring(ws);}
+    var rem=svExtrairRemarks(h.remarks||'');
+    var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
     return'<tr>'
       +'<td class="sv-td-date">'+h.data+'</td>'
       +'<td class="sv-td-track">'+h.pista+'</td>'
-      +'<td class="sv-td-muted">'+h.dist+'m</td>'
-      +'<td class="sv-td-muted">['+h.trap+']</td>'
-      +'<td class="sv-td-muted">'+(h.split||'')+'</td>'
+      +'<td class="sv-td-muted" style="text-align:center">'+h.dist+'m</td>'
+      +'<td class="sv-td-muted" style="text-align:center">['+h.trap+']</td>'
+      +'<td class="sv-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
       +'<td class="sv-bends">'+(h.bends||'')+'</td>'
       +'<td class="sv-td-rem">'+rem+'</td>'
       +'<td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td>'
@@ -613,7 +621,7 @@ function svCard(trap,nome,perfil,hist){
     +'<colgroup>'
     +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
     +'<col style="width:30px"><col style="width:40px"><col style="width:45px">'
-    +'<col><col style="width:36px"><col style="width:48px">'
+    +'<col style="width:50px"><col style="width:30px"><col style="width:40px">'
     +'</colgroup>'
     +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
