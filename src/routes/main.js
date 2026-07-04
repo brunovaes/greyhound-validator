@@ -555,7 +555,7 @@ function closeReplayModal(){}
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  var w=900,h=750;
+  var w=900,h=800;
   var left=Math.round((screen.width-w)/2);
   var top=Math.round((screen.height-h)/2);
   window.open(r.video_url,'gf_replay','width='+w+',height='+h+',left='+left+',top='+top+',scrollbars=yes,resizable=yes');
