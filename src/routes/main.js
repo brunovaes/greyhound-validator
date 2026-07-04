@@ -36,14 +36,14 @@ function navBar(user, active) {
     <span style="font-size:12px;color:#22c55e">📄 <strong><span id="pdf-banner-cnt">0</span> PDFs</strong> disponíveis para hoje — prontos para análise</span>
     <div style="display:flex;align-items:center;gap:10px">
       <button onclick="downloadAndAnalyze()" style="font-size:11px;color:#22c55e;background:none;cursor:pointer;border:1px solid rgba(34,197,94,.3);padding:3px 10px;border-radius:4px;font-weight:600">⬇ Baixar ZIP + Analisar →</button>
-      <button onclick="document.getElementById('pdf-banner').style.display='none'" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
+      <button onclick="dismissPdfBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
   <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
     <span style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
     <div style="display:flex;align-items:center;gap:10px">
       <a href="${BASE}/historico" style="font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Histórico →</a>
-      <button onclick="document.getElementById('res-banner').style.display='none'" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
+      <button onclick="dismissResBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
   <style>
@@ -58,15 +58,23 @@ function navBar(user, active) {
     var badgeTxt = document.getElementById('robot-badge-txt');
     var pdfBanner = document.getElementById('pdf-banner');
     function downloadAndAnalyze() {
-      // Dispara download do ZIP
       var a = document.createElement('a');
       a.href = BASE + '/api/pdfs/hoje/zip';
       a.download = '';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      // Navega para Analisar após 1s
       setTimeout(function() { window.location.href = BASE; }, 1000);
+    }
+    function dismissPdfBanner() {
+      document.getElementById('pdf-banner').style.display = 'none';
+      var key = 'pdf_banner_dismissed_' + new Date().toISOString().slice(0,10);
+      try { localStorage.setItem(key, 'true'); } catch(e) {}
+    }
+    function dismissResBanner() {
+      var banner = document.getElementById('res-banner');
+      banner.style.display = 'none';
+      try { localStorage.setItem('res_banner_dismissed', banner.dataset.lastRun || ''); } catch(e) {}
     }
     function checkRobots() {
       Promise.all([
@@ -88,6 +96,10 @@ function navBar(user, active) {
     function checkPdfBanner() {
       fetch(BASE + '/api/pdfs/hoje').then(function(r){return r.json();}).then(function(d){
         if (d.count > 0 && pdfBanner) {
+          var key = 'pdf_banner_dismissed_' + new Date().toISOString().slice(0,10);
+          var dismissed = false;
+          try { dismissed = localStorage.getItem(key) === 'true'; } catch(e) {}
+          if (dismissed) return;
           document.getElementById('pdf-banner-cnt').textContent = d.count;
           pdfBanner.style.display = 'flex';
         }
@@ -98,13 +110,17 @@ function navBar(user, active) {
         if (!d.lastRun || !d.updated) return;
         var resBanner = document.getElementById('res-banner');
         if (!resBanner) return;
+        var dismissed = false;
+        try { dismissed = localStorage.getItem('res_banner_dismissed') === d.lastRun; } catch(e) {}
+        if (dismissed) return;
         var lastRun = new Date(d.lastRun);
         var diff = (Date.now() - lastRun) / 60000;
-        if (diff < 65) { // dentro da última hora
+        if (diff < 35) {
           var h = String(lastRun.getHours()).padStart(2,'0');
           var m = String(lastRun.getMinutes()).padStart(2,'0');
           document.getElementById('res-banner-time').textContent = h + ':' + m;
           document.getElementById('res-banner-cnt').textContent = d.updated;
+          resBanner.dataset.lastRun = d.lastRun;
           resBanner.style.display = 'flex';
         }
       }).catch(function(){});
@@ -646,12 +662,19 @@ function svExtrairRemarks(mixed){
   for(var i=tokens.length-1;i>=0;i--){if(tokens[i]&&tokens[i][0]===tokens[i][0].toUpperCase()&&tokens[i][0]!==tokens[i][0].toLowerCase())return tokens.slice(i).join(' ');}
   return mixed;
 }
+function svClassRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
 function svCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:rgba(255,255,255,.3);font-size:11px;padding:8px 0">Sem histórico</p></div>';
+  // Calcular melhores valores para destaques
+  var caltms=hist.filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
+  var bestCaltm=caltms.length?Math.min.apply(null,caltms):null;
+  var bestClass=Math.min.apply(null,hist.map(function(h){return svClassRank(h.classe);}));
   var rows=hist.map(function(h){
     var rem=svExtrairRemarks(h.remarks||'');
     var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
+    var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
+    var isBestCl=svClassRank(h.classe)===bestClass&&bestClass<999;
     return'<tr>'
       +'<td class="sv-td-date">'+h.data+'</td>'
       +'<td class="sv-td-track">'+h.pista+'</td>'
@@ -659,9 +682,10 @@ function svCard(trap,nome,perfil,hist){
       +'<td class="sv-td-muted" style="text-align:center">['+h.trap+']</td>'
       +'<td class="sv-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
       +'<td class="sv-bends">'+(h.bends||'')+'</td>'
+      +'<td class="sv-td-muted" style="text-align:center">'+(h.pos||'-')+'</td>'
       +'<td class="sv-td-rem">'+rem+'</td>'
-      +'<td style="text-align:center"><span class="sv-grade">'+(h.classe||'')+'</span></td>'
-      +'<td class="sv-caltm">'+ct+'</td>'
+      +'<td style="text-align:center"><span class="sv-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
+      +'<td class="sv-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
       +'</tr>';
   }).join('');
   return'<div class="sv-dog">'
@@ -674,9 +698,9 @@ function svCard(trap,nome,perfil,hist){
     +'<colgroup>'
     +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
     +'<col style="width:30px"><col style="width:40px"><col style="width:45px">'
-    +'<col style="width:50px"><col style="width:30px"><col style="width:40px">'
+    +'<col style="width:25px"><col style="width:50px"><col style="width:30px"><col style="width:40px">'
     +'</colgroup>'
-    +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
+    +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Fin</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'</div>';
 }

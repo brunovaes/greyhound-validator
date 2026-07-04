@@ -270,19 +270,26 @@ function extrairRemarks(mixed){
 }
 function buildDogCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
+  function classRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
+  var caltms=(hist||[]).filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
+  var bestCaltm=caltms.length?Math.min.apply(null,caltms):null;
+  var bestClass=Math.min.apply(null,(hist||[]).map(function(h){return classRank(h.classe);}));
   var rows=(hist||[]).map(function(h){
     var rem=extrairRemarks(h.remarks||'');
     var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
+    var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
+    var isBestCl=classRank(h.classe)===bestClass&&bestClass<999;
     return'<tr>'
       +'<td class="val-td-date">'+h.data+'</td>'
       +'<td class="val-td-track">'+h.pista+'</td>'
       +'<td class="val-td-muted" style="text-align:center">'+h.dist+'m</td>'
       +'<td class="val-td-muted" style="text-align:center">['+h.trap+']</td>'
       +'<td class="val-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
-      +'<td class="val-td-bends">'+( h.bends||'')+'</td>'
+      +'<td class="val-td-bends">'+(h.bends||'')+'</td>'
+      +'<td class="val-td-muted" style="text-align:center">'+(h.pos||'-')+'</td>'
       +'<td class="val-td-rem">'+rem+'</td>'
-      +'<td style="text-align:center"><span class="val-badge-grade">'+(h.classe||'')+'</span></td>'
-      +'<td class="val-td-caltm">'+ct+'</td>'
+      +'<td style="text-align:center"><span class="val-badge-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
+      +'<td class="val-td-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
       +'</tr>';
   }).join('');
   return'<div class="val-dog">'
@@ -295,11 +302,11 @@ function buildDogCard(trap,nome,perfil,hist){
     +'<colgroup>'
     +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
     +'<col style="width:30px"><col style="width:40px"><col style="width:45px">'
-    +'<col style="width:50px"><col style="width:30px"><col style="width:40px">'
+    +'<col style="width:25px"><col style="width:50px"><col style="width:30px"><col style="width:40px">'
     +'</colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
-    +'<th>Split</th><th>Bends</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
+    +'<th>Split</th><th>Bends</th><th>Fin</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
     +'</tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'</div>';
