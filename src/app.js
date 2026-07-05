@@ -840,7 +840,11 @@ document.addEventListener('DOMContentLoaded',async function(){
   injectFilterPanel();
 
   await loadSystemConfig();
-  if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');setTimeout(enterFocusMode,400);}
+  if(restoreSessionState()){
+    updCards();
+    setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
+    enterFocusMode(); // direto no foco, sem flash da tabela
+  }
   else { setTimeout(autoCheckAndAnalyze, 800); }
 
   document.getElementById('race-input').addEventListener('change',async function(){

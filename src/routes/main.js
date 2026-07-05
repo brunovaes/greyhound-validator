@@ -311,7 +311,7 @@ ${navBar(user, 'analisar')}
     <div class="dv"></div>
     <div>
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
-      ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
+      ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" target="_blank" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
