@@ -236,6 +236,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .fp-dog-img{height:190px;object-fit:contain;max-width:100%;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5));transition:all .3s}
 .fp-dog-und .fp-dog-img{transform:scaleX(-1)}
 .fp-dog-name{font-size:17px;font-weight:700;color:#fff;margin-top:6px;text-align:center}
+.fp-dog-perfil{font-size:11px;font-weight:600;margin-top:3px;text-align:center;letter-spacing:.3px;opacity:.85}
 .fp-dog-trap{margin-bottom:6px}
 .fp-center{width:80px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:28px;gap:2px}
 .fp-vence-lbl{font-size:8px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase}
@@ -337,6 +338,7 @@ ${navBar(user, 'analisar')}
       <tbody id="tb"><tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3><p>Carregue PDFs e clique em Analisar.</p></div></td></tr></tbody></table>
     </div>
     <div class="ab" id="ab" style="display:none">
+      <button class="bexp" onclick="enterFocusMode()" style="border-color:rgba(34,197,94,.3);color:#22c55e">&#9654; Voltar ao Foco</button>
       <button class="bexp" id="btn-exp">Exportar CSV</button>
     </div>
   </div>

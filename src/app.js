@@ -109,7 +109,60 @@ function arranqueByClass(hist,raceClass){var f=getHistByClass(hist,raceClass).fi
 function melhorBRT(hist){var f=(hist||[]).filter(function(h){return h.caltm&&parseFloat(h.caltm)>0;});if(!f.length)return{val:null,classe:''};f.sort(function(a,b){return parseFloat(a.caltm)-parseFloat(b.caltm);});return{val:parseFloat(f[0].caltm).toFixed(2),classe:f[0].classe||''};}
 function categoriaInfo(hist,raceClass){var rc=(raceClass||'').toUpperCase();var rcNum=parseInt((rc.match(/d+/)||['99'])[0]);if(!hist||!hist.length)return{label:rc||'N/A',ascending:false,fillPct:Math.max(0,(12-rcNum)/11)};var recent=hist[0].classe||rc;var recentNum=parseInt((recent.match(/d+/)||['99'])[0]);var ascending=rcNum<recentNum;return{label:rc+(ascending?'↑':''),ascending:ascending,fillPct:Math.max(0,(12-rcNum)/11)};}
 function renderGauge(label,displayVal,subLabel,fillPct,color){var r=28,circ=2*Math.PI*r;var offset=circ*(1-Math.min(Math.max(fillPct||0,0),1));var dv=displayVal||'-';var fs=dv.length>5?'9':dv.length>3?'10':'12';return'<div class="fp-gauge">'+'<svg width="64" height="64" viewBox="0 0 72 72">'+'<circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5"/>'+'<circle cx="36" cy="36" r="28" fill="none" stroke="'+color+'" stroke-width="5" '+'stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" '+'stroke-linecap="round" transform="rotate(-90 36 36)"/>'+(subLabel?'<text x="36" y="33" text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700" font-family="sans-serif">'+dv+'</text>'+'<text x="36" y="47" text-anchor="middle" fill="rgba(255,255,255,.45)" font-size="9" font-family="sans-serif">'+subLabel+'</text>':'<text x="36" y="41" text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700" font-family="sans-serif">'+dv+'</text>')+'</svg>'+'<div class="fp-gauge-lbl">'+label+'</div>'+'</div>';}
-function buildGauges(hist,raceClass){var mt=mediaTempoByClass(hist,raceClass);var mtFill=mt?Math.max(0,Math.min(1,(35-mt)/8)):0;var mtStr=mt?mt.toFixed(2):'-';var cnt=getHistByClass(hist,raceClass).length;var podios=podiosByClass(hist,raceClass);var podiosFill=Math.min(podios/Math.max(cnt,1),1);var arr=arranqueByClass(hist,raceClass);var arrFill=arr?Math.max(0,Math.min(1,(4.5-arr)/1)):0;var arrStr=arr?arr.toFixed(2):'-';var brtObj=melhorBRT(hist);var brtFill=brtObj.val?Math.max(0,Math.min(1,(35-parseFloat(brtObj.val))/8)):0;var catObj=categoriaInfo(hist,raceClass);var catColor=catObj.ascending?'#f97316':'#60a5fa';return renderGauge('Média de Tempo',mtStr,cnt?'('+cnt+' corr.)':'',mtFill,'#22c55e')+renderGauge('Categoria',catObj.label,'',catObj.fillPct,catColor)+renderGauge('Pódios',String(podios),cnt?'/'+cnt:'',podiosFill,'#a78bfa')+renderGauge('Arranque',arrStr,'',arrFill,'#f97316')+renderGauge('Melhor BRT',brtObj.val||'-',brtObj.classe,brtFill,'#60a5fa');}
+function categoriaCountByClassOrBetter(hist, raceClass) {
+  if (!raceClass) return (hist||[]).length;
+  var rcNum = parseInt((raceClass.match(/\d+/)||['99'])[0]);
+  return (hist||[]).filter(function(h) {
+    var hNum = parseInt(((h.classe||'').match(/\d+/)||['99'])[0]);
+    return hNum <= rcNum;
+  }).length;
+}
+
+function buildGauges(hist, raceClass, otherHist) {
+  var myMt  = mediaTempoByClass(hist, raceClass);
+  var otMt  = mediaTempoByClass(otherHist, raceClass);
+  var myCat = categoriaCountByClassOrBetter(hist, raceClass);
+  var otCat = categoriaCountByClassOrBetter(otherHist, raceClass);
+  var myPod = podiosByClass(hist, raceClass);
+  var otPod = podiosByClass(otherHist, raceClass);
+  var myArr = arranqueByClass(hist, raceClass);
+  var otArr = arranqueByClass(otherHist, raceClass);
+  var myBrt = melhorBRT(hist);
+  var otBrt = melhorBRT(otherHist);
+
+  // Cores comparativas: verde = melhor, vermelho = pior
+  function timeCol(my, other) { // menor = melhor
+    if (!my) return '#555';
+    if (!other) return '#22c55e';
+    return my <= other ? '#22c55e' : '#ef4444';
+  }
+  function cntCol(my, other) { // maior = melhor
+    if (my === null || my === undefined) return '#555';
+    if (other === null || other === undefined) return '#22c55e';
+    return my >= other ? '#22c55e' : '#ef4444';
+  }
+
+  var mtColor  = timeCol(myMt, otMt);
+  var catColor = cntCol(myCat, otCat);
+  var podColor = cntCol(myPod, otPod);
+  var arrColor = timeCol(myArr, otArr);
+  var brtColor = timeCol(myBrt.val ? parseFloat(myBrt.val) : null, otBrt.val ? parseFloat(otBrt.val) : null);
+
+  var mtFill   = myMt ? Math.max(0,Math.min(1,(35-myMt)/8)) : 0;
+  var mtStr    = myMt ? myMt.toFixed(2) : '-';
+  var cnt      = getHistByClass(hist, raceClass).length;
+  var catFill  = Math.min(myCat/20, 1); // 20 corridas = full
+  var podFill  = Math.min(myPod/Math.max(cnt,1), 1);
+  var arrFill  = myArr ? Math.max(0,Math.min(1,(4.3-myArr)/0.7)) : 0; // range mais apertado
+  var arrStr   = myArr ? myArr.toFixed(2) : '-';
+  var brtFill  = myBrt.val ? Math.max(0,Math.min(1,(35-parseFloat(myBrt.val))/8)) : 0;
+
+  return renderGauge('Média de Tempo', mtStr, cnt?'('+cnt+' corr.)':'', mtFill, mtColor)
+    + renderGauge('Categoria', String(myCat), raceClass||'', catFill, catColor)
+    + renderGauge('Pódios', String(myPod), cnt?'/'+cnt:'', podFill, podColor)
+    + renderGauge('Arranque', arrStr, '', arrFill, arrColor)
+    + renderGauge('Melhor BRT', myBrt.val||'-', myBrt.classe, brtFill, brtColor);
+}
 
 function isUpcoming(r) {
   var hbr = r.hora_br || convertHora(r.hora||'');
@@ -187,6 +240,8 @@ function enterFocusMode() {
   if (focusRefreshInterval) clearInterval(focusRefreshInterval);
   focusRefreshInterval = setInterval(refreshFocusMode, 600000);
 }
+
+function renderFocusPanel(r, idx) {
   var focusCol = document.getElementById('focus-col');
   if (!focusCol) return;
   focusRaceIdx = idx;
@@ -223,6 +278,7 @@ function enterFocusMode() {
     + '<div class="fp-dog-side">'
     + '<img class="fp-dog-img" src="'+imgF+'" alt="'+nf+'" onerror="this.style.opacity=\'.2\'">'
     + '<div class="fp-dog-name">'+nf+'</div>'
+    + (perfF?'<div class="fp-dog-perfil" style="color:'+perfColorF+'">'+perfF+'</div>':'')
     + '</div>'
     // Centro
     + '<div class="fp-center">'
@@ -233,19 +289,18 @@ function enterFocusMode() {
     + '<div class="fp-dog-side fp-dog-und">'
     + '<img class="fp-dog-img" src="'+imgU+'" alt="'+nu+'" onerror="this.style.opacity=\'.2\'">'
     + '<div class="fp-dog-name">'+nu+'</div>'
+    + (perfU?'<div class="fp-dog-perfil" style="color:'+perfColorU+'">'+perfU+'</div>':'')
     + '</div>'
     + '</div>'
     + '<div class="fp-gauges-row">'
-    + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass) + '</div>'
+    + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass, histU) + '</div>'
     + '<div class="fp-gauges-div"></div>'
-    + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass) + '</div>'
+    + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
     + '</div>'
     // Odd / Valor
     + '<div class="fp-inputs-row">'
     + '<div class="fp-inp-group">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)"></div>'
     + '<div class="fp-inp-group">Valor R$ <input type="text" id="fp-val" placeholder="-" value="'+(r.valor||'')+'" oninput="updateFocusField(\'valor\',this.value)"></div>'
-    + (perfF ? '<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:'+perfColorF+'">'+nf.split(' ')[0]+': '+perfF+'</span>' : '')
-    + (perfU ? '<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:'+perfColorU+'">'+nu.split(' ')[0]+': '+perfU+'</span>' : '')
     + '</div>'
     + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
 }
