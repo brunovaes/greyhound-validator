@@ -89,6 +89,228 @@ function injectStyles(){
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
+/* ── PAINEL DE FOCO ─────────────────────────────────────────── */
+var focusRaceIdx = -1;
+
+function getDogImg(trap, corrida) {
+  var pelagens = ['branco', 'caramelo', 'preto'];
+  var seed = 0;
+  for (var i = 0; i < (corrida||'').length; i++) seed += corrida.charCodeAt(i);
+  seed += (trap||1) * 13;
+  var p = pelagens[((seed % 3) + 3) % 3];
+  return BASE + '/static/img/dogs/Trap' + (trap||1) + '_' + p + '.png';
+}
+
+function renderGauge(label, value, max, color) {
+  var pct = Math.min(Math.max(value/(max||1), 0), 1);
+  var r = 28, cx = 36, cy = 36;
+  var circ = 2 * Math.PI * r;
+  var offset = circ * (1 - pct);
+  var disp = typeof value === 'number' ? (value >= 10 ? Math.round(value) : value.toFixed(1)) : value;
+  return '<div class="fp-gauge">'
+    + '<svg width="72" height="72" viewBox="0 0 72 72">'
+    + '<circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5"/>'
+    + '<circle cx="36" cy="36" r="28" fill="none" stroke="' + color + '" stroke-width="5" '
+    + 'stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" '
+    + 'stroke-linecap="round" transform="rotate(-90 36 36)"/>'
+    + '<text x="36" y="40" text-anchor="middle" fill="#fff" font-size="14" font-weight="700" font-family="sans-serif">' + disp + '</text>'
+    + '</svg>'
+    + '<div class="fp-gauge-lbl">' + label + '</div>'
+    + '</div>';
+}
+
+function getBestCaltm(hist) {
+  if (!hist || !hist.length) return null;
+  var vals = hist.filter(function(h){return h.caltm && parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
+  return vals.length ? Math.min.apply(null, vals) : null;
+}
+
+function caltmScore(ct) {
+  // 28s=10, 35s=0, linear
+  if (!ct) return 0;
+  return Math.max(0, Math.min(10, (35 - ct) / 7 * 10));
+}
+
+function classScore(hist) {
+  if (!hist || !hist.length) return 0;
+  var nums = hist.map(function(h){var m=(h.classe||'').match(/(\d+)/);return m?parseInt(m[1]):99;});
+  var best = Math.min.apply(null, nums);
+  return best >= 99 ? 0 : Math.max(0, Math.min(10, (12 - best) / 11 * 10));
+}
+
+function classLabel(hist) {
+  if (!hist || !hist.length) return 'N/A';
+  var classes = hist.filter(function(h){return h.classe;}).map(function(h){return h.classe;});
+  if (!classes.length) return 'N/A';
+  classes.sort(function(a,b){
+    var na=parseInt((a.match(/\d+/)||['99'])[0]);
+    var nb=parseInt((b.match(/\d+/)||['99'])[0]);
+    return na-nb;
+  });
+  return classes[0];
+}
+
+function isUpcoming(r) {
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  if (!hbr) return true;
+  var now = new Date();
+  var nowMin = now.getHours()*60 + now.getMinutes();
+  var parts = hbr.split(':');
+  var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
+  return raceMin >= nowMin - 5; // 5 min de tolerância
+}
+
+function renderFocusPanel(r, idx) {
+  var focusCol = document.getElementById('focus-col');
+  if (!focusCol) return;
+  focusRaceIdx = idx;
+
+  var tf = r.trapFav || 1, tu = r.trapUnd || 2;
+  var nf = r.nameFav || 'Favorito', nu = r.nameUnd || 'Underdog';
+  var tc = ['','t1','t2','t3','t4','t5','t6'];
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  var conf = r.pct || 0;
+  var nivel = r.nivel || '';
+  var confClass = nivel==='alta'?'ba':nivel==='media'?'bm':'bb';
+
+  var histF = r.histFav || [];
+  var histU = r.histUnd || [];
+
+  var ctF = getBestCaltm(histF);
+  var ctU = getBestCaltm(histU);
+  var csF = caltmScore(ctF);
+  var csU = caltmScore(ctU);
+  var clScF = classScore(histF);
+  var clScU = classScore(histU);
+  var clLblF = classLabel(histF);
+  var clLblU = classLabel(histU);
+  var perfF = r.perfilFav || '';
+  var perfU = r.perfilUnd || '';
+  var perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
+  var perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
+
+  var imgF = getDogImg(tf, r.corrida||'');
+  var imgU = getDogImg(tu, r.corrida||'x');
+
+  var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');
+
+  focusCol.innerHTML =
+    '<div class="fp-hdr">'
+    + '<div><div class="fp-race-title">'+(r.corrida||'-')+'</div>'
+    + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
+    + '<button class="fp-toggle-tbl" onclick="toggleTableView()">&#9776; Ver tabela</button>'
+    + '</div>'
+    + '<div class="fp-arena">'
+    // Dog fav (esquerda, corre para direita)
+    + '<div class="fp-dog-side">'
+    + '<div class="fp-dog-trap"><span class="trap-badge '+tc[tf]+'" style="width:32px;height:32px;font-size:15px">'+tf+'</span></div>'
+    + '<img class="fp-dog-img" src="'+imgF+'" alt="'+nf+'" onerror="this.style.opacity=\'.2\'">'
+    + '<div class="fp-dog-name">'+nf+'</div>'
+    + '</div>'
+    // Centro
+    + '<div class="fp-center">'
+    + '<div class="fp-vence-lbl">VENCE</div>'
+    + '<div class="fp-vence-arrow">&#9658;</div>'
+    + '</div>'
+    // Dog und (direita, espelhado — corre para esquerda)
+    + '<div class="fp-dog-side fp-dog-und">'
+    + '<div class="fp-dog-trap"><span class="trap-badge '+tc[tu]+'" style="width:32px;height:32px;font-size:15px">'+tu+'</span></div>'
+    + '<img class="fp-dog-img" src="'+imgU+'" alt="'+nu+'" onerror="this.style.opacity=\'.2\'">'
+    + '<div class="fp-dog-name">'+nu+'</div>'
+    + '</div>'
+    + '</div>'
+    // Gauges
+    + '<div class="fp-gauges-row">'
+    + '<div class="fp-gauges-grp">'
+    + renderGauge('CalTm', parseFloat(csF.toFixed(1)), 10, '#22c55e')
+    + renderGauge('Classe', parseFloat(clScF.toFixed(1)), 10, '#60a5fa')
+    + renderGauge('Perfil', 0, 10, perfColorF)
+    + '</div>'
+    + '<div class="fp-gauges-div"></div>'
+    + '<div class="fp-gauges-grp">'
+    + renderGauge('CalTm', parseFloat(csU.toFixed(1)), 10, '#22c55e')
+    + renderGauge('Classe', parseFloat(clScU.toFixed(1)), 10, '#60a5fa')
+    + renderGauge('Perfil', 0, 10, perfColorU)
+    + '</div>'
+    + '</div>'
+    // Odd / Valor
+    + '<div class="fp-inputs-row">'
+    + '<div class="fp-inp-group">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)"></div>'
+    + '<div class="fp-inp-group">Valor R$ <input type="text" id="fp-val" placeholder="-" value="'+(r.valor||'')+'" oninput="updateFocusField(\'valor\',this.value)"></div>'
+    + (perfF ? '<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:'+perfColorF+'">'+nf.split(' ')[0]+': '+perfF+'</span>' : '')
+    + (perfU ? '<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:'+perfColorU+'">'+nu.split(' ')[0]+': '+perfU+'</span>' : '')
+    + '</div>'
+    + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
+}
+
+function updateFocusField(field, value) {
+  if (focusRaceIdx >= 0 && results[focusRaceIdx]) {
+    results[focusRaceIdx][field] = value;
+    saveSessionState();
+  }
+}
+
+function renderRaceListPanel(avbs) {
+  var col = document.getElementById('race-list-col');
+  if (!col) return;
+  col.innerHTML = '';
+  var nowMin = new Date().getHours()*60+new Date().getMinutes();
+  var upcoming = avbs.filter(isUpcoming);
+  var first = true;
+  upcoming.forEach(function(r, i) {
+    var hbr = r.hora_br || convertHora(r.hora||'');
+    var rIdx = results.indexOf(r);
+    var div = document.createElement('div');
+    div.className = 'rc' + (first ? ' rc-active' : '');
+    div.setAttribute('data-idx', rIdx);
+    if (first) {
+      div.innerHTML += '<div class="rc-next-badge">PRÓXIMA</div>';
+      focusRaceIdx = rIdx;
+    }
+    var tc = ['','t1','t2','t3','t4','t5','t6'];
+    div.innerHTML += '<div class="rc-time">'+hbr+'</div>'
+      + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
+      + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
+      + '<div class="rc-traps" style="margin-top:4px">'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:20px;height:20px;font-size:10px">'+(r.trapFav||'?')+'</span>'
+      + '<span style="font-size:10px;color:var(--mut)">vs</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:20px;height:20px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
+      + '</div>';
+    div.addEventListener('click', function() {
+      document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
+      div.classList.add('rc-active');
+      renderFocusPanel(r, rIdx);
+    });
+    col.appendChild(div);
+    first = false;
+  });
+  if (!upcoming.length) {
+    col.innerHTML = '<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Nenhuma corrida futura</div>';
+  }
+}
+
+function enterFocusMode() {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
+  if (!avbs.length) return;
+  document.getElementById('main-layout').classList.add('focus-mode');
+  renderRaceListPanel(avbs);
+  // Auto-seleciona próxima corrida
+  var next = avbs.filter(isUpcoming)[0] || avbs[0];
+  if (next) renderFocusPanel(next, results.indexOf(next));
+}
+
+function toggleTableView() {
+  var main = document.getElementById('main-layout');
+  if (main.classList.contains('focus-mode')) {
+    main.classList.remove('focus-mode');
+  } else {
+    main.classList.add('focus-mode');
+  }
+}
+
+/* ── FIM PAINEL DE FOCO ─────────────────────────────────────── */
+
 /* ── Popup pós-análise (3 etapas) ───────────────────────────────────── */
 function injectPostSaveModal(){
   var d=document.createElement('div');
@@ -486,7 +708,8 @@ async function runAnalysis(){
     var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;
     setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');
     prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
-    setTimeout(function(){openPsModal();},1400);
+    setTimeout(function(){enterFocusMode();},800);
+    setTimeout(function(){openPsModal();},1600);
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
@@ -510,20 +733,6 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
   document.getElementById('btngo').addEventListener('click',runAnalysis);
-  document.getElementById('btn-clear').addEventListener('click',function(){
-    raceFiles=[];capFiles=[];results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
-    clearSessionState();
-    document.getElementById('rlist').innerHTML='';
-    document.getElementById('tb').innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3></div></td></tr>';
-    document.getElementById('ab').style.display='none';document.getElementById('pw').style.display='none';
-    var fp=document.getElementById('filter-panel');if(fp)fp.style.display='none';
-    setSt('');updCards();
-  });
-  document.getElementById('btn-save').addEventListener('click',function(){
-    var avbs=results.filter(function(r){return r.tipo==='avb';});
-    if(!avbs.length){showToast('Nenhuma corrida para salvar.',false);return;}
-    openSaveModal();
-  });
   document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;saveSessionState();}});
   document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}saveSessionState();}});
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
@@ -535,32 +744,6 @@ document.addEventListener('DOMContentLoaded',function(){
     for(var i=0;i<items.length;i++){if(items[i].type.indexOf('image')!==-1){var file=items[i].getAsFile();var id='cm'+Date.now();try{var b64=await readB64(file);capModalFilesList.push({name:'capivara-colada.png',b64:b64,id:id,mime:'image/png',isImg:true});var d=document.createElement('div');d.className='fi';d.innerHTML='<span class="fi-name">&#128247; Imagem colada</span><span class="fi-st fi-ok">OK</span>';document.getElementById('cap-modal-list').appendChild(d);var st=document.getElementById('cap-st');st.className='cap-st ok';st.textContent='Imagem colada com sucesso!';st.style.display='block';document.getElementById('btn-cap-ok').disabled=false;}catch(err){console.error('Erro ao colar:',err);}}}
   });
   document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
-  document.getElementById('btn-print').addEventListener('click',function(){
-    var avbs=results.filter(function(r){return r.nivel!=='skip'&&r.tipo==='avb';});
-    avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
-    if(!avbs.length){alert('Nenhuma corrida para imprimir.');return;}
-    var rows=avbs.map(function(r){
-      var tf=r.trapFav||'?',tu=r.trapUnd||'?';
-      var obsClean=(r.obs||'-').replace(/CalTm/gi,'Tempo');
-      return'<tr>'
-        +'<td style="text-align:center;vertical-align:middle"><strong>'+convertHora(r.hora||'-')+'</strong><br><small style="color:#666">'+(r.hora||'')+'</small></td>'
-        +'<td style="vertical-align:middle"><b>'+(r.corrida||'-')+'</b><br><small>'+(r.dist||'')+'</small></td>'
-        +'<td style="text-align:center;vertical-align:middle;font-weight:700;font-size:10px;white-space:nowrap">T'+tf+' > T'+tu+'</td>'
-        +'<td style="text-align:center;vertical-align:middle">'+(r.pct||'-')+'%</td>'
-        +'<td style="font-size:9px;line-height:1.5;vertical-align:middle">'+obsClean+'</td>'
-        +'</tr>';
-    }).join('');
-    var nowD=new Date();var ddmm=String(nowD.getDate()).padStart(2,'0')+String(nowD.getMonth()+1).padStart(2,'0')+nowD.getFullYear();
-    var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Analises_Greyhound_'+ddmm+'</title>'
-      +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:10px}h2{font-size:13px;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #333}table{width:100%;border-collapse:collapse;font-size:9px}thead tr{background:#555;color:#fff}th{background:#555;color:#fff;border:1px solid #444;padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.6px;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}td{border:1px solid #ddd;padding:4px 6px;vertical-align:middle}tr:nth-child(even) td{background:#f5f5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}small{color:#777;font-size:8px}@media print{body{padding:4px}thead tr{background:#555!important;color:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}th{background:#555!important;color:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}tr:nth-child(even) td{background:#f5f5f5!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}</style></head><body>'
-      +'<h2>Greyhound Factory \u2014 Analises do dia</h2>'
-      +'<table><thead><tr>'
-      +'<th style="width:60px">Hora BR</th><th style="width:130px">Corrida</th>'
-      +'<th style="width:85px;white-space:nowrap">AvB</th><th style="width:40px">Conf</th><th>Observacao</th>'
-      +'</tr></thead><tbody>'+rows+'</tbody></table></body></html>';
-    var w=window.open('','_blank');w.document.write(html);w.document.close();
-    w.addEventListener('afterprint',function(){w.close();});setTimeout(function(){w.print();},600);
-  });
   document.getElementById('btn-pdf-ready-ok').addEventListener('click',function(){document.getElementById('pdf-ready-modal').classList.remove('open');});
   document.getElementById('btn-exp').addEventListener('click',function(){
     var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';

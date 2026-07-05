@@ -154,6 +154,7 @@ router.get('/', (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
+.main.focus-mode{grid-template-columns:250px 220px 1fr}
 .sidebar{background:var(--sur);border-right:1px solid var(--bdr2);padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
 .sidebar h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut)}
 .uz{border:2px dashed var(--bdr2);border-radius:8px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
@@ -167,8 +168,8 @@ router.get('/', (req, res) => {
 .fi-rm{background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px;padding:0}.fi-rm:hover{color:var(--red)}
 .btn-go{width:100%;padding:11px;background:var(--grn);color:#000;font-weight:700;font-size:13px;border:none;border-radius:var(--rad);cursor:pointer}
 .btn-go:hover{background:var(--grn2)}.btn-go:disabled{opacity:.35;cursor:not-allowed}
-.btn-sm{width:100%;padding:6px;background:transparent;color:var(--grn);font-size:11px;border:1px solid rgba(34,197,94,.3);border-radius:var(--rad);cursor:pointer;font-weight:600;transition:all .2s}
-.btn-sm:hover{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.6)}.dv{height:1px;background:var(--bdr2)}
+.btn-sm{width:100%;padding:6px;background:transparent;color:var(--grn);font-size:11px;border:1px solid rgba(34,197,94,.3);border-radius:var(--rad);cursor:pointer;font-weight:600;transition:all .2s;display:none}
+.dv{height:1px;background:var(--bdr2)}
 .sess-link{display:block;font-size:11px;color:var(--mut2);text-decoration:none;padding:3px 0;border-bottom:1px solid var(--bdr)}
 .sess-link:hover{color:var(--grn)}.sess-link span{float:right;color:var(--mut)}
 .content{padding:18px;overflow-y:auto}
@@ -211,6 +212,46 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .bexp:hover{border-color:var(--grn);color:var(--grn)}
 .bsave{padding:7px 14px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--grn);border-radius:var(--rad);cursor:pointer;font-size:12px;font-weight:600}
 .bsave:hover{background:rgba(34,197,94,.2)}
+/* ── Race list column ── */
+.race-list-col{display:none;background:var(--sur);border-right:1px solid var(--bdr2);overflow-y:auto}
+.main.focus-mode .race-list-col{display:block}
+.main.focus-mode .content{display:none}
+.main.focus-mode .focus-col{display:flex}
+.focus-col{display:none;flex-direction:column;overflow-y:auto;background:var(--bg);flex:1}
+.rc{padding:10px 12px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
+.rc:hover{background:rgba(34,197,94,.05);border-left-color:rgba(34,197,94,.3)}
+.rc.rc-active{background:rgba(34,197,94,.09);border-left-color:var(--grn)}
+.rc-time{font-size:16px;font-weight:700;color:var(--grn);line-height:1.1}
+.rc-name{font-size:10px;color:rgba(255,255,255,.8);margin:3px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-next-badge{position:absolute;top:6px;right:8px;font-size:8px;background:var(--grn);color:#000;border-radius:3px;padding:1px 5px;font-weight:700}
+.rc-traps{display:flex;align-items:center;gap:4px}
+/* ── Focus panel ── */
+.fp-hdr{padding:10px 18px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:52px;background:var(--sur)}
+.fp-race-title{font-size:14px;font-weight:700;color:#fff}
+.fp-race-meta{font-size:11px;color:var(--mut2);margin-top:1px}
+.fp-toggle-tbl{padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--bdr2);color:var(--mut2);border-radius:4px;cursor:pointer}
+.fp-toggle-tbl:hover{border-color:var(--grn);color:var(--grn)}
+.fp-arena{display:flex;align-items:flex-end;padding:12px 20px 0;gap:0;flex-shrink:0;background:radial-gradient(ellipse at center bottom,rgba(34,197,94,.04) 0%,transparent 70%)}
+.fp-dog-side{flex:1;display:flex;flex-direction:column;align-items:center;padding-bottom:8px}
+.fp-dog-img{height:190px;object-fit:contain;max-width:100%;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5));transition:all .3s}
+.fp-dog-und .fp-dog-img{transform:scaleX(-1)}
+.fp-dog-name{font-size:17px;font-weight:700;color:#fff;margin-top:6px;text-align:center}
+.fp-dog-trap{margin-bottom:6px}
+.fp-center{width:80px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:28px;gap:2px}
+.fp-vence-lbl{font-size:8px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase}
+.fp-vence-arrow{font-size:26px;color:var(--grn);animation:pulse-arrow 1.5s ease-in-out infinite}
+@keyframes pulse-arrow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.9)}}
+.fp-gauges-row{display:flex;justify-content:space-around;padding:8px 16px 10px;flex-shrink:0;gap:4px}
+.fp-gauges-grp{display:flex;gap:8px;flex:1;justify-content:center}
+.fp-gauges-div{width:1px;background:var(--bdr2);margin:0 8px;align-self:stretch}
+.fp-gauge{display:flex;flex-direction:column;align-items:center;gap:2px}
+.fp-gauge-lbl{font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px;text-align:center}
+.fp-inputs-row{display:flex;gap:12px;padding:8px 18px;border-top:1px solid var(--bdr2);align-items:center;flex-wrap:wrap;flex-shrink:0;background:var(--sur)}
+.fp-inp-group{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut2)}
+.fp-inp-group input{width:64px;padding:4px 8px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:12px;font-weight:600}
+.fp-inp-group input:focus{outline:none;border-color:var(--grn)}
+.fp-conf-badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700}
+.fp-obs{padding:8px 18px 12px;font-size:11px;color:var(--mut2);line-height:1.6;border-top:1px solid var(--bdr2);flex-shrink:0;overflow-y:auto;max-height:90px}
 .pdf-ready-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center}
 .pdf-ready-modal.open{display:flex}
 .pdf-ready-box{background:#111;border:1px solid #333;border-radius:12px;padding:28px 32px;text-align:center;max-width:420px;border-top:3px solid #22c55e}
@@ -258,7 +299,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
 ${navBar(user, 'analisar')}
-<div class="main">
+<div class="main" id="main-layout">
   <div class="sidebar">
     <div>
       <h2>PDFs de corridas</h2>
@@ -272,13 +313,15 @@ ${navBar(user, 'analisar')}
     <div class="dv"></div>
     <button class="btn-go" id="btngo">Analisar Corridas</button>
     <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
-    <button class="btn-sm" id="btn-clear">Limpar tudo</button>
+    <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
     <div>
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
       ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
     </div>
   </div>
+  <div class="race-list-col" id="race-list-col"></div>
+  <div class="focus-col" id="focus-col"></div>
   <div class="content">
     <div class="pw" id="pw"><div class="pb"><div class="pf" id="pf" style="width:0%"></div></div><div class="pt" id="pt"></div></div>
     <div class="kpis">
@@ -295,8 +338,6 @@ ${navBar(user, 'analisar')}
     </div>
     <div class="ab" id="ab" style="display:none">
       <button class="bexp" id="btn-exp">Exportar CSV</button>
-      <button class="bexp" id="btn-print" style="border-color:#a78bfa;color:#a78bfa">&#128438; Imprimir Analises</button>
-      <button class="bsave" id="btn-save">Salvar Sessao</button>
     </div>
   </div>
 </div>
