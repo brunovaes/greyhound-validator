@@ -369,10 +369,10 @@ function renderRaceListPanel(avbs) {
     div.innerHTML += '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
-      + '<div class="rc-traps" style="margin-top:4px">'
-      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapFav||'?')+'</span>'
-      + '<span style="font-size:10px;color:var(--mut)">vs</span>'
-      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapUnd||'?')+'</span>'
+      + '<div style="display:flex;align-items:center;gap:5px;margin-top:6px">'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:24px;height:24px;font-size:11px;flex-shrink:0">'+(r.trapFav||'?')+'</span>'
+      + '<span style="font-size:10px;color:var(--mut);flex-shrink:0">vs</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:24px;height:24px;font-size:11px;flex-shrink:0">'+(r.trapUnd||'?')+'</span>'
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
