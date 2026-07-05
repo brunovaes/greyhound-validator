@@ -366,18 +366,19 @@ function renderRaceListPanel(avbs) {
     var div = document.createElement('div');
     div.className = 'rc' + (first ? ' rc-active' : '');
     div.setAttribute('data-idx', rIdx);
-    if (first) {
-      div.innerHTML += '<div class="rc-next-badge">PRÓXIMA</div>';
-      focusRaceIdx = rIdx;
-    }
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.justifyContent = 'space-between';
+    if (first) { div.innerHTML += '<div class="rc-next-badge">PRÓXIMA</div>'; focusRaceIdx = rIdx; }
     var tc = ['','t1','t2','t3','t4','t5','t6'];
-    div.innerHTML += '<div class="rc-time">'+hbr+'</div>'
+    div.innerHTML += '<div style="flex:1;min-width:0">'
+      + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
-      + '<div style="display:flex;align-items:center;gap:5px;margin-top:6px">'
-      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:24px;height:24px;font-size:11px;flex-shrink:0">'+(r.trapFav||'?')+'</span>'
-      + '<span style="font-size:10px;color:var(--mut);flex-shrink:0">vs</span>'
-      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:24px;height:24px;font-size:11px;flex-shrink:0">'+(r.trapUnd||'?')+'</span>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;padding-left:6px">'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:26px;height:26px;font-size:12px">'+(r.trapFav||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:26px;height:26px;font-size:12px">'+(r.trapUnd||'?')+'</span>'
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
