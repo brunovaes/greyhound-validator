@@ -209,7 +209,7 @@ function isUpcoming(r) {
   var nowMin = now.getHours()*60 + now.getMinutes();
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
-  return raceMin >= nowMin - 10; // corrida fica 10 min após o horário de início
+  return raceMin >= nowMin - 120; // corrida fica 120 min após o horário de início
 }
 
 function isDayClosed() {
