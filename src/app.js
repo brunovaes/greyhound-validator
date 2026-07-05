@@ -357,10 +357,8 @@ function renderRaceListPanel(avbs) {
     + '<span style="font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Próximas</span>'
     + '<button onclick="refreshFocusMode()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
-  var nowMin = new Date().getHours()*60+new Date().getMinutes();
-  var upcoming = avbs.filter(isUpcoming);
   var first = true;
-  upcoming.forEach(function(r, i) {
+  avbs.forEach(function(r, i) {
     var hbr = r.hora_br || convertHora(r.hora||'');
     var rIdx = results.indexOf(r);
     var div = document.createElement('div');
