@@ -717,12 +717,19 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     try {
       browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
     } catch(connErr) {
-      const errMsg = connErr ? (connErr.message || connErr.toString() || JSON.stringify(connErr)) : 'sem mensagem';
-      addLog('err', '⚠️ Falha na conexão: ' + errMsg);
-      // Tenta URL alternativa sem path /chromium
+      let errMsg = 'sem mensagem';
+      try { errMsg = JSON.stringify(connErr); } catch(e) { errMsg = String(connErr); }
+      addLog('err', '⚠️ Detalhe erro: ' + errMsg);
       const altWS = BROWSERLESS_WS.replace('/chromium?', '?');
       addLog('info', '🔄 Tentando URL alternativa: ' + altWS.replace(/token=.*/, 'token=***'));
-      browser = await puppeteer.connect({ browserWSEndpoint: altWS });
+      try {
+        browser = await puppeteer.connect({ browserWSEndpoint: altWS });
+      } catch(connErr2) {
+        let errMsg2 = 'sem mensagem';
+        try { errMsg2 = JSON.stringify(connErr2); } catch(e) { errMsg2 = String(connErr2); }
+        addLog('err', '⚠️ Detalhe erro2: ' + errMsg2);
+        throw new Error('Falha ao conectar: ' + errMsg + ' | ' + errMsg2);
+      }
     }
 
     addLog('ok', '✅ Conectado ao Browserless!');
