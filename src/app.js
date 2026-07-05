@@ -386,8 +386,8 @@ function renderRaceListPanel(avbs) {
     col.appendChild(div);
     first = false;
   });
-  if (!upcoming.length) {
-    col.innerHTML = '<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Nenhuma corrida futura</div>';
+  if (!avbs.length) {
+    col.innerHTML += '<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Nenhuma corrida futura</div>';
   }
 }
 
