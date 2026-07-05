@@ -4,6 +4,9 @@ const { requireAdmin } = require('../middleware/auth');
 const { getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
+
+// Forçar IPv4 — Railway private network resolve IPv6 mas Browserless ouve em IPv4
+require('dns').setDefaultResultOrder('ipv4first');
 const BASE = process.env.BASE_PATH || '/greyhound';
 const resultsRobotModule = require('./resultsRobot');
 const { runResultsRobot, getResultsStatus } = resultsRobotModule;
