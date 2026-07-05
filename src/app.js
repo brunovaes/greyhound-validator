@@ -121,18 +121,22 @@ async function autoSaveSession(dateLabel) {
 }
 
 async function autoCheckAndAnalyze() {
-  if (raceFiles.length) return; // tem upload manual, não auto-analisa
-  if (results.length) return;   // já tem resultados, não reanalisa
+  if (raceFiles.length) return;
+  if (results.length) return;
   try {
     var r = await fetch(BASE+'/api/pdfs/hoje');
     var d = await r.json();
     if (!d.count) { setSt('Ainda não existe corridas disponíveis para serem carregadas.'); return; }
     var parts = (d.date||'').split('-');
     autoDateLabel = parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : d.date;
-    setSt('Carregando '+d.count+' corridas de '+autoDateLabel+'...');
-    await new Promise(function(res){setTimeout(res, 600);});
+    // Entra imediatamente no foco com spinner — sem passar pela tabela
+    var main = document.getElementById('main-layout');
+    if (main) main.classList.add('focus-mode');
+    var focusCol = document.getElementById('focus-col');
+    if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center"><div style="width:48px;height:48px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div><div style="font-size:14px;color:var(--mut2)">Carregando '+d.count+' corridas de '+autoDateLabel+'...</div></div>';
+    setSt('Analisando '+d.count+' corridas...');
     await runAnalysis();
-  } catch(e) { console.error('autoCheck erro:', e); }
+  } catch(e) { setSt('Ainda não existe corridas disponíveis para serem carregadas.'); }
 }
 
 /* ── PAINEL DE FOCO ─────────────────────────────────────────── */
