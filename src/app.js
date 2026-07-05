@@ -378,14 +378,15 @@ function renderRaceListPanel(avbs) {
     div.style.alignItems = 'center';
     div.style.justifyContent = 'space-between';
     if (first) focusRaceIdx = rIdx;
-    var top3Html = r.top3 ? '<div style="margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px">&#127942; '+r.top3+'</span></div>' : '';
+    var top3Val = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(function(x){return x>0;}).join('-') : r.top3) : '';
+    var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px">&#127942; '+top3Val+'</span></div>' : '';
     div.innerHTML += '<div style="flex:1;min-width:0">'
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
       + '</div>'
-      + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;padding-left:6px">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;padding-left:6px">'
       + '<div style="display:flex;align-items:center;gap:3px">'
       + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapFav||'?')+'</span>'
       + '<span style="font-size:9px;color:var(--mut)">vs</span>'
