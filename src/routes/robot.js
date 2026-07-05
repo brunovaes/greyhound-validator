@@ -713,9 +713,17 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     addLog('info', '🌐 Conectando ao Browserless.io...');
     addLog('info', '🔗 ' + BROWSERLESS_WS.replace(/token=.*/, 'token=***'));
 
-    browser = await puppeteer.connect({
-      browserWSEndpoint: BROWSERLESS_WS
-    });
+    // Tenta conectar com log detalhado de erro
+    try {
+      browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
+    } catch(connErr) {
+      const errMsg = connErr ? (connErr.message || connErr.toString() || JSON.stringify(connErr)) : 'sem mensagem';
+      addLog('err', '⚠️ Falha na conexão: ' + errMsg);
+      // Tenta URL alternativa sem path /chromium
+      const altWS = BROWSERLESS_WS.replace('/chromium?', '?');
+      addLog('info', '🔄 Tentando URL alternativa: ' + altWS.replace(/token=.*/, 'token=***'));
+      browser = await puppeteer.connect({ browserWSEndpoint: altWS });
+    }
 
     addLog('ok', '✅ Conectado ao Browserless!');
 
