@@ -370,9 +370,9 @@ function renderRaceListPanel(avbs) {
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
       + '<div class="rc-traps" style="margin-top:4px">'
-      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:20px;height:20px;font-size:10px">'+(r.trapFav||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapFav||'?')+'</span>'
       + '<span style="font-size:10px;color:var(--mut)">vs</span>'
-      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:20px;height:20px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapUnd||'?')+'</span>'
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
@@ -817,7 +817,7 @@ document.addEventListener('DOMContentLoaded',function(){
   injectValModal();
   injectFilterPanel();
 
-  if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');}
+  if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');setTimeout(enterFocusMode,400);}
   else { setTimeout(autoCheckAndAnalyze, 800); }
 
   document.getElementById('race-input').addEventListener('change',async function(){
