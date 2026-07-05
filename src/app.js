@@ -358,6 +358,7 @@ function renderRaceListPanel(avbs) {
     + '<button onclick="refreshFocusMode()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
   var first = true;
+  var tc = ['','t1','t2','t3','t4','t5','t6'];
   avbs.forEach(function(r, i) {
     var hbr = r.hora_br || convertHora(r.hora||'');
     var rIdx = results.indexOf(r);
