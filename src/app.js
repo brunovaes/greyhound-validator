@@ -176,15 +176,18 @@ function buildGauges(hist, raceClass, otherHist) {
   var myBrt = melhorBRT(hist);
   var otBrt = melhorBRT(otherHist);
 
-  // Cores comparativas: verde = melhor, vermelho = pior
+  // Cores comparativas: verde = melhor, vermelho = pior, azul = empate
   function timeCol(my, other) { // menor = melhor
-    if (!my) return '#555';
-    if (!other) return '#22c55e';
+    if (!my && !other) return '#555';
+    if (!my) return '#ef4444';   // sem dados = pior
+    if (!other) return '#22c55e'; // só eu tenho = melhor
+    if (Math.abs(my - other) < 0.01) return '#60a5fa'; // empate = azul
     return my <= other ? '#22c55e' : '#ef4444';
   }
   function cntCol(my, other) { // maior = melhor
     if (my === null || my === undefined) return '#555';
     if (other === null || other === undefined) return '#22c55e';
+    if (my === other) return '#60a5fa'; // empate = azul
     return my >= other ? '#22c55e' : '#ef4444';
   }
 
@@ -229,7 +232,7 @@ var focusRefreshInterval = null;
 
 function showDayEndMsg() {
   var focusCol = document.getElementById('focus-col');
-  if (focusCol) focusCol.innerHTML = '<div class="fp-empty"><div style="font-size:52px">&#127937;</div><div style="font-size:16px;font-weight:700;color:var(--mut2);margin-top:12px">Ciclo do dia encerrado</div><div style="font-size:12px;color:var(--mut);margin-top:6px">As corridas de hoje se encerraram às 18:30 BRT</div></div>';
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#127937;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Ciclo do dia encerrado</div><div style="font-size:13px">As corridas de hoje se encerraram às 18:30 BRT</div></div>';
   var col = document.getElementById('race-list-col');
   if (col) col.innerHTML = '';
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
@@ -330,7 +333,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-center">'
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
-    + '<button onclick="openValModal(ALL_RACES&&ALL_RACES['+idx+']||results['+idx+'])" style="margin-top:8px;font-size:10px;background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:4px;padding:3px 7px;cursor:pointer;white-space:nowrap" title="Ver histórico dos galgos">[Analisar disputa]</button>'
+    + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:10px;background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:4px;padding:3px 7px;cursor:pointer;white-space:nowrap">[Analisar disputa]</button>'
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
