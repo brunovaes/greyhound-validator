@@ -203,7 +203,6 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-arena">'
     // Dog fav (esquerda, corre para direita)
     + '<div class="fp-dog-side">'
-    + '<div class="fp-dog-trap"><span class="trap-badge '+tc[tf]+'" style="width:32px;height:32px;font-size:15px">'+tf+'</span></div>'
     + '<img class="fp-dog-img" src="'+imgF+'" alt="'+nf+'" onerror="this.style.opacity=\'.2\'">'
     + '<div class="fp-dog-name">'+nf+'</div>'
     + '</div>'
@@ -214,7 +213,6 @@ function renderFocusPanel(r, idx) {
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
-    + '<div class="fp-dog-trap"><span class="trap-badge '+tc[tu]+'" style="width:32px;height:32px;font-size:15px">'+tu+'</span></div>'
     + '<img class="fp-dog-img" src="'+imgU+'" alt="'+nu+'" onerror="this.style.opacity=\'.2\'">'
     + '<div class="fp-dog-name">'+nu+'</div>'
     + '</div>'
