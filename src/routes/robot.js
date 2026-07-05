@@ -12,7 +12,7 @@ const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || 'greyhound2024';
 const BROWSERLESS_HOST = process.env.BROWSERLESS_HOST || 'chromium.railway.internal';
-const BROWSERLESS_WS = `ws://${BROWSERLESS_HOST}:3000?token=${BROWSERLESS_TOKEN}`;
+const BROWSERLESS_WS = `ws://${BROWSERLESS_HOST}:3000/chromium?token=${BROWSERLESS_TOKEN}`;
 
 function cleanOldPdfFolders() {
   if (!fs.existsSync(PDF_BASE)) return;
@@ -693,8 +693,10 @@ router.post('/start', requireAdmin, async (req, res) => {
 
   runRobot(date, parseInt(distMin) || 400, parseInt(distMax) || 575, timeFrom||'', timeTo||'').catch(err => {
     robotStatus.running = false;
-    robotStatus.error = err.message;
-    addLog('err', '❌ Erro fatal: ' + err.message);
+    const msg = err && err.message ? err.message : String(err);
+    robotStatus.error = msg;
+    addLog('err', '❌ Erro fatal: ' + msg);
+    addLog('err', 'Stack: ' + (err && err.stack ? err.stack.split('\n')[0] : 'sem stack'));
   });
 });
 
