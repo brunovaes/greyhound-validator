@@ -713,6 +713,26 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     addLog('info', '🌐 Conectando ao Browserless.io...');
     addLog('info', '🔗 ' + BROWSERLESS_WS.replace(/token=.*/, 'token=***'));
 
+    // Diagnóstico: DNS lookup
+    const dns = require('dns');
+    await new Promise(function(resolve) {
+      dns.lookup('chromium.railway.internal', function(err, addr) {
+        addLog('info', 'DNS chromium.railway.internal → ' + (err ? 'ERRO: '+err.message : addr));
+        resolve();
+      });
+    });
+
+    // Diagnóstico: HTTP health check
+    const http = require('http');
+    await new Promise(function(resolve) {
+      const req = http.get('http://chromium.railway.internal:3000/docs', function(res) {
+        addLog('info', 'HTTP /docs → status: ' + res.statusCode);
+        resolve();
+      });
+      req.on('error', function(e) { addLog('err', 'HTTP /docs → ERRO: ' + e.message); resolve(); });
+      req.setTimeout(5000, function() { addLog('err', 'HTTP /docs → TIMEOUT'); req.destroy(); resolve(); });
+    });
+
     // Tenta conectar com log detalhado de erro
     try {
       browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
