@@ -132,26 +132,11 @@ async function autoCheckAndAnalyze() {
     // Entra imediatamente no foco com spinner — sem passar pela tabela
     var main = document.getElementById('main-layout');
     if (main) main.classList.add('focus-mode');
-    var dogImgs = ['Trap1_caramelo','Trap2_preto','Trap3_branco','Trap5_caramelo'];
-    var randomDog = dogImgs[Math.floor(Math.random()*dogImgs.length)];
-    var dogUrl = BASE+'/static/img/dogs/'+randomDog+'.png';
     if (focusCol) focusCol.innerHTML =
-      '<style>'
-      +'@keyframes run-dog{0%{left:-220px;transform:scaleX(1)}48%{left:calc(100% + 20px);transform:scaleX(1)}50%{left:calc(100% + 20px);transform:scaleX(-1)}98%{left:-220px;transform:scaleX(-1)}100%{left:-220px;transform:scaleX(1)}}'
-      +'@keyframes dog-bounce{0%,100%{bottom:38%}50%{bottom:41%}}'
-      +'@keyframes track-move{from{background-position:0 0}to{background-position:-80px 0}}'
-      +'</style>'
-      +'<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;position:relative;overflow:hidden">'
-      // pista
-      +'<div style="position:absolute;bottom:36%;left:0;right:0;height:4px;background:repeating-linear-gradient(90deg,rgba(34,197,94,.4) 0,rgba(34,197,94,.4) 20px,transparent 20px,transparent 40px);animation:track-move 0.5s linear infinite;border-radius:2px"></div>'
-      // galgo animado
-      +'<img src="'+dogUrl+'" style="position:absolute;width:200px;height:auto;animation:run-dog 2.8s linear infinite,dog-bounce 0.4s ease-in-out infinite;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))" onerror="this.style.display=\'none\'">'
-      // texto e spinner
-      +'<div style="position:relative;z-index:2;margin-top:140px;display:flex;flex-direction:column;align-items:center;gap:12px">'
-      +'<div style="width:36px;height:36px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div>'
-      +'<div style="font-size:14px;color:var(--mut2);font-weight:600">Carregando '+d.count+' corridas de '+autoDateLabel+'...</div>'
-      +'<div style="font-size:11px;color:var(--mut)">Isso pode levar alguns segundos</div>'
-      +'</div>'
+      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div>'
+      +'<div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div>'
+      +'<div style="font-size:15px;font-weight:700;color:var(--mut2)">Analisando '+d.count+' corridas de '+autoDateLabel+'...</div>'
       +'</div>';
     setSt('Analisando '+d.count+' corridas...');
     await runAnalysis();
