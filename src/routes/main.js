@@ -32,13 +32,6 @@ function navBar(user, active) {
       <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
     </div>
   </nav>
-  <div id="pdf-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(34,197,94,.08);border-bottom:1px solid rgba(34,197,94,.2)">
-    <span style="font-size:12px;color:#22c55e">📄 <strong><span id="pdf-banner-cnt">0</span> PDFs</strong> disponíveis para hoje — prontos para análise</span>
-    <div style="display:flex;align-items:center;gap:10px">
-      <button onclick="downloadAndAnalyze()" style="font-size:11px;color:#22c55e;background:none;cursor:pointer;border:1px solid rgba(34,197,94,.3);padding:3px 10px;border-radius:4px;font-weight:600">⬇ Baixar ZIP + Analisar →</button>
-      <button onclick="dismissPdfBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
-    </div>
-  </div>
   <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
     <span style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
     <div style="display:flex;align-items:center;gap:10px">

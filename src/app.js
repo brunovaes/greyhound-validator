@@ -320,7 +320,6 @@ function renderFocusPanel(r, idx) {
     '<div class="fp-hdr">'
     + '<div><div class="fp-race-title">'+(r.corrida||'-')+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
-    + '<button class="fp-toggle-tbl" onclick="toggleTableView()">&#9776; Ver tabela</button>'
     + '</div>'
     + '<div class="fp-arena">'
     // Dog fav (esquerda, corre para direita)
