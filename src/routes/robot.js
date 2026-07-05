@@ -15,7 +15,8 @@ const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || 'greyhound2024';
 const BROWSERLESS_HOST = process.env.BROWSERLESS_HOST || 'chromium.railway.internal';
-const BROWSERLESS_WS = `ws://${BROWSERLESS_HOST}:3000/chromium?token=${BROWSERLESS_TOKEN}`;
+const BROWSERLESS_PORT = process.env.BROWSERLESS_PORT || '8080';
+const BROWSERLESS_WS = `ws://${BROWSERLESS_HOST}:${BROWSERLESS_PORT}?token=${BROWSERLESS_TOKEN}`;
 
 function cleanOldPdfFolders() {
   if (!fs.existsSync(PDF_BASE)) return;
