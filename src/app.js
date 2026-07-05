@@ -89,6 +89,39 @@ function injectStyles(){
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
+var autoDateLabel = '';
+
+async function autoSaveSession(dateLabel) {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  if (!avbs.length) return;
+  var name = 'Races ' + dateLabel;
+  try {
+    // Remove sessão com mesmo nome se existir
+    var r = await fetch(BASE+'/api/sessions');
+    var sessions = await r.json();
+    var existing = sessions.find(function(s){return s.name===name;});
+    if (existing) await fetch(BASE+'/api/session/'+existing.id, {method:'DELETE'});
+    // Salva nova sessão
+    await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    showToast('\u2713 Sessão "'+name+'" salva no Histórico!', true);
+  } catch(e) { console.error('autoSave erro:', e); }
+}
+
+async function autoCheckAndAnalyze() {
+  if (raceFiles.length) return; // tem upload manual, não auto-analisa
+  if (results.length) return;   // já tem resultados, não reanalisa
+  try {
+    var r = await fetch(BASE+'/api/pdfs/hoje');
+    var d = await r.json();
+    if (!d.count) { setSt('Ainda não existe corridas disponíveis para serem carregadas.'); return; }
+    var parts = (d.date||'').split('-');
+    autoDateLabel = parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : d.date;
+    setSt('Carregando '+d.count+' corridas de '+autoDateLabel+'...');
+    await new Promise(function(res){setTimeout(res, 600);});
+    await runAnalysis();
+  } catch(e) { console.error('autoCheck erro:', e); }
+}
+
 /* ── PAINEL DE FOCO ─────────────────────────────────────────── */
 var focusRaceIdx = -1;
 
@@ -315,7 +348,10 @@ function updateFocusField(field, value) {
 function renderRaceListPanel(avbs) {
   var col = document.getElementById('race-list-col');
   if (!col) return;
-  col.innerHTML = '';
+  col.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)">'
+    + '<span style="font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Próximas</span>'
+    + '<button onclick="refreshFocusMode()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
+    + '</div>';
   var nowMin = new Date().getHours()*60+new Date().getMinutes();
   var upcoming = avbs.filter(isUpcoming);
   var first = true;
@@ -761,7 +797,13 @@ async function runAnalysis(){
     setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');
     prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
     setTimeout(function(){enterFocusMode();},800);
-    setTimeout(function(){openPsModal();},1600);
+    if(usandoPasta){
+      // Fluxo automático — salva direto sem popup
+      setTimeout(function(){autoSaveSession(autoDateLabel);},1600);
+    } else {
+      // Upload manual — pergunta se quer salvar
+      setTimeout(function(){openPsModal();},1600);
+    }
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
   document.getElementById('btngo').innerHTML='Analisar Corridas';
@@ -776,6 +818,7 @@ document.addEventListener('DOMContentLoaded',function(){
   injectFilterPanel();
 
   if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');}
+  else { setTimeout(autoCheckAndAnalyze, 800); }
 
   document.getElementById('race-input').addEventListener('change',async function(){
     for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
