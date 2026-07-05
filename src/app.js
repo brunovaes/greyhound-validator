@@ -118,10 +118,75 @@ function isUpcoming(r) {
   var nowMin = now.getHours()*60 + now.getMinutes();
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
-  return raceMin >= nowMin - 5; // 5 min de tolerância
+  return raceMin >= nowMin - 10; // corrida fica 10 min após o horário de início
 }
 
-function renderFocusPanel(r, idx) {
+function isDayClosed() {
+  var now = new Date();
+  return now.getHours()*60 + now.getMinutes() >= 18*60 + 31; // 18:31 BRT
+}
+
+var focusRefreshInterval = null;
+
+function showDayEndMsg() {
+  var focusCol = document.getElementById('focus-col');
+  if (focusCol) focusCol.innerHTML = '<div class="fp-empty"><div style="font-size:52px">&#127937;</div><div style="font-size:16px;font-weight:700;color:var(--mut2);margin-top:12px">Ciclo do dia encerrado</div><div style="font-size:12px;color:var(--mut);margin-top:6px">As corridas de hoje se encerraram às 18:30 BRT</div></div>';
+  var col = document.getElementById('race-list-col');
+  if (col) col.innerHTML = '';
+  if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
+}
+
+function refreshFocusMode() {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
+  var hasUpcoming = avbs.some(isUpcoming);
+
+  // Após 18:31 e sem corridas futuras → ciclo encerrado
+  if (!hasUpcoming && isDayClosed()) { showDayEndMsg(); return; }
+
+  // Se nenhuma é "futura" mas não é fim de dia → são corridas de amanhã, mostra todas
+  var toShow = hasUpcoming ? avbs.filter(isUpcoming) : avbs;
+
+  renderRaceListPanel(toShow);
+
+  // Se a corrida em foco já passou, avança para a próxima automaticamente
+  if (focusRaceIdx >= 0 && results[focusRaceIdx] && !isUpcoming(results[focusRaceIdx])) {
+    var next = toShow[0];
+    if (next) {
+      renderFocusPanel(next, results.indexOf(next));
+      document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
+      var firstCard = document.querySelector('.rc');
+      if (firstCard) firstCard.classList.add('rc-active');
+    } else {
+      showDayEndMsg();
+    }
+  }
+}
+
+function enterFocusMode() {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
+  if (!avbs.length) return;
+
+  var hasUpcoming = avbs.some(isUpcoming);
+
+  // Após 18:31 sem corridas futuras → ciclo encerrado
+  if (!hasUpcoming && isDayClosed()) {
+    document.getElementById('main-layout').classList.add('focus-mode');
+    showDayEndMsg();
+    return;
+  }
+
+  var toShow = hasUpcoming ? avbs.filter(isUpcoming) : avbs;
+  document.getElementById('main-layout').classList.add('focus-mode');
+  renderRaceListPanel(toShow);
+  var next = toShow[0];
+  if (next) renderFocusPanel(next, results.indexOf(next));
+
+  // Auto-refresh a cada minuto
+  if (focusRefreshInterval) clearInterval(focusRefreshInterval);
+  focusRefreshInterval = setInterval(refreshFocusMode, 600000);
+}
   var focusCol = document.getElementById('focus-col');
   if (!focusCol) return;
   focusRaceIdx = idx;
@@ -231,23 +296,12 @@ function renderRaceListPanel(avbs) {
   }
 }
 
-function enterFocusMode() {
-  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
-  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
-  if (!avbs.length) return;
-  document.getElementById('main-layout').classList.add('focus-mode');
-  renderRaceListPanel(avbs);
-  // Auto-seleciona próxima corrida
-  var next = avbs.filter(isUpcoming)[0] || avbs[0];
-  if (next) renderFocusPanel(next, results.indexOf(next));
-}
-
 function toggleTableView() {
   var main = document.getElementById('main-layout');
   if (main.classList.contains('focus-mode')) {
     main.classList.remove('focus-mode');
   } else {
-    main.classList.add('focus-mode');
+    enterFocusMode();
   }
 }
 
@@ -618,15 +672,16 @@ async function runChunk(files,caps){
 async function runAnalysis(){
   var usandoPasta=false;
   if(!raceFiles.length){
-    // Sem PDFs upados — verifica pasta do dia
-    setSt('Verificando PDFs de hoje na pasta...');
+    setSt('Verificando corridas disponíveis...');
     try{
       var r=await fetch(BASE+'/api/pdfs/hoje');
       var d=await r.json();
-      if(!d.count){setSt('Nenhum PDF encontrado. Faça upload ou rode o Robô primeiro.');return;}
-      setSt(d.count+' PDFs encontrados na pasta de hoje. Iniciando análise...');
+      if(!d.count){setSt('Ainda não existe corridas disponíveis para serem carregadas.');return;}
+      var dateParts=(d.date||'').split('-');
+      var dateLabel=dateParts.length===3?dateParts[2]+'/'+dateParts[1]:d.date;
+      setSt(d.count+' corridas do dia '+dateLabel+' encontradas. Iniciando análise...');
       usandoPasta=true;
-    }catch(e){setSt('Erro ao verificar pasta. Faça upload manual.');return;}
+    }catch(e){setSt('Ainda não existe corridas disponíveis para serem carregadas.');return;}
   }
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
