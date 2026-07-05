@@ -330,6 +330,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-center">'
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
+    + '<button onclick="openValModal(ALL_RACES&&ALL_RACES['+idx+']||results['+idx+'])" style="margin-top:8px;font-size:10px;background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:4px;padding:3px 7px;cursor:pointer;white-space:nowrap" title="Ver histórico dos galgos">[Analisar disputa]</button>'
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
@@ -377,15 +378,20 @@ function renderRaceListPanel(avbs) {
     div.style.alignItems = 'center';
     div.style.justifyContent = 'space-between';
     if (first) focusRaceIdx = rIdx;
+    var top3Html = r.top3 ? '<div style="margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px">&#127942; '+r.top3+'</span></div>' : '';
     div.innerHTML += '<div style="flex:1;min-width:0">'
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
       + '</div>'
-      + '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;padding-left:6px">'
+      + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;padding-left:6px">'
+      + '<div style="display:flex;align-items:center;gap:3px">'
       + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapFav||'?')+'</span>'
+      + '<span style="font-size:9px;color:var(--mut)">vs</span>'
       + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
+      + '</div>'
+      + top3Html
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
