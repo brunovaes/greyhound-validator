@@ -154,7 +154,7 @@ router.get('/', (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
-.main.focus-mode{grid-template-columns:250px 220px 1fr}
+.main.focus-mode{grid-template-columns:250px 170px 1fr}
 .sidebar{background:var(--sur);border-right:1px solid var(--bdr2);padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
 .sidebar h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut)}
 .uz{border:2px dashed var(--bdr2);border-radius:8px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative}

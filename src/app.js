@@ -94,6 +94,11 @@ var autoDateLabel = '';
 async function autoSaveSession(dateLabel) {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
   if (!avbs.length) return;
+  // Fallback para data atual se dateLabel não foi definido
+  if (!dateLabel) {
+    var now = new Date();
+    dateLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+  }
   var name = 'Races ' + dateLabel;
   try {
     // Remove sessão com mesmo nome se existir
