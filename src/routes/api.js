@@ -788,12 +788,24 @@ function sanitizeEliminatedTraps(races) {
 const fs = require('fs');
 const PDF_PATH = process.env.PDF_PATH || require('path').join(__dirname, '../../public/pdfs');
 
+function fmtDate(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function getPdfFolder(date) {
-  const d = date || new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  return require('path').join(PDF_PATH, `${yyyy}-${mm}-${dd}`);
+  const base = date ? new Date(date) : new Date();
+  const tomorrow = new Date(base); tomorrow.setDate(base.getDate()+1);
+  const yesterday = new Date(base); yesterday.setDate(base.getDate()-1);
+  const candidates = [fmtDate(base), fmtDate(tomorrow), fmtDate(yesterday)];
+  let bestFolder = require('path').join(PDF_PATH, candidates[0]);
+  let bestCount = 0;
+  for (const c of candidates) {
+    const folder = require('path').join(PDF_PATH, c);
+    if (fs.existsSync(folder)) {
+      const count = fs.readdirSync(folder).filter(f=>f.toLowerCase().endsWith('.pdf')).length;
+      if (count > bestCount) { bestCount = count; bestFolder = folder; }
+    }
+  }
+  return bestFolder;
 }
 
 function readFolderPdfs(folder) {
@@ -829,7 +841,8 @@ router.get('/pdfs/hoje/zip', (req, res) => {
 router.get('/pdfs/hoje', (req, res) => {
   const folder = getPdfFolder();
   const files = readFolderPdfs(folder);
-  res.json({ count: files.length, folder, files: files.map(f=>f.name) });
+  const dateFound = require('path').basename(folder);
+  res.json({ count: files.length, folder, date: dateFound, files: files.map(f=>f.name) });
 });
 
 
@@ -975,6 +988,20 @@ router.post('/session', express.json(), (req, res) => {
     }
     res.json({ ok:true, sessionId });
   } catch(err) { res.status(500).json({ error:err.message }); }
+});
+
+router.get('/config', (req, res) => {
+  try {
+    const { getUserConfig } = require('../db/database');
+    const config = getUserConfig(req.user.id);
+    res.json({
+      visibility_interval_min: config.visibility_interval_min || 120,
+      results_interval_min: config.results_interval_min || 30,
+      results_window_start: config.results_window_start || '09:00',
+      results_window_end: config.results_window_end || '18:30',
+      pdf_cron_time: config.pdf_cron_time || '13:30'
+    });
+  } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
 
 router.get('/sessions', (req, res) => {

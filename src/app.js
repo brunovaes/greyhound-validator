@@ -89,7 +89,15 @@ function injectStyles(){
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
-var autoDateLabel = '';
+var VISIBILITY_MIN = 120; // padrão, sobrescrito pela config
+
+async function loadSystemConfig() {
+  try {
+    var r = await fetch(BASE+'/api/config');
+    var c = await r.json();
+    if (c.visibility_interval_min) VISIBILITY_MIN = parseInt(c.visibility_interval_min);
+  } catch(e) {}
+}
 
 async function autoSaveSession(dateLabel) {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
@@ -209,7 +217,7 @@ function isUpcoming(r) {
   var nowMin = now.getHours()*60 + now.getMinutes();
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
-  return raceMin >= nowMin - 120; // corrida fica 120 min após o horário de início
+  return raceMin >= nowMin - VISIBILITY_MIN;
 }
 
 function isDayClosed() {
@@ -815,13 +823,14 @@ async function runAnalysis(){
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});}catch(e){}
 }
 
-document.addEventListener('DOMContentLoaded',function(){
+document.addEventListener('DOMContentLoaded',async function(){
   injectStyles();
   injectPostSaveModal();
   injectSaveModal();
   injectValModal();
   injectFilterPanel();
 
+  await loadSystemConfig();
   if(restoreSessionState()){renderTable();updCards();setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');setTimeout(enterFocusMode,400);}
   else { setTimeout(autoCheckAndAnalyze, 800); }
 

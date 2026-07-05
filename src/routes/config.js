@@ -21,8 +21,11 @@ router.get('/', requireAdmin, (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Configuracoes - Greyhound Validator</title>
-<link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
+nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
+.nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}.nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
 .content{padding:24px;max-width:820px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#888;margin-bottom:24px}
 .section{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:16px}
@@ -235,6 +238,37 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 <div><button type="submit" class="btn-save">Salvar Configuracoes</button><button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button></div>
+
+<div class="section" style="margin-top:16px;border-top:2px solid #22c55e">
+<div class="sec-title" style="color:#22c55e">Automação — Robôs e Visibilidade</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field">
+    <label>Visibilidade das corridas (min)</label>
+    <input type="number" name="visibility_interval_min" value="${config.visibility_interval_min||120}" min="10" max="480">
+    <div class="hint">Quantos minutos uma corrida permanece visível após o horário de início</div>
+  </div>
+  <div class="field">
+    <label>Intervalo do Robô de Resultados (min)</label>
+    <input type="number" name="results_interval_min" value="${config.results_interval_min||30}" min="10" max="120">
+    <div class="hint">A cada quantos minutos o robô atualiza os resultados</div>
+  </div>
+  <div class="field">
+    <label>Início da janela de resultados (BRT)</label>
+    <input type="time" name="results_window_start" value="${config.results_window_start||'09:00'}">
+    <div class="hint">Horário BRT de início das atualizações automáticas</div>
+  </div>
+  <div class="field">
+    <label>Fim da janela de resultados (BRT)</label>
+    <input type="time" name="results_window_end" value="${config.results_window_end||'18:30'}">
+    <div class="hint">Horário BRT de encerramento das atualizações automáticas</div>
+  </div>
+  <div class="field">
+    <label>Hora de execução do Robô de PDFs (BRT)</label>
+    <input type="time" name="pdf_cron_time" value="${config.pdf_cron_time||'13:30'}">
+    <div class="hint">Horário BRT em que o robô baixa os PDFs do dia seguinte</div>
+  </div>
+</div>
+</div>
 </form>
 </div>
 
@@ -283,7 +317,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_linhas_cat_inferior INTEGER DEFAULT 3').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,visibility_interval_min=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
@@ -295,6 +329,11 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.max_niveis_pool||2,
       d.max_linhas_cat_inferior||3,
       d.max_dias_gap_nova_cat||14,
+      d.visibility_interval_min||120,
+      d.results_interval_min||30,
+      d.results_window_start||'09:00',
+      d.results_window_end||'18:30',
+      d.pdf_cron_time||'13:30',
       user.id
     );
     res.json({ ok: true });

@@ -131,7 +131,6 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN hist_und TEXT DEFAULT NULL",
   "ALTER TABLE races ADD COLUMN race_card TEXT DEFAULT NULL",
   "ALTER TABLE races ADD COLUMN video_url TEXT DEFAULT NULL",
-  "ALTER TABLE races ADD COLUMN top3 TEXT DEFAULT NULL",
   'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
   'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
@@ -140,6 +139,11 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2',
   'ALTER TABLE analysis_config ADD COLUMN max_linhas_cat_inferior INTEGER DEFAULT 3',
   'ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14',
+  'ALTER TABLE analysis_config ADD COLUMN visibility_interval_min INTEGER DEFAULT 120',
+  'ALTER TABLE analysis_config ADD COLUMN results_interval_min INTEGER DEFAULT 30',
+  'ALTER TABLE analysis_config ADD COLUMN results_window_start TEXT DEFAULT \'09:00\'',
+  'ALTER TABLE analysis_config ADD COLUMN results_window_end TEXT DEFAULT \'18:30\'',
+  'ALTER TABLE analysis_config ADD COLUMN pdf_cron_time TEXT DEFAULT \'13:30\'',
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
