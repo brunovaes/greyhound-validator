@@ -377,8 +377,8 @@ function renderRaceListPanel(avbs) {
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
       + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;padding-left:6px">'
-      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:26px;height:26px;font-size:12px">'+(r.trapFav||'?')+'</span>'
-      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:26px;height:26px;font-size:12px">'+(r.trapUnd||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapFav||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapUnd||'?')+'</span>'
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
