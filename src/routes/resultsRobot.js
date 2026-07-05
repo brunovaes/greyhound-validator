@@ -4,8 +4,12 @@ const router  = express.Router();
 const { requireAdmin } = require('../middleware/auth');
 const { db } = require('../db/database');
 
-const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
-const BROWSERLESS_WS    = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
+require('dns').setDefaultResultOrder('ipv4first');
+
+const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || 'greyhound2024';
+const BROWSERLESS_HOST  = process.env.BROWSERLESS_HOST  || 'chromium.railway.internal';
+const BROWSERLESS_PORT  = process.env.BROWSERLESS_PORT  || '8080';
+const BROWSERLESS_WS    = `ws://${BROWSERLESS_HOST}:${BROWSERLESS_PORT}?token=${BROWSERLESS_TOKEN}`;
 
 const status = { running: false, stopRequested: false, logs: [], lastRun: null, processed: 0, updated: 0 };
 
@@ -117,9 +121,9 @@ async function runResultsRobot(targetDate) {
     const dbRaces = db.prepare(
       'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card ' +
       'FROM races r JOIN race_sessions s ON s.id=r.session_id ' +
-      'WHERE date(datetime(s.created_at, \'-3 hours\'))=? AND r.nivel!=? ORDER BY r.hora'
+      'WHERE date(s.created_at)=? AND r.nivel!=? ORDER BY r.hora'
     ).all(DATE, 'skip');
-    addLog('info', dbRaces.length + ' corridas no banco para ' + DATE + (dbRaces.length ? ' → horas: ' + dbRaces.map(function(r){return r.hora;}).join(', ') : ' — verifique se a sessão foi salva nesta data'));
+    addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
     const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=? WHERE id=?');
 
@@ -143,19 +147,8 @@ async function runResultsRobot(targetDate) {
 
         const pageText = await page.evaluate(function() {
           // Link do vídeo
-          // Capturar link de replay — múltiplas estratégias
-          let videoUrl = '';
-          const replaySels = ['a[href*="replay"]','a[href*="video"]','button[class*="replay"]','a[class*="replay"]','a[class*="watch"]'];
-          for (let s = 0; s < replaySels.length; s++) {
-            const el = document.querySelector(replaySels[s]);
-            if (el) { videoUrl = el.getAttribute('href') || el.getAttribute('data-url') || ''; if (videoUrl) break; }
-          }
-          // Fallback: qualquer link cujo texto contenha "replay" ou "watch"
-          if (!videoUrl) {
-            const allLinks = Array.from(document.querySelectorAll('a[href]'));
-            const rl = allLinks.find(function(a){ const t=(a.textContent||'').toLowerCase(); return t.includes('replay')||t.includes('watch'); });
-            if (rl) videoUrl = rl.getAttribute('href') || '';
-          }
+          const videoEl = document.querySelector('a[href*="replay"], a[href*="video"], button[class*="replay"]');
+          const videoUrl = videoEl ? (videoEl.getAttribute('href') || videoEl.getAttribute('data-url') || '') : '';
           
           // Tentar extrair trap numbers do HTML (elementos visuais)
           const trapOrder = []; // [{pos, trap}]
@@ -183,8 +176,6 @@ async function runResultsRobot(targetDate) {
         });
 
         addLog('info', 'Texto: ' + pageText.text.slice(0, 200));
-        if (pageText.videoUrl) addLog('ok', 'Replay: ' + pageText.videoUrl);
-        else addLog('info', 'Sem link de replay encontrado');
 
         // Extrair ordem de chegada por nome
         const finishing = extractFinishingOrder(pageText.text);
@@ -287,9 +278,7 @@ async function runResultsRobot(targetDate) {
           r3 = nameToTrap(p3 ? p3.name : null);
         }
 
-        // Salvar URL da página de resultado (não expira) — usuário clica Watch Replay lá
-        var resultUrl = 'https://greyhoundbet.racingpost.com/' + (link.href.startsWith('#') ? link.href : '#' + link.href);
-        updateStmt.run(bateu, r1, r2, r3, resultUrl, dbRace.id);
+        updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
         status.updated++;
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
