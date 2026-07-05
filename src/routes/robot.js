@@ -13,6 +13,21 @@ const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
 const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
 
+function cleanOldPdfFolders() {
+  if (!fs.existsSync(PDF_BASE)) return;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  try {
+    fs.readdirSync(PDF_BASE).forEach(function(folder) {
+      const folderDate = new Date(folder);
+      if (!isNaN(folderDate) && folderDate < cutoff) {
+        fs.rmSync(path.join(PDF_BASE, folder), { recursive: true, force: true });
+        console.log('[CLEAN] Pasta PDF removida:', folder);
+      }
+    });
+  } catch(e) { console.error('[CLEAN] Erro ao limpar PDFs:', e.message); }
+}
+
 // ─── CRON MADRUGADA — 06:00 UTC (03:00 BRT) ───────────────────────────────
 function getTodayDate() {
   const d = new Date();
@@ -36,6 +51,7 @@ function scheduleCronRobot() {
         await runRobot(date, 400, 575, '', '');
         addLog('ok', '✅ Coleta automática concluída — ' + robotStatus.pdfs.length + ' PDFs');
         console.log('[CRON] Coleta concluída: ' + robotStatus.pdfs.length + ' PDFs');
+        cleanOldPdfFolders();
       } catch(e) {
         addLog('err', '❌ Erro na coleta automática: ' + e.message);
         console.error('[CRON] Erro:', e.message);
