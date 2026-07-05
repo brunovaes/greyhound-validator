@@ -10,8 +10,9 @@ const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
 // PDF_DIR é dinâmico por data — criado em runRobot
 
-const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || '2UnDGfhNkfGbb981901301f0f490a53b587deeb6313c634d1';
-const BROWSERLESS_WS = `wss://production-sfo.browserless.io?token=${BROWSERLESS_TOKEN}`;
+const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || 'greyhound2024';
+const BROWSERLESS_HOST = process.env.BROWSERLESS_HOST || 'chromium.railway.internal';
+const BROWSERLESS_WS = `ws://${BROWSERLESS_HOST}:3000?token=${BROWSERLESS_TOKEN}`;
 
 function cleanOldPdfFolders() {
   if (!fs.existsSync(PDF_BASE)) return;
