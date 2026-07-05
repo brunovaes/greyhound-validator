@@ -201,8 +201,8 @@ function buildGauges(hist, raceClass, otherHist) {
   var mtStr    = myMt ? myMt.toFixed(2) : '-';
   var cnt      = getHistByClass(hist, raceClass).length;
   var catFill  = Math.min(myCat/20, 1); // 20 corridas = full
-  var podFill  = Math.min(myPod/Math.max(cnt,1), 1);
-  var arrFill  = myArr ? Math.max(0,Math.min(1,(4.3-myArr)/0.7)) : 0; // range mais apertado
+  var podFill  = cnt > 0 ? (myPod > 0 ? Math.min(myPod/cnt, 1) : (otPod > 0 ? 0.08 : 0)) : 0;
+  var arrFill  = myArr ? Math.max(0,Math.min(1,(6.0-myArr)/3.5)) : 0; // range real 2.5-6.0s
   var arrStr   = myArr ? myArr.toFixed(2) : '-';
   var brtFill  = myBrt.val ? Math.max(0,Math.min(1,(35-parseFloat(myBrt.val))/8)) : 0;
 
@@ -333,7 +333,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-center">'
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
-    + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:10px;background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:4px;padding:3px 7px;cursor:pointer;white-space:nowrap">[Analisar disputa]</button>'
+    + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
