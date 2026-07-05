@@ -218,12 +218,12 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .main.focus-mode .content{display:none}
 .main.focus-mode .focus-col{display:flex}
 .focus-col{display:none;flex-direction:column;overflow-y:auto;background:var(--bg);flex:1}
-.rc{padding:10px 12px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
+.rc{padding:7px 10px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
 .rc:hover{background:rgba(34,197,94,.05);border-left-color:rgba(34,197,94,.3)}
 .rc.rc-active{background:rgba(34,197,94,.09);border-left-color:var(--grn)}
 .rc-time{font-size:16px;font-weight:700;color:var(--grn);line-height:1.1}
 .rc-name{font-size:10px;color:rgba(255,255,255,.8);margin:3px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rc-next-badge{position:absolute;top:6px;right:8px;font-size:8px;background:var(--grn);color:#000;border-radius:3px;padding:1px 5px;font-weight:700}
+.rc-next-badge{display:block;font-size:8px;background:var(--grn);color:#000;border-radius:3px;padding:1px 5px;font-weight:700;margin-bottom:4px;align-self:flex-start}
 .rc-traps{display:flex;align-items:center;gap:4px}
 /* ── Focus panel ── */
 .fp-hdr{padding:10px 18px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:52px;background:var(--sur)}

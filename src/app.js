@@ -276,7 +276,7 @@ function enterFocusMode() {
 
   // Auto-refresh a cada minuto
   if (focusRefreshInterval) clearInterval(focusRefreshInterval);
-  focusRefreshInterval = setInterval(refreshFocusMode, 600000);
+  focusRefreshInterval = setInterval(refreshFocusMode, 7200000);
 }
 
 function renderFocusPanel(r, idx) {
@@ -369,16 +369,16 @@ function renderRaceListPanel(avbs) {
     div.style.display = 'flex';
     div.style.alignItems = 'center';
     div.style.justifyContent = 'space-between';
-    if (first) { div.innerHTML += '<div class="rc-next-badge">PRÓXIMA</div>'; focusRaceIdx = rIdx; }
-    var tc = ['','t1','t2','t3','t4','t5','t6'];
+    if (first) focusRaceIdx = rIdx;
     div.innerHTML += '<div style="flex:1;min-width:0">'
+      + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
       + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;padding-left:6px">'
-      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapFav||'?')+'</span>'
-      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:24px;height:24px;font-size:11px">'+(r.trapUnd||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapFav||'?')+'</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
