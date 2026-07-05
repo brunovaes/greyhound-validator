@@ -21,7 +21,7 @@ function getTodayDate() {
 function scheduleCronRobot() {
   const now = new Date();
   const nextRun = new Date();
-  nextRun.setUTCHours(19, 49, 0, 0);
+  nextRun.setUTCHours(6, 0, 0, 0);
   if (nextRun <= now) nextRun.setUTCDate(nextRun.getUTCDate() + 1);
   const msUntil = nextRun - now;
   console.log('[CRON] Próxima coleta automática em ' + Math.round(msUntil/60000) + ' minutos (' + nextRun.toISOString() + ')');
@@ -119,8 +119,9 @@ function formatTime(t) {
 }
 
 // Pasta por data: pdfs/2026-06-29/
+const PDF_BASE = process.env.PDF_PATH || path.join(__dirname, '../../public/pdfs');
 function getPdfDir(date) {
-  return path.join(__dirname, '../../public/pdfs', date);
+  return path.join(PDF_BASE, date);
 }
 
 // Converte horário UK (12h sem AM/PM) para minutos do dia (24h)
@@ -993,7 +994,7 @@ router.get('/download-pdf', requireAdmin, (req, res) => {
 
   // Segurança: não permitir path traversal
   const safeName = path.basename(file);
-  const filepath = path.join(__dirname, '../../public/pdfs', date, safeName);
+  const filepath = path.join(PDF_BASE, date, safeName);
 
   if (!fs.existsSync(filepath)) {
     return res.status(404).send('Arquivo nao encontrado');
@@ -1007,7 +1008,7 @@ router.get('/download-pdf', requireAdmin, (req, res) => {
 // ─── DOWNLOAD ZIP ───
 router.get('/download-zip', requireAdmin, async (req, res) => {
   const date = req.query.date || new Date().toISOString().split('T')[0];
-  const dir = path.join(__dirname, '../../public/pdfs', date);
+  const dir = path.join(PDF_BASE, date);
 
   if (!fs.existsSync(dir)) {
     return res.status(404).json({ error: 'Nenhum PDF encontrado para esta data' });
