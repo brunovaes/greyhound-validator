@@ -101,54 +101,15 @@ function getDogImg(trap, corrida) {
   return BASE + '/static/img/dogs/Trap' + (trap||1) + '_' + p + '.png';
 }
 
-function renderGauge(label, value, max, color) {
-  var pct = Math.min(Math.max(value/(max||1), 0), 1);
-  var r = 28, cx = 36, cy = 36;
-  var circ = 2 * Math.PI * r;
-  var offset = circ * (1 - pct);
-  var disp = typeof value === 'number' ? (value >= 10 ? Math.round(value) : value.toFixed(1)) : value;
-  return '<div class="fp-gauge">'
-    + '<svg width="72" height="72" viewBox="0 0 72 72">'
-    + '<circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5"/>'
-    + '<circle cx="36" cy="36" r="28" fill="none" stroke="' + color + '" stroke-width="5" '
-    + 'stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" '
-    + 'stroke-linecap="round" transform="rotate(-90 36 36)"/>'
-    + '<text x="36" y="40" text-anchor="middle" fill="#fff" font-size="14" font-weight="700" font-family="sans-serif">' + disp + '</text>'
-    + '</svg>'
-    + '<div class="fp-gauge-lbl">' + label + '</div>'
-    + '</div>';
-}
-
-function getBestCaltm(hist) {
-  if (!hist || !hist.length) return null;
-  var vals = hist.filter(function(h){return h.caltm && parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
-  return vals.length ? Math.min.apply(null, vals) : null;
-}
-
-function caltmScore(ct) {
-  // 28s=10, 35s=0, linear
-  if (!ct) return 0;
-  return Math.max(0, Math.min(10, (35 - ct) / 7 * 10));
-}
-
-function classScore(hist) {
-  if (!hist || !hist.length) return 0;
-  var nums = hist.map(function(h){var m=(h.classe||'').match(/(\d+)/);return m?parseInt(m[1]):99;});
-  var best = Math.min.apply(null, nums);
-  return best >= 99 ? 0 : Math.max(0, Math.min(10, (12 - best) / 11 * 10));
-}
-
-function classLabel(hist) {
-  if (!hist || !hist.length) return 'N/A';
-  var classes = hist.filter(function(h){return h.classe;}).map(function(h){return h.classe;});
-  if (!classes.length) return 'N/A';
-  classes.sort(function(a,b){
-    var na=parseInt((a.match(/\d+/)||['99'])[0]);
-    var nb=parseInt((b.match(/\d+/)||['99'])[0]);
-    return na-nb;
-  });
-  return classes[0];
-}
+function getRaceClass(corrida){var m=(corrida||'').trim().match(/([A-Z]d+)$/i);return m?m[1].toUpperCase():null;}
+function getHistByClass(hist,raceClass){if(!raceClass)return hist||[];return(hist||[]).filter(function(h){return(h.classe||'').toUpperCase()===raceClass.toUpperCase();});}
+function mediaTempoByClass(hist,raceClass){var f=getHistByClass(hist,raceClass).filter(function(h){return h.caltm&&parseFloat(h.caltm)>0;});if(!f.length)return null;return f.reduce(function(a,h){return a+parseFloat(h.caltm);},0)/f.length;}
+function podiosByClass(hist,raceClass){return getHistByClass(hist,raceClass).filter(function(h){return h.pos&&parseInt(h.pos)<=3;}).length;}
+function arranqueByClass(hist,raceClass){var f=getHistByClass(hist,raceClass).filter(function(h){return h.split&&parseFloat(h.split)>0;});if(!f.length)return null;return f.reduce(function(a,h){return a+parseFloat(h.split);},0)/f.length;}
+function melhorBRT(hist){var f=(hist||[]).filter(function(h){return h.caltm&&parseFloat(h.caltm)>0;});if(!f.length)return{val:null,classe:''};f.sort(function(a,b){return parseFloat(a.caltm)-parseFloat(b.caltm);});return{val:parseFloat(f[0].caltm).toFixed(2),classe:f[0].classe||''};}
+function categoriaInfo(hist,raceClass){var rc=(raceClass||'').toUpperCase();var rcNum=parseInt((rc.match(/d+/)||['99'])[0]);if(!hist||!hist.length)return{label:rc||'N/A',ascending:false,fillPct:Math.max(0,(12-rcNum)/11)};var recent=hist[0].classe||rc;var recentNum=parseInt((recent.match(/d+/)||['99'])[0]);var ascending=rcNum<recentNum;return{label:rc+(ascending?'↑':''),ascending:ascending,fillPct:Math.max(0,(12-rcNum)/11)};}
+function renderGauge(label,displayVal,subLabel,fillPct,color){var r=28,circ=2*Math.PI*r;var offset=circ*(1-Math.min(Math.max(fillPct||0,0),1));var dv=displayVal||'-';var fs=dv.length>5?'9':dv.length>3?'10':'12';return'<div class="fp-gauge">'+'<svg width="64" height="64" viewBox="0 0 72 72">'+'<circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5"/>'+'<circle cx="36" cy="36" r="28" fill="none" stroke="'+color+'" stroke-width="5" '+'stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" '+'stroke-linecap="round" transform="rotate(-90 36 36)"/>'+(subLabel?'<text x="36" y="33" text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700" font-family="sans-serif">'+dv+'</text>'+'<text x="36" y="47" text-anchor="middle" fill="rgba(255,255,255,.45)" font-size="9" font-family="sans-serif">'+subLabel+'</text>':'<text x="36" y="41" text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700" font-family="sans-serif">'+dv+'</text>')+'</svg>'+'<div class="fp-gauge-lbl">'+label+'</div>'+'</div>';}
+function buildGauges(hist,raceClass){var mt=mediaTempoByClass(hist,raceClass);var mtFill=mt?Math.max(0,Math.min(1,(35-mt)/8)):0;var mtStr=mt?mt.toFixed(2):'-';var cnt=getHistByClass(hist,raceClass).length;var podios=podiosByClass(hist,raceClass);var podiosFill=Math.min(podios/Math.max(cnt,1),1);var arr=arranqueByClass(hist,raceClass);var arrFill=arr?Math.max(0,Math.min(1,(4.5-arr)/1)):0;var arrStr=arr?arr.toFixed(2):'-';var brtObj=melhorBRT(hist);var brtFill=brtObj.val?Math.max(0,Math.min(1,(35-parseFloat(brtObj.val))/8)):0;var catObj=categoriaInfo(hist,raceClass);var catColor=catObj.ascending?'#f97316':'#60a5fa';return renderGauge('Média de Tempo',mtStr,cnt?'('+cnt+' corr.)':'',mtFill,'#22c55e')+renderGauge('Categoria',catObj.label,'',catObj.fillPct,catColor)+renderGauge('Pódios',String(podios),cnt?'/'+cnt:'',podiosFill,'#a78bfa')+renderGauge('Arranque',arrStr,'',arrFill,'#f97316')+renderGauge('Melhor BRT',brtObj.val||'-',brtObj.classe,brtFill,'#60a5fa');}
 
 function isUpcoming(r) {
   var hbr = r.hora_br || convertHora(r.hora||'');
@@ -175,15 +136,7 @@ function renderFocusPanel(r, idx) {
 
   var histF = r.histFav || [];
   var histU = r.histUnd || [];
-
-  var ctF = getBestCaltm(histF);
-  var ctU = getBestCaltm(histU);
-  var csF = caltmScore(ctF);
-  var csU = caltmScore(ctU);
-  var clScF = classScore(histF);
-  var clScU = classScore(histU);
-  var clLblF = classLabel(histF);
-  var clLblU = classLabel(histU);
+  var raceClass = getRaceClass(r.corrida||'');
   var perfF = r.perfilFav || '';
   var perfU = r.perfilUnd || '';
   var perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
@@ -217,19 +170,10 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-dog-name">'+nu+'</div>'
     + '</div>'
     + '</div>'
-    // Gauges
     + '<div class="fp-gauges-row">'
-    + '<div class="fp-gauges-grp">'
-    + renderGauge('CalTm', parseFloat(csF.toFixed(1)), 10, '#22c55e')
-    + renderGauge('Classe', parseFloat(clScF.toFixed(1)), 10, '#60a5fa')
-    + renderGauge('Perfil', 0, 10, perfColorF)
-    + '</div>'
+    + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass) + '</div>'
     + '<div class="fp-gauges-div"></div>'
-    + '<div class="fp-gauges-grp">'
-    + renderGauge('CalTm', parseFloat(csU.toFixed(1)), 10, '#22c55e')
-    + renderGauge('Classe', parseFloat(clScU.toFixed(1)), 10, '#60a5fa')
-    + renderGauge('Perfil', 0, 10, perfColorU)
-    + '</div>'
+    + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass) + '</div>'
     + '</div>'
     // Odd / Valor
     + '<div class="fp-inputs-row">'
