@@ -123,6 +123,10 @@ function navBar(user, active) {
     checkResultsBanner();
     setInterval(function(){ checkRobots(); checkResultsBanner(); }, 60000);
     setInterval(checkRobots, 4000);
+    // Expor funções de dismiss globalmente
+    window.dismissPdfBanner = dismissPdfBanner;
+    window.dismissResBanner = dismissResBanner;
+    window.downloadAndAnalyze = downloadAndAnalyze;
   })();
   </script>`;
 }
