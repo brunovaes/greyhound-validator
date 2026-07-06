@@ -372,10 +372,34 @@ router.get('/live', (req, res) => {
   // URLs fixas das pistas (ajustar aqui quando precisar trocar)
   const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
   const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-  // Recorte de cada tela dentro do greyhoundbrasil (uma em cima da outra na pagina original).
-  // Valores abaixo sao um chute inicial — calibrar depois olhando o resultado real.
-  const GHBR_TOP_1 = process.env.GHBR_TOP_1 || '0';
-  const GHBR_TOP_2 = process.env.GHBR_TOP_2 || '-400';
+  // Recorte de cada tela dentro do greyhoundbrasil (uma em cima da outra na pagina
+  // original). Valores calibrados manualmente via /live/calibrar em 06/07/2026.
+  const GHBR_1 = {
+    top: process.env.GHBR_TOP_1 || '-734',
+    left: process.env.GHBR_LEFT_1 || '-971',
+    width: process.env.GHBR_WIDTH_1 || '1660',
+    height: process.env.GHBR_HEIGHT_1 || '3840',
+    scale: process.env.GHBR_SCALE_1 || '118'
+  };
+  const GHBR_2 = {
+    top: process.env.GHBR_TOP_2 || '-1226',
+    left: process.env.GHBR_LEFT_2 || '-10',
+    width: process.env.GHBR_WIDTH_2 || '1653',
+    height: process.env.GHBR_HEIGHT_2 || '1651',
+    scale: process.env.GHBR_SCALE_2 || '119'
+  };
+  const SIS_CROP = {
+    top: process.env.SIS_TOP || '-103',
+    left: process.env.SIS_LEFT || '-187',
+    width: process.env.SIS_WIDTH || '1671',
+    height: process.env.SIS_HEIGHT || '3840',
+    scale: process.env.SIS_SCALE || '80'
+  };
+  function ghbrFrameStyle(c) {
+    return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
+      + 'width:' + c.width + 'px;height:' + c.height + 'px;'
+      + 'transform:scale(' + (parseInt(c.scale, 10) / 100) + ');transform-origin:top left;border:none;';
+  }
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
@@ -404,19 +428,19 @@ ${navBar(user, 'live')}
   <div class="live-panel">
     <h3>SIS Racing</h3>
     <div class="live-crop">
-      ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+      ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(SIS_CROP)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
     </div>
   </div>
   <div class="live-panel">
     <h3>Greyhound Brasil — Tela 1</h3>
     <div class="live-crop">
-      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_1}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_1}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_1)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
     </div>
   </div>
   <div class="live-panel">
     <h3>Greyhound Brasil — Tela 2</h3>
     <div class="live-crop">
-      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_2}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_2}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_2)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
     </div>
   </div>
 </div>
@@ -427,8 +451,32 @@ ${navBar(user, 'live')}
 router.get('/live/popup', (req, res) => {
   const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
   const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-  const GHBR_TOP_1 = process.env.GHBR_TOP_1 || '0';
-  const GHBR_TOP_2 = process.env.GHBR_TOP_2 || '-400';
+  const GHBR_1 = {
+    top: process.env.GHBR_TOP_1 || '-734',
+    left: process.env.GHBR_LEFT_1 || '-971',
+    width: process.env.GHBR_WIDTH_1 || '1660',
+    height: process.env.GHBR_HEIGHT_1 || '3840',
+    scale: process.env.GHBR_SCALE_1 || '118'
+  };
+  const GHBR_2 = {
+    top: process.env.GHBR_TOP_2 || '-1226',
+    left: process.env.GHBR_LEFT_2 || '-10',
+    width: process.env.GHBR_WIDTH_2 || '1653',
+    height: process.env.GHBR_HEIGHT_2 || '1651',
+    scale: process.env.GHBR_SCALE_2 || '119'
+  };
+  const SIS_CROP = {
+    top: process.env.SIS_TOP || '-103',
+    left: process.env.SIS_LEFT || '-187',
+    width: process.env.SIS_WIDTH || '1671',
+    height: process.env.SIS_HEIGHT || '3840',
+    scale: process.env.SIS_SCALE || '80'
+  };
+  function ghbrFrameStyle(c) {
+    return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
+      + 'width:' + c.width + 'px;height:' + c.height + 'px;'
+      + 'transform:scale(' + (parseInt(c.scale, 10) / 100) + ');transform-origin:top left;border:none;';
+  }
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
@@ -444,13 +492,13 @@ body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:cente
 </style></head><body>
 <div class="live-grid">
   <div class="live-crop">
-    ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+    ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(SIS_CROP)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
   </div>
   <div class="live-crop">
-    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_1}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_1}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_1)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
   </div>
   <div class="live-crop">
-    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_2}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_2}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_2)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
   </div>
 </div>
 </body></html>`);
