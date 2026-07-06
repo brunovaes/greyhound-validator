@@ -375,11 +375,11 @@ router.get('/live', (req, res) => {
   // Recorte de cada tela dentro do greyhoundbrasil (uma em cima da outra na pagina
   // original). Valores calibrados manualmente via /live/calibrar em 06/07/2026.
   const GHBR_1 = {
-    top: process.env.GHBR_TOP_1 || '-28',
-    left: process.env.GHBR_LEFT_1 || '-131',
+    top: process.env.GHBR_TOP_1 || '-262',
+    left: process.env.GHBR_LEFT_1 || '-457',
     width: process.env.GHBR_WIDTH_1 || '1920',
-    height: process.env.GHBR_HEIGHT_1 || '763',
-    scale: process.env.GHBR_SCALE_1 || '37'
+    height: process.env.GHBR_HEIGHT_1 || '1954',
+    scale: process.env.GHBR_SCALE_1 || '48'
   };
   const GHBR_2 = {
     top: process.env.GHBR_TOP_2 || '-571',
@@ -389,11 +389,11 @@ router.get('/live', (req, res) => {
     scale: process.env.GHBR_SCALE_2 || '48'
   };
   const SIS_CROP = {
-    top: process.env.SIS_TOP || '-299',
-    left: process.env.SIS_LEFT || '-458',
+    top: process.env.SIS_TOP || '-48',
+    left: process.env.SIS_LEFT || '-131',
     width: process.env.SIS_WIDTH || '1920',
     height: process.env.SIS_HEIGHT || '3840',
-    scale: process.env.SIS_SCALE || '48'
+    scale: process.env.SIS_SCALE || '37'
   };
   function ghbrFrameStyle(c) {
     return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
@@ -452,11 +452,11 @@ router.get('/live/popup', (req, res) => {
   const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
   const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
   const GHBR_1 = {
-    top: process.env.GHBR_TOP_1 || '-28',
-    left: process.env.GHBR_LEFT_1 || '-131',
+    top: process.env.GHBR_TOP_1 || '-262',
+    left: process.env.GHBR_LEFT_1 || '-457',
     width: process.env.GHBR_WIDTH_1 || '1920',
-    height: process.env.GHBR_HEIGHT_1 || '763',
-    scale: process.env.GHBR_SCALE_1 || '37'
+    height: process.env.GHBR_HEIGHT_1 || '1954',
+    scale: process.env.GHBR_SCALE_1 || '48'
   };
   const GHBR_2 = {
     top: process.env.GHBR_TOP_2 || '-571',
@@ -466,11 +466,11 @@ router.get('/live/popup', (req, res) => {
     scale: process.env.GHBR_SCALE_2 || '48'
   };
   const SIS_CROP = {
-    top: process.env.SIS_TOP || '-299',
-    left: process.env.SIS_LEFT || '-458',
+    top: process.env.SIS_TOP || '-48',
+    left: process.env.SIS_LEFT || '-131',
     width: process.env.SIS_WIDTH || '1920',
     height: process.env.SIS_HEIGHT || '3840',
-    scale: process.env.SIS_SCALE || '48'
+    scale: process.env.SIS_SCALE || '37'
   };
   function ghbrFrameStyle(c) {
     return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
