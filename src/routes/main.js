@@ -3,6 +3,7 @@ const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
+const atrCache = require('../state/atrStreamCache');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 
@@ -767,27 +768,14 @@ function openReplay(id){
 </div></body></html>`);
 });
 
-// Cache em memoria do ultimo stream URL recebido da extensao Chrome
-var atrStreamCache = { url: null, ts: 0 };
-
-// Recebe o stream URL da extensao Chrome
-router.post('/api/atr-stream-push', express.json(), (req, res) => {
-  const { url, ts } = req.body || {};
-  if (url && url.includes('.m3u8')) {
-    atrStreamCache = { url, ts: ts || Date.now() };
-    console.log('[ATR Extension] Stream recebido:', url.slice(0,80));
-    res.json({ ok: true });
-  } else {
-    res.status(400).json({ error: 'URL invalida' });
-  }
-});
-
 // Frontend consulta essa rota pra saber se tem stream disponivel
+// (cache compartilhado com src/routes/atrPush.js, que recebe da extensao Chrome)
 router.get('/api/atr-stream-status', (req, res) => {
-  const age = Date.now() - atrStreamCache.ts;
+  const cached = atrCache.get();
+  const age = Date.now() - cached.ts;
   // Stream expira em 2 horas (nimblesessionid dura bastante mas nao e eterno)
-  if (atrStreamCache.url && age < 7200000) {
-    res.json({ url: atrStreamCache.url, age: Math.round(age/1000) });
+  if (cached.url && age < 7200000) {
+    res.json({ url: cached.url, age: Math.round(age/1000) });
   } else {
     res.json({ url: null });
   }

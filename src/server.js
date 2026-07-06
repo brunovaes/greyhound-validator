@@ -21,6 +21,10 @@ app.use(BASE + '/static', express.static(path.join(__dirname, '../public')));
 // Auth routes (sem login necessario)
 app.use(BASE, require('./routes/auth'));
 
+// Rota publica (protegida por token proprio) que recebe o stream .m3u8
+// enviado pela extensao Chrome — precisa vir ANTES do requireLogin
+app.use(BASE, require('./routes/atrPush'));
+
 // Rotas protegidas
 const { requireLogin } = require('./middleware/auth');
 app.use(BASE, requireLogin, require('./routes/main'));
