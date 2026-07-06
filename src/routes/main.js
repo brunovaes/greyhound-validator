@@ -389,11 +389,11 @@ router.get('/live', (req, res) => {
     scale: process.env.GHBR_SCALE_2 || '48'
   };
   const SIS_CROP = {
-    top: process.env.SIS_TOP || '-48',
-    left: process.env.SIS_LEFT || '-131',
-    width: process.env.SIS_WIDTH || '1920',
-    height: process.env.SIS_HEIGHT || '3840',
-    scale: process.env.SIS_SCALE || '37'
+    top: process.env.SIS_TOP || '-34',
+    left: process.env.SIS_LEFT || '-165',
+    width: process.env.SIS_WIDTH || '2029',
+    height: process.env.SIS_HEIGHT || '1078',
+    scale: process.env.SIS_SCALE || '38'
   };
   function ghbrFrameStyle(c) {
     return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
@@ -466,11 +466,11 @@ router.get('/live/popup', (req, res) => {
     scale: process.env.GHBR_SCALE_2 || '48'
   };
   const SIS_CROP = {
-    top: process.env.SIS_TOP || '-48',
-    left: process.env.SIS_LEFT || '-131',
-    width: process.env.SIS_WIDTH || '1920',
-    height: process.env.SIS_HEIGHT || '3840',
-    scale: process.env.SIS_SCALE || '37'
+    top: process.env.SIS_TOP || '-34',
+    left: process.env.SIS_LEFT || '-165',
+    width: process.env.SIS_WIDTH || '2029',
+    height: process.env.SIS_HEIGHT || '1078',
+    scale: process.env.SIS_SCALE || '38'
   };
   function ghbrFrameStyle(c) {
     return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
