@@ -852,13 +852,24 @@ async function runAnalysis(){
       var sessions=await sr.json();
       var existing=sessions.find(function(s){return s.name===sessionName;});
       if(existing){
-        // Sessão já existe — só gera ZIP
-        showToast('As corridas de hoje já foram carregadas! Gerando ZIP...', true);
-        var a=document.createElement('a');
-        a.href=BASE+'/api/pdfs/hoje/zip';
-        a.download=sessionName.split('/').join('-')+'.zip';
-        document.body.appendChild(a);a.click();document.body.removeChild(a);
-        setSt('Corridas do dia já carregadas. ZIP gerado para download.');
+        // Sessão já existe — verifica se tem PDFs disponíveis
+        try {
+          var pdfChk=await fetch(BASE+'/api/pdfs/hoje');
+          var pdfD=await pdfChk.json();
+          if(pdfD.count>0){
+            showToast('Corridas de hoje já carregadas! Gerando ZIP...', true);
+            var a=document.createElement('a');
+            a.href=BASE+'/api/pdfs/hoje/zip';
+            a.download=sessionName.split('/').join('-')+'.zip';
+            document.body.appendChild(a);a.click();document.body.removeChild(a);
+            setSt('Corridas do dia já carregadas. ZIP gerado.');
+          } else {
+            showToast('Corridas de hoje já carregadas!', true);
+            setSt('Corridas do dia já carregadas. PDFs não disponíveis para download.');
+          }
+        } catch(e){
+          showToast('Corridas de hoje já carregadas!', true);
+        }
         return;
       }
     }catch(e){}
