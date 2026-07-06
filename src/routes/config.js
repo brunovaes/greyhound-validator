@@ -243,6 +243,11 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="sec-title" style="color:#22c55e">Automação — Robôs e Visibilidade</div>
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
   <div class="field">
+    <label>Refresh automático da tela (min)</label>
+    <input type="number" name="auto_refresh_min" value="${config.auto_refresh_min||1}" min="1" max="60">
+    <div class="hint">A cada quantos minutos atualiza o painel de corridas automaticamente</div>
+  </div>
+  <div class="field">
     <label>Visibilidade das corridas (min)</label>
     <input type="number" name="visibility_interval_min" value="${config.visibility_interval_min||120}" min="10" max="480">
     <div class="hint">Quantos minutos uma corrida permanece visível após o horário de início</div>
@@ -317,7 +322,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_niveis_pool INTEGER DEFAULT 2').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_linhas_cat_inferior INTEGER DEFAULT 3').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,visibility_interval_min=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,visibility_interval_min=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
@@ -329,6 +334,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.max_niveis_pool||2,
       d.max_linhas_cat_inferior||3,
       d.max_dias_gap_nova_cat||14,
+      d.auto_refresh_min||1,
       d.visibility_interval_min||120,
       d.results_interval_min||30,
       d.results_window_start||'09:00',

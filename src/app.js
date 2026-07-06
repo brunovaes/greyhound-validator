@@ -89,13 +89,15 @@ function injectStyles(){
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
-var VISIBILITY_MIN = 120; // padrão, sobrescrito pela config
+var VISIBILITY_MIN = 120;
+var AUTO_REFRESH_MIN = 1;
 
 async function loadSystemConfig() {
   try {
     var r = await fetch(BASE+'/api/config');
     var c = await r.json();
     if (c.visibility_interval_min) VISIBILITY_MIN = parseInt(c.visibility_interval_min);
+    if (c.auto_refresh_min) AUTO_REFRESH_MIN = parseInt(c.auto_refresh_min);
   } catch(e) {}
 }
 
@@ -117,6 +119,11 @@ async function autoSaveSession(dateLabel) {
     // Salva nova sessão
     await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
     showToast('\u2713 Sessão "'+name+'" salva no Histórico!', true);
+    // Auto-download ZIP na primeira análise do dia
+    var a = document.createElement('a');
+    a.href = BASE+'/api/pdfs/hoje/zip';
+    a.download = name.split('/').join('-')+'.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   } catch(e) { console.error('autoSave erro:', e); }
 }
 
@@ -304,7 +311,7 @@ function enterFocusMode() {
 
   // Auto-refresh a cada minuto
   if (focusRefreshInterval) clearInterval(focusRefreshInterval);
-  focusRefreshInterval = setInterval(refreshFocusMode, 7200000);
+  focusRefreshInterval = setInterval(refreshFocusMode, AUTO_REFRESH_MIN * 60000);
 }
 
 function renderFocusPanel(r, idx) {
@@ -801,6 +808,27 @@ async function runChunk(files,caps){
 
 async function runAnalysis(){
   var usandoPasta=false;
+  // Ponto 3: verifica se já existe sessão do dia ao usar pasta automática
+  if(!raceFiles.length){
+    var now=new Date();
+    var todayLabel=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    var sessionName='Races '+todayLabel;
+    try{
+      var sr=await fetch(BASE+'/api/sessions');
+      var sessions=await sr.json();
+      var existing=sessions.find(function(s){return s.name===sessionName;});
+      if(existing){
+        // Sessão já existe — só gera ZIP
+        showToast('As corridas de hoje já foram carregadas! Gerando ZIP...', true);
+        var a=document.createElement('a');
+        a.href=BASE+'/api/pdfs/hoje/zip';
+        a.download=sessionName.split('/').join('-')+'.zip';
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setSt('Corridas do dia já carregadas. ZIP gerado para download.');
+        return;
+      }
+    }catch(e){}
+  }
   if(!raceFiles.length){
     setSt('Verificando corridas disponíveis...');
     try{
