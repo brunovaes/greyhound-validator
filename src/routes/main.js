@@ -659,6 +659,171 @@ applyStyle();
 </body></html>`);
 });
 
+// ─── Calibrador das 3 telas ao mesmo tempo, no MESMO layout exato da aba Live ───
+// Evita o problema de calibrar num mockup de tamanho diferente do real.
+router.get('/live/calibrar3', requireAdmin, (req, res) => {
+  const P1_URL = req.query.p1 || process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
+  const P2_URL = req.query.p2 || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
+  const P3_URL = req.query.p3 || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
+
+  const P1_INIT = {
+    top: process.env.SIS_TOP || '-41', left: process.env.SIS_LEFT || '-188',
+    width: process.env.SIS_WIDTH || '1920', height: process.env.SIS_HEIGHT || '763',
+    scale: process.env.SIS_SCALE || '52'
+  };
+  const P2_INIT = {
+    top: process.env.GHBR_TOP_1 || '-344', left: process.env.GHBR_LEFT_1 || '-642',
+    width: process.env.GHBR_WIDTH_1 || '1920', height: process.env.GHBR_HEIGHT_1 || '1043',
+    scale: process.env.GHBR_SCALE_1 || '67'
+  };
+  const P3_INIT = {
+    top: process.env.GHBR_TOP_2 || '-735', left: process.env.GHBR_LEFT_2 || '-4',
+    width: process.env.GHBR_WIDTH_2 || '1901', height: process.env.GHBR_HEIGHT_2 || '1659',
+    scale: process.env.GHBR_SCALE_2 || '67'
+  };
+
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calibrador 3 Telas - Greyhound Validator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+.content{padding:16px 20px;max-width:1900px;margin:0 auto}
+h1{font-size:16px;font-weight:700;margin-bottom:4px}
+.sub{font-size:12px;color:#888;margin-bottom:14px}
+.live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.live-grid{grid-template-columns:1fr}}
+.live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
+.live-panel h3{font-size:11px;color:#666;padding:6px 10px;border-bottom:1px solid #222;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
+.live-crop iframe{position:absolute;border:none}
+.ctrl{padding:10px;background:#161B27;border-top:1px solid #222;display:flex;flex-direction:column;gap:6px}
+.ctrl-row{display:flex;align-items:center;gap:6px;font-size:10px}
+.ctrl-row label{width:34px;color:#888;text-transform:uppercase;flex-shrink:0}
+.ctrl-row input[type=range]{flex:1}
+.ctrl-row input[type=number]{width:62px;padding:3px 5px;background:#0D1117;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px}
+.ctrl-row span{width:36px;text-align:right;color:#22c55e;font-family:monospace;font-size:10px}
+.ctrl-url{width:100%;padding:5px 7px;background:#0D1117;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px;margin-bottom:2px}
+.btn-copy{padding:6px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:5px;cursor:pointer;font-size:11px;margin-top:2px}
+.btn-copy:hover{background:#16a34a}
+pre{background:#000;border:1px solid #333;border-radius:5px;padding:6px 8px;font-size:9px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;margin-top:4px;max-height:90px;overflow-y:auto}
+</style></head><body>
+<div class="content">
+<h1>&#127919; Calibrador — 3 Telas Simultaneas</h1>
+<div class="sub">Layout identico a aba Live real (mesma grade de 3 colunas) — o que voce ve aqui e o tamanho exato de producao. Ajusta cada painel e copia os valores.</div>
+<div class="live-grid">
+
+  <div class="live-panel">
+    <h3>SIS Racing</h3>
+    <div class="live-crop"><iframe id="f-p1" src="${P1_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
+    <div class="ctrl">
+      <input type="text" class="ctrl-url" id="url-p1" value="${P1_URL}" onchange="document.getElementById('f-p1').src=this.value">
+      <div class="ctrl-row"><label>Top</label><input type="range" id="r-p1-top" min="-3000" max="500" value="${P1_INIT.top}" oninput="sync('p1','top')"><input type="number" id="n-p1-top" value="${P1_INIT.top}" onchange="syncN('p1','top')"><span id="v-p1-top">${P1_INIT.top}</span></div>
+      <div class="ctrl-row"><label>Left</label><input type="range" id="r-p1-left" min="-2000" max="500" value="${P1_INIT.left}" oninput="sync('p1','left')"><input type="number" id="n-p1-left" value="${P1_INIT.left}" onchange="syncN('p1','left')"><span id="v-p1-left">${P1_INIT.left}</span></div>
+      <div class="ctrl-row"><label>Larg</label><input type="range" id="r-p1-width" min="320" max="3840" value="${P1_INIT.width}" oninput="sync('p1','width')"><input type="number" id="n-p1-width" value="${P1_INIT.width}" onchange="syncN('p1','width')"><span id="v-p1-width">${P1_INIT.width}</span></div>
+      <div class="ctrl-row"><label>Alt</label><input type="range" id="r-p1-height" min="320" max="3840" value="${P1_INIT.height}" oninput="sync('p1','height')"><input type="number" id="n-p1-height" value="${P1_INIT.height}" onchange="syncN('p1','height')"><span id="v-p1-height">${P1_INIT.height}</span></div>
+      <div class="ctrl-row"><label>Zoom</label><input type="range" id="r-p1-scale" min="10" max="300" value="${P1_INIT.scale}" oninput="sync('p1','scale')"><input type="number" id="n-p1-scale" value="${P1_INIT.scale}" onchange="syncN('p1','scale')"><span id="v-p1-scale">${P1_INIT.scale}</span></div>
+      <button class="btn-copy" onclick="copyVals('p1')">&#128203; Copiar SIS Racing</button>
+      <pre id="out-p1"></pre>
+    </div>
+  </div>
+
+  <div class="live-panel">
+    <h3>Greyhound Brasil — Tela 1</h3>
+    <div class="live-crop"><iframe id="f-p2" src="${P2_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
+    <div class="ctrl">
+      <input type="text" class="ctrl-url" id="url-p2" value="${P2_URL}" onchange="document.getElementById('f-p2').src=this.value">
+      <div class="ctrl-row"><label>Top</label><input type="range" id="r-p2-top" min="-3000" max="500" value="${P2_INIT.top}" oninput="sync('p2','top')"><input type="number" id="n-p2-top" value="${P2_INIT.top}" onchange="syncN('p2','top')"><span id="v-p2-top">${P2_INIT.top}</span></div>
+      <div class="ctrl-row"><label>Left</label><input type="range" id="r-p2-left" min="-2000" max="500" value="${P2_INIT.left}" oninput="sync('p2','left')"><input type="number" id="n-p2-left" value="${P2_INIT.left}" onchange="syncN('p2','left')"><span id="v-p2-left">${P2_INIT.left}</span></div>
+      <div class="ctrl-row"><label>Larg</label><input type="range" id="r-p2-width" min="320" max="3840" value="${P2_INIT.width}" oninput="sync('p2','width')"><input type="number" id="n-p2-width" value="${P2_INIT.width}" onchange="syncN('p2','width')"><span id="v-p2-width">${P2_INIT.width}</span></div>
+      <div class="ctrl-row"><label>Alt</label><input type="range" id="r-p2-height" min="320" max="3840" value="${P2_INIT.height}" oninput="sync('p2','height')"><input type="number" id="n-p2-height" value="${P2_INIT.height}" onchange="syncN('p2','height')"><span id="v-p2-height">${P2_INIT.height}</span></div>
+      <div class="ctrl-row"><label>Zoom</label><input type="range" id="r-p2-scale" min="10" max="300" value="${P2_INIT.scale}" oninput="sync('p2','scale')"><input type="number" id="n-p2-scale" value="${P2_INIT.scale}" onchange="syncN('p2','scale')"><span id="v-p2-scale">${P2_INIT.scale}</span></div>
+      <button class="btn-copy" onclick="copyVals('p2')">&#128203; Copiar Tela 1</button>
+      <pre id="out-p2"></pre>
+    </div>
+  </div>
+
+  <div class="live-panel">
+    <h3>Greyhound Brasil — Tela 2</h3>
+    <div class="live-crop"><iframe id="f-p3" src="${P3_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
+    <div class="ctrl">
+      <input type="text" class="ctrl-url" id="url-p3" value="${P3_URL}" onchange="document.getElementById('f-p3').src=this.value">
+      <div class="ctrl-row"><label>Top</label><input type="range" id="r-p3-top" min="-3000" max="500" value="${P3_INIT.top}" oninput="sync('p3','top')"><input type="number" id="n-p3-top" value="${P3_INIT.top}" onchange="syncN('p3','top')"><span id="v-p3-top">${P3_INIT.top}</span></div>
+      <div class="ctrl-row"><label>Left</label><input type="range" id="r-p3-left" min="-2000" max="500" value="${P3_INIT.left}" oninput="sync('p3','left')"><input type="number" id="n-p3-left" value="${P3_INIT.left}" onchange="syncN('p3','left')"><span id="v-p3-left">${P3_INIT.left}</span></div>
+      <div class="ctrl-row"><label>Larg</label><input type="range" id="r-p3-width" min="320" max="3840" value="${P3_INIT.width}" oninput="sync('p3','width')"><input type="number" id="n-p3-width" value="${P3_INIT.width}" onchange="syncN('p3','width')"><span id="v-p3-width">${P3_INIT.width}</span></div>
+      <div class="ctrl-row"><label>Alt</label><input type="range" id="r-p3-height" min="320" max="3840" value="${P3_INIT.height}" oninput="sync('p3','height')"><input type="number" id="n-p3-height" value="${P3_INIT.height}" onchange="syncN('p3','height')"><span id="v-p3-height">${P3_INIT.height}</span></div>
+      <div class="ctrl-row"><label>Zoom</label><input type="range" id="r-p3-scale" min="10" max="300" value="${P3_INIT.scale}" oninput="sync('p3','scale')"><input type="number" id="n-p3-scale" value="${P3_INIT.scale}" onchange="syncN('p3','scale')"><span id="v-p3-scale">${P3_INIT.scale}</span></div>
+      <button class="btn-copy" onclick="copyVals('p3')">&#128203; Copiar Tela 2</button>
+      <pre id="out-p3"></pre>
+    </div>
+  </div>
+
+</div>
+</div>
+<script>
+var vals={
+  p1:{top:${P1_INIT.top},left:${P1_INIT.left},width:${P1_INIT.width},height:${P1_INIT.height},scale:${P1_INIT.scale}},
+  p2:{top:${P2_INIT.top},left:${P2_INIT.left},width:${P2_INIT.width},height:${P2_INIT.height},scale:${P2_INIT.scale}},
+  p3:{top:${P3_INIT.top},left:${P3_INIT.left},width:${P3_INIT.width},height:${P3_INIT.height},scale:${P3_INIT.scale}}
+};
+
+function applyStyle(p){
+  var f=document.getElementById('f-'+p);
+  var v=vals[p];
+  f.style.top=v.top+'px';
+  f.style.left=v.left+'px';
+  f.style.width=v.width+'px';
+  f.style.height=v.height+'px';
+  f.style.transform='scale('+(v.scale/100)+')';
+  f.style.transformOrigin='top left';
+  updateOutput(p);
+}
+
+function sync(p,key){
+  var r=document.getElementById('r-'+p+'-'+key);
+  var n=document.getElementById('n-'+p+'-'+key);
+  var s=document.getElementById('v-'+p+'-'+key);
+  vals[p][key]=parseInt(r.value,10);
+  n.value=r.value;
+  s.textContent=r.value;
+  applyStyle(p);
+}
+
+function syncN(p,key){
+  var r=document.getElementById('r-'+p+'-'+key);
+  var n=document.getElementById('n-'+p+'-'+key);
+  var s=document.getElementById('v-'+p+'-'+key);
+  vals[p][key]=parseInt(n.value,10)||0;
+  r.value=vals[p][key];
+  s.textContent=vals[p][key];
+  applyStyle(p);
+}
+
+function updateOutput(p){
+  var v=vals[p];
+  var css='position:absolute;top:'+v.top+'px;left:'+v.left+'px;'
+    +'width:'+v.width+'px;height:'+v.height+'px;'
+    +'transform:scale('+(v.scale/100)+');transform-origin:top left;border:none;';
+  document.getElementById('out-'+p).textContent = css;
+}
+
+function copyVals(p){
+  var v=vals[p];
+  var txt='CSS:\\n'+document.getElementById('out-'+p).textContent
+    +'\\n\\nValores:\\nTOP='+v.top+' LEFT='+v.left+' WIDTH='+v.width+' HEIGHT='+v.height+' SCALE='+v.scale;
+  navigator.clipboard.writeText(txt).then(function(){
+    alert('Copiado! Cola aqui no chat.');
+  }).catch(function(){
+    alert('Nao consegui copiar — seleciona manualmente no quadro preto.');
+  });
+}
+
+applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
+</script>
+</body></html>`);
+});
+
 router.get('/historico', (req, res) => {
   const user = req.user;
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(user.id);
