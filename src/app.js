@@ -130,66 +130,68 @@ async function autoSaveSession(dateLabel) {
 async function autoCheckAndAnalyze() {
   if (raceFiles.length) return;
   if (results.length) return;
+
+  function setFocusLoading(msg) {
+    var fc = document.getElementById('focus-col');
+    if (fc) fc.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div><div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div><div style="font-size:15px;font-weight:700;color:var(--mut2)">'+msg+'</div></div>';
+  }
+  function setFocusEmpty() {
+    var fc = document.getElementById('focus-col');
+    if (fc) fc.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center"><div style="font-size:48px">📭</div><div style="font-size:15px;font-weight:700;color:var(--mut2)">Nenhuma corrida disponível</div><div style="font-size:12px">O robô ainda não baixou os PDFs de hoje.<br>Verifique a aba Robô.</div></div>';
+    setSt('Ainda não existe corridas disponíveis para serem carregadas.');
+  }
+
+  // 1. Verifica sessão de hoje (erros não interrompem o fluxo)
   try {
-    // Verifica se já existe sessão de hoje
     var now = new Date();
     var todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
     var sessionName = 'Races '+todayLabel;
     var sr = await fetch(BASE+'/api/sessions');
-    var sessions = await sr.json();
-    var todaySession = sessions.find(function(s){ return s.name===sessionName; });
-
-    if (todaySession) {
-      // Sessão de hoje já existe — carrega direto
-      setSt('Carregando sessão de hoje...');
-      var dr = await fetch(BASE+'/api/session/'+todaySession.id+'/races');
-      var dd = await dr.json();
-      if (dd.races && dd.races.length) {
-        dd.races.forEach(function(r) {
-          var obj = {
-            tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
-            corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
-            nameFav:r.name_fav||'', trapUnd:r.trap_und||0, nameUnd:r.name_und||'',
-            pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
-            obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
-            histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
-            id:r.id
-          };
-          results.push(obj);
-        });
-        updCards();
-        setSt('Sessão '+sessionName+' carregada — '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
-        enterFocusMode();
-        return;
+    if (sr.ok) {
+      var sessions = await sr.json();
+      if (Array.isArray(sessions)) {
+        var todaySession = sessions.find(function(s){ return s.name===sessionName; });
+        if (todaySession) {
+          setSt('Carregando sessão de hoje...');
+          var dr = await fetch(BASE+'/api/session/'+todaySession.id+'/races');
+          var dd = await dr.json();
+          if (dd.races && dd.races.length) {
+            dd.races.forEach(function(r) {
+              results.push({
+                tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
+                corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
+                nameFav:r.name_fav||'', trapUnd:r.trap_und||0, nameUnd:r.name_und||'',
+                pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
+                obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
+                histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
+                id:r.id
+              });
+            });
+            updCards();
+            setSt('Sessão '+sessionName+' carregada — '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
+            enterFocusMode();
+            return;
+          }
+        }
       }
     }
+  } catch(e) { console.warn('sessao check erro:', e.message); }
 
-    // Sem sessão — busca PDFs e analisa
+  // 2. Sem sessão — busca PDFs
+  try {
     var r = await fetch(BASE+'/api/pdfs/hoje');
     var d = await r.json();
-    if (!d.count) {
-      setSt('Ainda não existe corridas disponíveis para serem carregadas.');
-      var fc = document.getElementById('focus-col');
-      if (fc) fc.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center"><div style="font-size:48px">📭</div><div style="font-size:15px;font-weight:700;color:var(--mut2)">Nenhuma corrida disponível</div><div style="font-size:12px">O robô ainda não baixou os PDFs de hoje.<br>Verifique a aba Robô.</div></div>';
-      return;
-    }
+    if (!d.count) { setFocusEmpty(); return; }
     var parts = (d.date||'').split('-');
     autoDateLabel = parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : d.date;
-    // Entra imediatamente no foco com spinner — sem passar pela tabela
-    var main = document.getElementById('main-layout');
-    if (main) main.classList.add('focus-mode');
-    if (focusCol) focusCol.innerHTML =
-      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center">'
-      +'<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div>'
-      +'<div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div>'
-      +'<div style="font-size:15px;font-weight:700;color:var(--mut2)">Analisando '+d.count+' corridas de '+autoDateLabel+'...</div>'
-      +'</div>';
+    var mainEl = document.getElementById('main-layout');
+    if (mainEl) mainEl.classList.add('focus-mode');
+    setFocusLoading('Analisando '+d.count+' corridas de '+autoDateLabel+'...');
     setSt('Analisando '+d.count+' corridas...');
     await runAnalysis();
   } catch(e) {
-    var fc2 = document.getElementById('focus-col');
-    if (fc2) fc2.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center"><div style="font-size:48px">📭</div><div style="font-size:15px;font-weight:700;color:var(--mut2)">Nenhuma corrida disponível</div><div style="font-size:12px">O robô ainda não baixou os PDFs de hoje.</div></div>';
-    setSt('Ainda não existe corridas disponíveis para serem carregadas.');
+    console.error('autoCheckAndAnalyze erro:', e);
+    setFocusEmpty();
   }
 }
 
