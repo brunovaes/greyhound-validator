@@ -147,7 +147,7 @@ async function autoCheckAndAnalyze() {
       if (dd.races && dd.races.length) {
         dd.races.forEach(function(r) {
           var obj = {
-            tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:r.hora_br||'',
+            tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
             corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
             nameFav:r.name_fav||'', trapUnd:r.trap_und||0, nameUnd:r.name_und||'',
             pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
@@ -773,7 +773,7 @@ function renderTable(){
     var wd=winMap[(r.hora||'')+'_'+(r.corrida||'')];
     var wt=wd?'<div class="win-tag">&#127942; Back T'+wd.trapFav+' '+((wd.nameFav||'').split(' ')[0])+'</div>':'';
     var hh='<strong style="color:var(--grn)">'+(r.hora||'-')+'</strong><div class="hora-br">'+convertHora(r.hora)+'</div>';
-    var top3=(r.top3&&r.top3.filter(function(x){return x>0;}).length)?'<div class="top3-tag">&#127942; '+r.top3.filter(function(x){return x>0;}).join('-')+'</div>':'';
+    var top3=(function(){if(!r.top3)return'';var v=Array.isArray(r.top3)?r.top3.filter(function(x){return x>0;}).join('-'):r.top3;return v?'<div class="top3-tag">&#127942; '+v+'</div>':'';}());
     var ch=sk?'':'<span class="badge '+bc+'">'+bt+'</span><br><span style="font-size:10px;color:var(--mut)">'+r.pct+'%</span><span class="cbar"><span class="cfill '+fc+'" style="width:'+r.pct+'%"></span></span>';
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
