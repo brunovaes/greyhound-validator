@@ -370,7 +370,7 @@ router.get('/live', (req, res) => {
   const user = req.user;
   const logoB64 = getLogo();
   // URLs fixas das pistas (ajustar aqui quando precisar trocar)
-  const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://greyhounds.attheraces.com/video/live-video';
+  const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://tv.greyhoundbrasil.com/';
   const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://www.sisracing.tv/?autoplay=1';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -400,9 +400,8 @@ ${navBar(user, 'live')}
 </h1>
 <div class="live-grid">
   <div class="live-panel">
-    <div class="live-crop" id="p1wrap">
-      <iframe id="atr-frame-1" src="${LIVE_URL_1}" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
-      <div class="live-empty" id="p1status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
+    <div class="live-crop">
+      ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
     </div>
   </div>
   <div class="live-panel">
@@ -481,14 +480,13 @@ function loadATRStream(wrapId, ifrId, statusId, source){
       .catch(function(){});
   }, 3000);
 }
-loadATRStream('p1wrap','atr-frame-1','p1status','atr');
 loadATRStream('p2wrap','atr-frame-2','p2status','sisracing');
 </script>
 </body></html>`);
 });
 
 router.get('/live/popup', (req, res) => {
-  const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://greyhounds.attheraces.com/video/live-video';
+  const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://tv.greyhoundbrasil.com/';
   const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://www.sisracing.tv/?autoplay=1';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
