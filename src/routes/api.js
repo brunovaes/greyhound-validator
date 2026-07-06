@@ -3,6 +3,7 @@ const { parseRacingPostPDF } = require('../utils/pdfParser');
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
+const archiver = require('archiver');
 
 // Fetch com streaming da API Anthropic - evita timeout em respostas longas
 function fetchAnthropicStream(apiKey, body) {
@@ -827,7 +828,6 @@ router.get('/pdfs/hoje/zip', (req, res) => {
   const today = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="PDFs_${today}.zip"`);
-  const archiver = require('archiver');
   const archive = archiver('zip', { zlib: { level: 6 } });
   archive.on('error', e => { console.error('[ZIP]', e.message); });
   archive.pipe(res);
