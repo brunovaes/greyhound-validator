@@ -1,14 +1,14 @@
 // src/state/atrStreamCache.js
-// Cache em memoria compartilhado entre a rota publica (push, usada pela extensao
-// Chrome) e a rota protegida (status, usada pela pagina /live ja logada).
+// Cache em memoria compartilhado, agora com um slot por FONTE (atr, sisracing)
+// pra um stream nao sobrescrever o outro.
 
-let cache = { url: null, ts: 0 };
+let cache = {}; // { atr: {url,ts}, sisracing: {url,ts} }
 
 module.exports = {
-  get() {
-    return cache;
+  get(source) {
+    return cache[source] || { url: null, ts: 0 };
   },
-  set(url, ts) {
-    cache = { url, ts: ts || Date.now() };
+  set(source, url, ts) {
+    cache[source] = { url, ts: ts || Date.now() };
   }
 };

@@ -406,8 +406,9 @@ ${navBar(user, 'live')}
     </div>
   </div>
   <div class="live-panel">
-    <div class="live-crop">
-      ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 nao configurada</div>'}
+    <div class="live-crop" id="p2wrap">
+      <iframe id="atr-frame-2" src="${LIVE_URL_2}" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
+      <div class="live-empty" id="p2status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
     </div>
   </div>
 </div>
@@ -432,19 +433,20 @@ function showRetry(status, msg, onRetry){
   status.style.display='flex';
 }
 
-function loadATRStream(wrapId, ifrId, statusId){
+function loadATRStream(wrapId, ifrId, statusId, source){
   var wrap=document.getElementById(wrapId);
   var iframe=document.getElementById(ifrId);
   var status=document.getElementById(statusId);
   if(!wrap||!status){ console.error('[ATR] elementos nao encontrados para', wrapId); return; }
-  status.innerHTML='<div class="spinner"></div><span>Aguardando stream ATR...<br><small style="color:#666;margin-top:4px;display:block">Abra o ATR em outra aba do Chrome (com a extensao instalada) e de play la</small></span>';
+  var fonte = source==='sisracing' ? 'sisracing.tv' : 'ATR';
+  status.innerHTML='<div class="spinner"></div><span>Aguardando stream '+fonte+'...<br><small style="color:#666;margin-top:4px;display:block">Abra o '+fonte+' em outra aba do Chrome (com a extensao instalada) e de play la</small></span>';
   status.style.display='flex';
 
-  // Consulta a cada 3s ate encontrar um stream
+  // Consulta a cada 3s ate encontrar um stream (cada painel tem seu proprio slot de cache)
   var tries=0;
   var interval=setInterval(function(){
     tries++;
-    fetch(BASE+'/api/atr-stream-status')
+    fetch(BASE+'/api/atr-stream-status?source='+source)
       .then(function(r){return r.json();})
       .then(function(data){
         if(data.url){
@@ -464,7 +466,7 @@ function loadATRStream(wrapId, ifrId, statusId){
               if(d.fatal){
                 video.remove();
                 if(iframe) iframe.style.display='';
-                showRetry(status, 'Stream expirou.', function(){ loadATRStream(wrapId, ifrId, statusId); });
+                showRetry(status, 'Stream expirou.', function(){ loadATRStream(wrapId, ifrId, statusId, source); });
               }
             });
           } else if(video.canPlayType('application/vnd.apple.mpegurl')){
@@ -473,13 +475,14 @@ function loadATRStream(wrapId, ifrId, statusId){
         } else if(tries>60){
           // Desiste apos 3 minutos sem receber stream
           clearInterval(interval);
-          showRetry(status, 'Stream nao recebido.', function(){ loadATRStream(wrapId, ifrId, statusId); });
+          showRetry(status, 'Stream nao recebido.', function(){ loadATRStream(wrapId, ifrId, statusId, source); });
         }
       })
       .catch(function(){});
   }, 3000);
 }
-loadATRStream('p1wrap','atr-frame-1','p1status');
+loadATRStream('p1wrap','atr-frame-1','p1status','atr');
+loadATRStream('p2wrap','atr-frame-2','p2status','sisracing');
 </script>
 </body></html>`);
 });
@@ -781,9 +784,10 @@ function openReplay(id){
 });
 
 // Frontend consulta essa rota pra saber se tem stream disponivel
-// (cache compartilhado com src/routes/atrPush.js, que recebe da extensao Chrome)
+// (cache compartilhado com src/routes/atrPush.js, um slot por fonte: atr | sisracing)
 router.get('/api/atr-stream-status', (req, res) => {
-  const cached = atrCache.get();
+  const source = req.query.source === 'sisracing' ? 'sisracing' : 'atr';
+  const cached = atrCache.get(source);
   const age = Date.now() - cached.ts;
   // Stream expira em 2 horas (nimblesessionid dura bastante mas nao e eterno)
   if (cached.url && age < 7200000) {
