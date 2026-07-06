@@ -509,6 +509,10 @@ body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:cente
 // dentro do painel, sem precisar ficar chutando valor e fazendo deploy.
 router.get('/live/calibrar', requireAdmin, (req, res) => {
   const targetUrl = req.query.url || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
+  // Largura real de um painel na producao (hoje com 3 colunas). Calculo:
+  // .content max-width 1900px, gap 14px entre as 3 colunas -> (1900 - 2*14) / 3 ≈ 624px.
+  // Se o layout de colunas mudar de novo, passe ?boxwidth=NNN pra recalibrar certo.
+  const BOX_WIDTH = parseInt(req.query.boxwidth, 10) || 624;
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Calibrador de Tela - Greyhound Validator</title>
@@ -518,6 +522,8 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-seri
 .wrap{display:grid;grid-template-columns:340px 1fr;height:100vh}
 .panel{background:#111;border-right:1px solid #333;padding:16px;overflow-y:auto}
 .panel h2{font-size:14px;margin-bottom:14px;color:#22c55e}
+.panel .box-note{font-size:11px;color:#666;margin-bottom:14px;line-height:1.5;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:8px 10px}
+.panel .box-note b{color:#22c55e}
 .field{margin-bottom:14px}
 .field label{display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
 .field label span{color:#22c55e;font-weight:700;font-family:monospace}
@@ -531,12 +537,13 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-seri
 .btn-sec:hover{border-color:#22c55e;color:#22c55e}
 pre{background:#000;border:1px solid #333;border-radius:6px;padding:10px;font-size:11px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;margin-top:10px}
 .stage{background:#000;display:flex;align-items:center;justify-content:center;padding:20px}
-.crop-box{position:relative;width:100%;max-width:960px;aspect-ratio:16/9;overflow:hidden;background:#000;border:1px solid #333;border-radius:8px}
+.crop-box{position:relative;width:100%;max-width:${BOX_WIDTH}px;aspect-ratio:16/9;overflow:hidden;background:#000;border:1px solid #333;border-radius:8px}
 .crop-box iframe{position:absolute;border:none}
 </style></head><body>
 <div class="wrap">
   <div class="panel">
     <h2>&#127919; Calibrador de Recorte</h2>
+    <div class="box-note">Preview usando <b>${BOX_WIDTH}px</b> de largura — o tamanho real de 1 painel na tela Live hoje (layout de 3 colunas). Se o numero de paineis mudar, adicione <code>?boxwidth=NNN</code> na URL pra recalibrar certo.</div>
     <label style="display:block;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase">URL alvo</label>
     <input type="text" class="url-field" id="c-url" value="${targetUrl}">
     <button class="btn btn-sec" onclick="reloadFrame()">&#8635; Recarregar pagina</button>
