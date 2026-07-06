@@ -407,6 +407,7 @@ ${navBar(user, 'live')}
   <div class="live-panel">
     <div class="live-crop" id="p2wrap">
       <iframe id="atr-frame" src="" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
+      <div class="live-empty" id="p2status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
     </div>
   </div>
 </div>
@@ -426,8 +427,10 @@ function getATRUrl() {
 document.getElementById('atr-frame').src = getATRUrl();
 function loadATRStream(){
   var wrap=document.getElementById('p2wrap');
+  var iframe=document.getElementById('atr-frame');
   var status=document.getElementById('p2status');
-  status.innerHTML='<div class="spinner"></div><span>Aguardando stream ATR...<br><small style="color:#666;margin-top:4px;display:block">Abra o ATR no Chrome com a extensao instalada</small></span>';
+  if(!status){ console.error('[ATR] elemento p2status nao encontrado'); return; }
+  status.innerHTML='<div class="spinner"></div><span>Aguardando stream ATR...<br><small style="color:#666;margin-top:4px;display:block">Abra o ATR em outra aba do Chrome (com a extensao instalada) e de play la</small></span>';
   status.style.display='flex';
 
   // Consulta a cada 3s ate encontrar um stream
@@ -441,7 +444,9 @@ function loadATRStream(){
           clearInterval(interval);
           var video=document.createElement('video');
           video.controls=true; video.autoplay=true; video.muted=true;
+          video.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;background:#000';
           status.style.display='none';
+          if(iframe) iframe.style.display='none';
           wrap.appendChild(video);
           if(Hls.isSupported()){
             var hls=new Hls();
@@ -453,6 +458,7 @@ function loadATRStream(){
                 status.innerHTML='<span style="color:#ef4444">Stream expirou.</span><button class="btn-retry" onclick="loadATRStream()">Atualizar</button>';
                 status.style.display='flex';
                 video.remove();
+                if(iframe) iframe.style.display='';
               }
             });
           } else if(video.canPlayType('application/vnd.apple.mpegurl')){
