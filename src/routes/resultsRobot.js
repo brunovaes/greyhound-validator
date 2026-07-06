@@ -146,9 +146,8 @@ async function runResultsRobot(targetDate) {
         await new Promise(r => setTimeout(r, 5000));
 
         const pageText = await page.evaluate(function() {
-          // Link do vídeo
-          const videoEl = document.querySelector('a[href*="replay"], a[href*="video"], button[class*="replay"]');
-          const videoUrl = videoEl ? (videoEl.getAttribute('href') || videoEl.getAttribute('data-url') || '') : '';
+          // URL da página de resultado (Racing Post)
+          const videoUrl = window.location.href;
           
           // Tentar extrair trap numbers do HTML (elementos visuais)
           const trapOrder = []; // [{pos, trap}]
