@@ -126,7 +126,12 @@ async function autoCheckAndAnalyze() {
   try {
     var r = await fetch(BASE+'/api/pdfs/hoje');
     var d = await r.json();
-    if (!d.count) { setSt('Ainda não existe corridas disponíveis para serem carregadas.'); return; }
+    if (!d.count) {
+      setSt('Ainda não existe corridas disponíveis para serem carregadas.');
+      var fc = document.getElementById('focus-col');
+      if (fc) fc.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center"><div style="font-size:48px">📭</div><div style="font-size:15px;font-weight:700;color:var(--mut2)">Nenhuma corrida disponível</div><div style="font-size:12px">O robô ainda não baixou os PDFs de hoje.<br>Verifique a aba Robô.</div></div>';
+      return;
+    }
     var parts = (d.date||'').split('-');
     autoDateLabel = parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : d.date;
     // Entra imediatamente no foco com spinner — sem passar pela tabela
