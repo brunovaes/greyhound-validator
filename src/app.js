@@ -280,7 +280,7 @@ function isUpcoming(r) {
   var nowMin = now.getHours()*60 + now.getMinutes();
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
-  return raceMin >= nowMin - VISIBILITY_MIN;
+  return raceMin >= nowMin - VISIBILITY_MIN && raceMin <= nowMin + VISIBILITY_MIN;
 }
 
 function isDayClosed() {
