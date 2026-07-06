@@ -145,7 +145,11 @@ async function autoCheckAndAnalyze() {
       +'</div>';
     setSt('Analisando '+d.count+' corridas...');
     await runAnalysis();
-  } catch(e) { setSt('Ainda não existe corridas disponíveis para serem carregadas.'); }
+  } catch(e) {
+    var fc2 = document.getElementById('focus-col');
+    if (fc2) fc2.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center"><div style="font-size:48px">📭</div><div style="font-size:15px;font-weight:700;color:var(--mut2)">Nenhuma corrida disponível</div><div style="font-size:12px">O robô ainda não baixou os PDFs de hoje.</div></div>';
+    setSt('Ainda não existe corridas disponíveis para serem carregadas.');
+  }
 }
 
 /* ── PAINEL DE FOCO ─────────────────────────────────────────── */
