@@ -371,7 +371,7 @@ router.get('/live', (req, res) => {
   const logoB64 = getLogo();
   // URLs fixas das pistas (ajustar aqui quando precisar trocar)
   const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://greyhounds.attheraces.com/video/live-video';
-  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://greyhounds.attheraces.com/video/live-video';
+  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://www.sisracing.tv/?autoplay=1';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
@@ -406,9 +406,8 @@ ${navBar(user, 'live')}
     </div>
   </div>
   <div class="live-panel">
-    <div class="live-crop" id="p2wrap">
-      <iframe id="atr-frame-2" src="" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
-      <div class="live-empty" id="p2status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
+    <div class="live-crop">
+      ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 nao configurada</div>'}
     </div>
   </div>
 </div>
@@ -416,16 +415,6 @@ ${navBar(user, 'live')}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
 <script>
 var BASE='${BASE}';
-// Gera URL do ATR (racecard) com data de hoje — usado so como fallback visual do painel 2
-function getATRUrl() {
-  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var d = new Date();
-  var day = String(d.getDate()).padStart(2,'0');
-  var month = months[d.getMonth()];
-  var year = d.getFullYear();
-  return 'https://greyhounds.attheraces.com/racecard/GB/dunstall-park/'+day+'-'+month+'-'+year;
-}
-document.getElementById('atr-frame-2').src = getATRUrl();
 
 function showRetry(status, msg, onRetry){
   status.innerHTML='';
@@ -451,7 +440,7 @@ function loadATRStream(wrapId, ifrId, statusId){
   status.innerHTML='<div class="spinner"></div><span>Aguardando stream ATR...<br><small style="color:#666;margin-top:4px;display:block">Abra o ATR em outra aba do Chrome (com a extensao instalada) e de play la</small></span>';
   status.style.display='flex';
 
-  // Consulta a cada 3s ate encontrar um stream (mesmo cache compartilhado pros dois paineis)
+  // Consulta a cada 3s ate encontrar um stream
   var tries=0;
   var interval=setInterval(function(){
     tries++;
@@ -491,14 +480,13 @@ function loadATRStream(wrapId, ifrId, statusId){
   }, 3000);
 }
 loadATRStream('p1wrap','atr-frame-1','p1status');
-loadATRStream('p2wrap','atr-frame-2','p2status');
 </script>
 </body></html>`);
 });
 
 router.get('/live/popup', (req, res) => {
   const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://greyhounds.attheraces.com/video/live-video';
-  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://greyhounds.attheraces.com/video/live-video';
+  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://www.sisracing.tv/?autoplay=1';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
