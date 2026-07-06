@@ -856,23 +856,24 @@ document.addEventListener('DOMContentLoaded',async function(){
   injectValModal();
   injectFilterPanel();
 
+  // Entra imediatamente no foco com loading — ANTES de qualquer await
+  var mainEl = document.getElementById('main-layout');
+  if (mainEl) mainEl.classList.add('focus-mode');
+  var focusColEl = document.getElementById('focus-col');
+  if (focusColEl) focusColEl.innerHTML =
+    '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center">'
+    +'<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div>'
+    +'<div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div>'
+    +'<div style="font-size:15px;font-weight:700;color:var(--mut2)">Carregando corridas do dia...</div>'
+    +'</div>';
+
   await loadSystemConfig();
   if(restoreSessionState()){
     updCards();
     setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
     enterFocusMode();
   } else {
-    // Entra imediatamente no foco com loading — nunca mostra tabela vazia
-    var main = document.getElementById('main-layout');
-    if (main) main.classList.add('focus-mode');
-    var focusCol = document.getElementById('focus-col');
-    if (focusCol) focusCol.innerHTML =
-      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center">'
-      +'<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div>'
-      +'<div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div>'
-      +'<div style="font-size:15px;font-weight:700;color:var(--mut2)">Carregando corridas do dia...</div>'
-      +'</div>';
-    setTimeout(autoCheckAndAnalyze, 300);
+    setTimeout(autoCheckAndAnalyze, 100);
   }
 
   document.getElementById('race-input').addEventListener('change',async function(){
