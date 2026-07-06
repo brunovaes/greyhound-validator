@@ -22,39 +22,49 @@ router.get('/', requireAdmin, (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Configuracoes - Greyhound Validator</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
-nav{background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
+nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
 .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}.nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
-.content{padding:24px;max-width:820px;margin:0 auto}
-h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#888;margin-bottom:24px}
-.section{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:16px}
+.content{padding:24px;max-width:1200px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#888;margin-bottom:20px}
+.layout{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start}
+.tabnav{background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;position:sticky;top:16px;display:flex;flex-direction:column;gap:2px}
+.tabbtn{display:block;width:100%;text-align:left;padding:10px 12px;background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s}
+.tabbtn:hover{background:rgba(34,197,94,.08);color:#ccc}
+.tabbtn.active{background:rgba(34,197,94,.12);color:#22c55e}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.section{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:16px}
 .sec-title{font-size:13px;font-weight:700;color:#22c55e;margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
-.field input,.field textarea,.field select{padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#f0f0f0;font-size:13px;width:100%}
+.field input,.field textarea,.field select{padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;width:100%}
 .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:#22c55e}
 .field input[type=range]{padding:4px 0;cursor:pointer}
 .field textarea{min-height:70px;resize:vertical;font-family:monospace;font-size:11px}
 .rv{font-size:11px;color:#f97316;font-weight:700;margin-top:2px}
 .hint{font-size:10px;color:#666;margin-top:2px;line-height:1.4}
-.pbar{width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;margin-top:4px}
+.pbar{width:100%;height:4px;background:#0D1117;border-radius:2px;overflow:hidden;margin-top:4px}
 .pfill{height:100%;background:#22c55e;border-radius:2px;transition:width .3s}
-.btn-save{padding:12px 28px;background:#22c55e;color:#000;font-weight:700;font-size:14px;border:none;border-radius:6px;cursor:pointer;margin-top:20px}
+.btn-bar{display:flex;align-items:center;gap:10px;position:sticky;bottom:0;background:#0D1117;padding:14px 0;margin-top:4px;border-top:1px solid #222}
+.btn-save{padding:12px 28px;background:#22c55e;color:#000;font-weight:700;font-size:14px;border:none;border-radius:6px;cursor:pointer}
 .btn-save:hover{background:#16a34a}
-.btn-reset{padding:12px 20px;background:transparent;color:#888;font-size:13px;border:1px solid #333;border-radius:6px;cursor:pointer;margin-top:20px;margin-left:10px}
+.btn-reset{padding:12px 20px;background:transparent;color:#888;font-size:13px;border:1px solid #222;border-radius:6px;cursor:pointer}
 .alert{padding:12px 16px;border-radius:6px;font-size:13px;margin-bottom:16px;display:none}
 .alert.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.2)}
 .alert.er{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
 .info-box{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#f97316;line-height:1.6}
 .toast-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
 .toast-bg.open{display:flex}
-.toast-box{background:#111;border:1px solid #22c55e;border-radius:14px;padding:32px 40px;text-align:center;animation:popIn .3s ease}
+.toast-box{background:#161B27;border:1px solid #22c55e;border-radius:14px;padding:32px 40px;text-align:center;animation:popIn .3s ease}
 @keyframes popIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
 .toast-icon{font-size:52px;margin-bottom:12px}
 .toast-box h3{font-size:17px;color:#f0f0f0;margin-bottom:6px}
 .toast-box p{font-size:12px;color:#888}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.tabnav{position:static;flex-direction:row;overflow-x:auto}}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
 <nav>
@@ -73,7 +83,21 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 <p class="sub">Estas configuracoes se aplicam a TODOS os usuarios do sistema.</p>
 <div class="alert" id="alert"></div>
 <form id="cf">
+<div class="layout">
 
+<div class="tabnav">
+  <button type="button" class="tabbtn active" data-tab="t-pesos" onclick="showTab('t-pesos')">Pesos dos Criterios</button>
+  <button type="button" class="tabbtn" data-tab="t-categoria" onclick="showTab('t-categoria')">Categoria</button>
+  <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">Filtros de Corrida</button>
+  <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">Thresholds de Confianca</button>
+  <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">Motor de Pontuacao</button>
+  <button type="button" class="tabbtn" data-tab="t-remarks" onclick="showTab('t-remarks')">Remarks</button>
+  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">Automacao</button>
+</div>
+
+<div>
+
+<div class="tab-panel active" id="t-pesos">
 <div class="section">
 <div class="sec-title">Pesos dos Criterios</div>
 <div class="info-box">Os pesos orientam o Claude sobre qual criterio priorizar. Valores maiores = mais importante no raciocinio.</div>
@@ -90,7 +114,9 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 </div>`).join('')}
 </div>
 </div>
+</div>
 
+<div class="tab-panel" id="t-categoria">
 <div class="section">
 <div class="sec-title">Categoria</div>
 <div class="info-box">
@@ -149,7 +175,9 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 </div>
 </div>
 </div>
+</div>
 
+<div class="tab-panel" id="t-filtros">
 <div class="section">
 <div class="sec-title">Filtros de Corrida</div>
 <div class="grid">
@@ -159,7 +187,9 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="field"><label>Classes aceitas</label><input type="text" name="classes_aceitas" value="${config.classes_aceitas}"><span class="hint">Separadas por virgula</span></div>
 </div>
 </div>
+</div>
 
+<div class="tab-panel" id="t-confianca">
 <div class="section">
 <div class="sec-title">Thresholds de Confianca</div>
 <div class="grid">
@@ -173,7 +203,9 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="field"><label>CalTm empate (s)</label><input type="number" name="diff_caltm_empate" value="${config.diff_caltm_empate}" step="0.02" min="0.02" max="0.3"><span class="hint">Abaixo disso = empate tecnico</span></div>
 </div>
 </div>
+</div>
 
+<div class="tab-panel" id="t-motor">
 <div class="section">
 <div class="sec-title">Motor de Pontuacao</div>
 <div class="info-box">Estes parametros controlam o calculo deterministico de scores. O Claude agora so extrai dados brutos — toda a decisao de favorito/ranking/AvB/Back e feita por codigo com base nesses valores.</div>
@@ -201,7 +233,7 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="sec-title">&#128196; Documento de Regras</div>
 <details style="cursor:pointer">
 <summary style="font-size:12px;color:#22c55e;padding:4px 0">Ver como funciona o motor de pontuacao (clique para expandir)</summary>
-<div style="margin-top:14px;font-size:12px;color:#aaa;line-height:1.8;background:#0a0a0a;padding:14px;border-radius:8px">
+<div style="margin-top:14px;font-size:12px;color:#aaa;line-height:1.8;background:#0D1117;padding:14px;border-radius:8px">
 <p style="color:#f0f0f0;font-weight:700;margin-bottom:8px">Como o motor calcula o resultado de cada corrida:</p>
 
 <p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 1 — Extracao (Claude)</p>
@@ -229,6 +261,11 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </details>
 </div>
+</div>
+
+<div class="tab-panel" id="t-remarks">
+<div class="section">
+<div class="sec-title">Remarks — Listas Customizadas</div>
 <div class="grid" style="grid-template-columns:1fr 1fr">
 <div class="field"><label>Combinacoes muito positivas</label><textarea name="remarks_muito_positivos">${config.remarks_muito_positivos}</textarea><span class="hint">Ex: SAw+RnOn,Bmp+RnOn</span></div>
 <div class="field"><label>Remarks positivos</label><textarea name="remarks_positivos">${config.remarks_positivos}</textarea></div>
@@ -236,11 +273,11 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="field"><label>Remarks negativos</label><textarea name="remarks_negativos">${config.remarks_negativos}</textarea></div>
 </div>
 </div>
+</div>
 
-<div><button type="submit" class="btn-save">Salvar Configuracoes</button><button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button></div>
-
-<div class="section" style="margin-top:16px;border-top:2px solid #22c55e">
-<div class="sec-title" style="color:#22c55e">Automação — Robôs e Visibilidade</div>
+<div class="tab-panel" id="t-automacao">
+<div class="section">
+<div class="sec-title">Automacao — Robos e Visibilidade</div>
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
   <div class="field">
     <label>Refresh automático da tela (min)</label>
@@ -274,6 +311,15 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
 </div>
 </div>
+</div>
+
+<div class="btn-bar">
+  <button type="submit" class="btn-save">Salvar Configuracoes</button>
+  <button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button>
+</div>
+
+</div>
+</div>
 </form>
 </div>
 
@@ -286,6 +332,12 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 <script>
+function showTab(id){
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.tabbtn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+  document.querySelector('.tabbtn[data-tab="'+id+'"]').classList.add('active');
+}
 function upR(input){var n=input.name;var v=document.getElementById('v_'+n);var b=document.getElementById('b_'+n);if(v)v.textContent=input.value+(n.startsWith('pct')?'%':'');if(b)b.style.width=(input.value*10)+'%';}
 document.getElementById('cf').addEventListener('submit',async function(e){
   e.preventDefault();
