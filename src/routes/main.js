@@ -3,7 +3,6 @@ const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
-const atrCache = require('../state/atrStreamCache');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 
@@ -370,8 +369,12 @@ router.get('/live', (req, res) => {
   const user = req.user;
   const logoB64 = getLogo();
   // URLs fixas das pistas (ajustar aqui quando precisar trocar)
-  const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://tv.greyhoundbrasil.com/';
-  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://www.sisracing.tv/?autoplay=1';
+  const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
+  const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
+  // Recorte de cada tela dentro do greyhoundbrasil (uma em cima da outra na pagina original).
+  // Valores abaixo sao um chute inicial — calibrar depois olhando o resultado real.
+  const GHBR_TOP_1 = process.env.GHBR_TOP_1 || '0';
+  const GHBR_TOP_2 = process.env.GHBR_TOP_2 || '-400';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
@@ -379,18 +382,16 @@ router.get('/live', (req, res) => {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
-.content{padding:16px 20px;max-width:1600px;margin:0 auto}
+.content{padding:16px 20px;max-width:1900px;margin:0 auto}
 h1{font-size:18px;font-weight:700;margin-bottom:12px}
-.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:900px){.live-grid{grid-template-columns:1fr}}
+.live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.live-grid{grid-template-columns:1fr}}
 .live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
+.live-panel h3{font-size:11px;color:#666;padding:6px 10px;border-bottom:1px solid #222;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
 .live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
-.live-crop video{width:100%;height:100%;object-fit:cover}
 .live-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px;gap:10px}
-.spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#22c55e;border-radius:50%;animation:spin 0.8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.btn-retry{padding:6px 14px;background:transparent;border:1px solid #22c55e;color:#22c55e;border-radius:6px;cursor:pointer;font-size:11px}
 </style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'live')}
@@ -400,112 +401,55 @@ ${navBar(user, 'live')}
 </h1>
 <div class="live-grid">
   <div class="live-panel">
+    <h3>SIS Racing</h3>
     <div class="live-crop">
-      ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
+      ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Nao configurado</div>'}
     </div>
   </div>
   <div class="live-panel">
-    <div class="live-crop" id="p2wrap">
-      <iframe id="atr-frame-2" src="${LIVE_URL_2}" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
-      <div class="live-empty" id="p2status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
+    <h3>Greyhound Brasil — Tela 1</h3>
+    <div class="live-crop">
+      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_1}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_1}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+    </div>
+  </div>
+  <div class="live-panel">
+    <h3>Greyhound Brasil — Tela 2</h3>
+    <div class="live-crop">
+      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_2}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_2}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
     </div>
   </div>
 </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
-<script>
-var BASE='${BASE}';
-
-function showRetry(status, msg, onRetry){
-  status.innerHTML='';
-  var span=document.createElement('span');
-  span.style.color='#ef4444';
-  span.textContent=msg;
-  var br=document.createElement('br');
-  var btn=document.createElement('button');
-  btn.className='btn-retry';
-  btn.textContent='Tentar novamente';
-  btn.onclick=onRetry;
-  status.appendChild(span);
-  status.appendChild(br);
-  status.appendChild(btn);
-  status.style.display='flex';
-}
-
-function loadATRStream(wrapId, ifrId, statusId, source){
-  var wrap=document.getElementById(wrapId);
-  var iframe=document.getElementById(ifrId);
-  var status=document.getElementById(statusId);
-  if(!wrap||!status){ console.error('[ATR] elementos nao encontrados para', wrapId); return; }
-  var fonte = source==='sisracing' ? 'sisracing.tv' : 'ATR';
-  status.innerHTML='<div class="spinner"></div><span>Aguardando stream '+fonte+'...<br><small style="color:#666;margin-top:4px;display:block">Abra o '+fonte+' em outra aba do Chrome (com a extensao instalada) e de play la</small></span>';
-  status.style.display='flex';
-
-  // Consulta a cada 3s ate encontrar um stream (cada painel tem seu proprio slot de cache)
-  var tries=0;
-  var interval=setInterval(function(){
-    tries++;
-    fetch(BASE+'/api/atr-stream-status?source='+source)
-      .then(function(r){return r.json();})
-      .then(function(data){
-        if(data.url){
-          clearInterval(interval);
-          var video=document.createElement('video');
-          video.controls=true; video.autoplay=true; video.muted=true;
-          video.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;background:#000';
-          status.style.display='none';
-          if(iframe) iframe.style.display='none';
-          wrap.appendChild(video);
-          if(Hls.isSupported()){
-            var hls=new Hls();
-            hls.loadSource(data.url);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED,function(){video.play();});
-            hls.on(Hls.Events.ERROR,function(e,d){
-              if(d.fatal){
-                video.remove();
-                if(iframe) iframe.style.display='';
-                showRetry(status, 'Stream expirou.', function(){ loadATRStream(wrapId, ifrId, statusId, source); });
-              }
-            });
-          } else if(video.canPlayType('application/vnd.apple.mpegurl')){
-            video.src=data.url; video.play();
-          }
-        } else if(tries>60){
-          // Desiste apos 3 minutos sem receber stream
-          clearInterval(interval);
-          showRetry(status, 'Stream nao recebido.', function(){ loadATRStream(wrapId, ifrId, statusId, source); });
-        }
-      })
-      .catch(function(){});
-  }, 3000);
-}
-loadATRStream('p2wrap','atr-frame-2','p2status','sisracing');
-</script>
 </body></html>`);
 });
 
 router.get('/live/popup', (req, res) => {
-  const LIVE_URL_1 = process.env.LIVE_URL_1 || 'https://tv.greyhoundbrasil.com/';
-  const LIVE_URL_2 = process.env.LIVE_URL_2 || 'https://www.sisracing.tv/?autoplay=1';
+  const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
+  const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
+  const GHBR_TOP_1 = process.env.GHBR_TOP_1 || '0';
+  const GHBR_TOP_2 = process.env.GHBR_TOP_2 || '-400';
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:center}
-.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;width:100%}
-@media(max-width:900px){.live-grid{grid-template-columns:1fr}}
+.live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;width:100%}
+@media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.live-grid{grid-template-columns:1fr}}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}.live-crop.c2 iframe{top:-225px;height:1450px}
+.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
 .live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:13px;text-align:center;padding:20px;font-family:sans-serif}
 </style></head><body>
 <div class="live-grid">
   <div class="live-crop">
-    ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
+    ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Nao configurado</div>'}
   </div>
-  <div class="live-crop c2">
-    ${LIVE_URL_2 ? `<iframe src="${LIVE_URL_2}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 2 ainda nao configurada</div>'}
+  <div class="live-crop">
+    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_1}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_1}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
+  </div>
+  <div class="live-crop">
+    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_2}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_2}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
   </div>
 </div>
 </body></html>`);
@@ -779,20 +723,6 @@ function openReplay(id){
 }
 </script>
 </div></body></html>`);
-});
-
-// Frontend consulta essa rota pra saber se tem stream disponivel
-// (cache compartilhado com src/routes/atrPush.js, um slot por fonte: atr | sisracing)
-router.get('/api/atr-stream-status', (req, res) => {
-  const source = req.query.source === 'sisracing' ? 'sisracing' : 'atr';
-  const cached = atrCache.get(source);
-  const age = Date.now() - cached.ts;
-  // Stream expira em 2 horas (nimblesessionid dura bastante mas nao e eterno)
-  if (cached.url && age < 7200000) {
-    res.json({ url: cached.url, age: Math.round(age/1000) });
-  } else {
-    res.json({ url: null });
-  }
 });
 
 module.exports = router;
