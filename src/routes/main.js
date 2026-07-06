@@ -3,6 +3,7 @@ const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
+const { requireAdmin } = require('../middleware/auth');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 
@@ -452,6 +453,154 @@ body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:cente
     ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:${GHBR_TOP_2}px;left:0;width:100%;height:calc(100% - ${GHBR_TOP_2}px);border:none"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
   </div>
 </div>
+</body></html>`);
+});
+
+// ─── Calibrador manual de recorte de iframe (top/left/largura/altura/zoom) ───
+// Ferramenta so pra admin ajustar visualmente o crop de uma pagina de terceiros
+// dentro do painel, sem precisar ficar chutando valor e fazendo deploy.
+router.get('/live/calibrar', requireAdmin, (req, res) => {
+  const targetUrl = req.query.url || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calibrador de Tela - Greyhound Validator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
+.wrap{display:grid;grid-template-columns:340px 1fr;height:100vh}
+.panel{background:#111;border-right:1px solid #333;padding:16px;overflow-y:auto}
+.panel h2{font-size:14px;margin-bottom:14px;color:#22c55e}
+.field{margin-bottom:14px}
+.field label{display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.field label span{color:#22c55e;font-weight:700;font-family:monospace}
+.field input[type=range]{width:100%}
+.field input[type=number]{width:80px;padding:4px 6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:12px}
+.field-row{display:flex;gap:8px;align-items:center}
+.url-field{width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:12px;margin-bottom:14px}
+.btn{width:100%;padding:9px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-top:6px}
+.btn:hover{background:#16a34a}
+.btn-sec{background:transparent;border:1px solid #333;color:#888}
+.btn-sec:hover{border-color:#22c55e;color:#22c55e}
+pre{background:#000;border:1px solid #333;border-radius:6px;padding:10px;font-size:11px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;margin-top:10px}
+.stage{background:#000;display:flex;align-items:center;justify-content:center;padding:20px}
+.crop-box{position:relative;width:100%;max-width:960px;aspect-ratio:16/9;overflow:hidden;background:#000;border:1px solid #333;border-radius:8px}
+.crop-box iframe{position:absolute;border:none}
+</style></head><body>
+<div class="wrap">
+  <div class="panel">
+    <h2>&#127919; Calibrador de Recorte</h2>
+    <label style="display:block;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase">URL alvo</label>
+    <input type="text" class="url-field" id="c-url" value="${targetUrl}">
+    <button class="btn btn-sec" onclick="reloadFrame()">&#8635; Recarregar pagina</button>
+
+    <div class="field" style="margin-top:16px">
+      <label>Top (px) <span id="v-top">0</span></label>
+      <div class="field-row">
+        <input type="range" id="r-top" min="-3000" max="500" value="0" oninput="syncFromRange('top')">
+        <input type="number" id="n-top" value="0" onchange="syncFromNumber('top')">
+      </div>
+    </div>
+    <div class="field">
+      <label>Left (px) <span id="v-left">0</span></label>
+      <div class="field-row">
+        <input type="range" id="r-left" min="-2000" max="500" value="0" oninput="syncFromRange('left')">
+        <input type="number" id="n-left" value="0" onchange="syncFromNumber('left')">
+      </div>
+    </div>
+    <div class="field">
+      <label>Largura do iframe (px) <span id="v-width">1920</span></label>
+      <div class="field-row">
+        <input type="range" id="r-width" min="320" max="3840" value="1920" oninput="syncFromRange('width')">
+        <input type="number" id="n-width" value="1920" onchange="syncFromNumber('width')">
+      </div>
+    </div>
+    <div class="field">
+      <label>Altura do iframe (px) <span id="v-height">1080</span></label>
+      <div class="field-row">
+        <input type="range" id="r-height" min="320" max="3840" value="1080" oninput="syncFromRange('height')">
+        <input type="number" id="n-height" value="1080" onchange="syncFromNumber('height')">
+      </div>
+    </div>
+    <div class="field">
+      <label>Zoom / escala <span id="v-scale">100</span>%</label>
+      <div class="field-row">
+        <input type="range" id="r-scale" min="10" max="300" value="100" oninput="syncFromRange('scale')">
+        <input type="number" id="n-scale" value="100" onchange="syncFromNumber('scale')">
+      </div>
+    </div>
+
+    <button class="btn" onclick="copyValues()">&#128203; Copiar valores</button>
+    <pre id="out"></pre>
+  </div>
+  <div class="stage">
+    <div class="crop-box" id="box">
+      <iframe id="frame" src="${targetUrl}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    </div>
+  </div>
+</div>
+<script>
+var vals={top:0,left:0,width:1920,height:1080,scale:100};
+
+function applyStyle(){
+  var f=document.getElementById('frame');
+  f.style.top=vals.top+'px';
+  f.style.left=vals.left+'px';
+  f.style.width=vals.width+'px';
+  f.style.height=vals.height+'px';
+  f.style.transform='scale('+(vals.scale/100)+')';
+  f.style.transformOrigin='top left';
+  updateOutput();
+}
+
+function syncFromRange(key){
+  var r=document.getElementById('r-'+key);
+  var n=document.getElementById('n-'+key);
+  var v=document.getElementById('v-'+key);
+  vals[key]=parseInt(r.value,10);
+  n.value=r.value;
+  v.textContent=r.value;
+  applyStyle();
+}
+
+function syncFromNumber(key){
+  var r=document.getElementById('r-'+key);
+  var n=document.getElementById('n-'+key);
+  var v=document.getElementById('v-'+key);
+  vals[key]=parseInt(n.value,10)||0;
+  r.value=vals[key];
+  v.textContent=vals[key];
+  applyStyle();
+}
+
+function updateOutput(){
+  var css='position:absolute;top:'+vals.top+'px;left:'+vals.left+'px;'
+    +'width:'+vals.width+'px;height:'+vals.height+'px;'
+    +'transform:scale('+(vals.scale/100)+');transform-origin:top left;border:none;';
+  document.getElementById('out').textContent =
+    'CSS do iframe:\\n'+css+
+    '\\n\\nEnv vars (se for essa tela):\\nGHBR_TOP=' +vals.top+
+    '\\nGHBR_LEFT='+vals.left+
+    '\\nGHBR_IFRAME_WIDTH='+vals.width+
+    '\\nGHBR_IFRAME_HEIGHT='+vals.height+
+    '\\nGHBR_SCALE='+vals.scale;
+}
+
+function copyValues(){
+  var txt=document.getElementById('out').textContent;
+  navigator.clipboard.writeText(txt).then(function(){
+    alert('Copiado! Cola aqui no chat ou no Railway.');
+  }).catch(function(){
+    alert('Nao consegui copiar automaticamente — seleciona o texto manualmente.');
+  });
+}
+
+function reloadFrame(){
+  var url=document.getElementById('c-url').value;
+  document.getElementById('frame').src=url;
+}
+
+applyStyle();
+</script>
 </body></html>`);
 });
 
