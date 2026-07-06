@@ -400,13 +400,14 @@ ${navBar(user, 'live')}
 </h1>
 <div class="live-grid">
   <div class="live-panel">
-    <div class="live-crop">
-      ${LIVE_URL_1 ? `<iframe src="${LIVE_URL_1}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>` : '<div class="live-empty">Pista 1 nao configurada</div>'}
+    <div class="live-crop" id="p1wrap">
+      <iframe id="atr-frame-1" src="${LIVE_URL_1}" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
+      <div class="live-empty" id="p1status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
     </div>
   </div>
   <div class="live-panel">
     <div class="live-crop" id="p2wrap">
-      <iframe id="atr-frame" src="" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
+      <iframe id="atr-frame-2" src="" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
       <div class="live-empty" id="p2status" style="display:none;position:absolute;inset:0;z-index:3;background:#111"></div>
     </div>
   </div>
@@ -415,7 +416,7 @@ ${navBar(user, 'live')}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
 <script>
 var BASE='${BASE}';
-// Gera URL do ATR com data de hoje
+// Gera URL do ATR (racecard) com data de hoje — usado so como fallback visual do painel 2
 function getATRUrl() {
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var d = new Date();
@@ -424,16 +425,33 @@ function getATRUrl() {
   var year = d.getFullYear();
   return 'https://greyhounds.attheraces.com/racecard/GB/dunstall-park/'+day+'-'+month+'-'+year;
 }
-document.getElementById('atr-frame').src = getATRUrl();
-function loadATRStream(){
-  var wrap=document.getElementById('p2wrap');
-  var iframe=document.getElementById('atr-frame');
-  var status=document.getElementById('p2status');
-  if(!status){ console.error('[ATR] elemento p2status nao encontrado'); return; }
+document.getElementById('atr-frame-2').src = getATRUrl();
+
+function showRetry(status, msg, onRetry){
+  status.innerHTML='';
+  var span=document.createElement('span');
+  span.style.color='#ef4444';
+  span.textContent=msg;
+  var br=document.createElement('br');
+  var btn=document.createElement('button');
+  btn.className='btn-retry';
+  btn.textContent='Tentar novamente';
+  btn.onclick=onRetry;
+  status.appendChild(span);
+  status.appendChild(br);
+  status.appendChild(btn);
+  status.style.display='flex';
+}
+
+function loadATRStream(wrapId, ifrId, statusId){
+  var wrap=document.getElementById(wrapId);
+  var iframe=document.getElementById(ifrId);
+  var status=document.getElementById(statusId);
+  if(!wrap||!status){ console.error('[ATR] elementos nao encontrados para', wrapId); return; }
   status.innerHTML='<div class="spinner"></div><span>Aguardando stream ATR...<br><small style="color:#666;margin-top:4px;display:block">Abra o ATR em outra aba do Chrome (com a extensao instalada) e de play la</small></span>';
   status.style.display='flex';
 
-  // Consulta a cada 3s ate encontrar um stream
+  // Consulta a cada 3s ate encontrar um stream (mesmo cache compartilhado pros dois paineis)
   var tries=0;
   var interval=setInterval(function(){
     tries++;
@@ -455,10 +473,9 @@ function loadATRStream(){
             hls.on(Hls.Events.MANIFEST_PARSED,function(){video.play();});
             hls.on(Hls.Events.ERROR,function(e,d){
               if(d.fatal){
-                status.innerHTML='<span style="color:#ef4444">Stream expirou.</span><button class="btn-retry" onclick="loadATRStream()">Atualizar</button>';
-                status.style.display='flex';
                 video.remove();
                 if(iframe) iframe.style.display='';
+                showRetry(status, 'Stream expirou.', function(){ loadATRStream(wrapId, ifrId, statusId); });
               }
             });
           } else if(video.canPlayType('application/vnd.apple.mpegurl')){
@@ -467,13 +484,14 @@ function loadATRStream(){
         } else if(tries>60){
           // Desiste apos 3 minutos sem receber stream
           clearInterval(interval);
-          status.innerHTML='<span style="color:#888">Stream nao recebido.</span><button class="btn-retry" onclick="loadATRStream()">Tentar novamente</button>';
+          showRetry(status, 'Stream nao recebido.', function(){ loadATRStream(wrapId, ifrId, statusId); });
         }
       })
       .catch(function(){});
   }, 3000);
 }
-loadATRStream();
+loadATRStream('p1wrap','atr-frame-1','p1status');
+loadATRStream('p2wrap','atr-frame-2','p2status');
 </script>
 </body></html>`);
 });
