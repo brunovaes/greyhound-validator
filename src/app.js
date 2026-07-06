@@ -131,6 +131,40 @@ async function autoCheckAndAnalyze() {
   if (raceFiles.length) return;
   if (results.length) return;
   try {
+    // Verifica se já existe sessão de hoje
+    var now = new Date();
+    var todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    var sessionName = 'Races '+todayLabel;
+    var sr = await fetch(BASE+'/api/sessions');
+    var sessions = await sr.json();
+    var todaySession = sessions.find(function(s){ return s.name===sessionName; });
+
+    if (todaySession) {
+      // Sessão de hoje já existe — carrega direto
+      setSt('Carregando sessão de hoje...');
+      var dr = await fetch(BASE+'/api/session/'+todaySession.id+'/races');
+      var dd = await dr.json();
+      if (dd.races && dd.races.length) {
+        dd.races.forEach(function(r) {
+          var obj = {
+            tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:r.hora_br||'',
+            corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
+            nameFav:r.name_fav||'', trapUnd:r.trap_und||0, nameUnd:r.name_und||'',
+            pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
+            obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
+            histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
+            id:r.id
+          };
+          results.push(obj);
+        });
+        updCards();
+        setSt('Sessão '+sessionName+' carregada — '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
+        enterFocusMode();
+        return;
+      }
+    }
+
+    // Sem sessão — busca PDFs e analisa
     var r = await fetch(BASE+'/api/pdfs/hoje');
     var d = await r.json();
     if (!d.count) {

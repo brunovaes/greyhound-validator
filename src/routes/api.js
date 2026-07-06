@@ -1005,6 +1005,16 @@ router.get('/config', (req, res) => {
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
 
+router.get('/session/:id/races', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const sess = db.prepare('SELECT id, name FROM race_sessions WHERE id=? AND user_id=?').get(id, req.user.id);
+    if (!sess) return res.status(404).json({ error: 'Sessão não encontrada' });
+    const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(id);
+    res.json({ session: sess, races });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/sessions', (req, res) => {
   try {
     const sessions = db.prepare('SELECT id, name, created_at FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(req.user.id);
