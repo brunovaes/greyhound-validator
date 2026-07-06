@@ -89,14 +89,14 @@ function injectStyles(){
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
-var VISIBILITY_MIN = 120;
+var RACAS_EM_TELA = 6;
 var AUTO_REFRESH_MIN = 1;
 
 async function loadSystemConfig() {
   try {
     var r = await fetch(BASE+'/api/config');
     var c = await r.json();
-    if (c.visibility_interval_min) VISIBILITY_MIN = parseInt(c.visibility_interval_min);
+    if (c.racas_em_tela) RACAS_EM_TELA = parseInt(c.racas_em_tela);
     if (c.auto_refresh_min) AUTO_REFRESH_MIN = parseInt(c.auto_refresh_min);
   } catch(e) {}
 }
@@ -280,19 +280,20 @@ function isUpcoming(r) {
   var nowMin = now.getHours()*60 + now.getMinutes();
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
-  return raceMin >= nowMin - VISIBILITY_MIN && raceMin <= nowMin + VISIBILITY_MIN;
+  return raceMin >= nowMin;
 }
 
-function isDayClosed() {
-  var now = new Date();
-  return now.getHours()*60 + now.getMinutes() >= 18*60 + 31; // 18:31 BRT
+function isDayClosed(avbs) {
+  // Encerrado quando nao sobra nenhuma corrida futura na sessao carregada
+  // (dinamico — nao depende de um horario fixo de corte).
+  return !avbs.some(isUpcoming);
 }
 
 var focusRefreshInterval = null;
 
 function showDayEndMsg() {
   var focusCol = document.getElementById('focus-col');
-  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#127937;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Ciclo do dia encerrado</div><div style="font-size:13px">As corridas de hoje se encerraram às 18:30 BRT</div></div>';
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#127937;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Ciclo do dia encerrado</div><div style="font-size:13px">As corridas de hoje se encerraram e voltaremos amanhã</div></div>';
   var col = document.getElementById('race-list-col');
   if (col) col.innerHTML = '';
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
@@ -301,13 +302,12 @@ function showDayEndMsg() {
 function refreshFocusMode() {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
-  var hasUpcoming = avbs.some(isUpcoming);
 
-  // Após 18:31 e sem corridas futuras → ciclo encerrado
-  if (!hasUpcoming && isDayClosed()) { showDayEndMsg(); return; }
+  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao
+  if (isDayClosed(avbs)) { showDayEndMsg(); return; }
 
-  // Se nenhuma é "futura" mas não é fim de dia → são corridas de amanhã, mostra todas
-  var toShow = hasUpcoming ? avbs.filter(isUpcoming) : avbs;
+  // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja passadas
+  var toShow = avbs.filter(isUpcoming).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
 
@@ -330,16 +330,14 @@ function enterFocusMode() {
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
   if (!avbs.length) return;
 
-  var hasUpcoming = avbs.some(isUpcoming);
-
-  // Após 18:31 sem corridas futuras → ciclo encerrado
-  if (!hasUpcoming && isDayClosed()) {
+  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao
+  if (isDayClosed(avbs)) {
     document.getElementById('main-layout').classList.add('focus-mode');
     showDayEndMsg();
     return;
   }
 
-  var toShow = hasUpcoming ? avbs.filter(isUpcoming) : avbs;
+  var toShow = avbs.filter(isUpcoming).slice(0, RACAS_EM_TELA);
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
   var next = toShow[0];

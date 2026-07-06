@@ -1000,6 +1000,7 @@ router.get('/config', (req, res) => {
     const config = getUserConfig(req.user.id);
     res.json({
       visibility_interval_min: config.visibility_interval_min || 120,
+      racas_em_tela: config.racas_em_tela || 6,
       auto_refresh_min: config.auto_refresh_min || 1,
       results_interval_min: config.results_interval_min || 30,
       results_window_start: config.results_window_start || '09:00',
