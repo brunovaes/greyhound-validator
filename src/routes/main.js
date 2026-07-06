@@ -375,25 +375,25 @@ router.get('/live', (req, res) => {
   // Recorte de cada tela dentro do greyhoundbrasil (uma em cima da outra na pagina
   // original). Valores calibrados manualmente via /live/calibrar em 06/07/2026.
   const GHBR_1 = {
-    top: process.env.GHBR_TOP_1 || '-344',
-    left: process.env.GHBR_LEFT_1 || '-642',
+    top: process.env.GHBR_TOP_1 || '-28',
+    left: process.env.GHBR_LEFT_1 || '-131',
     width: process.env.GHBR_WIDTH_1 || '1920',
-    height: process.env.GHBR_HEIGHT_1 || '1043',
-    scale: process.env.GHBR_SCALE_1 || '67'
+    height: process.env.GHBR_HEIGHT_1 || '763',
+    scale: process.env.GHBR_SCALE_1 || '37'
   };
   const GHBR_2 = {
-    top: process.env.GHBR_TOP_2 || '-735',
-    left: process.env.GHBR_LEFT_2 || '-4',
-    width: process.env.GHBR_WIDTH_2 || '1901',
-    height: process.env.GHBR_HEIGHT_2 || '1659',
-    scale: process.env.GHBR_SCALE_2 || '67'
+    top: process.env.GHBR_TOP_2 || '-571',
+    left: process.env.GHBR_LEFT_2 || '-3',
+    width: process.env.GHBR_WIDTH_2 || '1920',
+    height: process.env.GHBR_HEIGHT_2 || '3840',
+    scale: process.env.GHBR_SCALE_2 || '48'
   };
   const SIS_CROP = {
-    top: process.env.SIS_TOP || '-41',
-    left: process.env.SIS_LEFT || '-188',
+    top: process.env.SIS_TOP || '-299',
+    left: process.env.SIS_LEFT || '-458',
     width: process.env.SIS_WIDTH || '1920',
-    height: process.env.SIS_HEIGHT || '763',
-    scale: process.env.SIS_SCALE || '52'
+    height: process.env.SIS_HEIGHT || '3840',
+    scale: process.env.SIS_SCALE || '48'
   };
   function ghbrFrameStyle(c) {
     return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
@@ -452,25 +452,25 @@ router.get('/live/popup', (req, res) => {
   const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
   const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
   const GHBR_1 = {
-    top: process.env.GHBR_TOP_1 || '-344',
-    left: process.env.GHBR_LEFT_1 || '-642',
+    top: process.env.GHBR_TOP_1 || '-28',
+    left: process.env.GHBR_LEFT_1 || '-131',
     width: process.env.GHBR_WIDTH_1 || '1920',
-    height: process.env.GHBR_HEIGHT_1 || '1043',
-    scale: process.env.GHBR_SCALE_1 || '67'
+    height: process.env.GHBR_HEIGHT_1 || '763',
+    scale: process.env.GHBR_SCALE_1 || '37'
   };
   const GHBR_2 = {
-    top: process.env.GHBR_TOP_2 || '-735',
-    left: process.env.GHBR_LEFT_2 || '-4',
-    width: process.env.GHBR_WIDTH_2 || '1901',
-    height: process.env.GHBR_HEIGHT_2 || '1659',
-    scale: process.env.GHBR_SCALE_2 || '67'
+    top: process.env.GHBR_TOP_2 || '-571',
+    left: process.env.GHBR_LEFT_2 || '-3',
+    width: process.env.GHBR_WIDTH_2 || '1920',
+    height: process.env.GHBR_HEIGHT_2 || '3840',
+    scale: process.env.GHBR_SCALE_2 || '48'
   };
   const SIS_CROP = {
-    top: process.env.SIS_TOP || '-41',
-    left: process.env.SIS_LEFT || '-188',
+    top: process.env.SIS_TOP || '-299',
+    left: process.env.SIS_LEFT || '-458',
     width: process.env.SIS_WIDTH || '1920',
-    height: process.env.SIS_HEIGHT || '763',
-    scale: process.env.SIS_SCALE || '52'
+    height: process.env.SIS_HEIGHT || '3840',
+    scale: process.env.SIS_SCALE || '48'
   };
   function ghbrFrameStyle(c) {
     return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
@@ -667,19 +667,19 @@ router.get('/live/calibrar3', requireAdmin, (req, res) => {
   const P3_URL = req.query.p3 || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
 
   const P1_INIT = {
-    top: process.env.SIS_TOP || '-41', left: process.env.SIS_LEFT || '-188',
-    width: process.env.SIS_WIDTH || '1920', height: process.env.SIS_HEIGHT || '763',
-    scale: process.env.SIS_SCALE || '52'
+    top: process.env.SIS_TOP || '-299', left: process.env.SIS_LEFT || '-458',
+    width: process.env.SIS_WIDTH || '1920', height: process.env.SIS_HEIGHT || '3840',
+    scale: process.env.SIS_SCALE || '48'
   };
   const P2_INIT = {
-    top: process.env.GHBR_TOP_1 || '-344', left: process.env.GHBR_LEFT_1 || '-642',
-    width: process.env.GHBR_WIDTH_1 || '1920', height: process.env.GHBR_HEIGHT_1 || '1043',
-    scale: process.env.GHBR_SCALE_1 || '67'
+    top: process.env.GHBR_TOP_1 || '-28', left: process.env.GHBR_LEFT_1 || '-131',
+    width: process.env.GHBR_WIDTH_1 || '1920', height: process.env.GHBR_HEIGHT_1 || '763',
+    scale: process.env.GHBR_SCALE_1 || '37'
   };
   const P3_INIT = {
-    top: process.env.GHBR_TOP_2 || '-735', left: process.env.GHBR_LEFT_2 || '-4',
-    width: process.env.GHBR_WIDTH_2 || '1901', height: process.env.GHBR_HEIGHT_2 || '1659',
-    scale: process.env.GHBR_SCALE_2 || '67'
+    top: process.env.GHBR_TOP_2 || '-571', left: process.env.GHBR_LEFT_2 || '-3',
+    width: process.env.GHBR_WIDTH_2 || '1920', height: process.env.GHBR_HEIGHT_2 || '3840',
+    scale: process.env.GHBR_SCALE_2 || '48'
   };
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
