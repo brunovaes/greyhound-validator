@@ -405,10 +405,7 @@ ${navBar(user, 'live')}
   </div>
   <div class="live-panel">
     <div class="live-crop" id="p2wrap">
-      <div class="live-empty" id="p2status">
-        <div class="spinner"></div>
-        <span>Buscando stream ATR...</span>
-      </div>
+      <iframe id="atr-frame" src="" scrolling="yes" allow="autoplay; fullscreen" allowfullscreen style="position:absolute;top:-55px;left:0;width:100%;height:calc(100% + 55px);border:none;background:#000"></iframe>
     </div>
   </div>
 </div>
@@ -416,6 +413,16 @@ ${navBar(user, 'live')}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
 <script>
 var BASE='${BASE}';
+// Gera URL do ATR com data de hoje
+function getATRUrl() {
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var d = new Date();
+  var day = String(d.getDate()).padStart(2,'0');
+  var month = months[d.getMonth()];
+  var year = d.getFullYear();
+  return 'https://greyhounds.attheraces.com/racecard/GB/dunstall-park/'+day+'-'+month+'-'+year;
+}
+document.getElementById('atr-frame').src = getATRUrl();
 function loadATRStream(){
   var wrap=document.getElementById('p2wrap');
   var status=document.getElementById('p2status');
