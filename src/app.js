@@ -974,7 +974,6 @@ async function runChunk(files,caps){
 }
 
 async function runAnalysis(){
-  var usandoPasta=false;
   // Ponto 3: verifica se já existe sessão do dia ao usar pasta automática
   if(!raceFiles.length){
     var now=new Date();
@@ -985,28 +984,50 @@ async function runAnalysis(){
       var sessions=await sr.json();
       var existing=sessions.find(function(s){return s.name===sessionName;});
       if(existing){
-        // Sessão já existe — verifica se tem PDFs disponíveis
-        try {
-          var pdfChk=await fetch(BASE+'/api/pdfs/hoje');
-          var pdfD=await pdfChk.json();
-          if(pdfD.count>0){
-            showToast('Corridas de hoje já carregadas! Gerando ZIP...', true);
-            var a=document.createElement('a');
-            a.href=BASE+'/api/pdfs/hoje/zip';
-            a.download=sessionName.split('/').join('-')+'.zip';
-            document.body.appendChild(a);a.click();document.body.removeChild(a);
-            setSt('Corridas do dia já carregadas. ZIP gerado.');
-          } else {
-            showToast('Corridas de hoje já carregadas!', true);
-            setSt('Corridas do dia já carregadas. PDFs não disponíveis para download.');
-          }
-        } catch(e){
-          showToast('Corridas de hoje já carregadas!', true);
-        }
+        showOverwriteConfirmModal(sessionName, existing.id);
         return;
       }
     }catch(e){}
   }
+  await proceedAnalysis();
+}
+
+// Mostra o modal perguntando se quer sobrescrever a sessao de hoje ja existente
+// (reaproveita o mesmo modal ps-* usado no fluxo de salvar sessao manual)
+function showOverwriteConfirmModal(sessionName, existingId){
+  var modal=document.getElementById('ps-modal');
+  if(!modal){
+    // Fallback, caso o modal nao tenha sido injetado por algum motivo
+    if(confirm('Já existe uma sessão carregada com o mesmo nome para hoje ("'+sessionName+'"). Deseja sobrescrever?')){
+      overwriteAndAnalyze(existingId);
+    }
+    return;
+  }
+  document.getElementById('ps-icon').textContent='\u26A0\uFE0F';
+  document.getElementById('ps-title').textContent='Sessão já existe';
+  document.getElementById('ps-sub').innerHTML='Já existe uma sessão carregada com o mesmo nome para hoje: <strong style="color:#fff">"'+sessionName+'"</strong>.<br>Deseja sobrescrever? A sessão atual será apagada e uma nova análise será feita.';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var cancel=document.createElement('button');cancel.className='ps-btn-sec';cancel.textContent='Cancelar';cancel.onclick=closePsModal;btns.appendChild(cancel);
+  var yes=document.createElement('button');yes.className='ps-btn-warn';yes.textContent='Sim, sobrescrever';yes.onclick=function(){overwriteAndAnalyze(existingId);};btns.appendChild(yes);
+  modal.classList.add('open');
+}
+
+async function overwriteAndAnalyze(existingId){
+  closePsModal();
+  showToast('Removendo sessão anterior...', true);
+  try{
+    await fetch(BASE+'/api/session/'+existingId,{method:'DELETE'});
+  }catch(e){
+    showToast('Erro ao remover sessão anterior.', false);
+    return;
+  }
+  await proceedAnalysis();
+}
+
+async function proceedAnalysis(){
+  var usandoPasta=false;
   if(!raceFiles.length){
     setSt('Verificando corridas disponíveis...');
     try{
