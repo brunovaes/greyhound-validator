@@ -346,10 +346,18 @@ function isOldRaceCard(r) {
   return r.dataCard < todayStr;
 }
 
+// Corrida antiga (data anterior a hoje) SEMPRE deve continuar visivel,
+// independente do relogio bater ou nao com o horario dela no card — ela e
+// so pra consulta/estudo, nao participa da logica de "ja passou". Corridas
+// de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
+function shouldShowRace(r) {
+  return isOldRaceCard(r) || isUpcoming(r);
+}
+
 function isDayClosed(avbs) {
   // Encerrado quando nao sobra nenhuma corrida futura na sessao carregada
   // (dinamico — nao depende de um horario fixo de corte).
-  return !avbs.some(isUpcoming);
+  return !avbs.some(shouldShowRace);
 }
 
 var focusRefreshInterval = null;
@@ -397,13 +405,16 @@ function refreshFocusMode() {
   // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao
   if (isDayClosed(avbs)) { showDayEndMsg(); return; }
 
-  // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja passadas
-  var toShow = avbs.filter(isUpcoming).slice(0, RACAS_EM_TELA);
+  // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja
+  // passadas — exceto corridas antigas (data anterior a hoje), que ficam
+  // sempre visiveis independente do horario.
+  var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
 
   // Se a corrida em foco já passou, avança para a próxima automaticamente
-  if (focusRaceIdx >= 0 && results[focusRaceIdx] && !isUpcoming(results[focusRaceIdx])) {
+  // (corridas antigas nunca "avançam" sozinhas — ficam fixas pra consulta)
+  if (focusRaceIdx >= 0 && results[focusRaceIdx] && !shouldShowRace(results[focusRaceIdx])) {
     var next = toShow[0];
     if (next) {
       renderFocusPanel(next, results.indexOf(next));
@@ -428,7 +439,7 @@ function enterFocusMode() {
     return;
   }
 
-  var toShow = avbs.filter(isUpcoming).slice(0, RACAS_EM_TELA);
+  var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
   var next = toShow[0];
