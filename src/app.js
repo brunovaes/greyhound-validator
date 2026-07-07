@@ -775,7 +775,7 @@ function openAllDogsModal(key){
     document.getElementById('val-body').innerHTML='<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Histórico completo não disponível para esta corrida (sessão salva antes deste recurso).</div>';
   } else {
     document.getElementById('val-body').innerHTML=all.map(function(g,i){
-      var card=buildDogCard(g.trap,g.nome,'',g.historico);
+      var card=buildDogCard(g.trap,g.nome,'',g.historico,true);
       return card+(i<all.length-1?'<div class="val-sep"></div>':'');
     }).join('');
   }
@@ -789,7 +789,7 @@ function extrairRemarks(mixed){
   for(var i=tokens.length-1;i>=0;i--){if(/^[A-Z]/.test(tokens[i]))return tokens.slice(i).join(' ');}
   return mixed;
 }
-function buildDogCard(trap,nome,perfil,hist){
+function buildDogCard(trap,nome,perfil,hist,compact){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   function classRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
   var caltms=(hist||[]).filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
@@ -813,6 +813,7 @@ function buildDogCard(trap,nome,perfil,hist){
       +'<td class="val-td-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
       +'</tr>';
   }).join('');
+  var cw=compact?['32','32','28','20','28','24','18','44','20','30']:['40','40','40','30','40','35','25','60','30','40'];
   return'<div class="val-dog">'
     +'<div class="val-dog-hdr">'
     +'<span class="trap-badge '+tc[trap]+'">'+trap+'</span>'
@@ -821,9 +822,9 @@ function buildDogCard(trap,nome,perfil,hist){
     +'</div>'
     +'<table class="val-tbl">'
     +'<colgroup>'
-    +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
-    +'<col style="width:30px"><col style="width:40px"><col style="width:35px">'
-    +'<col style="width:25px"><col style="width:60px"><col style="width:30px"><col style="width:40px">'
+    +'<col style="width:'+cw[0]+'px"><col style="width:'+cw[1]+'px"><col style="width:'+cw[2]+'px">'
+    +'<col style="width:'+cw[3]+'px"><col style="width:'+cw[4]+'px"><col style="width:'+cw[5]+'px">'
+    +'<col style="width:'+cw[6]+'px"><col style="width:'+cw[7]+'px"><col style="width:'+cw[8]+'px"><col style="width:'+cw[9]+'px">'
     +'</colgroup>'
     +'<thead><tr>'
     +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
