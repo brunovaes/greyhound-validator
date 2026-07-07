@@ -793,20 +793,11 @@ function fmtDate(d) {
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function getPdfFolder(date) {
+  // Estritamente a data informada (ou hoje, por padrao) — sem fallback pra
+  // ontem/amanha. Se nao existir PDF de hoje, quem chama trata como vazio
+  // e a tela mostra a mensagem padrao de "sem corridas disponiveis hoje".
   const base = date ? new Date(date) : new Date();
-  const tomorrow = new Date(base); tomorrow.setDate(base.getDate()+1);
-  const yesterday = new Date(base); yesterday.setDate(base.getDate()-1);
-  const candidates = [fmtDate(base), fmtDate(tomorrow), fmtDate(yesterday)];
-  let bestFolder = require('path').join(PDF_PATH, candidates[0]);
-  let bestCount = 0;
-  for (const c of candidates) {
-    const folder = require('path').join(PDF_PATH, c);
-    if (fs.existsSync(folder)) {
-      const count = fs.readdirSync(folder).filter(f=>f.toLowerCase().endsWith('.pdf')).length;
-      if (count > bestCount) { bestCount = count; bestFolder = folder; }
-    }
-  }
-  return bestFolder;
+  return require('path').join(PDF_PATH, fmtDate(base));
 }
 
 function readFolderPdfs(folder) {
