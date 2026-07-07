@@ -436,6 +436,16 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
     </div>
     <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: roda sozinho a cada 1 hora</p>
   </div>
+  <div class="card">
+    <div class="card-title">&#129514; Forcar teste (debug)</div>
+    <p style="font-size:11px;color:#888;margin-bottom:12px">Reverte o trap 1 de uma corrida de hoje pra um nome falso, pra forcar deteccao de mudanca na proxima execucao. Copia "hora" e "corrida" direto do log (ex: 8:41 / Kinsly A8).</p>
+    <div class="form-row" style="align-items:flex-end;gap:12px">
+      <div class="field"><label>Hora</label><input type="text" id="mon-test-hora" placeholder="8:41" style="width:80px"></div>
+      <div class="field"><label>Corrida</label><input type="text" id="mon-test-corrida" placeholder="Kinsly A8" style="width:140px"></div>
+      <button class="btn btn-red" onclick="forceMonitorTest()">&#129514; Forcar</button>
+    </div>
+    <p id="mon-test-msg" style="font-size:11px;color:#888;margin-top:10px"></p>
+  </div>
   <div class="card" id="mon-status-card" style="display:none">
     <div class="card-title">&#128202; Status</div>
     <div id="mon-sbar" class="sbar srun"><span class="spin"></span><span id="mon-st-txt"> Aguardando...</span></div>
@@ -710,6 +720,28 @@ async function pollResultsStatus() {
 
 // ── Robô de Monitoramento de Card ───────────────────────────────────────────
 let monPolling = null;
+
+async function forceMonitorTest() {
+  const hora = document.getElementById('mon-test-hora').value.trim();
+  const corrida = document.getElementById('mon-test-corrida').value.trim();
+  const msgEl = document.getElementById('mon-test-msg');
+  if (!hora || !corrida) { msgEl.textContent = 'Preenche hora e corrida.'; msgEl.style.color = '#ef4444'; return; }
+  msgEl.textContent = 'Aplicando...'; msgEl.style.color = '#888';
+  try {
+    const r = await fetch(BASE + '/robot/monitor/force-test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ hora, corrida })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Erro');
+    msgEl.textContent = '\u2713 ' + d.msg;
+    msgEl.style.color = '#22c55e';
+  } catch(e) {
+    msgEl.textContent = 'Erro: ' + e.message;
+    msgEl.style.color = '#ef4444';
+  }
+}
 
 async function startMonitorRobot() {
   const date = document.getElementById('mon-date').value;
@@ -1264,6 +1296,28 @@ router.post('/monitor/run', requireAdmin, express.json(), async (req, res) => {
 
 router.get('/monitor/status', requireAdmin, (req, res) => {
   res.json(getMonitorStatus());
+});
+
+// ── Ferramenta de teste: forca uma "mudanca falsa" no trap 1 de uma corrida,
+// pra disparar o fluxo completo (deteccao + extracao de historico + reanalise)
+// na proxima rodada do robo, sem precisar esperar uma mudanca real acontecer.
+router.post('/monitor/force-test', requireAdmin, express.json(), (req, res) => {
+  const { hora, corrida } = req.body || {};
+  if (!hora || !corrida) return res.status(400).json({ error: 'Informe hora e corrida (ex: "8:41" e "Kinsly A8")' });
+  const { db } = require('../db/database');
+  const date = new Date().toISOString().slice(0, 10);
+  const race = db.prepare(
+    "SELECT r.id, r.race_card FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at, '-3 hours')=? AND r.hora=? AND r.corrida=?"
+  ).get(date, hora, corrida);
+  if (!race) return res.status(404).json({ error: 'Corrida nao encontrada para hoje com essa hora/corrida' });
+  let card = [];
+  try { card = JSON.parse(race.race_card || '[]'); } catch(e) {}
+  if (!card.length) return res.status(400).json({ error: 'race_card vazio pra essa corrida' });
+  const trapOriginal = card[0].nome;
+  card[0] = { trap: card[0].trap, nome: 'TESTE Nome Falso XYZ' };
+  db.prepare('UPDATE races SET race_card=? WHERE id=?').run(JSON.stringify(card), race.id);
+  res.json({ ok: true, msg: 'Trap ' + card[0].trap + ' revertido de "' + trapOriginal + '" pra nome de teste. Roda o monitor agora pra disparar a deteccao.' });
 });
 
 module.exports = router;
