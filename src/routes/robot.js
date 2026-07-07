@@ -321,15 +321,16 @@ body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-seri
 nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
 .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
 .nl:hover,.na{color:#22c55e;border-bottom-color:#22c55e}
-.layout{display:flex;min-height:calc(100vh - 210px)}
-.robot-sidebar{width:200px;flex-shrink:0;background:#161B27;border-right:1px solid #222;padding:16px}
-.robot-sidebar h3{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
-.robot-menu-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#888;border:1px solid transparent;transition:all .2s;margin-bottom:6px;text-decoration:none;width:100%}
-.robot-menu-item:hover{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.2);color:#fff}
-.robot-menu-item.active{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e}
-.robot-menu-item .icon{font-size:18px}
-.robot-content{flex:1;padding:24px;overflow-y:auto}
+.layout{display:flex;gap:18px;min-height:calc(100vh - 210px);padding:0 24px;align-items:flex-start}
+.robot-sidebar{width:220px;flex-shrink:0;background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;position:sticky;top:16px;display:flex;flex-direction:column;gap:2px}
+.robot-sidebar h3{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.8px;padding:8px 12px 4px}
+.robot-menu-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;background:none;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#888;transition:all .15s;text-decoration:none;box-sizing:border-box}
+.robot-menu-item:hover{background:rgba(34,197,94,.08);color:#ccc}
+.robot-menu-item.active{background:rgba(34,197,94,.12);color:#22c55e}
+.robot-menu-item .icon{font-size:16px}
+.robot-content{flex:1;padding:24px 0;overflow-y:auto;min-width:0}
 .robot-panel{display:none}.robot-panel.active{display:block}
+@media(max-width:800px){.layout{flex-direction:column;padding:0 16px}.robot-sidebar{width:100%;position:static;flex-direction:row;overflow-x:auto}}
 .content{padding:24px;max-width:920px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .sub{font-size:13px;color:#888;margin-bottom:24px}
