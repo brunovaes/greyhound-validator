@@ -44,6 +44,21 @@ function similarity(a, b) {
 // Pista aparece como uma linha isolada, logo ANTES de uma linha tipo "Jul 6"
 // (mes abreviado + dia, sem ano) — formato diferente do usado na pagina de
 // resultado ("Sheffield 07/07/26"), por isso precisa de logica separada aqui.
+// Comparacao especifica pra abreviacao de pista (ex: "CPark" vs "Central
+// Park", "DunPk" vs "Dunmore Park") — abreviacoes British greyhound tipicamente
+// removem vogais/letras mas mantem a ORDEM, entao subsequencia ordenada e
+// muito mais confiavel aqui do que o overlap de caracteres do similarity().
+function trackAbbrMatches(abbr, fullName) {
+  const a = (abbr || '').toLowerCase().replace(/[^a-z]/g, '');
+  const f = (fullName || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!a || !f) return false;
+  let i = 0;
+  for (let j = 0; j < f.length && i < a.length; j++) {
+    if (f[j] === a[i]) i++;
+  }
+  return i === a.length;
+}
+
 // Comparacao de IDENTIDADE (mesmo galgo ou nao) — precisa ser rigorosa, ao
 // contrario do similarity() acima que e usado pra achar o MELHOR entre varios
 // candidatos (comparacao relativa). Pra decisao absoluta sim/nao (mudou ou
@@ -195,33 +210,53 @@ async function runCardMonitorRobot(targetDate) {
       try { if (dbRace.race_card) raceCard = JSON.parse(dbRace.race_card); } catch(e) {}
       if (!raceCard.length) { addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — sem race_card salvo, pulando'); continue; }
 
-      // Acha o link correspondente na lista pelo horario (UK 12h cru, igual r.hora)
-      const link = races.find(function(r) { return r.time === dbRace.hora; });
-      if (!link) { addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — nao esta mais na lista (ja rodou ou nao encontrada)'); continue; }
+      // Acha os candidatos na lista pelo horario (UK 12h cru, igual r.hora) —
+      // pode ter mais de um (varias pistas correm no mesmo horario)
+      const candidates = races.filter(function(r) { return r.time === dbRace.hora; });
+      if (!candidates.length) { addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — nao esta mais na lista (ja rodou ou nao encontrada)'); continue; }
 
       status.processed++;
-      addLog('info', 'Verificando ' + dbRace.corrida + ' ' + dbRace.hora + '...');
+      addLog('info', 'Verificando ' + dbRace.corrida + ' ' + dbRace.hora + (candidates.length > 1 ? ' (' + candidates.length + ' candidatos no mesmo horario)' : '') + '...');
 
       try {
         const raceBase = 'https://greyhoundbet.racingpost.com/';
-        const raceHash = link.href.replace(/^#/, '');
-        await page.goto(raceBase, { timeout: 30000, waitUntil: 'domcontentloaded' });
-        await new Promise(r => setTimeout(r, 1500));
-        await page.evaluate(function(hash) { window.location.hash = hash; }, raceHash);
+        const trackAbbr = (dbRace.corrida || '').split(' ')[0];
 
-        try {
-          await page.waitForSelector(
-            '.RC-runnerTable, .RC-cardPage, [class*="runnerTable"], [class*="cardPage"], [class*="RC-runner"], tbody tr',
-            { timeout: 15000 }
-          );
+        // Se tem mais de um candidato no mesmo horario, navega em cada um ate
+        // achar o que bate com a pista certa (evita analisar a pista errada,
+        // igual o bug que a gente corrigiu no robo de resultados)
+        let cardText = null, scrapedTrack = '';
+        for (let ci = 0; ci < candidates.length; ci++) {
+          const cand = candidates[ci];
+          const raceHash = cand.href.replace(/^#/, '');
+          await page.goto(raceBase, { timeout: 30000, waitUntil: 'domcontentloaded' });
           await new Promise(r => setTimeout(r, 1500));
-        } catch(e) {
-          await new Promise(r => setTimeout(r, 4000));
+          await page.evaluate(function(hash) { window.location.hash = hash; }, raceHash);
+
+          try {
+            await page.waitForSelector(
+              '.RC-runnerTable, .RC-cardPage, [class*="runnerTable"], [class*="cardPage"], [class*="RC-runner"], tbody tr',
+              { timeout: 15000 }
+            );
+            await new Promise(r => setTimeout(r, 1500));
+          } catch(e) {
+            await new Promise(r => setTimeout(r, 4000));
+          }
+
+          const text = await page.evaluate(function() { return (document.body.innerText || '').slice(0, 6000); });
+          const track = extractTrackFromText(text);
+          if (candidates.length === 1 || trackAbbrMatches(trackAbbr, track)) {
+            cardText = text; scrapedTrack = track;
+            break;
+          }
+          addLog('info', '  candidato ' + (ci+1) + '/' + candidates.length + ' pista "' + track + '" nao bate com "' + trackAbbr + '" — tentando proximo');
         }
 
-        const cardText = await page.evaluate(function() { return (document.body.innerText || '').slice(0, 6000); });
-        const scrapedTrack = extractTrackFromText(cardText);
-        addLog('info', '  pista da pagina: "' + scrapedTrack + '"');
+        if (!cardText) {
+          addLog('warn', '  nao encontrei a pagina certa entre ' + candidates.length + ' candidatos para ' + dbRace.corrida + ' ' + dbRace.hora + ' — pulando pra evitar analisar pista errada');
+          continue;
+        }
+        addLog('info', '  pista da pagina: "' + scrapedTrack + '"' + (candidates.length > 1 ? ' (desambiguado entre ' + candidates.length + ' candidatos)' : ''));
 
         const currentRunners = extractCurrentRunnersFromText(cardText);
         if (!currentRunners.length) {
