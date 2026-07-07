@@ -7,6 +7,7 @@
 
 const { db, getUserConfig } = require('../db/database');
 const { processarCorrida } = require('./api');
+const { logChanges } = require('../utils/auditLog');
 const { parseHistoryLine, isHistLine, isColHeader, isBrtLine } = require('../utils/pdfParser');
 
 require('dns').setDefaultResultOrder('ipv4first');
@@ -379,6 +380,22 @@ async function runCardMonitorRobot(targetDate) {
           await new Promise(r => setTimeout(r, 1500));
           continue;
         }
+
+        // Grava a trilha de auditoria ANTES de sobrescrever — compara o que
+        // tinha no banco (dbRace) com o que a reanalise calculou
+        const auditCount = logChanges(
+          dbRace.id, 'monitor_robot', dbRace,
+          {
+            trap_fav: novoResultado.trapFav || 0,
+            name_fav: novoResultado.nameFav || '',
+            trap_und: novoResultado.trapUnd || 0,
+            name_und: novoResultado.nameUnd || '',
+            pct: novoResultado.pct || 0,
+            nivel: novoResultado.nivel || ''
+          },
+          ['trap_fav', 'name_fav', 'trap_und', 'name_und', 'pct', 'nivel']
+        );
+        if (auditCount) addLog('info', '  auditoria: ' + auditCount + ' campo(s) registrado(s) no historico de alteracoes');
 
         db.prepare(
           'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=? WHERE id=?'

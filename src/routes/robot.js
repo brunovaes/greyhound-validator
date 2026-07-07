@@ -402,6 +402,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">📥</span> Coletor de PDFs</button>
   <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">🏁</span> Resultados</button>
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">🔎</span> Monitoramento</button>
+  <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">📜</span> Auditoria</button>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
@@ -524,6 +525,35 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
     <div class="res-log" id="mon-log"></div>
   </div>
 </div><!-- fim panel-monitor -->
+
+<div class="robot-panel" id="panel-audit">
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">&#128220; Trilha de Auditoria</h1>
+  <p class="sub">Histórico permanente de todas as alterações em corridas — robô de monitoramento, robô de resultados e edições manuais. Não reseta, fica salvo pra sempre.</p>
+  <div class="card">
+    <div class="form-row" style="align-items:flex-end;gap:12px">
+      <div class="field"><label>Data</label><input type="date" id="audit-date" value="${today}"></div>
+      <button class="btn" onclick="loadAuditLog()">&#128269; Filtrar</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">&#128203; Alterações</div>
+    <div id="audit-table-wrap" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="text-align:left;color:#666;text-transform:uppercase;font-size:10px;letter-spacing:.5px;border-bottom:1px solid #333">
+            <th style="padding:8px 6px">Quando</th>
+            <th style="padding:8px 6px">Corrida</th>
+            <th style="padding:8px 6px">Origem</th>
+            <th style="padding:8px 6px">Campo</th>
+            <th style="padding:8px 6px">De</th>
+            <th style="padding:8px 6px">Para</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody"><tr><td colspan="6" style="padding:16px;color:#555;text-align:center">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- fim panel-audit -->
 
 </div><!-- fim robot-content -->
 </div><!-- fim layout -->
@@ -900,7 +930,38 @@ async function pollMonitorStatus() {
     }
   } catch(e) {}
 }
+async function loadAuditLog() {
+  const tbody = document.getElementById('audit-tbody');
+  const date = document.getElementById('audit-date').value;
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;color:#555;text-align:center">Carregando...</td></tr>';
+  try {
+    const r = await fetch(BASE + '/robot/audit/list?date=' + encodeURIComponent(date));
+    const d = await r.json();
+    const rows = d.rows || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;color:#555;text-align:center">Nenhuma alteração nessa data.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function(row) {
+      const t = new Date(row.changed_at);
+      const hh = String(t.getHours()).padStart(2,'0'), mm = String(t.getMinutes()).padStart(2,'0');
+      const srcColor = row.source === 'monitor_robot' ? '#60a5fa' : row.source === 'results_robot' ? '#f97316' : '#22c55e';
+      const srcLabel = row.source === 'monitor_robot' ? 'Monitoramento' : row.source === 'results_robot' ? 'Resultados' : row.source;
+      return '<tr style="border-bottom:1px solid #1a1a1a">'
+        + '<td style="padding:8px 6px;color:#888;white-space:nowrap">' + hh + ':' + mm + '</td>'
+        + '<td style="padding:8px 6px;font-weight:600">' + (row.corrida||'-') + ' <span style="color:#666;font-weight:400">' + (row.hora||'') + '</span></td>'
+        + '<td style="padding:8px 6px;color:' + srcColor + '">' + srcLabel + '</td>'
+        + '<td style="padding:8px 6px;color:#aaa">' + row.field + '</td>'
+        + '<td style="padding:8px 6px;color:#ef4444">' + (row.valor_antigo||'-') + '</td>'
+        + '<td style="padding:8px 6px;color:#22c55e">' + (row.valor_novo||'-') + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;color:#ef4444;text-align:center">Erro: ' + e.message + '</td></tr>';
+  }
+}
 loadMonitorImportantOnce();
+loadAuditLog();
 </script></body></html>`);
 });
 
@@ -1417,6 +1478,21 @@ router.post('/monitor/force-test', requireAdmin, express.json(), (req, res) => {
   card[0] = { trap: card[0].trap, nome: 'TESTE Nome Falso XYZ' };
   db.prepare('UPDATE races SET race_card=? WHERE id=?').run(JSON.stringify(card), race.id);
   res.json({ ok: true, msg: 'Trap ' + card[0].trap + ' revertido de "' + trapOriginal + '" pra nome de teste. Roda o monitor agora pra disparar a deteccao.' });
+});
+
+// ── Auditoria: lista as alteracoes registradas em race_audit_log pra uma data
+router.get('/audit/list', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  const date = req.query.date || new Date().toISOString().slice(0, 10);
+  try {
+    const rows = db.prepare(
+      "SELECT a.changed_at, a.source, a.field, a.valor_antigo, a.valor_novo, r.corrida, r.hora " +
+      "FROM race_audit_log a JOIN races r ON r.id = a.race_id " +
+      "WHERE date(a.changed_at, '-3 hours') = ? " +
+      "ORDER BY a.changed_at DESC LIMIT 300"
+    ).all(date);
+    res.json({ rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

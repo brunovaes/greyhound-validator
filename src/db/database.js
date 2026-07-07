@@ -115,6 +115,20 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  -- Trilha de auditoria: registra toda alteracao de campo relevante numa
+  -- corrida, independente de quem/o que mudou (robo de monitoramento, robo
+  -- de resultados, edicao manual). Historico permanente, nao reseta nunca.
+  CREATE TABLE IF NOT EXISTS race_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id INTEGER NOT NULL,
+    changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL,
+    field TEXT NOT NULL,
+    valor_antigo TEXT,
+    valor_novo TEXT,
+    FOREIGN KEY (race_id) REFERENCES races(id)
+  );
 `);
 
 // Migracoes seguras para banco existente
