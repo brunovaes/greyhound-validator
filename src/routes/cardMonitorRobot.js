@@ -82,7 +82,9 @@ function extractCurrentRunnersFromText(text) {
 // ── Extrai o historico (linhas de corrida) de UM galgo especifico dentro do
 // texto da aba Form — procura o nome do galgo e le as linhas seguintes que
 // batem com o formato de linha de historico (mesmo regex do pdfParser).
-// TAMBEM HEURISTICA — precisa de calibracao com log real.
+// Ordem real observada nessa pagina: Nome -> linha de raca/cor -> linha de
+// BRT -> cabecalho de colunas ("Date Track Dis Trp...") -> SO ENTAO vem o
+// historico de verdade. Precisa pular tudo isso antes de comecar a colher.
 function extractDogHistoricoFromFormText(text, dogName) {
   const lines = (text || '').split('\n').map(l => l.trim()).filter(Boolean);
   let startIdx = -1;
@@ -94,19 +96,30 @@ function extractDogHistoricoFromFormText(text, dogName) {
   }
   if (startIdx === -1) return { historico: [], debugNote: 'nome do galgo nao encontrado no texto (score max ' + bestScore.toFixed(2) + ')' };
 
+  // Passo 1: avanca ate achar o cabecalho de colunas (pula raca/cor e BRT)
+  let i = startIdx + 1;
+  const maxScan = Math.min(lines.length, startIdx + 20);
+  let foundColHeader = false;
+  while (i < maxScan && !foundColHeader) {
+    if (isColHeader(lines[i])) { foundColHeader = true; i++; break; }
+    if (isHistLine(lines[i])) break; // ja apareceu historico sem cabecalho — segue mesmo assim
+    i++;
+  }
+
+  // Passo 2: agora sim colhe as linhas de historico, ate 5 ou ate o padrao quebrar
   const historico = [];
-  for (let i = startIdx + 1; i < lines.length && historico.length < 5; i++) {
+  while (i < maxScan && historico.length < 5) {
     const line = lines[i];
-    if (isColHeader(line)) continue;
-    if (isBrtLine(line)) break; // chegou na linha de BRT = acabou o bloco desse galgo
     if (isHistLine(line)) {
       const parsed = parseHistoryLine(line);
       if (parsed) historico.push(parsed);
-    } else if (historico.length > 0) {
-      break;
+      i++;
+      continue;
     }
+    if (historico.length > 0) break; // ja vinha colhendo e quebrou o padrao — acabou o bloco
+    i++;
   }
-  return { historico, debugNote: 'match "' + lines[startIdx] + '" (score ' + bestScore.toFixed(2) + '), ' + historico.length + ' linhas extraidas' };
+  return { historico, debugNote: 'match "' + lines[startIdx] + '" (score ' + bestScore.toFixed(2) + '), cabecalho colunas ' + (foundColHeader ? 'achado' : 'NAO achado') + ', ' + historico.length + ' linhas extraidas' };
 }
 
 // ── Robô principal ────────────────────────────────────────────────────────────
@@ -266,7 +279,7 @@ async function runCardMonitorRobot(targetDate) {
         }
 
         const formText = await page.evaluate(function() { return (document.body.innerText || '').slice(0, 8000); });
-        addLog('info', '  texto da aba Form (debug, 300 chars): ' + formText.slice(0, 300).replace(/\n/g, ' | '));
+        addLog('info', '  texto da aba Form (debug, 2000 chars): ' + formText.slice(0, 2000).replace(/\n/g, ' | '));
 
         let algumFalhou = false;
         const galgosNovos = {}; // trap -> {nome, historico}
