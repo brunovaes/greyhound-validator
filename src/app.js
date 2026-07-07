@@ -398,12 +398,26 @@ function showDayEndMsg() {
   if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
 }
 
+// Mensagem especifica pra quando o lote CARREGADO (avulso ou nao) e' inteiro
+// composto por corridas de hoje que ja aconteceram (nao antigas — antigas
+// tem mensagem/tratamento proprio — so ja passaram do horario hoje mesmo)
+function showAllExpiredMsg() {
+  var focusCol = document.getElementById('focus-col');
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#9200;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Corridas já realizadas</div><div style="font-size:13px">Essas corridas já foram realizadas.<br>Favor selecionar corridas ainda vigentes.</div></div>';
+  var col = document.getElementById('race-list-col');
+  if (col) col.innerHTML = '';
+  if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
+  if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
+}
+
 function refreshFocusMode() {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
 
-  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao
-  if (isDayClosed(avbs)) { showDayEndMsg(); return; }
+  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
+  // Se sobrou alguma corrida no lote mas nenhuma e antiga nem futura, e
+  // porque sao corridas de hoje que ja aconteceram — mensagem diferente.
+  if (isDayClosed(avbs)) { avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg(); return; }
 
   // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja
   // passadas — exceto corridas antigas (data anterior a hoje), que ficam
@@ -422,7 +436,7 @@ function refreshFocusMode() {
       var firstCard = document.querySelector('.rc');
       if (firstCard) firstCard.classList.add('rc-active');
     } else {
-      showDayEndMsg();
+      avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg();
     }
   }
 }
@@ -432,10 +446,12 @@ function enterFocusMode() {
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
   if (!avbs.length) return;
 
-  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao
+  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
+  // Se sobrou corrida no lote mas nenhuma e antiga nem futura, sao corridas
+  // de hoje que ja aconteceram — mensagem diferente da generica.
   if (isDayClosed(avbs)) {
     document.getElementById('main-layout').classList.add('focus-mode');
-    showDayEndMsg();
+    avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg();
     return;
   }
 
@@ -1190,7 +1206,8 @@ async function proceedAnalysis(){
     clearUploadedPdfList();
 
     // Avisa se alguma das corridas carregadas for de data anterior a hoje
-    var oldDates = Array.from(new Set(results.filter(function(r){return isOldRaceCard(r);}).map(function(r){return r.dataCard;})));
+    var avbList = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+    var oldDates = Array.from(new Set(avbList.filter(function(r){return isOldRaceCard(r);}).map(function(r){return r.dataCard;})));
     if (oldDates.length) {
       var datesLabel = oldDates.map(function(d){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}).join(', ');
       setTimeout(function(){
@@ -1198,10 +1215,19 @@ async function proceedAnalysis(){
       }, 900);
     }
 
-    // Corrida antiga NUNCA e salva no Historico nem oferece a opcao de salvar
-    // — serve so como referencia/estudo na aba Analisar. Nenhuma configuracao
-    // de tempo/refresh/auto-save se aplica a essas corridas.
-    if (oldDates.length) {
+    // Corridas de hoje que ja aconteceram (nao antigas — so ja passou o
+    // horario) tambem nao devem ser salvas nem oferecer a opcao de salvar.
+    var allExpiredToday = avbList.length>0 && !oldDates.length && !avbList.some(isUpcoming);
+    if (allExpiredToday) {
+      setTimeout(function(){
+        showToast('\u23F1\uFE0F As corridas carregadas já foram realizadas hoje. Selecione corridas ainda vigentes.', false);
+      }, 900);
+    }
+
+    // Corrida antiga ou ja realizada hoje NUNCA e salva no Historico nem
+    // oferece a opcao de salvar — serve so como referencia/estudo na aba
+    // Analisar. Nenhuma configuracao de tempo/refresh/auto-save se aplica.
+    if (oldDates.length || allExpiredToday) {
       // nao salva, nao pergunta — fica so disponivel na aba Analisar
     } else if(usandoPasta){
       // Fluxo automático — salva direto sem popup
