@@ -44,6 +44,21 @@ function similarity(a, b) {
 // Pista aparece como uma linha isolada, logo ANTES de uma linha tipo "Jul 6"
 // (mes abreviado + dia, sem ano) — formato diferente do usado na pagina de
 // resultado ("Sheffield 07/07/26"), por isso precisa de logica separada aqui.
+// Comparacao de IDENTIDADE (mesmo galgo ou nao) — precisa ser rigorosa, ao
+// contrario do similarity() acima que e usado pra achar o MELHOR entre varios
+// candidatos (comparacao relativa). Pra decisao absoluta sim/nao (mudou ou
+// nao mudou o card), overlap de caracteres da falso positivo com frequencia
+// (strings bem diferentes compartilham letras comuns do ingles e pontuam
+// alto). Usa igualdade ou substring do nome normalizado.
+function namesMatch(a, b) {
+  const na = (a || '').toLowerCase().trim().replace(/\s*\((w|m)\)\s*$/i, '').trim();
+  const nb = (b || '').toLowerCase().trim().replace(/\s*\((w|m)\)\s*$/i, '').trim();
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.length > 3 && nb.length > 3 && (na.includes(nb) || nb.includes(na))) return true;
+  return false;
+}
+
 function extractTrackFromText(text) {
   const lines = (text || '').split('\n').map(l => l.trim());
   for (let i = 1; i < lines.length; i++) {
@@ -231,8 +246,7 @@ async function runCardMonitorRobot(targetDate) {
         raceCard.forEach(function(g) {
           const atual = currentRunners.find(function(r) { return r.trap === g.trap; });
           if (!atual) return; // nao achou esse trap na pagina — nao mexe (evita falso positivo)
-          const score = similarity(atual.nome, g.nome);
-          if (score < 0.5) {
+          if (!namesMatch(atual.nome, g.nome)) {
             changes.push({ trap: g.trap, nomeAntigo: g.nome, nomeNovo: atual.nome });
           }
         });
