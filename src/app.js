@@ -84,7 +84,9 @@ function injectStyles(){
     '.ps-btn-pri:hover{opacity:.88;}',
     '.ps-btn-sec{background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.15);padding:10px 20px;border-radius:9px;font-size:14px;cursor:pointer;}',
     '.ps-btn-warn{background:#f97316;color:#000;border:none;padding:10px 20px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
-    '.ps-btn-warn:hover{opacity:.88;}'
+    '.ps-btn-warn:hover{opacity:.88;}',
+    '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
+    '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}'
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
@@ -163,6 +165,7 @@ async function autoCheckAndAnalyze() {
                 nameFav:r.name_fav||'', trapUnd:r.trap_und||0, nameUnd:r.name_und||'',
                 pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
                 obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
+                avbNaoAberto: !!r.avb_nao_aberto,
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
                 id:r.id
               });
@@ -281,6 +284,16 @@ function isUpcoming(r) {
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
   return raceMin >= nowMin;
+}
+
+function minutesToRace(r) {
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  if (!hbr) return null;
+  var now = new Date();
+  var nowMin = now.getHours()*60 + now.getMinutes();
+  var parts = hbr.split(':');
+  var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
+  return raceMin - nowMin;
 }
 
 function isDayClosed(avbs) {
@@ -404,19 +417,70 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-gauges-div"></div>'
     + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
     + '</div>'
-    // Odd / Valor
+    // Odd / Valor / AvB nao aberto
     + '<div class="fp-inputs-row">'
     + '<div class="fp-inp-group">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)"></div>'
     + '<div class="fp-inp-group">Valor R$ <input type="text" id="fp-val" placeholder="-" value="'+(r.valor||'')+'" oninput="updateFocusField(\'valor\',this.value)"></div>'
+    + '<div class="fp-inp-group fp-check-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label></div>'
     + '</div>'
     + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
 }
 
+// Nomes de campo usados no front (results[i]) as vezes diferem da coluna no
+// banco (ex: r1/r2/r3/hit -> resultado_1/resultado_2/resultado_3/bateu).
+var FIELD_DB_MAP = { r1:'resultado_1', r2:'resultado_2', r3:'resultado_3', hit:'bateu' };
+
+// Atualiza um campo da corrida em memoria (sessionStorage) e, se a corrida ja
+// existe no banco (tem id — ou seja, a sessao ja foi salva no Historico),
+// persiste na hora via PUT /api/race/:id. Assim Odd, Valor e a flag "AvB nao
+// aberto" ficam sempre sincronizados com o Historico, sem precisar reanalisar.
+function saveRaceField(idx, field, value) {
+  if (idx < 0 || !results[idx]) return;
+  var localField = field === 'avb_nao_aberto' ? 'avbNaoAberto' : field;
+  results[idx][localField] = value;
+  saveSessionState();
+  var id = results[idx].id;
+  if (!id) return; // ainda nao foi salva no Historico — vai junto no proximo save
+  var dbField = FIELD_DB_MAP[field] || field;
+  var body = {};
+  body[dbField] = value;
+  fetch(BASE+'/api/race/'+id, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).catch(function(e){ console.error('[saveRaceField] erro ao persistir', field, e); });
+}
+
 function updateFocusField(field, value) {
-  if (focusRaceIdx >= 0 && results[focusRaceIdx]) {
-    results[focusRaceIdx][field] = value;
-    saveSessionState();
-  }
+  saveRaceField(focusRaceIdx, field, value);
+}
+
+// Alerta de proximidade da corrida (3 min antes): som de sino + piscar o card.
+// Sino gerado via Web Audio API (sem precisar de arquivo de audio externo).
+var alertedRaces = {};
+
+function playBellSound() {
+  try {
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    function tone(freq, start, dur) {
+      var o = ctx.createOscillator();
+      var g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+      g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime+start+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime+start);
+      o.stop(ctx.currentTime+start+dur+0.05);
+    }
+    tone(1046.5, 0, 0.25);   // C6
+    tone(1318.5, 0.15, 0.35); // E6
+  } catch(e) { console.error('[playBellSound] erro', e); }
+}
+
+function raceAlertKey(r) {
+  return (r.hora||'') + '|' + (r.corrida||'');
 }
 
 function renderRaceListPanel(avbs) {
@@ -432,7 +496,16 @@ function renderRaceListPanel(avbs) {
     var hbr = r.hora_br || convertHora(r.hora||'');
     var rIdx = results.indexOf(r);
     var div = document.createElement('div');
-    div.className = 'rc' + (first ? ' rc-active' : '');
+    var mins = minutesToRace(r);
+    var isAlerting = mins !== null && mins >= 0 && mins <= 3;
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '');
+    if (isAlerting) {
+      var key = raceAlertKey(r);
+      if (!alertedRaces[key]) {
+        alertedRaces[key] = true;
+        playBellSound();
+      }
+    }
     div.setAttribute('data-idx', rIdx);
     div.style.display = 'flex';
     div.style.alignItems = 'center';
@@ -797,7 +870,7 @@ function renderTable(){
           +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
         +'</div>'
       +'</div>';
-    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div></div>';
+    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" value="'+(r.valor||'')+'" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
       +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'
@@ -957,8 +1030,8 @@ document.addEventListener('DOMContentLoaded',async function(){
   document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
   document.getElementById('btngo').addEventListener('click',runAnalysis);
-  document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;saveSessionState();}});
-  document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){results[i][f]=el.value;if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}saveSessionState();}});
+  document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){saveRaceField(i,f,el.value);}});
+  document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){var val=el.type==='checkbox'?(el.checked?1:0):el.value;saveRaceField(i,f,val);if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}}});
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
   document.getElementById('cap-modal-inp').addEventListener('change',async function(){for(var i=0;i<this.files.length;i++){var file=this.files[i],id='cm'+Date.now()+i;try{var b64=await readB64(file);var isImg=/\.(jpg|jpeg|png|webp)$/i.test(file.name);capModalFilesList.push({name:file.name,b64:b64,id:id,mime:isImg?file.type:'application/pdf',isImg:isImg});var d=document.createElement('div');d.className='fi';d.innerHTML='<span class="fi-name">'+file.name+'</span><span class="fi-st fi-ok">OK</span>';document.getElementById('cap-modal-list').appendChild(d);document.getElementById('btn-cap-ok').disabled=false;}catch(e){alert('Erro ao ler.');}}});
   document.getElementById('btn-cap-cancel').addEventListener('click',function(){document.getElementById('cap-modal').classList.remove('open');});

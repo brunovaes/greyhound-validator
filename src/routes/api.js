@@ -968,9 +968,22 @@ router.put('/race/:id', express.json(), (req, res) => {
   if (!raceId) return res.status(400).json({ error: 'ID inválido' });
   const race = db.prepare('SELECT id FROM races WHERE id=? AND user_id=?').get(raceId, userId);
   if (!race) return res.status(404).json({ error: 'Corrida não encontrada' });
-  const { odd, valor, resultado_1, resultado_2, resultado_3, bateu } = req.body;
-  db.prepare('UPDATE races SET odd=?,valor=?,resultado_1=?,resultado_2=?,resultado_3=?,bateu=? WHERE id=? AND user_id=?')
-    .run(odd||null, valor||null, resultado_1||null, resultado_2||null, resultado_3||null, bateu||null, raceId, userId);
+
+  // Update PARCIAL: so mexe nos campos que vieram no body, pra nao apagar
+  // resultado_1/2/3/bateu (escritos pelo robo de resultados) quando o front
+  // manda so odd/valor/avb_nao_aberto, ou vice-versa.
+  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto'];
+  const sets = [];
+  const values = [];
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+      sets.push(key + '=?');
+      values.push(req.body[key]);
+    }
+  }
+  if (!sets.length) return res.json({ ok: true });
+  values.push(raceId, userId);
+  db.prepare(`UPDATE races SET ${sets.join(',')} WHERE id=? AND user_id=?`).run(...values);
   res.json({ ok: true });
 });
 
@@ -980,7 +993,7 @@ router.post('/session', express.json(), (req, res) => {
     const { name, races } = req.body;
     const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(user.id, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
     const sessionId = result.lastInsertRowid;
-    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for(const r of races) {
       const p=(r.hora||'').split(':');
       let h=parseInt(p[0]||0);
@@ -988,7 +1001,7 @@ router.post('/session', express.json(), (req, res) => {
       h=h-4; if(h<0)h+=24; // UK→BRT
       const horaBr=p.length>=2?h+':'+p[1]:'';
       const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str);
+      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,r.avbNaoAberto?1:0);
     }
     res.json({ ok:true, sessionId });
   } catch(err) { res.status(500).json({ error:err.message }); }
@@ -1000,7 +1013,6 @@ router.get('/config', (req, res) => {
     const config = getUserConfig(req.user.id);
     res.json({
       visibility_interval_min: config.visibility_interval_min || 120,
-      racas_em_tela: config.racas_em_tela || 6,
       auto_refresh_min: config.auto_refresh_min || 1,
       results_interval_min: config.results_interval_min || 30,
       results_window_start: config.results_window_start || '09:00',
