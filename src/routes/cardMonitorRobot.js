@@ -309,12 +309,15 @@ async function runCardMonitorRobot(targetDate) {
           return { trap: g.trap, nome: g.nome, historico: (antigo && antigo.historico) || [] };
         });
 
+        const postPickMatch = cardText.match(/POST PICK:\s*([\d-]+)/i);
+        const postPick = postPickMatch ? postPickMatch[1] : '';
+
         const corridaRaw = {
           hora: dbRace.hora,
           corrida: dbRace.corrida,
           dist: dbRace.dist,
           classe: (dbRace.corrida || '').split(' ').pop(),
-          postPick: [],
+          postPick: postPick,
           trapsCard: novoRaceCard.map(function(g){ return g.trap; }),
           galgos: galgosParaAnalise
         };
