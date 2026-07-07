@@ -43,18 +43,19 @@ function parseDataCard(str) {
 }
 
 function parseHeader(text) {
-  // O grupo da data no final e OPCIONAL de proposito — se algum PDF nao tiver
-  // essa data (ou vier num formato diferente), o resto do parsing continua
-  // funcionando normalmente, so sem o campo dataCard.
-  const m = text.match(/^(.+?)\s+(\d+:\d+)\s+.+?\(([^)]+)\)\s+-\s+(\d+)m\s+-\s+Post Pick:\s+([\d-]+)(?:\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4}))?/);
+  const m = text.match(/^(.+?)\s+(\d+:\d+)\s+.+?\(([^)]+)\)\s+-\s+(\d+)m\s+-\s+Post Pick:\s+([\d-]+)/);
   if (!m) return null;
+  // A data fica no final da linha, mas pode ter coisas no meio (ex: "(nap)"
+  // apos o post pick) — entao busca o padrao de data ancorado no FIM da
+  // string, em vez de exigir que venha logo depois do post pick.
+  const dateMatch = text.match(/(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s*$/);
   return {
     track: m[1].trim(),
     hora: m[2],
     classe: m[3],
     dist: parseInt(m[4]),
     postPick: m[5].split('-').map(Number).filter(n => !isNaN(n)),
-    dataCard: parseDataCard(m[6])
+    dataCard: parseDataCard(dateMatch ? dateMatch[1] : null)
   };
 }
 

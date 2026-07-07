@@ -1183,11 +1183,16 @@ async function proceedAnalysis(){
     if (oldDates.length) {
       var datesLabel = oldDates.map(function(d){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}).join(', ');
       setTimeout(function(){
-        showToast('\u26A0\uFE0F As corridas carregadas não são de hoje. Referem-se à(s) corrida(s) do dia '+datesLabel+'.', false);
+        showToast('\u26A0\uFE0F Corridas de data anterior a hoje ('+datesLabel+') — disponíveis só para consulta na aba Analisar, não serão salvas no Histórico.', false);
       }, 900);
     }
 
-    if(usandoPasta){
+    // Corrida antiga NUNCA e salva no Historico nem oferece a opcao de salvar
+    // — serve so como referencia/estudo na aba Analisar. Nenhuma configuracao
+    // de tempo/refresh/auto-save se aplica a essas corridas.
+    if (oldDates.length) {
+      // nao salva, nao pergunta — fica so disponivel na aba Analisar
+    } else if(usandoPasta){
       // Fluxo automático — salva direto sem popup
       setTimeout(function(){autoSaveSession(autoDateLabel);},1600);
     } else {
