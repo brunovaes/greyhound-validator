@@ -645,8 +645,25 @@ function showPsStep1(avbs,alta){
   document.getElementById('ps-inp').style.display='none';
   var btns=document.getElementById('ps-btns');
   btns.innerHTML='';
-  var no=document.createElement('button');no.className='ps-btn-sec';no.textContent='Não, obrigado';no.onclick=closePsModal;btns.appendChild(no);
+  var no=document.createElement('button');no.className='ps-btn-sec';no.textContent='Não, obrigado';no.onclick=showPsDeclineMsg;btns.appendChild(no);
   var yes=document.createElement('button');yes.className='ps-btn-pri';yes.textContent='Sim, salvar ✓';yes.onclick=showPsStep2;btns.appendChild(yes);
+}
+function showPsDeclineMsg(){
+  document.getElementById('ps-icon').textContent='\u2705';
+  document.getElementById('ps-title').textContent='Ok';
+  document.getElementById('ps-sub').textContent='Suas corridas só ficarão disponíveis na aba Analisar.';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='OK';ok.onclick=finishDeclineSave;btns.appendChild(ok);
+}
+function finishDeclineSave(){
+  closePsModal();
+  // Limpa a lista de PDFs carregados na barra lateral — a analise ja esta
+  // disponivel na aba Analisar, entao a lista de upload pode ser resetada
+  raceFiles=[];
+  var list=document.getElementById('rlist');
+  if(list) list.innerHTML='';
 }
 function showPsStep2(){
   document.getElementById('ps-icon').textContent='\u270F\uFE0F';
@@ -663,7 +680,7 @@ function showPsStep2(){
   setTimeout(function(){inp.focus();inp.select();},80);
   var btns=document.getElementById('ps-btns');
   btns.innerHTML='';
-  var back=document.createElement('button');back.className='ps-btn-sec';back.textContent='← Voltar';back.onclick=function(){var avbs=results.filter(function(r){return r.tipo==='avb';});var alta=results.filter(function(r){return r.nivel==='alta';}).length;showPsStep1(avbs,alta);};btns.appendChild(back);
+  var back=document.createElement('button');back.className='ps-btn-sec';back.textContent='← Voltar';back.onclick=function(){var avbs=results.filter(function(r){return r.tipo==='avb';});var alta=results.filter(function(r){return r.nivel==='alta';}).length;showPsStep1(avbs.length,alta);};btns.appendChild(back);
   var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='Salvar';ok.onclick=psSaveCheck;btns.appendChild(ok);
   inp.onkeydown=function(e){if(e.key==='Enter')psSaveCheck();if(e.key==='Escape')closePsModal();};
 }
