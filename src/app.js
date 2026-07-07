@@ -106,6 +106,23 @@ async function loadSystemConfig() {
 async function autoSaveSession(dateLabel) {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
   if (!avbs.length) return;
+  // Reaplica dados preservados de uma sobrescrita (odd/valor/flag/resultados
+  // do robo que a sessao antiga ja tinha) — casando por hora+corrida.
+  if (preserveDataMap) {
+    avbs.forEach(function(r){
+      var prev = preserveDataMap[r.hora+'|'+r.corrida];
+      if (!prev) return;
+      if (prev.odd != null) r.odd = prev.odd;
+      if (prev.valor != null) r.valor = prev.valor;
+      if (prev.resultado_1 != null) r.r1 = prev.resultado_1;
+      if (prev.resultado_2 != null) r.r2 = prev.resultado_2;
+      if (prev.resultado_3 != null) r.r3 = prev.resultado_3;
+      if (prev.bateu != null) r.hit = prev.bateu;
+      if (prev.avb_nao_aberto != null) r.avbNaoAberto = !!prev.avb_nao_aberto;
+      if (prev.video_url != null) r.videoUrl = prev.video_url;
+    });
+    preserveDataMap = null;
+  }
   // Fallback para data atual se dateLabel não foi definido
   if (!dateLabel) {
     var now = new Date();
@@ -1044,12 +1061,35 @@ function showOverwriteConfirmModal(sessionName, existingId){
   modal.classList.add('open');
 }
 
+// Guarda temporariamente os dados de resultado/odd/valor/flag da sessao
+// antiga entre o momento em que o usuario confirma a sobrescrita e o
+// momento em que a nova sessao e salva — pra nao perder o que o robo de
+// resultados e/ou o proprio usuario ja tinham preenchido.
+var preserveDataMap = null;
+
 async function overwriteAndAnalyze(existingId){
   closePsModal();
+  preserveDataMap = null;
+  try {
+    var resp = await fetch(BASE+'/api/session/'+existingId+'/races');
+    var data = await resp.json();
+    if (data && Array.isArray(data.races)) {
+      preserveDataMap = {};
+      data.races.forEach(function(r){
+        var key = r.hora+'|'+r.corrida;
+        preserveDataMap[key] = {
+          odd: r.odd, valor: r.valor,
+          resultado_1: r.resultado_1, resultado_2: r.resultado_2, resultado_3: r.resultado_3,
+          bateu: r.bateu, avb_nao_aberto: r.avb_nao_aberto, video_url: r.video_url
+        };
+      });
+    }
+  } catch(e) { console.error('[overwriteAndAnalyze] erro ao carregar dados da sessao anterior', e); }
   // Nao deleta aqui na frente — se a nova analise nao encontrar PDFs/AvBs
   // por algum motivo, a sessao antiga precisa continuar existindo. O
   // autoSaveSession() (chamado no final da analise) ja faz delete-e-recria
-  // com o mesmo nome com seguranca, só quando ha dados novos de fato.
+  // com o mesmo nome com seguranca, só quando ha dados novos de fato — e
+  // agora tambem reaplica os dados preservados acima antes de salvar.
   await proceedAnalysis();
 }
 
