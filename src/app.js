@@ -303,6 +303,31 @@ function isDayClosed(avbs) {
 }
 
 var focusRefreshInterval = null;
+var alertCheckInterval = null;
+
+// Checagem RAPIDA (a cada 15s) e independente do refresh geral da lista —
+// so atualiza a classe de piscar + dispara o som, sem precisar esperar o
+// intervalo configurado em Automacao (que pode ser grande demais e "pular"
+// a janela de 3 minutos sem nunca cair exatamente nela).
+function checkRaceAlerts() {
+  document.querySelectorAll('.rc').forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-idx'), 10);
+    if (isNaN(idx) || !results[idx]) return;
+    var r = results[idx];
+    var mins = minutesToRace(r);
+    var shouldAlert = mins !== null && mins >= 0 && mins <= 3;
+    if (shouldAlert) {
+      el.classList.add('rc-alert');
+      var key = raceAlertKey(r);
+      if (!alertedRaces[key]) {
+        alertedRaces[key] = true;
+        playBellSound();
+      }
+    } else {
+      el.classList.remove('rc-alert');
+    }
+  });
+}
 
 function showDayEndMsg() {
   var focusCol = document.getElementById('focus-col');
@@ -310,6 +335,7 @@ function showDayEndMsg() {
   var col = document.getElementById('race-list-col');
   if (col) col.innerHTML = '';
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
+  if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
 }
 
 function refreshFocusMode() {
@@ -359,6 +385,11 @@ function enterFocusMode() {
   // Auto-refresh a cada minuto
   if (focusRefreshInterval) clearInterval(focusRefreshInterval);
   focusRefreshInterval = setInterval(refreshFocusMode, AUTO_REFRESH_MIN * 60000);
+
+  // Checagem de alerta de proximidade (independente, mais frequente)
+  if (alertCheckInterval) clearInterval(alertCheckInterval);
+  alertCheckInterval = setInterval(checkRaceAlerts, 15000);
+  checkRaceAlerts(); // roda uma vez na hora
 }
 
 function renderFocusPanel(r, idx) {
