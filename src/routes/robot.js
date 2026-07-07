@@ -9,6 +9,8 @@ const fs = require('fs');
 require('dns').setDefaultResultOrder('ipv4first');
 const BASE = process.env.BASE_PATH || '/greyhound';
 const resultsRobotModule = require('./resultsRobot');
+const cardMonitorModule = require('./cardMonitorRobot');
+const { runCardMonitorRobot, getMonitorStatus } = cardMonitorModule;
 const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
 // PDF_DIR é dinâmico por data — criado em runRobot
@@ -332,6 +334,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   <h3>Robôs</h3>
   <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">📥</span> Coletor de PDFs</button>
   <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">🏁</span> Resultados</button>
+  <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">🔎</span> Monitoramento</button>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
@@ -420,6 +423,25 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
     <div class="res-log" id="res-log"></div>
   </div>
 </div><!-- fim panel-results -->
+
+<div class="robot-panel" id="panel-monitor">
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">&#128269; Monitoramento de Card</h1>
+  <p class="sub">Revisita o card de cada corrida do dia de hora em hora — se detectar retirada ou troca de galgo, atualiza o grid e reanalisa so aquela corrida automaticamente.</p>
+  <div class="card">
+    <div class="card-title">&#9881;&#65039; Executar</div>
+    <div class="form-row" style="align-items:flex-end;gap:12px">
+      <div class="field"><label>Data</label><input type="date" id="mon-date" value="${today}"></div>
+      <button class="btn" id="btn-mon-start" onclick="startMonitorRobot()">&#9654; Executar agora</button>
+      <button class="btn btn-red" id="btn-mon-stop" onclick="stopMonitorRobot()" disabled style="opacity:.35;cursor:not-allowed">&#9646;&#9646; Parar</button>
+    </div>
+    <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: roda sozinho a cada 1 hora</p>
+  </div>
+  <div class="card" id="mon-status-card" style="display:none">
+    <div class="card-title">&#128202; Status</div>
+    <div id="mon-sbar" class="sbar srun"><span class="spin"></span><span id="mon-st-txt"> Aguardando...</span></div>
+    <div class="res-log" id="mon-log"></div>
+  </div>
+</div><!-- fim panel-monitor -->
 
 </div><!-- fim robot-content -->
 </div><!-- fim layout -->
@@ -682,6 +704,69 @@ async function pollResultsStatus() {
       sbar.className = 'sbar sdone';
     } else {
       stEl.textContent = 'Processando... ' + d.processed + ' corridas';
+    }
+  } catch(e) {}
+}
+
+// ── Robô de Monitoramento de Card ───────────────────────────────────────────
+let monPolling = null;
+
+async function startMonitorRobot() {
+  const date = document.getElementById('mon-date').value;
+  if (!date) { alert('Selecione uma data'); return; }
+  document.getElementById('btn-mon-start').disabled = true;
+  document.getElementById('mon-status-card').style.display = 'block';
+  document.getElementById('mon-log').innerHTML = '';
+  document.getElementById('mon-st-txt').textContent = 'Iniciando...';
+
+  try {
+    await fetch(BASE + '/robot/monitor/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ date })
+    });
+    if (monPolling) clearInterval(monPolling);
+    monPolling = setInterval(pollMonitorStatus, 2000);
+    document.getElementById('btn-mon-stop').disabled=false;
+    document.getElementById('btn-mon-stop').style.opacity='';
+    document.getElementById('btn-mon-stop').style.cursor='';
+    document.getElementById('btn-mon-start').disabled=true;
+  } catch(e) {
+    alert('Erro: ' + e.message);
+    document.getElementById('btn-mon-start').disabled = false;
+  }
+}
+
+async function stopMonitorRobot() {
+  try {
+    await fetch(BASE + '/robot/monitor/stop', { method: 'POST' });
+    document.getElementById('mon-st-txt').textContent = 'Parando...';
+  } catch(e) {}
+}
+
+async function pollMonitorStatus() {
+  try {
+    const r = await fetch(BASE + '/robot/monitor/status');
+    const d = await r.json();
+    const logEl = document.getElementById('mon-log');
+    logEl.innerHTML = (d.logs || []).map(l => {
+      const cls = l.type === 'ok' ? 'res-ok' : l.type === 'err' ? 'res-err' : l.type === 'warn' ? 'res-warn' : 'res-info';
+      return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
+    }).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+
+    const stEl = document.getElementById('mon-st-txt');
+    const sbar = document.getElementById('mon-sbar');
+    if (!d.running) {
+      clearInterval(monPolling);
+      document.getElementById('btn-mon-start').disabled=false;
+      document.getElementById('btn-mon-stop').disabled=true;
+      document.getElementById('btn-mon-stop').style.opacity='.35';
+      document.getElementById('btn-mon-stop').style.cursor='not-allowed';
+      stEl.textContent = d.lastRun ? 'Concluído — ' + d.processed + ' verificadas, ' + d.changed + ' com mudança, ' + d.reanalyzed + ' reanalisadas' : 'Pronto';
+      sbar.className = 'sbar sdone';
+    } else {
+      stEl.textContent = 'Verificando... ' + d.processed + ' corridas';
     }
   } catch(e) {}
 }
@@ -1159,6 +1244,26 @@ router.post('/results/run', requireAdmin, express.json(), async (req, res) => {
 
 router.get('/results/status', requireAdmin, (req, res) => {
   res.json(getResultsStatus());
+});
+
+// ── Robô de Monitoramento de Card ───────────────────────────────────────────
+router.post('/monitor/stop', requireAdmin, (req, res) => {
+  const st = getMonitorStatus();
+  if (!st.running) return res.json({ ok: true, msg: 'Não está rodando' });
+  cardMonitorModule.requestStop && cardMonitorModule.requestStop();
+  res.json({ ok: true });
+});
+
+router.post('/monitor/run', requireAdmin, express.json(), async (req, res) => {
+  const date = req.body?.date || new Date().toISOString().slice(0, 10);
+  try {
+    runCardMonitorRobot(date).catch(e => console.error('[MONITOR]', e.message));
+    res.json({ ok: true, date });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/monitor/status', requireAdmin, (req, res) => {
+  res.json(getMonitorStatus());
 });
 
 module.exports = router;

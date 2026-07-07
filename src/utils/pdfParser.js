@@ -220,4 +220,14 @@ async function parseRacingPostPDF(buffer) {
   };
 }
 
-module.exports = { parseRacingPostPDF };
+module.exports = {
+  parseRacingPostPDF,
+  // Exportados a mais pra reaproveitar no robo de monitoramento de card (que
+  // le texto raspado do navegador, nao de um PDF, mas no mesmo formato de linha)
+  parseHistoryLine,
+  isHistLine,
+  isColHeader,
+  isBrtLine,
+  extractBrtInfo,
+  parseDataCard
+};

@@ -1050,3 +1050,7 @@ router.delete('/session/:id', (req, res) => {
 });
 
 module.exports = router;
+// Exportados a mais pra reaproveitar no robo de monitoramento de card (reanalise
+// parcial de uma corrida so, sem duplicar a engine de pontuacao)
+module.exports.processarCorrida = processarCorrida;
+module.exports.mapHistLinhas = mapHistLinhas;
