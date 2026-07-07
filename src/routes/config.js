@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
+const { navBar } = require('./main');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -20,7 +21,7 @@ router.get('/', requireAdmin, (req, res) => {
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Configuracoes - Greyhound Validator</title>
+<title>Configurações - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
@@ -67,19 +68,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 @media(max-width:800px){.layout{grid-template-columns:1fr}.tabnav{position:static;flex-direction:row;overflow-x:auto}}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
-<nav>
-  <div>
-    <a href="${BASE}" class="nl">Analisar</a>
-    <a href="${BASE}/historico" class="nl">Historico</a>
-    <a href="${BASE}/config" class="nl na">Configuracoes</a>
-    <a href="${BASE}/robot" class="nl">Robo</a>
-    <a href="${BASE}/admin/usuarios" class="nl">Usuarios</a>
-    <a href="${BASE}/live" class="nl">Live</a>
-  </div>
-  <span style="font-size:11px;color:#666;padding:12px">${user.name} &middot; <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
-</nav>
+${navBar(user, 'config')}
 <div class="content">
-<h1>Configuracoes de Analise</h1>
+<h1>Configurações de Análise</h1>
 <p class="sub">Estas configuracoes se aplicam a TODOS os usuarios do sistema.</p>
 <div class="alert" id="alert"></div>
 <form id="cf">
@@ -329,7 +320,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 <div class="btn-bar">
-  <button type="submit" class="btn-save">Salvar Configuracoes</button>
+  <button type="submit" class="btn-save">Salvar Configurações</button>
   <button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button>
 </div>
 
@@ -341,7 +332,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="toast-bg" id="toast-bg">
   <div class="toast-box">
     <div class="toast-icon">&#128077;</div>
-    <h3>Configuracoes salvas com sucesso!</h3>
+    <h3>Configurações salvas com sucesso!</h3>
     <p>As alteracoes ja estao em vigor para todos os usuarios.</p>
   </div>
 </div>

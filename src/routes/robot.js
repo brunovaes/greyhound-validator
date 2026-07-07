@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAdmin } = require('../middleware/auth');
 const { getUserConfig } = require('../db/database');
+const { navBar } = require('./main');
 const path = require('path');
 const fs = require('fs');
 
@@ -386,17 +387,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
   </div>
 </div>
 <div class="hero"><img src="${logoB64}" alt="Greyhound Validator"></div>
-<nav>
-  <div>
-    <a href="${BASE}" class="nl">Analisar</a>
-    <a href="${BASE}/historico" class="nl">Histórico</a>
-    <a href="${BASE}/config" class="nl">Configurações</a>
-    <a href="${BASE}/robot" class="nl na">Robô</a>
-    <a href="${BASE}/admin/usuarios" class="nl">Usuários</a>
-    <a href="${BASE}/live" class="nl">Live</a>
-  </div>
-  <span style="font-size:11px;color:#666;padding:12px">Admin · <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
-</nav>
+${navBar(req.user, 'robot')}
 <div class="layout">
 <div class="robot-sidebar">
   <h3>Robôs</h3>

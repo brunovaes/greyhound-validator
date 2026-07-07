@@ -1153,3 +1153,4 @@ function openReplay(id){
 });
 
 module.exports = router;
+module.exports.navBar = navBar;

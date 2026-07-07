@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { findUserByEmail, validatePassword, createUser, db } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
+const { navBar } = require('./main');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -77,7 +78,7 @@ router.get('/admin/usuarios', requireAdmin, (req, res) => {
   const users = db.prepare('SELECT id,name,email,role,plan,analyses_used,analyses_limit,active,created_at,last_login FROM users ORDER BY created_at DESC').all();
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Usuarios - Greyhound Validator</title>
+<title>Usuários - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 body{background:#0D1117}
@@ -100,19 +101,9 @@ td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:m
 .btn-sm{font-size:10px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;font-weight:600;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
-<nav>
-  <div>
-    <a href="${BASE}" class="nl">Analisar</a>
-    <a href="${BASE}/historico" class="nl">Historico</a>
-    <a href="${BASE}/config" class="nl">Configuracoes</a>
-    <a href="${BASE}/robot" class="nl">Robo</a>
-    <a href="${BASE}/admin/usuarios" class="nl na">Usuarios</a>
-    <a href="${BASE}/live" class="nl">Live</a>
-  </div>
-  <span style="font-size:11px;color:#666;padding:12px">Admin: ${req.user.name} &middot; <a href="${BASE}/logout" style="color:#666;text-decoration:none">Sair</a></span>
-</nav>
+${navBar(req.user, 'admin')}
 <div class="content">
-<h1>Gestao de Usuarios</h1>
+<h1>Gestão de Usuários</h1>
 <div class="form-card">
   <h2>Criar novo usuario</h2>
   <form method="POST" action="${BASE}/admin/usuarios/criar">
