@@ -1016,13 +1016,10 @@ function showOverwriteConfirmModal(sessionName, existingId){
 
 async function overwriteAndAnalyze(existingId){
   closePsModal();
-  showToast('Removendo sessão anterior...', true);
-  try{
-    await fetch(BASE+'/api/session/'+existingId,{method:'DELETE'});
-  }catch(e){
-    showToast('Erro ao remover sessão anterior.', false);
-    return;
-  }
+  // Nao deleta aqui na frente — se a nova analise nao encontrar PDFs/AvBs
+  // por algum motivo, a sessao antiga precisa continuar existindo. O
+  // autoSaveSession() (chamado no final da analise) ja faz delete-e-recria
+  // com o mesmo nome com seguranca, só quando ha dados novos de fato.
   await proceedAnalysis();
 }
 
