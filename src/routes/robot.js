@@ -151,15 +151,15 @@ function scheduleResultsCron() {
 }
 scheduleResultsCron();
 
-// Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11,12 = AM (cedo) | 1-9 = PM (tarde/noite)
+// Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11 = AM (cedo) | 12,1-9 = PM (meio-dia em diante)
 function formatTime(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return t.replace(':', '.');
   const h = parseInt(m[1]);
   const min = m[2];
   let ampm;
-  if (h >= 10 && h <= 12) ampm = 'AM';
-  else ampm = 'PM'; // 1-9 = PM (tarde/noite, ate ~21h59)
+  if (h >= 10 && h <= 11) ampm = 'AM';
+  else ampm = 'PM'; // 12 (meio-dia) e 1-9 = PM (meio-dia ate ~21h59)
   return h + '.' + min + ampm;
 }
 
@@ -170,14 +170,15 @@ function getPdfDir(date) {
 }
 
 // Converte horário UK (12h sem AM/PM) para minutos do dia (24h)
-// Corridas de galgo no UK rodam de ~10h ate ~meia-noite. Regra: 10,11,12 = AM (cedo); 1-9 = PM (tarde/noite)
+// Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11 = manha (AM);
+// 12 = meio-dia (ja e PM, mas em 24h fica como 12 mesmo); 1-9 = tarde/noite (PM, 13h-21h)
 function ukTimeTo24Mins(raceTime) {
   const m = raceTime.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return -1;
   const h = parseInt(m[1]);
   const min = parseInt(m[2]);
   let h24;
-  if (h >= 10 && h <= 12) h24 = h;        // 10,11,12 = AM
+  if (h >= 10 && h <= 12) h24 = h;        // 10,11 = AM; 12 = meio-dia (12h em 24h tambem)
   else h24 = h + 12;                      // 1-9 = PM (13-21)
   return h24 * 60 + min;
 }
