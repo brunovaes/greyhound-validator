@@ -41,11 +41,15 @@ function similarity(a, b) {
   return matches / longer.length;
 }
 
+// Pista aparece como uma linha isolada, logo ANTES de uma linha tipo "Jul 6"
+// (mes abreviado + dia, sem ano) — formato diferente do usado na pagina de
+// resultado ("Sheffield 07/07/26"), por isso precisa de logica separada aqui.
 function extractTrackFromText(text) {
-  const lines = (text || '').split('\n');
-  for (const line of lines) {
-    const m = line.match(/^([A-Za-z][A-Za-z\s]*?)\s+\d{2}\/\d{2}\/\d{2}\s*$/);
-    if (m) return m[1].trim();
+  const lines = (text || '').split('\n').map(l => l.trim());
+  for (let i = 1; i < lines.length; i++) {
+    if (/^[A-Za-z]{3}\s+\d{1,2}$/.test(lines[i]) && lines[i-1] && /^[A-Za-z]/.test(lines[i-1])) {
+      return lines[i-1];
+    }
   }
   return '';
 }
@@ -197,7 +201,7 @@ async function runCardMonitorRobot(targetDate) {
         const currentRunners = extractCurrentRunnersFromText(cardText);
         if (!currentRunners.length) {
           addLog('warn', '  nao consegui extrair os corredores atuais dessa pagina (formato inesperado) — pulando');
-          addLog('info', '  texto (debug): ' + cardText.slice(0, 300).replace(/\n/g, ' | '));
+          addLog('info', '  texto completo (debug): ' + cardText.replace(/\n/g, ' | '));
           continue;
         }
 
