@@ -86,7 +86,12 @@ function injectStyles(){
     '.ps-btn-warn{background:#f97316;color:#000;border:none;padding:10px 20px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
     '.ps-btn-warn:hover{opacity:.88;}',
     '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
-    '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}'
+    '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
+    '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
+    '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
+    '.fp-old-banner{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
+    '.old-row{background:rgba(239,68,68,.08)!important;}',
+    '.old-row td{border-color:rgba(239,68,68,.15)!important;}'
   ].join('');
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
@@ -200,6 +205,7 @@ async function autoCheckAndAnalyze() {
                 obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
                 avbNaoAberto: !!r.avb_nao_aberto,
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
+                dataCard: r.data_card||null,
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
                 id:r.id
               });
@@ -330,6 +336,16 @@ function minutesToRace(r) {
   return raceMin - nowMin;
 }
 
+// Corrida "antiga" = o PDF traz uma data explicita (dataCard, formato
+// YYYY-MM-DD) e ela e anterior a hoje. PDFs sem essa data (formato antigo,
+// sem o campo) nunca sao marcados como antigos — fica neutro.
+function isOldRaceCard(r) {
+  if (!r || !r.dataCard) return false;
+  var now = new Date();
+  var todayStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  return r.dataCard < todayStr;
+}
+
 function isDayClosed(avbs) {
   // Encerrado quando nao sobra nenhuma corrida futura na sessao carregada
   // (dinamico — nao depende de um horario fixo de corte).
@@ -348,6 +364,8 @@ function checkRaceAlerts() {
     var idx = parseInt(el.getAttribute('data-idx'), 10);
     if (isNaN(idx) || !results[idx]) return;
     var r = results[idx];
+    el.classList.toggle('rc-old', isOldRaceCard(r));
+    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); return; } // corrida antiga nunca pisca/soa
     var mins = minutesToRace(r);
     var shouldAlert = mins !== null && mins >= 0 && mins <= 3;
     if (shouldAlert) {
@@ -451,9 +469,11 @@ function renderFocusPanel(r, idx) {
   var imgU = getDogImg(tu, r.corrida||'x');
 
   var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');
+  var oldBanner = isOldRaceCard(r) ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+') — apenas para consulta/estudo, não é uma corrida ao vivo.</div>' : '';
 
   focusCol.innerHTML =
-    '<div class="fp-hdr">'
+    oldBanner
+    + '<div class="fp-hdr">'
     + '<div><div class="fp-race-title">'+(r.corrida||'-')+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
     + '</div>'
@@ -562,9 +582,10 @@ function renderRaceListPanel(avbs) {
     var hbr = r.hora_br || convertHora(r.hora||'');
     var rIdx = results.indexOf(r);
     var div = document.createElement('div');
+    var isOld = isOldRaceCard(r);
     var mins = minutesToRace(r);
-    var isAlerting = mins !== null && mins >= 0 && mins <= 3;
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '');
+    var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= 3;
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '') + (isOld ? ' rc-old' : '');
     if (isAlerting) {
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
@@ -581,6 +602,7 @@ function renderRaceListPanel(avbs) {
     var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px">&#127942; '+top3Val+'</span></div>' : '';
     div.innerHTML += '<div style="flex:1;min-width:0">'
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
+      + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
@@ -657,13 +679,16 @@ function showPsDeclineMsg(){
   btns.innerHTML='';
   var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='OK';ok.onclick=finishDeclineSave;btns.appendChild(ok);
 }
-function finishDeclineSave(){
-  closePsModal();
-  // Limpa a lista de PDFs carregados na barra lateral — a analise ja esta
-  // disponivel na aba Analisar, entao a lista de upload pode ser resetada
+function clearUploadedPdfList(){
   raceFiles=[];
   var list=document.getElementById('rlist');
   if(list) list.innerHTML='';
+}
+function finishDeclineSave(){
+  closePsModal();
+  // Lista ja foi limpa logo apos a analise terminar (clearUploadedPdfList),
+  // mas chama de novo aqui por segurança caso algo tenha sido re-adicionado.
+  clearUploadedPdfList();
 }
 function showPsStep2(){
   document.getElementById('ps-icon').textContent='\u270F\uFE0F';
@@ -996,7 +1021,7 @@ function renderTable(){
       +'</div>';
     var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" value="'+(r.valor||'')+'" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:13px;line-height:1;margin-left:auto">&#128196;</a></div></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
-    rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
+    rows+='<tr class="row-avb'+(sk?' sk':'')+(isOldRaceCard(r)?' old-row':'')+'">'
       +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'
       +'<td style="vertical-align:middle"><div style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
       +'<td style="text-align:center;vertical-align:middle">'+shComPerfil+'<div style="margin-top:4px">'+valLink+'</div></td>'
@@ -1147,6 +1172,21 @@ async function proceedAnalysis(){
     setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');
     prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
     setTimeout(function(){enterFocusMode();},800);
+
+    // Limpa a lista de PDFs carregados assim que a analise termina — tanto
+    // pra corridas de hoje quanto antigas, nao precisa esperar a escolha de
+    // salvar/nao salvar.
+    clearUploadedPdfList();
+
+    // Avisa se alguma das corridas carregadas for de data anterior a hoje
+    var oldDates = Array.from(new Set(results.filter(function(r){return isOldRaceCard(r);}).map(function(r){return r.dataCard;})));
+    if (oldDates.length) {
+      var datesLabel = oldDates.map(function(d){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}).join(', ');
+      setTimeout(function(){
+        showToast('\u26A0\uFE0F As corridas carregadas não são de hoje. Referem-se à(s) corrida(s) do dia '+datesLabel+'.', false);
+      }, 900);
+    }
+
     if(usandoPasta){
       // Fluxo automático — salva direto sem popup
       setTimeout(function(){autoSaveSession(autoDateLabel);},1600);

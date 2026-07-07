@@ -31,15 +31,30 @@ async function extractRows(buffer) {
 }
 
 // ── Parse do cabeçalho ───────────────────────────────────────────────────────
+const MESES_EN = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+
+function parseDataCard(str) {
+  if (!str) return null;
+  const m = str.trim().match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (!m) return null;
+  const mes = MESES_EN[m[2].toLowerCase()];
+  if (!mes) return null;
+  return m[3] + '-' + String(mes).padStart(2, '0') + '-' + String(parseInt(m[1])).padStart(2, '0');
+}
+
 function parseHeader(text) {
-  const m = text.match(/^(.+?)\s+(\d+:\d+)\s+.+?\(([^)]+)\)\s+-\s+(\d+)m\s+-\s+Post Pick:\s+([\d-]+)/);
+  // O grupo da data no final e OPCIONAL de proposito — se algum PDF nao tiver
+  // essa data (ou vier num formato diferente), o resto do parsing continua
+  // funcionando normalmente, so sem o campo dataCard.
+  const m = text.match(/^(.+?)\s+(\d+:\d+)\s+.+?\(([^)]+)\)\s+-\s+(\d+)m\s+-\s+Post Pick:\s+([\d-]+)(?:\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4}))?/);
   if (!m) return null;
   return {
     track: m[1].trim(),
     hora: m[2],
     classe: m[3],
     dist: parseInt(m[4]),
-    postPick: m[5].split('-').map(Number).filter(n => !isNaN(n))
+    postPick: m[5].split('-').map(Number).filter(n => !isNaN(n)),
+    dataCard: parseDataCard(m[6])
   };
 }
 
@@ -199,6 +214,7 @@ async function parseRacingPostPDF(buffer) {
     classe: header.classe,
     postPick: header.postPick.join('-'),
     trapsCard: galgos.map(g => g.trap),
+    dataCard: header.dataCard,
     galgos
   };
 }
