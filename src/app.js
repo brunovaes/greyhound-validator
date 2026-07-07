@@ -723,11 +723,15 @@ function injectValModal(){
 #val-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
 #val-xbtn:hover{color:#fff}
 #val-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
-#val-body.val-compact .val-dog-hdr{margin-bottom:3px}
-#val-body.val-compact .val-tbl th{padding:2px 3px;font-size:10px}
-#val-body.val-compact .val-tbl td{padding:2px 3px;font-size:10px;line-height:1.2}
-#val-body.val-compact .val-sep{margin:4px 0}
-#val-body.val-compact{max-height:78vh;overflow-y:auto}
+#val-body.val-compact .val-dog{width:100%}
+#val-body.val-compact .val-dog-hdr{margin-bottom:1px;gap:5px}
+#val-body.val-compact .val-dog-hdr .trap-badge{width:18px;height:18px;font-size:9px}
+#val-body.val-compact .val-name{font-size:11px}
+#val-body.val-compact .val-tbl th{padding:1px 3px;font-size:9px;line-height:1.1}
+#val-body.val-compact .val-tbl td{padding:0px 3px;font-size:9px;line-height:1.05}
+#val-body.val-compact .val-td-rem{font-size:8px;max-width:90px}
+#val-body.val-compact .val-sep{margin:2px 0}
+#val-body.val-compact{max-height:85vh;overflow-y:auto;gap:0}
 .val-dog{width:100%}
 .val-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
 .val-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
