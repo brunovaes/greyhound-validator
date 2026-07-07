@@ -119,7 +119,23 @@ async function autoSaveSession(dateLabel) {
     var existing = sessions.find(function(s){return s.name===name;});
     if (existing) await fetch(BASE+'/api/session/'+existing.id, {method:'DELETE'});
     // Salva nova sessão
-    await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    var saveResp = await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    var saveData = await saveResp.json().catch(function(){return null;});
+    // Busca de volta os IDs das corridas recem-criadas e vincula em `results` —
+    // sem isso, edições de Odd/Valor/AvB não aberto feitas depois nunca
+    // persistem no banco (saveRaceField exige um id pra saber onde dar o PUT).
+    if (saveData && saveData.sessionId) {
+      try {
+        var racesResp = await fetch(BASE+'/api/session/'+saveData.sessionId+'/races');
+        var racesData = await racesResp.json();
+        if (racesData && Array.isArray(racesData.races)) {
+          racesData.races.forEach(function(dbRace){
+            var match = avbs.find(function(x){ return x.hora===dbRace.hora && x.corrida===dbRace.corrida; });
+            if (match) match.id = dbRace.id;
+          });
+        }
+      } catch(e) { console.error('[autoSaveSession] erro ao vincular IDs das corridas', e); }
+    }
     showToast('\u2713 Sessão "'+name+'" salva no Histórico!', true);
     // Auto-download ZIP na primeira análise do dia
     var a = document.createElement('a');
@@ -618,11 +634,15 @@ function showPsStep1(avbs,alta){
 function showPsStep2(){
   document.getElementById('ps-icon').textContent='\u270F\uFE0F';
   document.getElementById('ps-title').textContent='Nome da sessão';
-  document.getElementById('ps-sub').textContent='Escolha um nome para identificar esta análise no Histórico.';
+  document.getElementById('ps-sub').innerHTML='Escolha um nome para identificar esta análise no Histórico.<br><small style="color:#f97316">O padrão "Races DD/MM/AAAA" é reservado para as sessões automáticas do robô — não pode ser usado aqui.</small>';
   var inp=document.getElementById('ps-inp');
   inp.style.display='block';
   var now=new Date();
-  inp.value='Races '+String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+  var dd=String(now.getDate()).padStart(2,'0'), mm=String(now.getMonth()+1).padStart(2,'0'), yyyy=now.getFullYear();
+  var hh=String(now.getHours()).padStart(2,'0'), mi=String(now.getMinutes()).padStart(2,'0');
+  // Sugestao de nome DIFERENTE do padrao "Races DD/MM/AAAA" usado pelas sessoes
+  // automaticas do robo, pra nao colidir/sobrescrever sem querer.
+  inp.value='Avulsa '+dd+'/'+mm+'/'+yyyy+' '+hh+'h'+mi;
   setTimeout(function(){inp.focus();inp.select();},80);
   var btns=document.getElementById('ps-btns');
   btns.innerHTML='';
@@ -630,9 +650,19 @@ function showPsStep2(){
   var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='Salvar';ok.onclick=psSaveCheck;btns.appendChild(ok);
   inp.onkeydown=function(e){if(e.key==='Enter')psSaveCheck();if(e.key==='Escape')closePsModal();};
 }
+var RESERVED_SESSION_NAME_RE = /^races\s+\d{1,2}\/\d{1,2}\/\d{4}$/i;
 async function psSaveCheck(){
   var name=document.getElementById('ps-inp').value.trim();
   if(!name){document.getElementById('ps-inp').focus();return;}
+  // Bloqueia o padrao reservado das sessoes automaticas do robo — corridas
+  // avulsas (upload manual) nunca podem usar esse nome, pra nao arriscar
+  // sobrescrever a sessao automatica do dia sem querer.
+  if(RESERVED_SESSION_NAME_RE.test(name)){
+    showToast('Esse nome é reservado para as sessões automáticas do robô. Escolha outro nome pra corridas avulsas.', false);
+    document.getElementById('ps-inp').focus();
+    document.getElementById('ps-inp').select();
+    return;
+  }
   try{
     var r=await fetch(BASE+'/api/sessions');
     var sessions=await r.json();
