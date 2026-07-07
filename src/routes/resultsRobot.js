@@ -39,6 +39,37 @@ function horaDBTo24(horaDB) {
   return h24 + ':' + min;
 }
 
+// Similaridade entre dois strings (chars em comum / max length) — usada
+// tanto pra casar nome de galgo quanto nome de pista.
+function similarity(a, b) {
+  a = (a || '').toLowerCase().replace(/\s/g, '');
+  b = (b || '').toLowerCase().replace(/\s/g, '');
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (b.includes(a) || a.includes(b)) return 0.9;
+  var matches = 0;
+  var shorter = a.length < b.length ? a : b;
+  var longer  = a.length < b.length ? b : a;
+  for (var k = 0; k < shorter.length; k++) {
+    if (longer.includes(shorter[k])) matches++;
+  }
+  return matches / longer.length;
+}
+
+// Extrai o nome da pista direto do texto raspado da pagina de resultado
+// (formato: uma linha exatamente "Sheffield 07/07/26") — usado pra desempatar
+// quando ha mais de uma corrida no banco no MESMO horario (comum, ja que
+// varias pistas correm no mesmo slot). Busca linha por linha pra nao pegar
+// texto de mais (o \s do regex bateria com quebra de linha tambem).
+function extractTrackFromText(text) {
+  const lines = (text || '').split('\n');
+  for (const line of lines) {
+    const m = line.match(/^([A-Za-z][A-Za-z\s]*?)\s+\d{2}\/\d{2}\/\d{2}\s*$/);
+    if (m) return m[1].trim();
+  }
+  return '';
+}
+
 // ── Extrai nomes dos cães por posição ─────────────────────────────────────────
 // Formato da página: "1 st Dog Name bk d ... 2 nd Other Dog bd b ..."
 function extractFinishingOrder(text) {
@@ -118,10 +149,15 @@ async function runResultsRobot(targetDate) {
     if (!raceLinks.length) { addLog('warn', 'Nenhum resultado na pagina.'); return; }
 
     // 2. Corridas do banco
+    // IMPORTANTE: s.created_at e gravado pelo SQLite em UTC, mas DATE aqui e
+    // sempre a data local do Brasil (BRT = UTC-3). Sem esse ajuste, sessoes
+    // criadas/recriadas tarde da noite (ex: 21h30 BRT = 00h30 UTC do dia
+    // seguinte) ficavam com a data errada nessa comparacao e a corrida nunca
+    // era encontrada pelo robo de resultados — mesmo sendo do dia certo.
     const dbRaces = db.prepare(
-      'SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card ' +
-      'FROM races r JOIN race_sessions s ON s.id=r.session_id ' +
-      'WHERE date(s.created_at)=? AND r.nivel!=? ORDER BY r.hora'
+      "SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card " +
+      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at, '-3 hours')=? AND r.nivel!=? ORDER BY r.hora"
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
@@ -132,13 +168,13 @@ async function runResultsRobot(targetDate) {
       if (status.stopRequested) { addLog('warn', 'Parado pelo usuario.'); break; }
 
       const hora12 = hora24To12(link.rTime);
-      const dbRace = dbRaces.find(function(r) {
+      const candidates = dbRaces.filter(function(r) {
         return r.hora === hora12 || r.hora === link.rTime || horaDBTo24(r.hora) === link.rTime;
       });
-      if (!dbRace) { addLog('info', 'Sem match: ' + link.rTime + ' (12h=' + hora12 + ')'); continue; }
+      if (!candidates.length) { addLog('info', 'Sem match: ' + link.rTime + ' (12h=' + hora12 + ')'); continue; }
 
       status.processed++;
-      addLog('info', 'Processando ' + link.rTime + ' -> ' + dbRace.corrida);
+      addLog('info', 'Processando ' + link.rTime + ' -> ' + candidates.map(function(c){return c.corrida;}).join(' | '));
 
       try {
         const url = 'https://greyhoundbet.racingpost.com/' + (link.href.startsWith('#') ? link.href : '#' + link.href);
@@ -175,6 +211,30 @@ async function runResultsRobot(targetDate) {
         });
 
         addLog('info', 'Texto: ' + pageText.text.slice(0, 200));
+
+        // Se tem mais de uma corrida no banco nesse MESMO horario (comum —
+        // varias pistas correm no mesmo slot), desempata pelo nome da pista,
+        // que a gente sabe de verdade so depois de abrir a pagina.
+        var dbRace;
+        if (candidates.length === 1) {
+          dbRace = candidates[0];
+        } else {
+          const scrapedTrack = extractTrackFromText(pageText.text);
+          addLog('info', 'Multiplos candidatos em ' + link.rTime + ' — pista da pagina: "' + scrapedTrack + '"');
+          var best = null, bestScore = 0.4;
+          candidates.forEach(function(c) {
+            var trackAbbr = (c.corrida || '').split(' ')[0]; // ex: "DunPk" de "DunPk A7"
+            var score = similarity(scrapedTrack, trackAbbr);
+            addLog('info', '  candidato ' + c.corrida + ' (pista "' + trackAbbr + '") score=' + score.toFixed(2));
+            if (score > bestScore) { bestScore = score; best = c; }
+          });
+          if (!best) {
+            addLog('warn', link.rTime + ' - nao foi possivel identificar a pista certa entre os candidatos — pulando pra nao gravar resultado errado.');
+            continue;
+          }
+          dbRace = best;
+          addLog('info', 'Pista escolhida: ' + dbRace.corrida + ' (score ' + bestScore.toFixed(2) + ')');
+        }
 
         // Extrair ordem de chegada por nome
         const finishing = extractFinishingOrder(pageText.text);
@@ -217,22 +277,6 @@ async function runResultsRobot(targetDate) {
         var raceCard = [];
         try { if (dbRace.race_card) raceCard = JSON.parse(dbRace.race_card); } catch(e) {}
         addLog('info', 'race_card: ' + (raceCard.length ? raceCard.map(function(g){return 'T'+g.trap+':'+g.nome;}).join(', ') : 'VAZIO - sessao antiga sem race_card'));
-
-        // Similaridade entre dois strings (chars em comum / max length)
-        function similarity(a, b) {
-          a = a.toLowerCase().replace(/\s/g, '');
-          b = b.toLowerCase().replace(/\s/g, '');
-          if (!a || !b) return 0;
-          if (a === b) return 1;
-          if (b.includes(a) || a.includes(b)) return 0.9;
-          var matches = 0;
-          var shorter = a.length < b.length ? a : b;
-          var longer  = a.length < b.length ? b : a;
-          for (var k = 0; k < shorter.length; k++) {
-            if (longer.includes(shorter[k])) matches++;
-          }
-          return matches / longer.length;
-        }
 
         function nameToTrap(name) {
           if (!name) return null;
