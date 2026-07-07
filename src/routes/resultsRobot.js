@@ -11,7 +11,7 @@ const BROWSERLESS_HOST  = process.env.BROWSERLESS_HOST  || 'chromium.railway.int
 const BROWSERLESS_PORT  = process.env.BROWSERLESS_PORT  || '8080';
 const BROWSERLESS_WS    = `ws://${BROWSERLESS_HOST}:${BROWSERLESS_PORT}?token=${BROWSERLESS_TOKEN}`;
 
-const status = { running: false, stopRequested: false, logs: [], lastRun: null, processed: 0, updated: 0 };
+const status = { running: false, stopRequested: false, logs: [], lastRun: null, processed: 0, updated: 0, suspicious: false, suspiciousReason: '' };
 
 function addLog(type, msg) {
   const ts = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -111,6 +111,8 @@ async function runResultsRobot(targetDate) {
   if (status.running) { addLog('warn', 'Robo ja esta rodando.'); return; }
   status.running = true; status.stopRequested = false;
   status.logs = []; status.processed = 0; status.updated = 0;
+  status.suspicious = false; status.suspiciousReason = '';
+  let noPosicoesCount = 0;
 
   const DATE = targetDate || new Date().toISOString().slice(0, 10);
   addLog('info', 'Processando resultados de ' + DATE);
@@ -242,6 +244,7 @@ async function runResultsRobot(targetDate) {
 
         if (!finishing.length) {
           addLog('warn', link.rTime + ' - sem posicoes (formato inesperado)');
+          noPosicoesCount++;
           continue;
         }
 
@@ -347,6 +350,16 @@ async function runResultsRobot(targetDate) {
 
     status.lastRun = new Date().toISOString();
     addLog('ok', 'Concluido! ' + status.updated + '/' + status.processed + ' corridas atualizadas');
+
+    // Invariante de sanidade: se a MAIORIA das corridas processadas falhou
+    // em extrair a ordem de chegada, isso nao e "corridas dificeis" — e sinal
+    // de que o FORMATO DA PAGINA mudou e o robo esta lendo lixo. Falha
+    // isolada e normal; falha em massa precisa ser barulhenta, nao silenciosa.
+    if (status.processed >= 3 && (noPosicoesCount / status.processed) > 0.5) {
+      status.suspicious = true;
+      status.suspiciousReason = noPosicoesCount + ' de ' + status.processed + ' corridas processadas nao tiveram a ordem de chegada extraida — provavel mudanca no formato da pagina do Racing Post. Resultados dessa rodada podem estar incompletos ou errados.';
+      addLog('err', '⚠️ RODADA SUSPEITA: ' + status.suspiciousReason);
+    }
 
   } catch (e) {
     addLog('err', 'Erro fatal: ' + e.message);

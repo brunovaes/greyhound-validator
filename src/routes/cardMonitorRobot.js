@@ -17,7 +17,7 @@ const BROWSERLESS_HOST  = process.env.BROWSERLESS_HOST  || 'chromium.railway.int
 const BROWSERLESS_PORT  = process.env.BROWSERLESS_PORT  || '8080';
 const BROWSERLESS_WS    = `ws://${BROWSERLESS_HOST}:${BROWSERLESS_PORT}?token=${BROWSERLESS_TOKEN}`;
 
-const status = { running: false, stopRequested: false, logs: [], lastRun: null, processed: 0, changed: 0, reanalyzed: 0 };
+const status = { running: false, stopRequested: false, logs: [], lastRun: null, processed: 0, changed: 0, reanalyzed: 0, suspicious: false, suspiciousReason: '' };
 
 function addLog(type, msg) {
   const ts = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -158,6 +158,8 @@ async function runCardMonitorRobot(targetDate) {
   if (status.running) { addLog('warn', 'Robo ja esta rodando.'); return; }
   status.running = true; status.stopRequested = false;
   status.logs = []; status.processed = 0; status.changed = 0; status.reanalyzed = 0;
+  status.suspicious = false; status.suspiciousReason = '';
+  let extractFailCount = 0;
 
   const DATE = targetDate || new Date().toISOString().slice(0, 10);
   addLog('info', 'Monitorando cards de ' + DATE);
@@ -255,6 +257,7 @@ async function runCardMonitorRobot(targetDate) {
 
         if (!cardText) {
           addLog('warn', '  nao encontrei a pagina certa entre ' + candidates.length + ' candidatos para ' + dbRace.corrida + ' ' + dbRace.hora + ' — pulando pra evitar analisar pista errada');
+          extractFailCount++;
           continue;
         }
         addLog('info', '  pista da pagina: "' + scrapedTrack + '"' + (candidates.length > 1 ? ' (desambiguado entre ' + candidates.length + ' candidatos)' : ''));
@@ -262,6 +265,7 @@ async function runCardMonitorRobot(targetDate) {
         const currentRunners = extractCurrentRunnersFromText(cardText);
         if (!currentRunners.length) {
           addLog('warn', '  nao consegui extrair os corredores atuais dessa pagina (formato inesperado) — pulando');
+          extractFailCount++;
           addLog('info', '  texto completo (debug): ' + cardText.replace(/\n/g, ' | '));
           continue;
         }
@@ -432,6 +436,16 @@ async function runCardMonitorRobot(targetDate) {
 
     status.lastRun = new Date().toISOString();
     addLog('ok', 'Concluido! ' + status.processed + ' verificadas, ' + status.changed + ' com mudanca, ' + status.reanalyzed + ' reanalisadas');
+
+    // Invariante de sanidade: se a MAIORIA das corridas verificadas falhou em
+    // confirmar a pista ou extrair os corredores, isso nao e coincidencia —
+    // e sinal de que o formato da pagina mudou. Falha isolada e normal;
+    // falha em massa precisa ser barulhenta, nao silenciosa.
+    if (status.processed >= 3 && (extractFailCount / status.processed) > 0.5) {
+      status.suspicious = true;
+      status.suspiciousReason = extractFailCount + ' de ' + status.processed + ' corridas verificadas falharam em confirmar a pista ou extrair os corredores — provavel mudanca no formato da pagina do Racing Post. Mudancas de card dessa rodada podem estar incompletas.';
+      addLog('err', '⚠️ RODADA SUSPEITA: ' + status.suspiciousReason);
+    }
 
   } catch (e) {
     addLog('err', 'Erro fatal: ' + e.message);

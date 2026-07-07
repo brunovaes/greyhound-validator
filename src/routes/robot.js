@@ -814,6 +814,10 @@ async function pollResultsStatus() {
       document.getElementById('btn-res-stop').style.cursor='not-allowed';
       stEl.textContent = d.lastRun ? 'Concluído — ' + d.updated + ' corridas atualizadas' : 'Pronto';
       sbar.className = 'sbar sdone';
+      if (d.suspicious) {
+        sbar.className = 'sbar serr';
+        stEl.innerHTML = '⚠️ RODADA SUSPEITA — ' + (d.suspiciousReason || 'taxa de falha alta');
+      }
     } else {
       stEl.textContent = 'Processando... ' + d.processed + ' corridas';
     }
@@ -925,6 +929,10 @@ async function pollMonitorStatus() {
       document.getElementById('btn-mon-stop').style.cursor='not-allowed';
       stEl.textContent = d.lastRun ? 'Concluído — ' + d.processed + ' verificadas, ' + d.changed + ' com mudança, ' + d.reanalyzed + ' reanalisadas' : 'Pronto';
       sbar.className = 'sbar sdone';
+      if (d.suspicious) {
+        sbar.className = 'sbar serr';
+        stEl.innerHTML = '⚠️ RODADA SUSPEITA — ' + (d.suspiciousReason || 'taxa de falha alta');
+      }
     } else {
       stEl.textContent = 'Verificando... ' + d.processed + ' corridas';
     }

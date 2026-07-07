@@ -47,6 +47,10 @@ function navBar(user, active) {
       <button onclick="dismissMonBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
+  <div id="suspicious-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.1);border-bottom:1px solid rgba(239,68,68,.3)">
+    <span style="font-size:12px;color:#ef4444">⚠️ <strong>Rodada suspeita</strong> — <span id="suspicious-banner-msg"></span></span>
+    <a href="${BASE}/robot" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
+  </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
@@ -100,6 +104,20 @@ function navBar(user, active) {
           badgeTxt.textContent = 'Robô Monitoramento: ' + (mon.processed||0) + ' verificadas...';
         } else {
           badge.style.display = 'none';
+        }
+        // Invariante de sanidade: rodada suspeita (taxa de falha alta) fica
+        // visivel aqui mesmo, sem precisar abrir a aba Robo
+        var susBanner = document.getElementById('suspicious-banner');
+        if (susBanner) {
+          var reasons = [];
+          if (res.suspicious) reasons.push('Resultados: ' + res.suspiciousReason);
+          if (mon.suspicious) reasons.push('Monitoramento: ' + mon.suspiciousReason);
+          if (reasons.length) {
+            document.getElementById('suspicious-banner-msg').textContent = reasons.join(' | ');
+            susBanner.style.display = 'flex';
+          } else {
+            susBanner.style.display = 'none';
+          }
         }
       });
     }
