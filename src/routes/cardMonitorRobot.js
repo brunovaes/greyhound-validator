@@ -245,7 +245,7 @@ async function runCardMonitorRobot(targetDate) {
 
           const text = await page.evaluate(function() { return (document.body.innerText || '').slice(0, 6000); });
           const track = extractTrackFromText(text);
-          if (candidates.length === 1 || trackAbbrMatches(trackAbbr, track)) {
+          if (trackAbbrMatches(trackAbbr, track)) {
             cardText = text; scrapedTrack = track;
             break;
           }
@@ -423,20 +423,6 @@ async function runCardMonitorRobot(targetDate) {
     status.running = false;
   }
 }
-
-// ── Cron: roda de hora em hora ──────────────────────────────────────────────
-let cronTimer = null;
-function scheduleMonitorCron() {
-  if (cronTimer) clearTimeout(cronTimer);
-  const HOUR_MS = 60 * 60 * 1000;
-  cronTimer = setTimeout(function() {
-    const today = new Date().toISOString().slice(0, 10);
-    console.log('[CRON-MONITOR] Verificando cards para ' + today);
-    runCardMonitorRobot(today).catch(function(e) { addLog('err', e.message); });
-    scheduleMonitorCron();
-  }, HOUR_MS);
-}
-scheduleMonitorCron();
 
 module.exports = {
   runCardMonitorRobot,

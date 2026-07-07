@@ -150,6 +150,9 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN pdf_cron_time TEXT DEFAULT \'13:30\'',
   'ALTER TABLE analysis_config ADD COLUMN auto_refresh_min INTEGER DEFAULT 1',
   'ALTER TABLE analysis_config ADD COLUMN racas_em_tela INTEGER DEFAULT 6',
+  "ALTER TABLE analysis_config ADD COLUMN monitor_interval_min INTEGER DEFAULT 60",
+  "ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '09:00'",
+  "ALTER TABLE analysis_config ADD COLUMN monitor_window_end TEXT DEFAULT '20:00'",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

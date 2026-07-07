@@ -153,6 +153,73 @@ function scheduleResultsCron() {
 }
 scheduleResultsCron();
 
+// ─── CRON MONITORAMENTO DE CARD — intervalo/janela configuraveis ──────────────
+function scheduleMonitorCron() {
+  const { db } = require('../db/database');
+  let intervalMin = 60, startBRT = '09:00', endBRT = '20:00';
+  try {
+    const cfg = db.prepare('SELECT monitor_interval_min, monitor_window_start, monitor_window_end FROM analysis_config WHERE user_id=1').get();
+    if (cfg) {
+      if (cfg.monitor_interval_min) intervalMin = parseInt(cfg.monitor_interval_min);
+      if (cfg.monitor_window_start) startBRT = cfg.monitor_window_start;
+      if (cfg.monitor_window_end) endBRT = cfg.monitor_window_end;
+    }
+  } catch(e) {}
+
+  // Converter janela BRT → UTC (+3h)
+  function brtToUtcH(t) { const p=t.split(':'); return (parseInt(p[0])+3)%24; }
+  function brtToUtcM(t) { return parseInt(t.split(':')[1]||0); }
+  const startUtcH = brtToUtcH(startBRT), startUtcM = brtToUtcM(startBRT);
+  const endUtcH = brtToUtcH(endBRT), endUtcM = brtToUtcM(endBRT);
+
+  const now = new Date();
+  let nextRun = new Date(now);
+  const mins = nextRun.getUTCMinutes();
+  const interval = intervalMin;
+  const nextSlot = Math.ceil((mins + 1) / interval) * interval;
+  nextRun.setUTCMinutes(nextSlot % 60, 0, 0);
+  if (nextSlot >= 60) nextRun.setUTCHours(nextRun.getUTCHours() + Math.floor(nextSlot / 60));
+
+  const h = nextRun.getUTCHours(), m = nextRun.getUTCMinutes();
+  const afterEnd = h > endUtcH || (h === endUtcH && m > endUtcM);
+  const beforeStart = h < startUtcH || (h === startUtcH && m < startUtcM);
+  if (afterEnd) {
+    nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+    nextRun.setUTCHours(startUtcH, startUtcM, 0, 0);
+  } else if (beforeStart) {
+    nextRun.setUTCHours(startUtcH, startUtcM, 0, 0);
+  }
+
+  const msUntil = nextRun - now;
+  console.log('[CRON-MONITOR] Próxima verificação em ' + Math.round(msUntil/60000) + ' min (intervalo: ' + intervalMin + 'min)');
+
+  setTimeout(async function() {
+    const nowUtc = new Date();
+    const uh = nowUtc.getUTCHours(), um = nowUtc.getUTCMinutes();
+    const dentroJanela = (uh > startUtcH || (uh===startUtcH && um>=startUtcM)) &&
+                         (uh < endUtcH || (uh===endUtcH && um<=endUtcM));
+    if (dentroJanela) {
+      const st = getMonitorStatus();
+      if (!st.running) {
+        const date = getTodayDate();
+        console.log('[CRON-MONITOR] 🔎 Verificando cards para ' + date);
+        runCardMonitorRobot(date).then(function() {
+          const s = getMonitorStatus();
+          console.log('[CRON-MONITOR] ✅ Concluído — ' + s.processed + ' verificadas, ' + s.changed + ' com mudança, ' + s.reanalyzed + ' reanalisadas');
+        }).catch(function(e) {
+          console.error('[CRON-MONITOR] ❌ Erro:', e.message);
+        });
+      } else {
+        console.log('[CRON-MONITOR] Robô de monitoramento já rodando, pulando.');
+      }
+    } else {
+      console.log('[CRON-MONITOR] Fora da janela BRT, pulando.');
+    }
+    scheduleMonitorCron();
+  }, msUntil);
+}
+scheduleMonitorCron();
+
 // Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11 = AM (cedo) | 12,1-9 = PM (meio-dia em diante)
 function formatTime(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
@@ -445,6 +512,11 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
       <button class="btn btn-red" onclick="forceMonitorTest()">&#129514; Forcar</button>
     </div>
     <p id="mon-test-msg" style="font-size:11px;color:#888;margin-top:10px"></p>
+  </div>
+  <div class="card">
+    <div class="card-title">&#128226; Eventos Importantes</div>
+    <p style="font-size:11px;color:#888;margin-bottom:10px">Só erros, mudanças de card detectadas e reanálises — sem o log cheio (fica registrado entre execuções, até a próxima verificação).</p>
+    <div class="res-log" id="mon-important-log"><div style="padding:10px;color:#555;font-size:11px">Nenhum evento importante ainda.</div></div>
   </div>
   <div class="card" id="mon-status-card" style="display:none">
     <div class="card-title">&#128202; Status</div>
@@ -776,6 +848,31 @@ async function stopMonitorRobot() {
   } catch(e) {}
 }
 
+function renderImportantEvents(logs) {
+  const el = document.getElementById('mon-important-log');
+  if (!el) return;
+  var important = (logs || []).filter(function(l) {
+    return l.type === 'err' || l.type === 'warn' ||
+      /MUDANCA DETECTADA|REANALISADO/.test(l.msg);
+  });
+  if (!important.length) {
+    el.innerHTML = '<div style="padding:10px;color:#555;font-size:11px">Nenhum evento importante ainda.</div>';
+    return;
+  }
+  el.innerHTML = important.map(function(l) {
+    const cls = l.type === 'err' ? 'res-err' : l.type === 'warn' ? 'res-warn' : /REANALISADO/.test(l.msg) ? 'res-ok' : 'res-info';
+    return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
+  }).join('');
+}
+
+async function loadMonitorImportantOnce() {
+  try {
+    const r = await fetch(BASE + '/robot/monitor/status');
+    const d = await r.json();
+    renderImportantEvents(d.logs);
+  } catch(e) {}
+}
+
 async function pollMonitorStatus() {
   try {
     const r = await fetch(BASE + '/robot/monitor/status');
@@ -786,6 +883,7 @@ async function pollMonitorStatus() {
       return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
     }).join('');
     logEl.scrollTop = logEl.scrollHeight;
+    renderImportantEvents(d.logs);
 
     const stEl = document.getElementById('mon-st-txt');
     const sbar = document.getElementById('mon-sbar');
@@ -802,6 +900,7 @@ async function pollMonitorStatus() {
     }
   } catch(e) {}
 }
+loadMonitorImportantOnce();
 </script></body></html>`);
 });
 

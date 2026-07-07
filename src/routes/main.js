@@ -40,6 +40,13 @@ function navBar(user, active) {
       <button onclick="dismissResBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
+  <div id="mon-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(96,165,250,.06);border-bottom:1px solid rgba(96,165,250,.15)">
+    <span style="font-size:12px;color:#60a5fa">🔎 <strong><span id="mon-banner-cnt">0</span> mudança(s) no card</strong> detectada(s) às <strong><span id="mon-banner-time">--:--</span></strong> — <span id="mon-banner-reanalyzed"></span></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="${BASE}/robot" style="font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
+      <button onclick="dismissMonBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
+    </div>
+  </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
@@ -70,18 +77,27 @@ function navBar(user, active) {
       banner.style.display = 'none';
       try { localStorage.setItem('res_banner_dismissed', banner.dataset.lastRun || ''); } catch(e) {}
     }
+    function dismissMonBanner() {
+      var banner = document.getElementById('mon-banner');
+      banner.style.display = 'none';
+      try { localStorage.setItem('mon_banner_dismissed', banner.dataset.lastRun || ''); } catch(e) {}
+    }
     function checkRobots() {
       Promise.all([
         fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
-        fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).catch(function(){return {};})
+        fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).catch(function(){return {};}),
+        fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).catch(function(){return {};})
       ]).then(function(results) {
-        var pdf = results[0]; var res = results[1];
+        var pdf = results[0]; var res = results[1]; var mon = results[2];
         if (pdf.running) {
           badge.style.display = 'flex';
           badgeTxt.textContent = 'Robô PDF: ' + (pdf.progress||0) + '/' + (pdf.total||'?');
         } else if (res.running) {
           badge.style.display = 'flex';
           badgeTxt.textContent = 'Robô Resultados rodando...';
+        } else if (mon.running) {
+          badge.style.display = 'flex';
+          badgeTxt.textContent = 'Robô Monitoramento: ' + (mon.processed||0) + ' verificadas...';
         } else {
           badge.style.display = 'none';
         }
@@ -119,14 +135,37 @@ function navBar(user, active) {
         }
       }).catch(function(){});
     }
+    function checkMonitorBanner() {
+      fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).then(function(d){
+        if (!d.lastRun || !d.changed) return;
+        var monBanner = document.getElementById('mon-banner');
+        if (!monBanner) return;
+        var dismissed = false;
+        try { dismissed = localStorage.getItem('mon_banner_dismissed') === d.lastRun; } catch(e) {}
+        if (dismissed) return;
+        var lastRun = new Date(d.lastRun);
+        var diff = (Date.now() - lastRun) / 60000;
+        if (diff < 70) {
+          var h = String(lastRun.getHours()).padStart(2,'0');
+          var m = String(lastRun.getMinutes()).padStart(2,'0');
+          document.getElementById('mon-banner-time').textContent = h + ':' + m;
+          document.getElementById('mon-banner-cnt').textContent = d.changed;
+          document.getElementById('mon-banner-reanalyzed').textContent = d.reanalyzed ? (d.reanalyzed + ' reanalisada(s) automaticamente') : 'confira manualmente';
+          monBanner.dataset.lastRun = d.lastRun;
+          monBanner.style.display = 'flex';
+        }
+      }).catch(function(){});
+    }
     checkRobots();
     checkPdfBanner();
     checkResultsBanner();
-    setInterval(function(){ checkRobots(); checkResultsBanner(); }, 60000);
+    checkMonitorBanner();
+    setInterval(function(){ checkRobots(); checkResultsBanner(); checkMonitorBanner(); }, 60000);
     setInterval(checkRobots, 4000);
     // Expor funções de dismiss globalmente
     window.dismissPdfBanner = dismissPdfBanner;
     window.dismissResBanner = dismissResBanner;
+    window.dismissMonBanner = dismissMonBanner;
     window.downloadAndAnalyze = downloadAndAnalyze;
   })();
   </script>`;

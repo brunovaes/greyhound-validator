@@ -309,6 +309,21 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <input type="time" name="pdf_cron_time" value="${config.pdf_cron_time||'13:30'}">
     <div class="hint">Horário BRT em que o robô baixa os PDFs do dia seguinte</div>
   </div>
+  <div class="field">
+    <label>Intervalo do Robô de Monitoramento (min)</label>
+    <input type="number" name="monitor_interval_min" value="${config.monitor_interval_min||60}" min="15" max="240">
+    <div class="hint">A cada quantos minutos o robô revisita os cards pra checar retirada/troca de galgo</div>
+  </div>
+  <div class="field">
+    <label>Início da janela de monitoramento (BRT)</label>
+    <input type="time" name="monitor_window_start" value="${config.monitor_window_start||'09:00'}">
+    <div class="hint">Horário BRT de início da checagem automática de cards</div>
+  </div>
+  <div class="field">
+    <label>Fim da janela de monitoramento (BRT)</label>
+    <input type="time" name="monitor_window_end" value="${config.monitor_window_end||'20:00'}">
+    <div class="hint">Horário BRT de encerramento da checagem automática de cards</div>
+  </div>
 </div>
 </div>
 </div>
@@ -375,7 +390,10 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_linhas_cat_inferior INTEGER DEFAULT 3').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN racas_em_tela INTEGER DEFAULT 6').run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_interval_min INTEGER DEFAULT 60").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '09:00'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_end TEXT DEFAULT '20:00'").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
@@ -393,6 +411,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.results_window_start||'09:00',
       d.results_window_end||'18:30',
       d.pdf_cron_time||'13:30',
+      d.monitor_interval_min||60,
+      d.monitor_window_start||'09:00',
+      d.monitor_window_end||'20:00',
       user.id
     );
     res.json({ ok: true });

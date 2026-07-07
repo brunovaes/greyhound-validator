@@ -362,6 +362,59 @@ function isDayClosed(avbs) {
 
 var focusRefreshInterval = null;
 var alertCheckInterval = null;
+var serverSyncInterval = null;
+
+// Busca do banco os dados atualizados da sessao de hoje (o que os robos de
+// resultado/monitoramento ja tiverem gravado) e atualiza `results` em
+// memoria — sem isso, mudancas feitas pelos robos so apareciam depois de
+// um F5 manual na pagina.
+async function syncFromServer() {
+  try {
+    var now = new Date();
+    var todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    var sessionName = 'Races '+todayLabel;
+    var sr = await fetch(BASE+'/api/sessions');
+    if (!sr.ok) return;
+    var sessions = await sr.json();
+    var todaySession = Array.isArray(sessions) ? sessions.find(function(s){return s.name===sessionName;}) : null;
+    if (!todaySession) return;
+    var dr = await fetch(BASE+'/api/session/'+todaySession.id+'/races');
+    if (!dr.ok) return;
+    var dd = await dr.json();
+    if (!dd.races || !Array.isArray(dd.races)) return;
+
+    var focusedKey = (focusRaceIdx>=0 && results[focusRaceIdx]) ? (results[focusRaceIdx].hora+'|'+results[focusRaceIdx].corrida) : null;
+    var changedAny = false;
+
+    dd.races.forEach(function(r){
+      var idx = results.findIndex(function(x){ return x.hora===r.hora && x.corrida===r.corrida; });
+      if (idx === -1) return;
+      var cur = results[idx];
+      if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel) {
+        changedAny = true;
+      }
+      cur.nivel = r.nivel; cur.trapFav = r.trap_fav; cur.nameFav = r.name_fav;
+      cur.trapUnd = r.trap_und; cur.nameUnd = r.name_und; cur.pct = r.pct;
+      cur.perfilFav = r.perfil_fav; cur.perfilUnd = r.perfil_und; cur.obs = r.obs;
+      cur.odd = r.odd; cur.valor = r.valor; cur.avbNaoAberto = !!r.avb_nao_aberto;
+      cur.top3 = r.top3;
+      cur.histFav = r.hist_fav?JSON.parse(r.hist_fav):[];
+      cur.histUnd = r.hist_und?JSON.parse(r.hist_und):[];
+      cur.histAll = r.hist_all?JSON.parse(r.hist_all):[];
+      cur.dataCard = r.data_card||null;
+      cur.id = r.id;
+    });
+
+    if (changedAny) {
+      refreshFocusMode();
+      if (focusedKey) {
+        var stillIdx = results.findIndex(function(x){ return (x.hora+'|'+x.corrida)===focusedKey; });
+        if (stillIdx>=0) renderFocusPanel(results[stillIdx], stillIdx);
+      }
+      showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
+    }
+  } catch(e) { console.error('[syncFromServer] erro', e); }
+}
 
 // Checagem RAPIDA (a cada 15s) e independente do refresh geral da lista —
 // so atualiza a classe de piscar + dispara o som, sem precisar esperar o
@@ -396,6 +449,7 @@ function showDayEndMsg() {
   if (col) col.innerHTML = '';
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
   if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
+  if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
 }
 
 // Mensagem especifica pra quando o lote CARREGADO (avulso ou nao) e' inteiro
@@ -408,6 +462,7 @@ function showAllExpiredMsg() {
   if (col) col.innerHTML = '';
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
   if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
+  if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
 }
 
 function refreshFocusMode() {
@@ -469,6 +524,10 @@ function enterFocusMode() {
   if (alertCheckInterval) clearInterval(alertCheckInterval);
   alertCheckInterval = setInterval(checkRaceAlerts, 15000);
   checkRaceAlerts(); // roda uma vez na hora
+
+  // Sincroniza com o banco a cada 2 min (pega mudancas feitas pelos robos)
+  if (serverSyncInterval) clearInterval(serverSyncInterval);
+  serverSyncInterval = setInterval(syncFromServer, 120000);
 }
 
 function renderFocusPanel(r, idx) {
