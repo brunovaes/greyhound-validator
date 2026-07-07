@@ -55,28 +55,25 @@ function extractTrackFromText(text) {
 }
 
 // ── Extrai o card ATUAL (trap -> nome) da aba "card" ────────────────────────
-// HEURISTICA baseada em texto puro (nao temos os seletores CSS exatos dessa
-// pagina) — procura uma linha que seja so um numero 1-6 (badge do trap) e
-// pega o nome logo depois. Bem provavel que precise de calibracao apos o
-// primeiro teste real (igual aconteceu com o robo de resultados).
+// Essa aba mostra uma view tipo "Predictor/Tips", sem numero de trap
+// explicito — cada galgo aparece nessa ordem (que corresponde a ordem dos
+// traps 1-6): Nome | comentario do tip | "Form: XXXXX Tnr: Fulano" | "SP
+// Forecast: X/1 Topspeed: NN". A gente usa esse padrao de 4 linhas pra achar
+// os nomes, na ordem, logo apos a linha "Race Status: ...".
 function extractCurrentRunnersFromText(text) {
   const runners = [];
   const lines = (text || '').split('\n').map(l => l.trim()).filter(Boolean);
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^([1-6])$/);
-    if (!m) continue;
-    const trap = parseInt(m[1]);
-    if (runners.find(r => r.trap === trap)) continue;
-    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-      const cand = lines[j];
-      if (/^vacant$/i.test(cand) || /^res(erve)?$/i.test(cand)) {
-        runners.push({ trap, nome: '' });
-        break;
-      }
-      if (cand.length > 1 && !/^\d/.test(cand) && !/^[1-6]$/.test(cand)) {
-        runners.push({ trap, nome: cand });
-        break;
-      }
+  let idx = lines.findIndex(l => /^Race Status/i.test(l));
+  if (idx === -1) idx = 0; else idx++;
+  let trap = 1;
+  while (idx < lines.length && trap <= 6) {
+    if (idx + 2 < lines.length && /^Form:/i.test(lines[idx + 2])) {
+      const nome = lines[idx].replace(/\s*\((W|M)\)\s*$/i, '').trim();
+      runners.push({ trap, nome });
+      trap++;
+      idx += 4;
+    } else {
+      idx++;
     }
   }
   return runners;
@@ -202,6 +199,17 @@ async function runCardMonitorRobot(targetDate) {
         if (!currentRunners.length) {
           addLog('warn', '  nao consegui extrair os corredores atuais dessa pagina (formato inesperado) — pulando');
           addLog('info', '  texto completo (debug): ' + cardText.replace(/\n/g, ' | '));
+          continue;
+        }
+
+        // A extracao infere o trap pela ORDEM em que os galgos aparecem (essa
+        // view nao mostra numero de trap explicito). Isso e confiavel pra
+        // SUBSTITUICAO (galgo trocado no mesmo trap), mas se um trap ficar
+        // vago SEM substituto, a lista teria menos de 6 nomes e a ordem dos
+        // que vem depois desalinha. Se nao vierem exatamente 6, nao arrisca
+        // comparar por posicao — so avisa pra checar manualmente.
+        if (currentRunners.length !== raceCard.length) {
+          addLog('warn', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — pagina mostra ' + currentRunners.length + ' galgo(s) mas o card salvo tem ' + raceCard.length + '. Pode ser retirada sem substituto — checar manualmente, nao arriscando comparar por posicao.');
           continue;
         }
 
