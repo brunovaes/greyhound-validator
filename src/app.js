@@ -166,6 +166,7 @@ async function autoCheckAndAnalyze() {
                 pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
                 obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
                 avbNaoAberto: !!r.avb_nao_aberto,
+                histAll: r.hist_all?JSON.parse(r.hist_all):[],
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
                 id:r.id
               });
@@ -452,7 +453,8 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-inputs-row">'
     + '<div class="fp-inp-group">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)"></div>'
     + '<div class="fp-inp-group">Valor R$ <input type="text" id="fp-val" placeholder="-" value="'+(r.valor||'')+'" oninput="updateFocusField(\'valor\',this.value)"></div>'
-    + '<div class="fp-inp-group fp-check-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label></div>'
+    + '<div class="fp-inp-group fp-check-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
+    + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:16px;line-height:1;margin-left:4px">&#128196;</a></div>'
     + '</div>'
     + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
 }
@@ -753,6 +755,21 @@ function openValModal(key){
   document.getElementById('val-body').innerHTML=buildDogCard(r.trapFav,r.nameFav,r.perfilFav,r.histFav)+'<div class="val-sep"></div>'+buildDogCard(r.trapUnd,r.nameUnd,r.perfilUnd,r.histUnd);
   document.getElementById('val-modal').classList.add('open');
 }
+function openAllDogsModal(key){
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[ALLDOGS] nao achou:',key);return;}
+  var all=r.histAll&&r.histAll.length?r.histAll:null;
+  document.getElementById('val-title').textContent='Corrida completa — '+(r.corrida||'');
+  if(!all){
+    document.getElementById('val-body').innerHTML='<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Histórico completo não disponível para esta corrida (sessão salva antes deste recurso).</div>';
+  } else {
+    document.getElementById('val-body').innerHTML=all.map(function(g,i){
+      var card=buildDogCard(g.trap,g.nome,'',g.historico);
+      return card+(i<all.length-1?'<div class="val-sep"></div>':'');
+    }).join('');
+  }
+  document.getElementById('val-modal').classList.add('open');
+}
 function extrairRemarks(mixed){
   if(!mixed)return'';
   var commaIdx=mixed.indexOf(',');
@@ -901,7 +918,7 @@ function renderTable(){
           +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
         +'</div>'
       +'</div>';
-    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" value="'+(r.valor||'')+'" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label></div>';
+    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" value="'+(r.valor||'')+'" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div><div style="display:flex;align-items:center;gap:5px"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:13px;line-height:1">&#128196;</a></div></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+'">'
       +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'

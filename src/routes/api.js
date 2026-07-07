@@ -546,6 +546,12 @@ function calcularNivel(pct, config) {
   return 'baixa';
 }
 
+// Mapeia as linhas de historico de um galgo pro formato slim usado nos modais
+// (mesma logica ja usada em histFav/histUnd, agora reaproveitada pra histAll)
+function mapHistLinhas(linhasValidas) {
+  return (linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)}));
+}
+
 // FUNCAO PRINCIPAL: processa uma corrida extraida
 function processarCorrida(corridaRaw, config) {
   const { hora, corrida, dist, classe, postPick, trapsCard, galgos } = corridaRaw;
@@ -740,7 +746,7 @@ function processarCorrida(corridaRaw, config) {
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
 
   if (diffAvB < thresholdSkip) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, trapsCard:trapsCard||[], scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})) };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, trapsCard:trapsCard||[], scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})) };
   }
 
   const pct = scoreToPct(diffAvB);
@@ -753,8 +759,9 @@ function processarCorrida(corridaRaw, config) {
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
     top3, trapsCard:trapsCard||[],
     obs:`${ranking} | ${narrativa}${notaReanalise}`,
-    histFav:(melhor.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)})),
-    histUnd:(pior.linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)})),
+    histFav:mapHistLinhas(melhor.linhasValidas),
+    histUnd:mapHistLinhas(pior.linhasValidas),
+    histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})),
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})),
     raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome}))
   };
@@ -984,7 +991,7 @@ router.post('/session', express.json(), (req, res) => {
     const { name, races } = req.body;
     const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(user.id, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
     const sessionId = result.lastInsertRowid;
-    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for(const r of races) {
       const p=(r.hora||'').split(':');
       let h=parseInt(p[0]||0);
@@ -992,7 +999,7 @@ router.post('/session', express.json(), (req, res) => {
       h=h-4; if(h<0)h+=24; // UK→BRT
       const horaBr=p.length>=2?h+':'+p[1]:'';
       const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,r.avbNaoAberto?1:0);
+      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,r.avbNaoAberto?1:0,r.histAll?JSON.stringify(r.histAll):null);
     }
     res.json({ ok:true, sessionId });
   } catch(err) { res.status(500).json({ error:err.message }); }
