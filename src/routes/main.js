@@ -405,14 +405,14 @@ router.get('/live', (req, res) => {
 <title>Live - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
 .content{padding:16px 20px;max-width:1900px;margin:0 auto}
 h1{font-size:18px;font-weight:700;margin-bottom:12px}
 .live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 @media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.live-grid{grid-template-columns:1fr}}
-.live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
+.live-panel{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
 .live-panel h3{font-size:11px;color:#666;padding:6px 10px;border-bottom:1px solid #222;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
 .live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
@@ -518,7 +518,7 @@ router.get('/live/calibrar', requireAdmin, (req, res) => {
 <title>Calibrador de Tela - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
+body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
 .wrap{display:grid;grid-template-columns:340px 1fr;height:100vh}
 .panel{background:#111;border-right:1px solid #333;padding:16px;overflow-y:auto}
 .panel h2{font-size:14px;margin-bottom:14px;color:#22c55e}
@@ -687,14 +687,14 @@ router.get('/live/calibrar3', requireAdmin, (req, res) => {
 <title>Calibrador 3 Telas - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0a0a;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .content{padding:16px 20px;max-width:1900px;margin:0 auto}
 h1{font-size:16px;font-weight:700;margin-bottom:4px}
 .sub{font-size:12px;color:#888;margin-bottom:14px}
 .live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 @media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.live-grid{grid-template-columns:1fr}}
-.live-panel{background:#111;border:1px solid #333;border-radius:10px;overflow:hidden}
+.live-panel{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
 .live-panel h3{font-size:11px;color:#666;padding:6px 10px;border-bottom:1px solid #222;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
 .live-crop iframe{position:absolute;border:none}

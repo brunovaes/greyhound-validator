@@ -80,16 +80,18 @@ router.get('/admin/usuarios', requireAdmin, (req, res) => {
 <title>Usuarios - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
 .content{padding:24px;max-width:1000px;margin:0 auto}h1{font-size:20px;font-weight:700;margin-bottom:20px}
-.form-card{background:#111;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:20px;border-top:2px solid #22c55e}
+.form-card{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:20px;border-top:2px solid #22c55e}
 .form-card h2{font-size:13px;color:#22c55e;margin-bottom:14px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
 .field label{display:block;font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
-.field input,.field select{width:100%;padding:7px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#f0f0f0;font-size:13px}
+.field input,.field select{width:100%;padding:7px 10px;background:#0D1117;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:13px}
 .field input:focus,.field select:focus{outline:none;border-color:#22c55e}
 .btn{padding:8px 16px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:13px;width:100%}.btn:hover{background:#16a34a}
-table{width:100%;border-collapse:collapse;background:#111;border:1px solid #333;border-radius:8px;overflow:hidden}
-th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}
+table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden}
+th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}
 td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
 .badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
 .badge-admin{background:rgba(249,115,22,.15);color:#f97316}.badge-user{background:rgba(100,100,100,.15);color:#888}
