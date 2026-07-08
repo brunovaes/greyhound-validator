@@ -228,6 +228,10 @@ ${designTokensCSS()}
 .main.focus-mode{grid-template-columns:250px 170px 1fr}
 .sidebar{background:var(--sur);border-right:1px solid var(--bdr2);padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
 .sidebar h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut)}
+.tabnav{background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:2px}
+.tabbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s;text-decoration:none;box-sizing:border-box}
+.tabbtn:hover{background:rgba(34,197,94,.08);color:#ccc}
+.tabbtn.active{background:rgba(34,197,94,.12);color:#22c55e}
 .uz{border:2px dashed var(--bdr2);border-radius:8px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
 .uz:hover,.uz.drag{border-color:var(--grn);background:rgba(34,197,94,.08)}
 .uz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
@@ -374,15 +378,17 @@ ${navBar(user, 'analisar')}
 <div class="main" id="main-layout">
   <div class="sidebar">
     <div>
-      <h2>PDFs de corridas</h2>
-      <label class="btn-go" id="rz" for="race-input" style="display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;text-decoration:none">
-        <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
-        &#128193; Análise por PDFs
-      </label>
+      <h2>Analisar corridas</h2>
+      <div class="tabnav">
+        <label class="tabbtn active" id="rz" for="race-input">
+          <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
+          &#128193; Carregando PDF
+        </label>
+        <button class="tabbtn" id="btngo">&#9889; Automaticamente</button>
+      </div>
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <button class="btn-go" id="btngo">Análise Automática</button>
     <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
