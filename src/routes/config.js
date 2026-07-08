@@ -177,7 +177,7 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="grid">
 <div class="field"><label>Distancia minima (m)</label><input type="number" name="dist_min" value="${config.dist_min}" min="200" max="600"><span class="hint">Corridas abaixo sao descartadas</span></div>
 <div class="field"><label>Distancia maxima (m)</label><input type="number" name="dist_max" value="${config.dist_max}" min="400" max="1000"><span class="hint">Corridas acima sao descartadas</span></div>
-<div class="field"><label>Min. corridas uteis</label><input type="number" name="min_corridas_uteis" value="${config.min_corridas_uteis}" min="1" max="10"><span class="hint">Abaixo disso solicita capivara</span></div>
+<div class="field"><label>Mín. corridas na pista/distância exata</label><input type="number" name="min_corridas_uteis" value="${config.min_corridas_uteis}" min="1" max="10"><span class="hint">Quantas linhas do histórico precisam ser na MESMA pista e MESMA distância da corrida de hoje pra considerar o galgo elegível. Abaixo disso, ele é eliminado do AvB.</span></div>
 <div class="field"><label>Classes aceitas</label><input type="text" name="classes_aceitas" value="${config.classes_aceitas}"><span class="hint">Separadas por virgula</span></div>
 </div>
 </div>

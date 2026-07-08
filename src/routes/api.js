@@ -305,18 +305,21 @@ function detectarNovoNaCategoriaComGap(linhasValidas, corridaClasse, config) {
 }
 
 // CAMADA 1: Filtrar linhas validas do historico de cada galgo
-function filtrarLinhasValidas(historico, corridaDist, corridaClasse, config) {
+function filtrarLinhasValidas(historico, corridaDist, corridaClasse, corridaPista, config) {
   const classeLevel = getClassLevel(corridaClasse);
-  const distMin = corridaDist * 0.90;
-  const distMax = corridaDist * 1.10;
+  const pistaAlvo = (corridaPista||'').trim().toLowerCase();
 
   return historico.filter(linha => {
     // Descartar classes invalidas (HP, Trial, Solo, OR)
     const classeInvalida = ['HP','T1','T2','T3','T4','T5','T6','OR','Mdn','Trial','Solo','T','S1','S2','S3','S4','S5','S6'];
     if (classeInvalida.some(c => (linha.classe||'').toUpperCase().includes(c.toUpperCase()))) return false;
 
-    // Distancia compativel (+/- 10%)
-    if (!linha.dist || linha.dist < distMin || linha.dist > distMax) return false;
+    // Pista E distancia EXATAS — corrida de 480m na Hove so conta historico
+    // tambem rodado na Hove, tambem a 480m. Sem tolerancia: pistas diferentes
+    // tem configuracoes fisicas diferentes (curvas, retas) mesmo com a mesma
+    // distancia nominal, e isso afeta o tempo de forma nao-comparavel.
+    if (!linha.dist || linha.dist !== corridaDist) return false;
+    if (pistaAlvo && (linha.pista||'').trim().toLowerCase() !== pistaAlvo) return false;
 
     // Classe comparavel (max_niveis_pool configuravel, default 2)
     const linhaLevel = getClassLevel(linha.classe);
@@ -569,9 +572,12 @@ function processarCorrida(corridaRaw, config) {
   const elegiveis = [];
   const eliminados = [];
 
+  const pistaAtual = (corrida||'').split(' ')[0] || '';
+  const minCorridasUteis = config.min_corridas_uteis || 3;
+
   for (const galgo of (galgos||[])) {
     if (trapsCard && trapsCard.length && !trapsCard.includes(galgo.trap)) continue;
-    const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, config);
+    const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config);
 
     // Verificar retorno de inatividade longa (trial/solo após pausa >= threshold dias)
     const inatividade = detectarRetornoInatividade(galgo.historico||[], config);
@@ -588,8 +594,8 @@ function processarCorrida(corridaRaw, config) {
       continue;
     }
 
-    if (linhasValidas.length < 3) {
-      eliminados.push({ trap:galgo.trap, motivo:`${linhasValidas.length} linha(s) valida(s)` });
+    if (linhasValidas.length < minCorridasUteis) {
+      eliminados.push({ trap:galgo.trap, motivo:`${linhasValidas.length} linha(s) na pista/distancia exata (min. ${minCorridasUteis})` });
       continue;
     }
     const calTmsAjustados = linhasValidas.map(l=>ajustarCaltm(l, classe, config));
