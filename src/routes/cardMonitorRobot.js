@@ -42,7 +42,27 @@ function similarity(a, b) {
   return matches / longer.length;
 }
 
-// Pista aparece como uma linha isolada, logo ANTES de uma linha tipo "Jul 6"
+// Converte hora UK crua (ex: "9:16") pra minutos do dia em BRT — mesma regra
+// de conversao usada no resto do sistema (10,11=AM; 12,1-9=PM; BRT=UK-4h)
+function horaUkParaMinutosBrt(horaUk) {
+  const p = (horaUk || '').split(':');
+  if (p.length < 2) return null;
+  let h = parseInt(p[0]);
+  const min = parseInt(p[1]) || 0;
+  if (h >= 1 && h <= 9) h += 12; // 1-9 = PM
+  h = h - 4; if (h < 0) h += 24; // UK -> BRT
+  return h * 60 + min;
+}
+
+// Minutos do dia agora, em BRT (servidor roda em UTC no Railway; BRT = UTC-3)
+function agoraMinutosBrt() {
+  const now = new Date();
+  let m = (now.getUTCHours() * 60 + now.getUTCMinutes()) - 180;
+  if (m < 0) m += 1440;
+  return m;
+}
+
+
 // (mes abreviado + dia, sem ano) — formato diferente do usado na pagina de
 // resultado ("Sheffield 07/07/26"), por isso precisa de logica separada aqui.
 
@@ -242,6 +262,7 @@ async function runCardMonitorRobot(targetDate) {
   status.logs = []; status.processed = 0; status.changed = 0; status.reanalyzed = 0;
   status.suspicious = false; status.suspiciousReason = '';
   let extractFailCount = 0;
+  const pistasSuspeitas = new Set();
 
   const DATE = targetDate || new Date().toISOString().slice(0, 10);
   addLog('info', 'Monitorando cards de ' + DATE);
@@ -298,7 +319,22 @@ async function runCardMonitorRobot(targetDate) {
       // Acha os candidatos na lista pelo horario (UK 12h cru, igual r.hora) —
       // pode ter mais de um (varias pistas correm no mesmo horario)
       const candidates = races.filter(function(r) { return r.time === dbRace.hora; });
-      if (!candidates.length) { addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — nao esta mais na lista (ja rodou ou nao encontrada)'); continue; }
+      if (!candidates.length) {
+        const minutosRace = horaUkParaMinutosBrt(dbRace.hora);
+        const minutosAgora = agoraMinutosBrt();
+        const aindaNaoDeviaTerPassado = minutosRace !== null && minutosRace >= minutosAgora;
+        if (aindaNaoDeviaTerPassado) {
+          // Corrida ainda esta no horario (nao devia ter acontecido ainda) mas
+          // sumiu da lista ao vivo — sinal forte de que a pista inteira foi
+          // cancelada/retirada da programacao do dia, nao que a corrida ja rodou
+          addLog('warn', '⚠️ ' + dbRace.corrida + ' ' + dbRace.hora + ' — ainda nao devia ter acontecido (' + Math.round(minutosRace/60)+'h'+String(minutosRace%60).padStart(2,'0') + ' BRT) mas sumiu da lista ao vivo. Pista pode ter sido cancelada — verificar manualmente.');
+          const trackAbbr = (dbRace.corrida || '').split(' ')[0];
+          pistasSuspeitas.add(trackAbbr);
+        } else {
+          addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — nao esta mais na lista (ja rodou ou nao encontrada)');
+        }
+        continue;
+      }
 
       status.processed++;
       addLog('info', 'Verificando ' + dbRace.corrida + ' ' + dbRace.hora + (candidates.length > 1 ? ' (' + candidates.length + ' candidatos no mesmo horario)' : '') + '...');
@@ -536,6 +572,17 @@ async function runCardMonitorRobot(targetDate) {
       status.suspicious = true;
       status.suspiciousReason = extractFailCount + ' de ' + status.processed + ' corridas verificadas falharam em confirmar a pista ou extrair os corredores — provavel mudanca no formato da pagina do Racing Post. Mudancas de card dessa rodada podem estar incompletas.';
       addLog('err', '⚠️ RODADA SUSPEITA: ' + status.suspiciousReason);
+    }
+
+    // Resumo de pistas com corrida(s) que ainda nao deviam ter acontecido mas
+    // sumiram da lista ao vivo — sinal de possivel cancelamento do card
+    // inteiro daquela pista hoje (nao so retirada de um galgo)
+    if (pistasSuspeitas.size) {
+      status.suspicious = true;
+      const lista = Array.from(pistasSuspeitas).join(', ');
+      status.suspiciousReason = (status.suspiciousReason ? status.suspiciousReason + ' | ' : '') +
+        'Possivel cancelamento de card inteiro: ' + lista + ' — corrida(s) ainda no horario mas sumiram da lista ao vivo.';
+      addLog('err', '⚠️ PISTA(S) POSSIVELMENTE CANCELADA(S) HOJE: ' + lista + ' — verificar manualmente.');
     }
 
   } catch (e) {
