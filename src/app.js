@@ -407,9 +407,15 @@ async function syncFromServer() {
 
     if (changedAny) {
       refreshFocusMode();
+      // So re-mostra a corrida que estava em foco se ela AINDA e valida pra
+      // exibir agora (nao passou do horario nesse meio-tempo) — senao, deixa
+      // o refreshFocusMode() ja ter avancado sozinho pra proxima, sem forcar
+      // de volta uma corrida velha que ja devia ter saido da tela.
       if (focusedKey) {
         var stillIdx = results.findIndex(function(x){ return (x.hora+'|'+x.corrida)===focusedKey; });
-        if (stillIdx>=0) renderFocusPanel(results[stillIdx], stillIdx);
+        if (stillIdx>=0 && shouldShowRace(results[stillIdx])) {
+          renderFocusPanel(results[stillIdx], stillIdx);
+        }
       }
       showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
     }
