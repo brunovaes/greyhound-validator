@@ -91,23 +91,26 @@ function extractTrackFromText(text) {
 // traps 1-6): Nome | comentario do tip | "Form: XXXXX Tnr: Fulano" | "SP
 // Forecast: X/1 Topspeed: NN". A gente usa esse padrao de 4 linhas pra achar
 // os nomes, na ordem, logo apos a linha "Race Status: ...".
+// Extrai os nomes dos corredores atuais, na ORDEM em que aparecem na pagina
+// (nao da pra confiar que posicao = trap, porque o numero do trap so existe
+// como badge visual, nao como texto simples — entao devolve so os nomes; o
+// casamento com o trap certo e feito depois por IDENTIDADE, via
+// matchRunnersToRaceCard, no lugar de assumir a ordem).
 function extractCurrentRunnersFromText(text) {
-  const runners = [];
+  const names = [];
   const lines = (text || '').split('\n').map(l => l.trim()).filter(Boolean);
   let idx = lines.findIndex(l => /^Race Status/i.test(l));
   if (idx === -1) idx = 0; else idx++;
-  let trap = 1;
-  while (idx < lines.length && trap <= 6) {
+  while (idx < lines.length && names.length < 6) {
     if (idx + 2 < lines.length && /^Form:/i.test(lines[idx + 2])) {
       const nome = lines[idx].replace(/\s*\((W|M)\)\s*$/i, '').trim();
-      runners.push({ trap, nome });
-      trap++;
+      names.push(nome);
       idx += 4;
     } else {
       idx++;
     }
   }
-  return runners;
+  return names;
 }
 
 // ── Extrai o historico (linhas de corrida) de UM galgo especifico dentro do
@@ -151,6 +154,49 @@ function extractDogHistoricoFromFormText(text, dogName) {
     i++;
   }
   return { historico, debugNote: 'match "' + lines[startIdx] + '" (score ' + bestScore.toFixed(2) + '), cabecalho colunas ' + (foundColHeader ? 'achado' : 'NAO achado') + ', ' + historico.length + ' linhas extraidas' };
+}
+
+// Casa os nomes extraidos (ordem NAO confiavel como trap, ja que o numero do
+// trap so existe como badge visual na pagina, nao como texto simples) contra
+// os traps do race_card salvo — por IDENTIDADE (nome), nao por posicao. Isso
+// e o que permite detectar retirada SEM substituto corretamente: o trap cujo
+// nome antigo nao aparece em lugar nenhum da lista nova e o vago, nao importa
+// em que posicao os outros ficaram depois disso.
+function matchRunnersToRaceCard(extractedNames, raceCard) {
+  const rcPool = raceCard.map(g => ({ trap: g.trap, nome: g.nome, used: false }));
+  const curPool = extractedNames.map(n => ({ nome: n, used: false }));
+
+  // Passo 1: casa por identidade (nome igual/substring) — esses NAO mudaram
+  rcPool.forEach(rc => {
+    const found = curPool.find(c => !c.used && namesMatch(c.nome, rc.nome));
+    if (found) { found.used = true; rc.used = true; }
+  });
+
+  const rcSobra = rcPool.filter(rc => !rc.used);
+  const curSobra = curPool.filter(c => !c.used);
+
+  if (!rcSobra.length && !curSobra.length) {
+    return { changes: [], vagos: [], ok: true }; // tudo bateu, nada mudou
+  }
+
+  if (curSobra.length > rcSobra.length) {
+    // extraiu mais corredores "novos" do que sobrou trap pra encaixar —
+    // sinal de erro de extracao (nomes duplicados/lixo), nao arrisca
+    return { changes: [], vagos: [], ok: false };
+  }
+
+  // Pareia o que sobrou 1-a-1 (assume ordem relativa — funciona bem pra 1-2
+  // substituicoes simultaneas). O que sobrar de trap sem nome novo pra
+  // encaixar e retirada sem substituto (vago).
+  const changes = [], vagos = [];
+  rcSobra.forEach((rc, i) => {
+    if (i < curSobra.length) {
+      changes.push({ trap: rc.trap, nomeAntigo: rc.nome, nomeNovo: curSobra[i].nome });
+    } else {
+      vagos.push(rc);
+    }
+  });
+  return { changes, vagos, ok: true };
 }
 
 // ── Robô principal ────────────────────────────────────────────────────────────
@@ -270,48 +316,50 @@ async function runCardMonitorRobot(targetDate) {
           continue;
         }
 
-        // A extracao infere o trap pela ORDEM em que os galgos aparecem (essa
-        // view nao mostra numero de trap explicito). Isso e confiavel pra
-        // SUBSTITUICAO (galgo trocado no mesmo trap), mas se um trap ficar
-        // vago SEM substituto, a lista teria menos de 6 nomes e a ordem dos
-        // que vem depois desalinha. Se nao vierem exatamente 6, nao arrisca
-        // comparar por posicao — so avisa pra checar manualmente.
-        if (currentRunners.length !== raceCard.length) {
-          addLog('warn', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — pagina mostra ' + currentRunners.length + ' galgo(s) mas o card salvo tem ' + raceCard.length + '. Pode ser retirada sem substituto — checar manualmente, nao arriscando comparar por posicao.');
+        // Casamento por IDENTIDADE (nome), nao por posicao/ordem — o numero
+        // do trap so existe como badge visual na pagina (nao da pra ler como
+        // texto), e confiar na ordem quebra quando um trap fica vago sem
+        // substituto (a lista so "pula" ele, sem marcador nenhum).
+        const matchResult = matchRunnersToRaceCard(currentRunners, raceCard);
+        if (!matchResult.ok) {
+          addLog('warn', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — extracao inconsistente (mais corredores extraidos do que traps no card salvo) — pulando pra nao arriscar');
+          extractFailCount++;
           continue;
         }
 
-        // Compara com o race_card salvo
-        const changes = [];
-        raceCard.forEach(function(g) {
-          const atual = currentRunners.find(function(r) { return r.trap === g.trap; });
-          if (!atual) return; // nao achou esse trap na pagina — nao mexe (evita falso positivo)
-          if (!namesMatch(atual.nome, g.nome)) {
-            changes.push({ trap: g.trap, nomeAntigo: g.nome, nomeNovo: atual.nome });
-          }
-        });
+        const changes = matchResult.changes;
+        const vagos = matchResult.vagos;
 
-        if (!changes.length) {
+        if (!changes.length && !vagos.length) {
           addLog('ok', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — sem alteracoes no card');
           await new Promise(r => setTimeout(r, 1500));
           continue;
         }
 
-        status.changed++;
-        addLog('warn', '  MUDANCA DETECTADA em ' + dbRace.corrida + ' ' + dbRace.hora + ': ' +
-          changes.map(function(c){return 'T'+c.trap+' "'+c.nomeAntigo+'" -> "'+(c.nomeNovo||'VAGO')+'"';}).join(', '));
+        if (vagos.length) {
+          addLog('warn', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — trap(s) vago(s) sem substituto: ' + vagos.map(v => 'T'+v.trap+' "'+v.nome+'"').join(', ') + '. Card atualizado (retirada marcada), sem reanalise automatica pra esse(s) trap(s).');
+        }
 
-        // Atualiza o race_card com os nomes novos (mesmo se nao conseguir reanalisar depois)
+        status.changed++;
+        if (changes.length) {
+          addLog('warn', '  MUDANCA DETECTADA em ' + dbRace.corrida + ' ' + dbRace.hora + ': ' +
+            changes.map(function(c){return 'T'+c.trap+' "'+c.nomeAntigo+'" -> "'+c.nomeNovo+'"';}).join(', '));
+        }
+
+        // Atualiza o race_card com os nomes novos — substituicoes trocam o
+        // nome, vagos ficam com nome vazio (retirada sem substituto)
         const novoRaceCard = raceCard.map(function(g) {
           const ch = changes.find(function(c) { return c.trap === g.trap; });
-          return ch ? { trap: g.trap, nome: ch.nomeNovo } : g;
+          if (ch) return { trap: g.trap, nome: ch.nomeNovo };
+          const vg = vagos.find(function(v) { return v.trap === g.trap; });
+          if (vg) return { trap: g.trap, nome: '' };
+          return g;
         });
         db.prepare('UPDATE races SET race_card=? WHERE id=?').run(JSON.stringify(novoRaceCard), dbRace.id);
 
-        // Se algum trap ficou vago (retirada sem substituto), so atualiza o card e segue
-        const changesComGalgoNovo = changes.filter(function(c) { return c.nomeNovo; });
-        if (!changesComGalgoNovo.length) {
-          addLog('info', '  retirada sem substituto — card atualizado, sem reanalise (galgo insuficiente)');
+        // Se so teve retirada sem substituto (nenhuma substituicao de verdade
+        // pra reanalisar), so atualiza o card e segue
+        if (!changes.length) {
           await new Promise(r => setTimeout(r, 1500));
           continue;
         }
@@ -337,7 +385,7 @@ async function runCardMonitorRobot(targetDate) {
 
         let algumFalhou = false;
         const galgosNovos = {}; // trap -> {nome, historico}
-        changesComGalgoNovo.forEach(function(c) {
+        changes.forEach(function(c) {
           const extraido = extractDogHistoricoFromFormText(formText, c.nomeNovo);
           addLog('info', '  T' + c.trap + ' "' + c.nomeNovo + '": ' + extraido.debugNote);
           if (!extraido.historico.length) { algumFalhou = true; return; }
@@ -351,17 +399,22 @@ async function runCardMonitorRobot(targetDate) {
         }
 
         // Monta a corrida sintetica: galgos que nao mudaram usam o hist_all ja
-        // salvo, galgos trocados usam o historico recem-raspado
+        // salvo, galgos trocados usam o historico recem-raspado. Trap vago
+        // (retirada sem substituto) e EXCLUIDO da analise — nao faz sentido
+        // competir usando o historico antigo de um galgo que nem corre mais.
         let histAllAntigo = [];
         try { if (dbRace.hist_all) histAllAntigo = JSON.parse(dbRace.hist_all); } catch(e) {}
 
-        const galgosParaAnalise = novoRaceCard.map(function(g) {
-          if (galgosNovos[g.trap]) {
-            return { trap: g.trap, nome: galgosNovos[g.trap].nome, historico: galgosNovos[g.trap].historico };
-          }
-          const antigo = histAllAntigo.find(function(h) { return h.trap === g.trap; });
-          return { trap: g.trap, nome: g.nome, historico: (antigo && antigo.historico) || [] };
-        });
+        const trapsVagos = vagos.map(function(v){ return v.trap; });
+        const galgosParaAnalise = novoRaceCard
+          .filter(function(g) { return trapsVagos.indexOf(g.trap) === -1; })
+          .map(function(g) {
+            if (galgosNovos[g.trap]) {
+              return { trap: g.trap, nome: galgosNovos[g.trap].nome, historico: galgosNovos[g.trap].historico };
+            }
+            const antigo = histAllAntigo.find(function(h) { return h.trap === g.trap; });
+            return { trap: g.trap, nome: g.nome, historico: (antigo && antigo.historico) || [] };
+          });
 
         const postPickMatch = cardText.match(/POST PICK:\s*([\d-]+)/i);
         const postPick = postPickMatch ? postPickMatch[1] : '';
@@ -372,7 +425,7 @@ async function runCardMonitorRobot(targetDate) {
           dist: dbRace.dist,
           classe: (dbRace.corrida || '').split(' ').pop(),
           postPick: postPick,
-          trapsCard: novoRaceCard.map(function(g){ return g.trap; }),
+          trapsCard: galgosParaAnalise.map(function(g){ return g.trap; }),
           galgos: galgosParaAnalise,
           trackFull: scrapedTrack || dbRace.track_full || null
         };
