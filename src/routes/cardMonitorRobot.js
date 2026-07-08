@@ -45,6 +45,37 @@ function similarity(a, b) {
 // Pista aparece como uma linha isolada, logo ANTES de uma linha tipo "Jul 6"
 // (mes abreviado + dia, sem ano) — formato diferente do usado na pagina de
 // resultado ("Sheffield 07/07/26"), por isso precisa de logica separada aqui.
+
+// Dicionario de abreviacoes JA CONFIRMADAS em producao — usado com prioridade
+// sobre o algoritmo generico. Necessario porque abreviacao pura por
+// subsequencia de letras pode colidir entre pistas parecidas (ex: "DunPk"
+// bate tanto em "Dunmore Park" quanto em "Dunstall Park" — letras na mesma
+// ordem, mas sao pistas diferentes). Se aparecer uma pista nova que nao esta
+// aqui, cai no algoritmo generico como antes (funciona bem pra a maioria,
+// so falha em colisoes como essa).
+const KNOWN_TRACK_ABBR = {
+  dunpk: 'dunmorepark',
+  cpark: 'centralpark',
+  yrmth: 'yarmouth',
+  sland: 'sunderland',
+  towc: 'towcester',
+  sheff: 'sheffield',
+  newc: 'newcastle',
+  trlee: 'tralee',
+  romfd: 'romford',
+  youghl: 'youghal',
+  harlow: 'harlow',
+  cork: 'cork',
+  notts: 'nottingham',
+  kinsly: 'kinsley',
+  vlley: 'valley',
+  thurl: 'thurles',
+  pelaw: 'starpelaw',
+  donc: 'doncaster',
+  hove: 'hove',
+  monmr: 'monmore',
+};
+
 // Comparacao especifica pra abreviacao de pista (ex: "CPark" vs "Central
 // Park", "DunPk" vs "Dunmore Park") — abreviacoes British greyhound tipicamente
 // removem vogais/letras mas mantem a ORDEM, entao subsequencia ordenada e
@@ -53,6 +84,11 @@ function trackAbbrMatches(abbr, fullName) {
   const a = (abbr || '').toLowerCase().replace(/[^a-z]/g, '');
   const f = (fullName || '').toLowerCase().replace(/[^a-z]/g, '');
   if (!a || !f) return false;
+
+  // Prioridade: dicionario curado (evita colisao tipo DunPk x Dunstall Park)
+  if (KNOWN_TRACK_ABBR[a]) return KNOWN_TRACK_ABBR[a] === f;
+
+  // Fallback: subsequencia ordenada (pra pistas novas ainda nao mapeadas)
   let i = 0;
   for (let j = 0; j < f.length && i < a.length; j++) {
     if (f[j] === a[i]) i++;
