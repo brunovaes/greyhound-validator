@@ -50,7 +50,10 @@ function navBar(user, active) {
   </div>
   <div id="suspicious-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.1);border-bottom:1px solid rgba(239,68,68,.3)">
     <span style="font-size:12px;color:#ef4444">⚠️ <strong>Rodada suspeita</strong> — <span id="suspicious-banner-msg"></span></span>
-    <a href="${BASE}/robot" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="${BASE}/robot" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
+      <button onclick="dismissSuspiciousBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece se continuar suspeito depois)">×</button>
+    </div>
   </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
@@ -87,6 +90,12 @@ function navBar(user, active) {
       banner.style.display = 'none';
       try { localStorage.setItem('mon_banner_dismissed', banner.dataset.lastRun || ''); } catch(e) {}
     }
+    function dismissSuspiciousBanner() {
+      var banner = document.getElementById('suspicious-banner');
+      var msg = document.getElementById('suspicious-banner-msg').textContent || '';
+      banner.style.display = 'none';
+      try { localStorage.setItem('suspicious_banner_dismissed', msg); } catch(e) {}
+    }
     function checkRobots() {
       Promise.all([
         fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
@@ -114,8 +123,11 @@ function navBar(user, active) {
           if (res.suspicious) reasons.push('Resultados: ' + res.suspiciousReason);
           if (mon.suspicious) reasons.push('Monitoramento: ' + mon.suspiciousReason);
           if (reasons.length) {
-            document.getElementById('suspicious-banner-msg').textContent = reasons.join(' | ');
-            susBanner.style.display = 'flex';
+            var reasonsText = reasons.join(' | ');
+            document.getElementById('suspicious-banner-msg').textContent = reasonsText;
+            var dismissed = false;
+            try { dismissed = localStorage.getItem('suspicious_banner_dismissed') === reasonsText; } catch(e) {}
+            susBanner.style.display = dismissed ? 'none' : 'flex';
           } else {
             susBanner.style.display = 'none';
           }
@@ -185,6 +197,7 @@ function navBar(user, active) {
     window.dismissPdfBanner = dismissPdfBanner;
     window.dismissResBanner = dismissResBanner;
     window.dismissMonBanner = dismissMonBanner;
+    window.dismissSuspiciousBanner = dismissSuspiciousBanner;
     window.downloadAndAnalyze = downloadAndAnalyze;
   })();
   </script>`;

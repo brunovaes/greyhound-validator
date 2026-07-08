@@ -335,6 +335,7 @@ async function runCardMonitorRobot(targetDate) {
           if (dbRace.card_suspect) {
             db.prepare('UPDATE races SET nivel=? WHERE id=?').run('skip', dbRace.id);
           } else {
+            logChanges(dbRace.id, 'monitor_robot', dbRace, { nivel: 'skip' }, ['nivel']);
             db.prepare('UPDATE races SET card_suspect=1, nivel_pre_suspeita=?, nivel=? WHERE id=?').run(dbRace.nivel, 'skip', dbRace.id);
           }
         } else {
@@ -387,7 +388,9 @@ async function runCardMonitorRobot(targetDate) {
         }
         addLog('info', '  pista da pagina: "' + scrapedTrack + '"' + (candidates.length > 1 ? ' (desambiguado entre ' + candidates.length + ' candidatos)' : ''));
         if (dbRace.card_suspect) {
-          db.prepare('UPDATE races SET card_suspect=0, nivel=?, nivel_pre_suspeita=NULL WHERE id=?').run(dbRace.nivel_pre_suspeita || dbRace.nivel, dbRace.id);
+          const nivelRestaurado = dbRace.nivel_pre_suspeita || dbRace.nivel;
+          logChanges(dbRace.id, 'monitor_robot', dbRace, { nivel: nivelRestaurado }, ['nivel']);
+          db.prepare('UPDATE races SET card_suspect=0, nivel=?, nivel_pre_suspeita=NULL WHERE id=?').run(nivelRestaurado, dbRace.id);
           addLog('info', '  corrida reapareceu na lista ao vivo — desfeita a marcacao de suspeita, nivel restaurado.');
         }
 
@@ -532,9 +535,10 @@ async function runCardMonitorRobot(targetDate) {
             trap_und: novoResultado.trapUnd || 0,
             name_und: novoResultado.nameUnd || '',
             pct: novoResultado.pct || 0,
-            nivel: novoResultado.nivel || ''
+            nivel: novoResultado.nivel || '',
+            track_full: novoResultado.trackFull || dbRace.track_full || ''
           },
-          ['trap_fav', 'name_fav', 'trap_und', 'name_und', 'pct', 'nivel']
+          ['trap_fav', 'name_fav', 'trap_und', 'name_und', 'pct', 'nivel', 'track_full']
         );
         if (auditCount) addLog('info', '  auditoria: ' + auditCount + ' campo(s) registrado(s) no historico de alteracoes');
 

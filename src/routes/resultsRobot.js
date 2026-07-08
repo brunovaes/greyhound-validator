@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { requireAdmin } = require('../middleware/auth');
 const { db } = require('../db/database');
+const { logChanges } = require('../utils/auditLog');
 
 require('dns').setDefaultResultOrder('ipv4first');
 
@@ -157,7 +158,7 @@ async function runResultsRobot(targetDate) {
     // seguinte) ficavam com a data errada nessa comparacao e a corrida nunca
     // era encontrada pelo robo de resultados — mesmo sendo do dia certo.
     const dbRaces = db.prepare(
-      "SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card " +
+      "SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card, r.resultado_1, r.resultado_2, r.resultado_3 " +
       "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
       "WHERE date(s.created_at, '-3 hours')=? AND r.nivel!=? ORDER BY r.hora"
     ).all(DATE, 'skip');
@@ -324,6 +325,11 @@ async function runResultsRobot(targetDate) {
           r3 = nameToTrap(p3 ? p3.name : null);
         }
 
+        logChanges(
+          dbRace.id, 'results_robot', dbRace,
+          { bateu: bateu, resultado_1: r1, resultado_2: r2, resultado_3: r3 },
+          ['bateu', 'resultado_1', 'resultado_2', 'resultado_3']
+        );
         updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
         status.updated++;
 
