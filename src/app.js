@@ -1341,7 +1341,7 @@ async function proceedAnalysis(){
     }
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
   document.getElementById('btngo').disabled=false;
-  document.getElementById('btngo').innerHTML='Analisar Corridas';
+  document.getElementById('btngo').innerHTML='Análise Automática';
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});}catch(e){}
 }
 
@@ -1373,7 +1373,10 @@ document.addEventListener('DOMContentLoaded',async function(){
   }
 
   document.getElementById('race-input').addEventListener('change',async function(){
+    if (!this.files.length) return;
     for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
+    // Dispara a analise direto, sem precisar clicar em outro botao
+    runAnalysis();
   });
   document.getElementById('rz').addEventListener('dragover',function(e){e.preventDefault();this.classList.add('drag');});
   document.getElementById('rz').addEventListener('dragleave',function(){this.classList.remove('drag');});

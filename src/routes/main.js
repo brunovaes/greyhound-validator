@@ -375,15 +375,14 @@ ${navBar(user, 'analisar')}
   <div class="sidebar">
     <div>
       <h2>PDFs de corridas</h2>
-      <div class="uz" id="rz">
-        <input type="file" accept=".pdf" multiple id="race-input">
-        <strong>Clique ou arraste os PDFs</strong>
-        <p>Multiplos PDFs aceitos</p>
-      </div>
+      <label class="btn-go" id="rz" for="race-input" style="display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;text-decoration:none">
+        <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
+        &#128193; Análise por PDFs
+      </label>
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <button class="btn-go" id="btngo">Analisar Corridas</button>
+    <button class="btn-go" id="btngo">Análise Automática</button>
     <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
