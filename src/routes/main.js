@@ -20,6 +20,7 @@ function navBar(user, active) {
     <div style="display:flex">
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
       <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Histórico</a>
+      <a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robô</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuários</a>` : ''}

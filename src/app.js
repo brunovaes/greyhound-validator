@@ -91,7 +91,9 @@ function injectStyles(){
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
     '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
     '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
+    '.rc-suspect-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#000;background:#f59e0b;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
     '.fp-old-banner{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
+    '.fp-suspect-banner{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f59e0b;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
     '.old-row{background:rgba(239,68,68,.08)!important;}',
     '.old-row td{border-color:rgba(239,68,68,.15)!important;}'
   ].join('');
@@ -209,6 +211,9 @@ async function autoCheckAndAnalyze() {
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
                 dataCard: r.data_card||null,
                 trackFull: r.track_full||null,
+                cardSuspect: !!r.card_suspect,
+                betEntrou: !!r.bet_entrou,
+                betUnidades: r.bet_unidades!=null?r.bet_unidades:2.5,
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
                 id:r.id
               });
@@ -406,6 +411,9 @@ async function syncFromServer() {
       cur.histAll = r.hist_all?JSON.parse(r.hist_all):[];
       cur.dataCard = r.data_card||null;
       cur.trackFull = r.track_full||cur.trackFull;
+      cur.cardSuspect = !!r.card_suspect;
+      cur.betEntrou = !!r.bet_entrou;
+      cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:2.5;
       cur.id = r.id;
     });
 
@@ -566,6 +574,7 @@ function renderFocusPanel(r, idx) {
 
   var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');
   var oldBanner = isOldRaceCard(r) ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+') — apenas para consulta/estudo, não é uma corrida ao vivo.</div>' : '';
+  var suspectBanner = r.cardSuspect ? '<div class="fp-suspect-banner">&#9888; Essa corrida sumiu da lista ao vivo antes do horário — a pista pode ter sido cancelada hoje. Confira manualmente antes de confiar nesse AvB.</div>' : '';
 
   // Titulo: "3:44 - Newcastle (A3) - 480m" (hora UK, nome completo da pista,
   // classe, distancia). Se a sessao for antiga e nao tiver trackFull salvo
@@ -576,6 +585,7 @@ function renderFocusPanel(r, idx) {
 
   focusCol.innerHTML =
     oldBanner
+    + suspectBanner
     + '<div class="fp-hdr">'
     + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
@@ -605,10 +615,11 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-gauges-div"></div>'
     + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
     + '</div>'
-    // Odd / Valor / AvB nao aberto
+    // Odd / Apostei+Unidades / AvB nao aberto
     + '<div class="fp-inputs-row">'
     + '<div class="fp-inp-group">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)"></div>'
-    + '<div class="fp-inp-group">Valor R$ <input type="text" id="fp-val" placeholder="-" value="'+(r.valor||'')+'" oninput="updateFocusField(\'valor\',this.value)"></div>'
+    + '<div class="fp-inp-group fp-bet-group"><label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="fp-bet-entrou" style="cursor:pointer" '+(r.betEntrou?'checked':'')+' onchange="updateFocusField(\'bet_entrou\',this.checked?1:0)"> Apostei</label>'
+    + '<input type="number" step="0.5" min="0" id="fp-bet-unidades" value="'+(r.betUnidades!=null?r.betUnidades:2.5)+'" style="width:52px;text-align:center;margin-top:4px" title="Unidades (1 unidade = 1% da banca)" oninput="updateFocusField(\'bet_unidades\',this.value)"></div>'
     + '<div class="fp-inp-group fp-check-group" style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:16px;line-height:1;margin-left:auto">&#128196;</a></div>'
     + '</div>'
@@ -618,14 +629,17 @@ function renderFocusPanel(r, idx) {
 // Nomes de campo usados no front (results[i]) as vezes diferem da coluna no
 // banco (ex: r1/r2/r3/hit -> resultado_1/resultado_2/resultado_3/bateu).
 var FIELD_DB_MAP = { r1:'resultado_1', r2:'resultado_2', r3:'resultado_3', hit:'bateu' };
+// Mapeia campo em snake_case (nome no banco/data-f) pro nome camelCase usado
+// no objeto `results` em memoria
+var LOCAL_FIELD_MAP = { avb_nao_aberto: 'avbNaoAberto', bet_entrou: 'betEntrou', bet_unidades: 'betUnidades' };
 
 // Atualiza um campo da corrida em memoria (sessionStorage) e, se a corrida ja
 // existe no banco (tem id — ou seja, a sessao ja foi salva no Historico),
-// persiste na hora via PUT /api/race/:id. Assim Odd, Valor e a flag "AvB nao
+// persiste na hora via PUT /api/race/:id. Assim Odd, aposta e a flag "AvB nao
 // aberto" ficam sempre sincronizados com o Historico, sem precisar reanalisar.
 function saveRaceField(idx, field, value) {
   if (idx < 0 || !results[idx]) return;
-  var localField = field === 'avb_nao_aberto' ? 'avbNaoAberto' : field;
+  var localField = LOCAL_FIELD_MAP[field] || field;
   results[idx][localField] = value;
   saveSessionState();
   var id = results[idx].id;
@@ -700,12 +714,12 @@ function renderRaceListPanel(avbs) {
     div.style.display = 'flex';
     div.style.alignItems = 'center';
     div.style.justifyContent = 'space-between';
-    if (first) focusRaceIdx = rIdx;
     var top3Val = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(function(x){return x>0;}).join('-') : r.top3) : '';
     var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2A4 4 0 0 1 17 9"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2A4 4 0 0 0 7 9"/></svg> '+top3Val+'</span></div>' : '';
     div.innerHTML += '<div style="flex:1;min-width:0">'
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
+      + (r.cardSuspect ? '<div class="rc-suspect-badge">⚠ PISTA PODE TER CANCELADO</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
@@ -1135,7 +1149,7 @@ function renderTable(){
           +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
         +'</div>'
       +'</div>';
-    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Valor R$</span><input type="text" placeholder="0" value="'+(r.valor||'')+'" data-i="'+i+'" data-f="valor" style="width:52px;text-align:center"></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:13px;line-height:1;margin-left:auto">&#128196;</a></div></div>';
+    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Unid.</span><input type="number" step="0.5" min="0" value="'+(r.betUnidades!=null?r.betUnidades:2.5)+'" data-i="'+i+'" data-f="bet_unidades" style="width:52px;text-align:center" title="Unidades (1 unidade = 1% da banca)"></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="bet_entrou" style="cursor:pointer" '+(r.betEntrou?'checked':'')+'> Apostei</label></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:13px;line-height:1;margin-left:auto">&#128196;</a></div></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+(isOldRaceCard(r)?' old-row':'')+'">'
       +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'

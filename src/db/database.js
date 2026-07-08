@@ -129,6 +129,20 @@ db.exec(`
     valor_novo TEXT,
     FOREIGN KEY (race_id) REFERENCES races(id)
   );
+
+  -- Banca inicial de referencia por mes (1 unidade = 1% desse valor, fixo o
+  -- mes inteiro — nao recalcula a cada aposta). Se nao existir linha pro mes
+  -- atual, o sistema usa o saldo final do mes anterior como padrao (ou 1000
+  -- se for o primeiro mes), mas o usuario pode sobrescrever manualmente.
+  CREATE TABLE IF NOT EXISTS bankroll_months (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    year_month TEXT NOT NULL,
+    banca_inicial REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, year_month),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 // Migracoes seguras para banco existente
@@ -152,6 +166,8 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN track_full TEXT DEFAULT NULL",
   "ALTER TABLE races ADD COLUMN card_suspect INTEGER DEFAULT 0",
   "ALTER TABLE races ADD COLUMN nivel_pre_suspeita TEXT DEFAULT NULL",
+  "ALTER TABLE races ADD COLUMN bet_entrou INTEGER DEFAULT 0",
+  "ALTER TABLE races ADD COLUMN bet_unidades REAL DEFAULT 2.5",
   'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
   'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
