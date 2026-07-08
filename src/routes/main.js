@@ -988,15 +988,20 @@ router.get('/sessao/:id', (req, res) => {
   const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, user.id);
   if (!sess) return res.redirect(BASE + '/historico');
   const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(sess.id);
+  const resolvidas = races.filter(r=>r.bateu).length;
   const ac = races.filter(r=>r.bateu==='sim').length;
-  const ap = races.filter(r=>r.bateu).length;
+  const taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
+  const apostadas = races.filter(r=>r.bet_entrou && r.odd);
+  const ap = apostadas.length;
+  const green = apostadas.filter(r=>r.bateu==='sim').length;
+  const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
 .tw{overflow-x:auto;border:1px solid var(--bdr);border-radius:8px}
 table{width:100%;border-collapse:collapse;background:#111;min-width:900px}
 th{padding:10px 8px;text-align:center;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}
@@ -1009,10 +1014,12 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 <div class="kpi b"><div class="kpi-label">Corridas</div><div class="kpi-val">${races.length}</div></div>
 <div class="kpi g"><div class="kpi-label">Acertos</div><div class="kpi-val">${ac}</div></div>
+<div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${resolvidas>0&&ac/resolvidas>=.5?'#22c55e':'#f97316'}">${taxa}%</div></div>
 <div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
-<div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${ap>0&&ac/ap>=.5?'#22c55e':'#f97316'}">${ap>0?Math.round(ac/ap*100):0}%</div></div>
+<div class="kpi g"><div class="kpi-label">Green</div><div class="kpi-val">${green}</div></div>
+<div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" style="color:${ap>0&&green/ap>=.5?'#22c55e':'#f97316'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:40px">Odd</th><th style="width:55px">Valor</th><th style="width:70px">Aberto?</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:110px">Aposta</th><th style="width:80px">Aberto?</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -1037,9 +1044,9 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
-<td style="text-align:center">${r.odd||'-'}</td>
-<td style="text-align:center">${r.valor?'R$'+r.valor:'-'}</td>
-<td style="text-align:center">${r.avb_nao_aberto?'<span style="color:#f97316;font-weight:700">Não aberto</span>':'<span style="color:#666">—</span>'}</td>
+<td style="text-align:center"><input type="text" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" style="width:44px;text-align:center;background:#0D1117;border:1px solid #333;color:#fff;border-radius:4px;padding:4px"></td>
+<td style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:6px"><label style="display:flex;align-items:center;gap:3px;font-size:10px;color:#888;cursor:pointer;white-space:nowrap"><input type="checkbox" ${r.bet_entrou?'checked':''} data-id="${r.id}" data-f="bet_entrou" style="cursor:pointer"> Apostei</label><input type="number" step="0.5" min="0" value="${r.bet_unidades!=null?r.bet_unidades:2.5}" data-id="${r.id}" data-f="bet_unidades" style="width:44px;text-align:center;background:#0D1117;border:1px solid #333;color:#fff;border-radius:4px;padding:4px" title="Unidades"></div></td>
+<td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:pointer"><input type="checkbox" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" style="cursor:pointer"> Não aberto</label></td>
 </tr>`;}).join('')}
 ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
@@ -1102,6 +1109,23 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
+var BASE='${BASE}';
+// Salva edicoes de Odd/Apostei/Unidades/Aberto direto no banco, sem precisar
+// voltar pra tela Analisar
+function saveHistField(id, field, value){
+  var body={};
+  body[field]=value;
+  fetch(BASE+'/api/race/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .catch(function(e){console.error('[historico] erro ao salvar',field,e);});
+}
+document.querySelectorAll('table [data-f]').forEach(function(el){
+  var evt = el.type==='checkbox' ? 'change' : (el.type==='number'||el.type==='text' ? 'input' : 'change');
+  el.addEventListener(evt, function(){
+    var id=this.getAttribute('data-id'), f=this.getAttribute('data-f');
+    var val = this.type==='checkbox' ? (this.checked?1:0) : this.value;
+    saveHistField(id, f, val);
+  });
+});
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
 document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});
 function openSessValModal(id){
