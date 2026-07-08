@@ -616,11 +616,11 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto
-    + '<div class="fp-inputs-row">'
+    + '<div class="fp-inputs-row" style="display:flex;align-items:flex-end;gap:8px">'
     + '<div class="fp-inp-group">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)"></div>'
     + '<div class="fp-inp-group fp-bet-group"><label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="fp-bet-entrou" style="cursor:pointer" '+(r.betEntrou?'checked':'')+' onchange="updateFocusField(\'bet_entrou\',this.checked?1:0)"> Apostei</label>'
     + '<input type="number" step="0.5" min="0" id="fp-bet-unidades" value="'+(r.betUnidades!=null?r.betUnidades:2.5)+'" style="width:52px;text-align:center;margin-top:4px" title="Unidades (1 unidade = 1% da banca)" oninput="updateFocusField(\'bet_unidades\',this.value)"></div>'
-    + '<div class="fp-inp-group fp-check-group" style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-left:-14px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
+    + '<div class="fp-inp-group fp-check-group" style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:16px;line-height:1;margin-left:auto">&#128196;</a></div>'
     + '</div>'
     + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
