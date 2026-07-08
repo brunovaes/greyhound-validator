@@ -19,7 +19,6 @@ function navBar(user, active) {
   return `<nav style="background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
     <div style="display:flex">
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
-      <a href="${BASE}/historico" class="nl${active==='historico'?' na':''}">Histórico</a>
       <a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Robô</a>` : ''}
@@ -378,23 +377,28 @@ ${navBar(user, 'analisar')}
 <div class="main" id="main-layout">
   <div class="sidebar">
     <div>
-      <h2>Analisar corridas</h2>
+      <h2>Análise automática</h2>
       <div class="tabnav">
-        <label class="tabbtn active" id="rz" for="race-input">
-          <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
-          &#128193; Carregando PDF
-        </label>
-        <button class="tabbtn" id="btngo">&#9889; Automaticamente</button>
+        <button class="tabbtn active" id="btngo">&#9889; Automaticamente</button>
       </div>
-      <div class="flist" id="rlist"></div>
+      <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
     </div>
-    <div class="dv"></div>
-    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
-    <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
     <div>
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
       ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
+    </div>
+    <div class="dv"></div>
+    <div>
+      <h2>Carregar PDFs</h2>
+      <div class="tabnav">
+        <label class="tabbtn" id="rz" for="race-input">
+          <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
+          &#128193; Carregando PDF
+        </label>
+      </div>
+      <div class="flist" id="rlist"></div>
+      <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
