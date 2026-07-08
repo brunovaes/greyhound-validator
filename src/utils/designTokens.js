@@ -17,9 +17,9 @@ function designTokensCSS() {
   --font-body:'Inter',system-ui,-apple-system,sans-serif;
 }
 body{font-family:var(--font-body)}
+.nl,.robot-menu-item,.tabbtn{font-family:var(--font-body);font-weight:600}
 h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:.3px;font-weight:600}
 button,.btn,.btn-save,.btn-reset,.btn-red,input[type=submit]{font-family:var(--font-display);letter-spacing:.5px;font-weight:600}
-.nl,.robot-menu-item,.tabbtn{font-family:var(--font-display);letter-spacing:.4px;font-weight:600}
 .card-title,.sec-title{font-family:var(--font-display);letter-spacing:.7px;font-weight:600}
 .trap-badge,.badge,.top3-tag{font-family:var(--font-display);letter-spacing:.3px}
 `;

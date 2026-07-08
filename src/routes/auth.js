@@ -29,8 +29,9 @@ router.get('/login', (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Login - Greyhound Validator</title>
 <style>
+${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+body{background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .bg{position:fixed;inset:0;${bgB64 ? `background:url('${bgB64}') center center/cover no-repeat;` : 'background:#000;'}opacity:.5;z-index:0}
 .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.3) 0%,rgba(0,0,0,.85) 100%);z-index:1}
 .card{position:relative;z-index:2;background:rgba(10,10,10,.92);border:1px solid rgba(34,197,94,.3);border-radius:14px;padding:32px;width:100%;max-width:420px;box-shadow:0 0 60px rgba(34,197,94,.08),0 20px 60px rgba(0,0,0,.8);backdrop-filter:blur(10px)}
@@ -82,8 +83,8 @@ router.get('/admin/usuarios', requireAdmin, (req, res) => {
 <title>Usuários - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
-body{background:#0D1117}
 ${designTokensCSS()}
+body{background:#0D1117}
 nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
 .content{padding:24px;max-width:1000px;margin:0 auto}h1{font-size:20px;font-weight:700;margin-bottom:20px}
 .form-card{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:20px;border-top:2px solid #22c55e}

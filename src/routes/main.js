@@ -465,7 +465,7 @@ router.get('/live', (req, res) => {
 <style>
 ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+body{background:#0D1117;color:#f0f0f0;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
 .content{padding:16px 20px;max-width:1900px;margin:0 auto}
 h1{font-size:18px;font-weight:700;margin-bottom:12px}

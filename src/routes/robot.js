@@ -317,9 +317,9 @@ router.get('/', requireAdmin, (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Robo - Greyhound Validator</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
 ${designTokensCSS()}
-body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0D1117;color:#f0f0f0;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}
 .hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
 nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
