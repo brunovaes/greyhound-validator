@@ -303,9 +303,9 @@ async function runCardMonitorRobot(targetDate) {
     // Corridas do banco pra hoje (so as que ja viraram AvB de verdade)
     const dbRaces = db.prepare(
       "SELECT r.id, r.user_id, r.hora, r.corrida, r.dist, r.trap_fav, r.name_fav, r.trap_und, r.name_und, " +
-      "r.race_card, r.hist_all, r.top3, r.pct, r.nivel, r.perfil_fav, r.perfil_und, r.track_full " +
+      "r.race_card, r.hist_all, r.top3, r.pct, r.nivel, r.perfil_fav, r.perfil_und, r.track_full, r.card_suspect, r.nivel_pre_suspeita " +
       "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-      "WHERE date(s.created_at, '-3 hours')=? AND r.nivel!=? ORDER BY r.hora"
+      "WHERE date(s.created_at, '-3 hours')=? AND (r.nivel!=? OR r.card_suspect=1) ORDER BY r.hora"
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
@@ -330,6 +330,13 @@ async function runCardMonitorRobot(targetDate) {
           addLog('warn', '⚠️ ' + dbRace.corrida + ' ' + dbRace.hora + ' — ainda nao devia ter acontecido (' + Math.round(minutosRace/60)+'h'+String(minutosRace%60).padStart(2,'0') + ' BRT) mas sumiu da lista ao vivo. Pista pode ter sido cancelada — verificar manualmente.');
           const trackAbbr = (dbRace.corrida || '').split(' ')[0];
           pistasSuspeitas.add(trackAbbr);
+          // So guarda o nivel original na PRIMEIRA vez que marca (senao, numa
+          // segunda rodada, salvaria 'skip' como se fosse o "original")
+          if (dbRace.card_suspect) {
+            db.prepare('UPDATE races SET nivel=? WHERE id=?').run('skip', dbRace.id);
+          } else {
+            db.prepare('UPDATE races SET card_suspect=1, nivel_pre_suspeita=?, nivel=? WHERE id=?').run(dbRace.nivel, 'skip', dbRace.id);
+          }
         } else {
           addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — nao esta mais na lista (ja rodou ou nao encontrada)');
         }
@@ -379,6 +386,10 @@ async function runCardMonitorRobot(targetDate) {
           continue;
         }
         addLog('info', '  pista da pagina: "' + scrapedTrack + '"' + (candidates.length > 1 ? ' (desambiguado entre ' + candidates.length + ' candidatos)' : ''));
+        if (dbRace.card_suspect) {
+          db.prepare('UPDATE races SET card_suspect=0, nivel=?, nivel_pre_suspeita=NULL WHERE id=?').run(dbRace.nivel_pre_suspeita || dbRace.nivel, dbRace.id);
+          addLog('info', '  corrida reapareceu na lista ao vivo — desfeita a marcacao de suspeita, nivel restaurado.');
+        }
 
         const currentRunners = extractCurrentRunnersFromText(cardText);
         if (!currentRunners.length) {
