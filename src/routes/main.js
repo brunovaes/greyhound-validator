@@ -213,6 +213,8 @@ router.get('/', (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(user.id);
+  const hojeStr = (function(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear(); })();
+  const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
   const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
   const taxa = stats.t > 0 ? Math.round(stats.a/stats.t*100) : 0;
   const logoB64 = getLogo();
@@ -377,28 +379,27 @@ ${navBar(user, 'analisar')}
 <div class="main" id="main-layout">
   <div class="sidebar">
     <div>
-      <h2>Análise automática</h2>
+      <h2>Analisar corridas</h2>
       <div class="tabnav">
         <button class="tabbtn active" id="btngo">&#9889; Automaticamente</button>
-      </div>
-      <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
-    </div>
-    <div class="dv"></div>
-    <div>
-      <h2 style="margin-bottom:6px">Sessoes recentes</h2>
-      ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
-    </div>
-    <div class="dv"></div>
-    <div>
-      <h2>Carregar PDFs</h2>
-      <div class="tabnav">
+        ${sessaoHoje
+          ? `<a href="${BASE}/sessao/${sessaoHoje.id}" class="tabbtn">&#128220; Histórico do dia</a>`
+          : `<span class="tabbtn" style="opacity:.4;cursor:not-allowed" title="Ainda nao ha sessao analisada hoje">&#128220; Histórico do dia</span>`
+        }
         <label class="tabbtn" id="rz" for="race-input">
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregando PDF
         </label>
       </div>
       <div class="flist" id="rlist"></div>
-      <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
+    </div>
+    <div class="dv"></div>
+    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
+    <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
+    <div class="dv"></div>
+    <div>
+      <h2 style="margin-bottom:6px">Sessoes recentes</h2>
+      ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
