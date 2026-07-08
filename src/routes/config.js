@@ -3,6 +3,8 @@ const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
+const { designTokensCSS } = require('../utils/designTokens');
+const { icon } = require('../utils/icons');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -23,6 +25,7 @@ router.get('/', requireAdmin, (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Configurações - Greyhound Validator</title>
 <style>
+${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
@@ -32,7 +35,7 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#888;margin-bottom:20px}
 .layout{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start}
 .tabnav{background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;position:sticky;top:16px;display:flex;flex-direction:column;gap:2px}
-.tabbtn{display:block;width:100%;text-align:left;padding:10px 12px;background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s}
+.tabbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s}
 .tabbtn:hover{background:rgba(34,197,94,.08);color:#ccc}
 .tabbtn.active{background:rgba(34,197,94,.12);color:#22c55e}
 .tab-panel{display:none}
@@ -77,21 +80,21 @@ ${navBar(user, 'config')}
 <div class="layout">
 
 <div class="tabnav">
-  <button type="button" class="tabbtn active" data-tab="t-pesos" onclick="showTab('t-pesos')">Pesos dos Criterios</button>
-  <button type="button" class="tabbtn" data-tab="t-categoria" onclick="showTab('t-categoria')">Categoria</button>
-  <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">Filtros de Corrida</button>
-  <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">Thresholds de Confianca</button>
-  <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">Motor de Pontuacao</button>
-  <button type="button" class="tabbtn" data-tab="t-remarks" onclick="showTab('t-remarks')">Remarks</button>
-  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">Automacao</button>
+  <button type="button" class="tabbtn active" data-tab="t-pesos" onclick="showTab('t-pesos')">${icon('sliders',{size:14})} Pesos dos Critérios</button>
+  <button type="button" class="tabbtn" data-tab="t-categoria" onclick="showTab('t-categoria')">${icon('layers',{size:14})} Categoria</button>
+  <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">${icon('filter',{size:14})} Filtros de Corrida</button>
+  <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
+  <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
+  <button type="button" class="tabbtn" data-tab="t-remarks" onclick="showTab('t-remarks')">${icon('message',{size:14})} Remarks</button>
+  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
 </div>
 
 <div>
 
 <div class="tab-panel active" id="t-pesos">
 <div class="section">
-<div class="sec-title">Pesos dos Criterios</div>
-<div class="info-box">Os pesos orientam o Claude sobre qual criterio priorizar. Valores maiores = mais importante no raciocinio.</div>
+<div class="sec-title">Pesos dos Critérios</div>
+<div class="info-box">Os pesos orientam o Claude sobre qual critério priorizar. Valores maiores = mais importante no raciocinio.</div>
 <div class="grid">
 ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm,1,10],
    ['peso_bends','Bends / Arranque','Perfil e evolucao nas marcacoes',config.peso_bends,1,10],
@@ -111,9 +114,9 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="section">
 <div class="sec-title">Categoria</div>
 <div class="info-box">
-  Controla como a classe historica dos galgos influencia a analise.<br>
-  <strong>Diferenca que CalTm pode superar:</strong> quantos niveis de classe o tempo pode compensar entre dois galgos.<br>
-  <strong>Niveis no pool:</strong> quantos niveis de diferenca em relacao a classe do card sao aceitos no historico valido.
+  Controla como a classe historica dos galgos influencia a análise.<br>
+  <strong>Diferenca que CalTm pode superar:</strong> quantos níveis de classe o tempo pode compensar entre dois galgos.<br>
+  <strong>Niveis no pool:</strong> quantos níveis de diferença em relação a classe do card sao aceitos no historico valido.
 </div>
 <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
 <div class="field">
@@ -121,8 +124,8 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
   <select name="max_cat_diff_caltm">
     <option value="0" ${(config.max_cat_diff_caltm||1)===0?'selected':''}>0 — Categoria sempre decide</option>
     <option value="1" ${(config.max_cat_diff_caltm||1)===1?'selected':''}>1 nivel (ex: A5 vs A6)</option>
-    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 niveis (ex: A5 vs A7)</option>
-    <option value="3" ${(config.max_cat_diff_caltm||1)===3?'selected':''}>3 niveis (ex: A5 vs A8)</option>
+    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 níveis (ex: A5 vs A7)</option>
+    <option value="3" ${(config.max_cat_diff_caltm||1)===3?'selected':''}>3 níveis (ex: A5 vs A8)</option>
   </select>
   <span class="hint">Define quando o CalTm pode superar a diferenca de classe entre dois galgos comparados</span>
 </div>
@@ -130,11 +133,11 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
   <label>Niveis diferentes permitidos no pool</label>
   <select name="max_niveis_pool">
     <option value="1" ${(config.max_niveis_pool||2)===1?'selected':''}>1 nivel (apenas classe do card)</option>
-    <option value="2" ${(config.max_niveis_pool||2)===2?'selected':''}>2 niveis (ex: A7 aceita A8)</option>
-    <option value="3" ${(config.max_niveis_pool||2)===3?'selected':''}>3 niveis (ex: A7 aceita A8 e A9)</option>
-    <option value="4" ${(config.max_niveis_pool||2)===4?'selected':''}>4 niveis (historico amplo)</option>
+    <option value="2" ${(config.max_niveis_pool||2)===2?'selected':''}>2 níveis (ex: A7 aceita A8)</option>
+    <option value="3" ${(config.max_niveis_pool||2)===3?'selected':''}>3 níveis (ex: A7 aceita A8 e A9)</option>
+    <option value="4" ${(config.max_niveis_pool||2)===4?'selected':''}>4 níveis (histórico amplo)</option>
   </select>
-  <span class="hint">Quantos niveis abaixo ou acima da classe do card sao aceitos nas linhas validas do galgo</span>
+  <span class="hint">Quantos níveis abaixo ou acima da classe do card sao aceitos nas linhas validas do galgo</span>
 </div>
 </div>
 <div style="margin-top:14px;padding-top:14px;border-top:1px solid #222">
@@ -154,7 +157,7 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
   <span class="hint">Quantas linhas em categoria inferior (excluindo a ultima) sao toleradas antes de eliminar o galgo</span>
 </div>
 <div class="field">
-  <label>Gap maximo entre as duas ultimas corridas (dias)</label>
+  <label>Gap máximo entre as duas últimas corridas (dias)</label>
   <select name="max_dias_gap_nova_cat">
     <option value="7"  ${(config.max_dias_gap_nova_cat||14)===7 ?'selected':''}>7 dias</option>
     <option value="14" ${(config.max_dias_gap_nova_cat||14)===14?'selected':''}>14 dias (padrao)</option>
@@ -182,12 +185,12 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 
 <div class="tab-panel" id="t-confianca">
 <div class="section">
-<div class="sec-title">Thresholds de Confianca</div>
+<div class="sec-title">Thresholds de Confiança</div>
 <div class="grid">
-<div class="field"><label>Alta confianca (%)</label>
+<div class="field"><label>Alta confiança (%)</label>
 <input type="range" name="pct_alta" min="50" max="90" value="${config.pct_alta}" oninput="upR(this)">
 <div style="display:flex;justify-content:space-between"><span class="hint">Minimo para badge Alta</span><span class="rv" id="v_pct_alta">${config.pct_alta}%</span></div></div>
-<div class="field"><label>Media confianca (%)</label>
+<div class="field"><label>Média confiança (%)</label>
 <input type="range" name="pct_media" min="30" max="70" value="${config.pct_media}" oninput="upR(this)">
 <div style="display:flex;justify-content:space-between"><span class="hint">Minimo para badge Media</span><span class="rv" id="v_pct_media">${config.pct_media}%</span></div></div>
 <div class="field"><label>CalTm significativo (s)</label><input type="number" name="diff_caltm_significativa" value="${config.diff_caltm_significativa}" step="0.05" min="0.1" max="1"><span class="hint">Acima disso = vantagem clara</span></div>
@@ -198,13 +201,13 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 
 <div class="tab-panel" id="t-motor">
 <div class="section">
-<div class="sec-title">Motor de Pontuacao</div>
+<div class="sec-title">Motor de Pontuação</div>
 <div class="info-box">Estes parametros controlam o calculo deterministico de scores. O Claude agora so extrai dados brutos — toda a decisao de favorito/ranking/AvB/Back e feita por codigo com base nesses valores.</div>
 <div class="grid">
 <div class="field"><label>Ajuste por nivel de classe (s)</label><input type="number" name="ajuste_classe_segundos" value="${config.ajuste_classe_segundos||0.20}" step="0.05" min="0.05" max="0.50"><span class="hint">Ex: galgo em A5 correu em A3 = +0.20s no tempo (normaliza pra comparar)</span></div>
 <div class="field"><label>Desconto acidente leve (s)</label><input type="number" name="desconto_acidente_leve" value="${config.desconto_acidente_leve||0.10}" step="0.02" min="0" max="0.30"><span class="hint">Bmp, SAw, MsdBrk — tempo ajustado para baixo</span></div>
 <div class="field"><label>Desconto acidente medio (s)</label><input type="number" name="desconto_acidente_medio" value="${config.desconto_acidente_medio||0.20}" step="0.02" min="0" max="0.50"><span class="hint">Crd, FcdCk — desconto maior</span></div>
-<div class="field"><label>Desconto acidente grave (s)</label><input type="number" name="desconto_acidente_grave" value="${config.desconto_acidente_grave||0.35}" step="0.05" min="0" max="0.70"><span class="hint">BdBmp, Stmb — desconto maximo</span></div>
+<div class="field"><label>Desconto acidente grave (s)</label><input type="number" name="desconto_acidente_grave" value="${config.desconto_acidente_grave||0.35}" step="0.05" min="0" max="0.70"><span class="hint">BdBmp, Stmb — desconto máximo</span></div>
 <div class="field"><label>Teto normalizacao CalTm (s)</label><input type="number" name="teto_diff_normalizacao" value="${config.teto_diff_normalizacao||0.50}" step="0.05" min="0.20" max="1.00"><span class="hint">Diferenca maxima relevante entre galgos (acima disso = 0 pts)</span></div>
 <div class="field"><label>Proporcao media / melhor CalTm</label>
   <select name="proporcao_media_caltm">
@@ -215,15 +218,15 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
   </select>
   <span class="hint">Consistencia vs potencial — maior proporcao de media = mais conservador</span>
 </div>
-<div class="field"><label>Score minimo para gerar AvB (pts)</label><input type="number" name="threshold_skip_avb" value="${config.threshold_skip_avb||10}" step="1" min="1" max="30"><span class="hint">Abaixo disso = corrida parelha = skip automatico</span></div>
-<div class="field"><label>Score minimo para gerar Back (pts)</label><input type="number" name="threshold_back" value="${config.threshold_back||25}" step="1" min="10" max="50"><span class="hint">Diferenca entre 1o e 2o colocado — barra alta para Back</span></div>
+<div class="field"><label>Score mínimo para gerar AvB (pts)</label><input type="number" name="threshold_skip_avb" value="${config.threshold_skip_avb||10}" step="1" min="1" max="30"><span class="hint">Abaixo disso = corrida parelha = skip automatico</span></div>
+<div class="field"><label>Score mínimo para gerar Back (pts)</label><input type="number" name="threshold_back" value="${config.threshold_back||25}" step="1" min="10" max="50"><span class="hint">Diferenca entre 1o e 2o colocado — barra alta para Back</span></div>
 </div>
 </div>
 
 <div class="section">
-<div class="sec-title">&#128196; Documento de Regras</div>
+<div class="sec-title" style="display:flex;align-items:center;gap:8px">${icon('scroll',{size:14})} Documento de Regras</div>
 <details style="cursor:pointer">
-<summary style="font-size:12px;color:#22c55e;padding:4px 0">Ver como funciona o motor de pontuacao (clique para expandir)</summary>
+<summary style="font-size:12px;color:#22c55e;padding:4px 0">Ver como funciona o motor de pontuação (clique para expandir)</summary>
 <div style="margin-top:14px;font-size:12px;color:#aaa;line-height:1.8;background:#0D1117;padding:14px;border-radius:8px">
 <p style="color:#f0f0f0;font-weight:700;margin-bottom:8px">Como o motor calcula o resultado de cada corrida:</p>
 
@@ -236,10 +239,10 @@ Para cada galgo, cada linha do historico e avaliada. E descartada se: distancia 
 <p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 3 — Ajuste de CalTm (codigo)</p>
 Cada linha valida tem seu CalTm ajustado: desconto por acidente (Bmp=-${config.desconto_acidente_leve||0.10}s, Crd=-${config.desconto_acidente_medio||0.20}s) e ajuste por nivel de classe (+${config.ajuste_classe_segundos||0.20}s por nivel de diferenca). Os 3 ajustados mais recentes sao agregados com peso por recencia (3x, 2x, 1x) em ${Math.round((config.proporcao_media_caltm||0.60)*100)}% media + ${Math.round((1-(config.proporcao_media_caltm||0.60))*100)}% melhor.
 
-<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 4 — Score por criterio (codigo)</p>
-Cada galgo recebe um score 0-100 em cada criterio, multiplicado pelo seu peso:<br>
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 4 — Score por critério (código)</p>
+Cada galgo recebe um score 0-100 em cada critério, multiplicado pelo seu peso:<br>
 &bull; <strong>CalTm</strong> (peso ${config.peso_caltm||4}): normalizado pela diferenca para o melhor da corrida (teto ${config.teto_diff_normalizacao||0.50}s)<br>
-&bull; <strong>Categoria</strong>: influencia via ajuste de CalTm (${config.ajuste_classe_segundos||0.20}s/nivel) + pool limitado a ${config.max_niveis_pool||2} nivel(is) + CalTm pode superar ate ${config.max_cat_diff_caltm||1} nivel(is)<br>
+&bull; <strong>Categoria</strong>: influencia via ajuste de CalTm (${config.ajuste_classe_segundos||0.20}s/nivel) + pool limitado a ${config.max_niveis_pool||2} nível(is) + CalTm pode superar ate ${config.max_cat_diff_caltm||1} nivel(is)<br>
 &bull; <strong>Bends/Perfil</strong> (peso ${config.peso_bends||3}): Recuperador=90pts, Frontrunner=80pts, Estavel=60pts, Fumador=20pts + bonus por split<br>
 &bull; <strong>Remarks</strong> (peso ${config.peso_remarks||3}): combos muito positivos +30pts, positivos +15pts, negativos -20pts<br>
 &bull; <strong>BRT</strong> (peso ${config.peso_brt||1}): comparativo entre galgos, penalizado se BRT em classe muito diferente ou galgo fora de forma<br>
@@ -268,7 +271,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 
 <div class="tab-panel" id="t-automacao">
 <div class="section">
-<div class="sec-title">Automacao — Robos e Visibilidade</div>
+<div class="sec-title">Automação — Robôs e Visibilidade</div>
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
   <div class="field">
     <label>Refresh automático da tela (min)</label>

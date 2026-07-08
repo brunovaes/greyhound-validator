@@ -3,6 +3,7 @@ const router = express.Router();
 const { findUserByEmail, validatePassword, createUser, db } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
+const { designTokensCSS } = require('../utils/designTokens');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -82,6 +83,7 @@ router.get('/admin/usuarios', requireAdmin, (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 body{background:#0D1117}
+${designTokensCSS()}
 nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
 .content{padding:24px;max-width:1000px;margin:0 auto}h1{font-size:20px;font-weight:700;margin-bottom:20px}
 .form-card{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:20px;border-top:2px solid #22c55e}
@@ -105,19 +107,19 @@ ${navBar(req.user, 'admin')}
 <div class="content">
 <h1>Gestão de Usuários</h1>
 <div class="form-card">
-  <h2>Criar novo usuario</h2>
+  <h2>Criar novo usuário</h2>
   <form method="POST" action="${BASE}/admin/usuarios/criar">
     <div class="form-grid">
       <div class="field"><label>Nome</label><input type="text" name="name" placeholder="Nome completo" required></div>
       <div class="field"><label>Email</label><input type="email" name="email" placeholder="email@exemplo.com" required></div>
       <div class="field"><label>Senha</label><input type="password" name="password" placeholder="senha" required></div>
-      <div class="field"><label>Perfil</label><select name="role"><option value="user">Usuario</option><option value="admin">Admin</option></select></div>
-      <div class="field"><label>Plano</label><select name="plan"><option value="free">Free (30/mes)</option><option value="pro">Pro (200/mes)</option><option value="premium">Premium (ilimitado)</option></select></div>
+      <div class="field"><label>Perfil</label><select name="role"><option value="user">Usuário</option><option value="admin">Admin</option></select></div>
+      <div class="field"><label>Plano</label><select name="plan"><option value="free">Free (30/mês)</option><option value="pro">Pro (200/mês)</option><option value="premium">Premium (ilimitado)</option></select></div>
       <div class="field" style="display:flex;align-items:flex-end"><button type="submit" class="btn">Criar</button></div>
     </div>
   </form>
 </div>
-<table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th><th>Analises</th><th>Status</th><th>Ultimo login</th><th>Acao</th></tr></thead><tbody>
+<table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th><th>Análises</th><th>Status</th><th>Último login</th><th>Ação</th></tr></thead><tbody>
 ${users.map(u => `<tr>
   <td><strong>${u.name}</strong></td><td style="color:#888">${u.email}</td>
   <td><span class="badge badge-${u.role}">${u.role}</span></td>

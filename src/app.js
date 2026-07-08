@@ -685,7 +685,7 @@ function renderRaceListPanel(avbs) {
     div.style.justifyContent = 'space-between';
     if (first) focusRaceIdx = rIdx;
     var top3Val = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(function(x){return x>0;}).join('-') : r.top3) : '';
-    var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px">&#127942; '+top3Val+'</span></div>' : '';
+    var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2A4 4 0 0 1 17 9"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2A4 4 0 0 0 7 9"/></svg> '+top3Val+'</span></div>' : '';
     div.innerHTML += '<div style="flex:1;min-width:0">'
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
@@ -913,19 +913,19 @@ function injectValModal(){
 .val-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
 .val-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
 .val-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
-.val-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
+.val-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:var(--font-body)}
 .val-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
-.val-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:sans-serif}
-.val-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:sans-serif;font-size:12px}
+.val-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:var(--font-body)}
+.val-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:var(--font-body);font-size:12px}
 .val-tbl tr:last-child td{border-bottom:none}
 .val-tbl tr:hover td{background:rgba(255,255,255,.025)}
-.val-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:sans-serif}
-.val-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:sans-serif}
-.val-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:sans-serif}
-.val-td-bends{font-family:sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
-.val-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
-.val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}
+.val-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:var(--font-body)}
+.val-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:var(--font-body)}
+.val-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:var(--font-body)}
+.val-td-bends{font-family:var(--font-body);font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
+.val-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:var(--font-body);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:var(--font-body)}
+.val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:var(--font-body)}
 .val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
 .val-link:hover{color:#60a5fa}.t1{background:radial-gradient(circle at 35% 35%,#ff4444,#c00 60%,#8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4)}.t2{background:radial-gradient(circle at 35% 35%,#4488ff,#1a3db5 60%,#0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3)}.t3{background:radial-gradient(circle at 35% 35%,#fff,#d0d0d0 60%,#a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8)}.t4{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a 60%,#000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15)}.t5{background:radial-gradient(circle at 35% 35%,#ffaa00,#e07000 60%,#a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4)}.t6{background:radial-gradient(circle at 50% 50%,#cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2)}
 `;
@@ -1081,7 +1081,7 @@ function renderTable(){
     var wd=winMap[(r.hora||'')+'_'+(r.corrida||'')];
     var wt=wd?'<div class="win-tag">&#127942; Back T'+wd.trapFav+' '+((wd.nameFav||'').split(' ')[0])+'</div>':'';
     var hh='<strong style="color:var(--grn)">'+(r.hora||'-')+'</strong><div class="hora-br">'+convertHora(r.hora)+'</div>';
-    var top3=(function(){if(!r.top3)return'';var v=Array.isArray(r.top3)?r.top3.filter(function(x){return x>0;}).join('-'):r.top3;return v?'<div class="top3-tag">&#127942; '+v+'</div>':'';}());
+    var top3=(function(){if(!r.top3)return'';var v=Array.isArray(r.top3)?r.top3.filter(function(x){return x>0;}).join('-'):r.top3;return v?'<div class="top3-tag" style="display:inline-flex;align-items:center;gap:4px"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2A4 4 0 0 1 17 9"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2A4 4 0 0 0 7 9"/></svg> '+v+'</div>':'';}());
     var ch=sk?'':'<span class="badge '+bc+'">'+bt+'</span><br><span style="font-size:10px;color:var(--mut)">'+r.pct+'%</span><span class="cbar"><span class="cfill '+fc+'" style="width:'+r.pct+'%"></span></span>';
     var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
     var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';

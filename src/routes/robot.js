@@ -3,6 +3,8 @@ const router = express.Router();
 const { requireAdmin } = require('../middleware/auth');
 const { getUserConfig } = require('../db/database');
 const { navBar } = require('./main');
+const { designTokensCSS } = require('../utils/designTokens');
+const { icon } = require('../utils/icons');
 const path = require('path');
 const fs = require('fs');
 
@@ -316,6 +318,7 @@ router.get('/', requireAdmin, (req, res) => {
 <title>Robo - Greyhound Validator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+${designTokensCSS()}
 body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}
 .hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
@@ -391,14 +394,14 @@ ${navBar(req.user, 'robot')}
 <div class="layout">
 <div class="robot-sidebar">
   <h3>Robôs</h3>
-  <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">📥</span> Coletor de PDFs</button>
-  <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">🏁</span> Resultados</button>
-  <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">🔎</span> Monitoramento</button>
-  <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">📜</span> Auditoria</button>
+  <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
+  <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
+  <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
+  <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
-  <h1>&#x1F916; Robo Coletor de PDFs</h1>
+  <h1 style="display:flex;align-items:center;gap:10px">${icon('download',{size:22})} Robô Coletor de PDFs</h1>
   <p class="sub">Coleta automaticamente as corridas do Racing Post via Browserless.io.</p>
 
   <div class="card">
@@ -466,10 +469,10 @@ ${navBar(req.user, 'robot')}
 
 
 <div class="robot-panel" id="panel-results">
-  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">&#127937; Rob\u00f4 de Resultados</h1>
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('flag',{size:20})} Robô de Resultados</h1>
   <p class="sub">Coleta automaticamente os resultados do Racing Post e atualiza o campo Bateu nas sess\u00f5es.</p>
   <div class="card">
-    <div class="card-title">&#9881;&#65039; Executar</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('gear',{size:14})} Executar</div>
     <div class="form-row" style="align-items:flex-end;gap:12px">
       <div class="field"><label>Data</label><input type="date" id="res-date" value="${today}"></div>
       <button class="btn" id="btn-res-start" onclick="startResultsRobot()">&#9654; Executar agora</button>
@@ -478,17 +481,17 @@ ${navBar(req.user, 'robot')}
     <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: 23:00 UK = 19:00 Rio de Janeiro</p>
   </div>
   <div class="card" id="res-status-card" style="display:none">
-    <div class="card-title">&#128202; Status</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('chart',{size:14})} Status</div>
     <div id="res-sbar" class="sbar srun"><span class="spin"></span><span id="res-st-txt"> Aguardando...</span></div>
     <div class="res-log" id="res-log"></div>
   </div>
 </div><!-- fim panel-results -->
 
 <div class="robot-panel" id="panel-monitor">
-  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">&#128269; Monitoramento de Card</h1>
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('search',{size:20})} Monitoramento de Card</h1>
   <p class="sub">Revisita o card de cada corrida do dia de hora em hora — se detectar retirada ou troca de galgo, atualiza o grid e reanalisa so aquela corrida automaticamente.</p>
   <div class="card">
-    <div class="card-title">&#9881;&#65039; Executar</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('gear',{size:14})} Executar</div>
     <div class="form-row" style="align-items:flex-end;gap:12px">
       <div class="field"><label>Data</label><input type="date" id="mon-date" value="${today}"></div>
       <button class="btn" id="btn-mon-start" onclick="startMonitorRobot()">&#9654; Executar agora</button>
@@ -497,7 +500,7 @@ ${navBar(req.user, 'robot')}
     <p style="font-size:11px;color:#555;margin-top:12px">&#9200; Autom\u00e1tico: roda sozinho a cada 1 hora</p>
   </div>
   <div class="card">
-    <div class="card-title">&#129514; Forcar teste (debug)</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('gear',{size:14})} Forçar teste (debug)</div>
     <p style="font-size:11px;color:#888;margin-bottom:12px">Reverte o trap 1 de uma corrida de hoje pra um nome falso, pra forcar deteccao de mudanca na proxima execucao. Copia "hora" e "corrida" direto do log (ex: 8:41 / Kinsly A8).</p>
     <div class="form-row" style="align-items:flex-end;gap:12px">
       <div class="field"><label>Hora</label><input type="text" id="mon-test-hora" placeholder="8:41" style="width:80px"></div>
@@ -507,19 +510,19 @@ ${navBar(req.user, 'robot')}
     <p id="mon-test-msg" style="font-size:11px;color:#888;margin-top:10px"></p>
   </div>
   <div class="card">
-    <div class="card-title">&#128226; Eventos Importantes</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('bell',{size:14})} Eventos Importantes</div>
     <p style="font-size:11px;color:#888;margin-bottom:10px">Só erros, mudanças de card detectadas e reanálises — sem o log cheio (fica registrado entre execuções, até a próxima verificação).</p>
     <div class="res-log" id="mon-important-log"><div style="padding:10px;color:#555;font-size:11px">Nenhum evento importante ainda.</div></div>
   </div>
   <div class="card" id="mon-status-card" style="display:none">
-    <div class="card-title">&#128202; Status</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('chart',{size:14})} Status</div>
     <div id="mon-sbar" class="sbar srun"><span class="spin"></span><span id="mon-st-txt"> Aguardando...</span></div>
     <div class="res-log" id="mon-log"></div>
   </div>
 </div><!-- fim panel-monitor -->
 
 <div class="robot-panel" id="panel-audit">
-  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px">&#128220; Trilha de Auditoria</h1>
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('scroll',{size:20})} Trilha de Auditoria</h1>
   <p class="sub">Histórico permanente de todas as alterações em corridas — robô de monitoramento, robô de resultados e edições manuais. Não reseta, fica salvo pra sempre.</p>
   <div class="card">
     <div class="form-row" style="align-items:flex-end;gap:12px">
@@ -528,7 +531,7 @@ ${navBar(req.user, 'robot')}
     </div>
   </div>
   <div class="card">
-    <div class="card-title">&#128203; Alterações</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('list',{size:14})} Alterações</div>
     <div id="audit-table-wrap" style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>

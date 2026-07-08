@@ -4,6 +4,7 @@ const { db, getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
 const { requireAdmin } = require('../middleware/auth');
+const { designTokensCSS } = require('../utils/designTokens');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 
@@ -208,6 +209,7 @@ router.get('/', (req, res) => {
 <title>Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+${designTokensCSS()}
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
 .main.focus-mode{grid-template-columns:250px 170px 1fr}
 .sidebar{background:var(--sur);border-right:1px solid var(--bdr2);padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
@@ -461,6 +463,7 @@ router.get('/live', (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Live - Greyhound Validator</title>
 <style>
+${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
@@ -886,9 +889,10 @@ router.get('/historico', (req, res) => {
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(user.id);
   const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
   const logoB64 = getLogo();
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Historico - Greyhound Validator</title>
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Histórico - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+${designTokensCSS()}
 .content{padding:24px;max-width:900px;margin:0 auto}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
 h2{font-size:16px;font-weight:700;margin-bottom:12px}table{width:100%;border-collapse:collapse;background:#111;border:1px solid #333;border-radius:8px;overflow:hidden}th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}td{padding:10px 12px;border-bottom:1px solid #222;font-size:13px}tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
 .btn-del{background:none;border:none;cursor:pointer;color:#666;font-size:18px;padding:4px 6px;border-radius:6px;transition:all .2s;line-height:1}.btn-del:hover{color:#ef4444;background:rgba(239,68,68,.1)}
@@ -966,6 +970,7 @@ router.get('/sessao/:id', (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .tw{overflow-x:auto;border:1px solid var(--bdr);border-radius:8px}
