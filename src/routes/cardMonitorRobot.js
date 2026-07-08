@@ -200,7 +200,7 @@ async function runCardMonitorRobot(targetDate) {
     // Corridas do banco pra hoje (so as que ja viraram AvB de verdade)
     const dbRaces = db.prepare(
       "SELECT r.id, r.user_id, r.hora, r.corrida, r.dist, r.trap_fav, r.name_fav, r.trap_und, r.name_und, " +
-      "r.race_card, r.hist_all, r.top3, r.pct, r.nivel, r.perfil_fav, r.perfil_und " +
+      "r.race_card, r.hist_all, r.top3, r.pct, r.nivel, r.perfil_fav, r.perfil_und, r.track_full " +
       "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
       "WHERE date(s.created_at, '-3 hours')=? AND r.nivel!=? ORDER BY r.hora"
     ).all(DATE, 'skip');
@@ -373,7 +373,8 @@ async function runCardMonitorRobot(targetDate) {
           classe: (dbRace.corrida || '').split(' ').pop(),
           postPick: postPick,
           trapsCard: novoRaceCard.map(function(g){ return g.trap; }),
-          galgos: galgosParaAnalise
+          galgos: galgosParaAnalise,
+          trackFull: scrapedTrack || dbRace.track_full || null
         };
 
         const config = getUserConfig(dbRace.user_id);
@@ -402,7 +403,7 @@ async function runCardMonitorRobot(targetDate) {
         if (auditCount) addLog('info', '  auditoria: ' + auditCount + ' campo(s) registrado(s) no historico de alteracoes');
 
         db.prepare(
-          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=? WHERE id=?'
+          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=? WHERE id=?'
         ).run(
           novoResultado.trapFav || 0, novoResultado.nameFav || '',
           novoResultado.trapUnd || 0, novoResultado.nameUnd || '',
@@ -414,6 +415,7 @@ async function runCardMonitorRobot(targetDate) {
           novoResultado.histAll ? JSON.stringify(novoResultado.histAll) : null,
           novoResultado.raceCard ? JSON.stringify(novoResultado.raceCard) : JSON.stringify(novoRaceCard),
           Array.isArray(novoResultado.top3) ? novoResultado.top3.filter(function(x){return x>0;}).join('-') : (novoResultado.top3 || null),
+          novoResultado.trackFull || dbRace.track_full || null,
           dbRace.id
         );
         status.reanalyzed++;
