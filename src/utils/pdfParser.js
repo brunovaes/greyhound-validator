@@ -211,6 +211,7 @@ async function parseRacingPostPDF(buffer) {
   return {
     hora: header.hora,
     corrida: `${trackAbbr} ${header.classe}`,
+    trackFull: header.track,
     dist: String(header.dist),
     classe: header.classe,
     postPick: header.postPick.join('-'),

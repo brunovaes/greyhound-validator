@@ -206,6 +206,7 @@ async function autoCheckAndAnalyze() {
                 avbNaoAberto: !!r.avb_nao_aberto,
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
                 dataCard: r.data_card||null,
+                trackFull: r.track_full||null,
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
                 id:r.id
               });
@@ -402,6 +403,7 @@ async function syncFromServer() {
       cur.histUnd = r.hist_und?JSON.parse(r.hist_und):[];
       cur.histAll = r.hist_all?JSON.parse(r.hist_all):[];
       cur.dataCard = r.data_card||null;
+      cur.trackFull = r.track_full||cur.trackFull;
       cur.id = r.id;
     });
 
@@ -563,10 +565,17 @@ function renderFocusPanel(r, idx) {
   var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');
   var oldBanner = isOldRaceCard(r) ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+') — apenas para consulta/estudo, não é uma corrida ao vivo.</div>' : '';
 
+  // Titulo: "3:44 - Newcastle (A3) - 480m" (hora UK, nome completo da pista,
+  // classe, distancia). Se a sessao for antiga e nao tiver trackFull salvo
+  // (campo novo), cai pro formato curto de antes.
+  var tituloCorrida = r.trackFull
+    ? (r.hora||'') + ' - ' + r.trackFull + (raceClass ? ' ('+raceClass+')' : '') + ' - ' + (r.dist||'') + 'm'
+    : (r.corrida||'-');
+
   focusCol.innerHTML =
     oldBanner
     + '<div class="fp-hdr">'
-    + '<div><div class="fp-race-title">'+(r.corrida||'-')+'</div>'
+    + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
     + '</div>'
     + '<div class="fp-arena">'

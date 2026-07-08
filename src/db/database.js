@@ -149,6 +149,7 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN avb_nao_aberto INTEGER DEFAULT 0",
   "ALTER TABLE races ADD COLUMN hist_all TEXT DEFAULT NULL",
   "ALTER TABLE races ADD COLUMN data_card TEXT DEFAULT NULL",
+  "ALTER TABLE races ADD COLUMN track_full TEXT DEFAULT NULL",
   'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
   'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',
