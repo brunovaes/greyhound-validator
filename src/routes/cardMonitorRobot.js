@@ -310,7 +310,9 @@ async function runCardMonitorRobot(targetDate) {
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
-    for (const dbRace of dbRaces) {
+    const retryCount = {}; // raceId -> quantas vezes ja tentou de novo (max 1)
+    for (let dbRaceIdx = 0; dbRaceIdx < dbRaces.length; dbRaceIdx++) {
+      const dbRace = dbRaces[dbRaceIdx];
       if (status.stopRequested) { addLog('warn', 'Parado pelo usuario.'); break; }
 
       let raceCard = [];
@@ -596,6 +598,14 @@ async function runCardMonitorRobot(targetDate) {
             await page.setViewport({ width: 1280, height: 900 });
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36');
             addLog('ok', 'Reconectado!');
+            // Reconectou com sucesso — tenta essa MESMA corrida de novo antes
+            // de desistir e ir pra proxima (so 1 vez, pra nao ficar em loop
+            // se a pagina estiver realmente instavel hoje)
+            if (!retryCount[dbRace.id]) {
+              retryCount[dbRace.id] = 1;
+              addLog('info', '  tentando ' + dbRace.corrida + ' ' + dbRace.hora + ' de novo apos reconexao...');
+              dbRaceIdx--;
+            }
           } catch (e2) { addLog('err', 'Falha reconexao: ' + e2.message); break; }
         }
       }
