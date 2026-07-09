@@ -28,10 +28,18 @@ function getLogo() {
 
 // %ganho/perda de UMA aposta. 1 unidade = 1 ponto percentual da banca do mes.
 // Green: unidades x (odd-1). Red: -unidades. Pendente (sem resultado ainda): null.
+// Converte string numerica no padrao brasileiro (virgula decimal, ex: "1,6")
+// pra Number — parseFloat sozinho para de ler na virgula e trunca o valor
+function parseNumBR(v) {
+  if (v == null) return 0;
+  const n = parseFloat(String(v).trim().replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
 function calcGanhoPct(bet) {
   if (bet.bateu !== 'sim' && bet.bateu !== 'nao') return null;
-  const u = parseFloat(bet.bet_unidades) || 0;
-  const odd = parseFloat(bet.odd) || 0;
+  const u = parseNumBR(bet.bet_unidades);
+  const odd = parseNumBR(bet.odd);
   if (bet.bateu === 'sim') return u * (odd - 1);
   return -u;
 }
