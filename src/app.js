@@ -464,7 +464,7 @@ function showDayEndMsg() {
   var focusCol = document.getElementById('focus-col');
   if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#127937;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Ciclo do dia encerrado</div><div style="font-size:13px">As corridas de hoje se encerraram e voltaremos amanhã</div></div>';
   var col = document.getElementById('race-list-col');
-  if (col) col.innerHTML = '';
+  if (col) { col.innerHTML = ''; col.style.background = '#0D1117'; }
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
   if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
   if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
@@ -475,9 +475,9 @@ function showDayEndMsg() {
 // tem mensagem/tratamento proprio — so ja passaram do horario hoje mesmo)
 function showAllExpiredMsg() {
   var focusCol = document.getElementById('focus-col');
-  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#9200;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Corridas já realizadas</div><div style="font-size:13px">Essas corridas já foram realizadas.<br>Favor selecionar corridas ainda vigentes.</div></div>';
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px"><div style="font-size:64px">&#9200;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Corridas encerradas</div><div style="font-size:13px">Favor aguardar o próximo turno.</div></div>';
   var col = document.getElementById('race-list-col');
-  if (col) col.innerHTML = '';
+  if (col) { col.innerHTML = ''; col.style.background = '#0D1117'; }
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
   if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
   if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
