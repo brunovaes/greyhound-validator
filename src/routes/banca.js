@@ -115,12 +115,16 @@ router.get('/data', (req, res) => {
       const prejuizos = resolvidas.filter(a => a.ganhoReais < 0).reduce((s, a) => s + Math.abs(a.ganhoReais), 0);
       const saldoDia = lucros - prejuizos;
       const pctDia = mes.inicial ? (saldoDia / mes.inicial) * 100 : 0;
+      // Dinheiro transitado: soma de TUDO que foi apostado no dia (o volume
+      // que entrou em jogo), independente de ter ganho ou perdido — nao e o
+      // resultado liquido, e o "handle" do dia.
+      const dinheiroTransitado = apostasDoDia.reduce((s, a) => s + (parseNumBR(a.bet_unidades) / 100) * mes.inicial, 0);
       const cfg = getUserConfig(userId);
       const pctStop = cfg && cfg.banca_pct_stop != null ? cfg.banca_pct_stop : 20;
       const stopHit = pctDia < 0 && Math.abs(pctDia) >= pctStop;
       res.json({
         ok: true, view: 'day', date: dateParam, bancaInicialMes: mes.inicial,
-        apostas: apostasDoDia, lucros, prejuizos, saldoDia, pctDia,
+        apostas: apostasDoDia, lucros, prejuizos, saldoDia, pctDia, dinheiroTransitado,
         pendentes: apostasDoDia.length - resolvidas.length,
         stopHit, pctStop,
         avisoStop: cfg && cfg.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'
@@ -330,7 +334,46 @@ function barChart(items) {
     }).join('') + '</div>';
 }
 
-function lineChart(pontos) {
+// Curva intradiaria: saldo acumulado do dia, bet a bet, em ordem cronologica.
+// Cada TRECHO da linha e colorido pelo resultado daquela aposta especifica —
+// verde subindo (green), vermelho descendo (red) — tipo uma curva de equity.
+function intradayEquityChart(apostas) {
+  const resolvidas = apostas.filter(function(a){ return a.status !== 'pendente'; })
+    .slice().sort(function(a,b){ return (a.hora_br||a.hora||'').localeCompare(b.hora_br||b.hora||''); });
+  if (!resolvidas.length) return '<div class="empty-msg">Sem apostas resolvidas nesse dia ainda.</div>';
+
+  const w = 900, h = 220, pad = 36;
+  let acumulado = 0;
+  const pts = [{ x: 0, valor: 0, label: 'início', cor: '#666' }];
+  resolvidas.forEach(function(a, i) {
+    acumulado += (a.ganhoReais || 0);
+    pts.push({ x: i+1, valor: acumulado, label: a.hora_br||a.hora||'', cor: a.ganhoReais >= 0 ? '#22c55e' : '#ef4444' });
+  });
+
+  const vals = pts.map(function(p){return p.valor;});
+  const minV = Math.min.apply(null, vals.concat([0])), maxV = Math.max.apply(null, vals.concat([0]));
+  const range = (maxV - minV) || 1;
+  const stepX = pts.length > 1 ? (w - pad*2) / (pts.length - 1) : 0;
+  const coords = pts.map(function(p, i) {
+    return { x: pad + i*stepX, y: h - pad - ((p.valor - minV) / range) * (h - pad*2), label: p.label, valor: p.valor, cor: p.cor };
+  });
+
+  // Um <path> por trecho (cor do trecho = cor do PONTO DE CHEGADA, ou seja,
+  // do resultado daquela aposta especifica)
+  const segments = [];
+  for (let i = 1; i < coords.length; i++) {
+    segments.push('<path d="M'+coords[i-1].x.toFixed(1)+','+coords[i-1].y.toFixed(1)+' L'+coords[i].x.toFixed(1)+','+coords[i].y.toFixed(1)+'" fill="none" stroke="'+coords[i].cor+'" stroke-width="2.5"/>');
+  }
+  const zeroY = h - pad - ((0 - minV) / range) * (h - pad*2);
+  const linhaZero = '<line x1="'+pad+'" y1="'+zeroY.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+zeroY.toFixed(1)+'" stroke="#333" stroke-width="1" stroke-dasharray="4,4"/>';
+  const dots = coords.map(function(p){ return '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3" fill="'+p.cor+'"><title>'+p.label+': '+fmtR$(p.valor)+'</title></circle>'; }).join('');
+  const labels = coords.filter(function(_,i){ return i % Math.ceil(coords.length/8 || 1) === 0 || i === coords.length-1; })
+    .map(function(p){ return '<text x="'+p.x.toFixed(1)+'" y="'+(h-6)+'" font-size="9" fill="#666" text-anchor="middle">'+p.label+'</text>'; }).join('');
+
+  return '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:220px">' + linhaZero + segments.join('') + dots + labels + '</svg>';
+}
+
+
   // pontos: [{label, valor}] — linha simples em SVG, eixo Y auto-escalado
   if (!pontos.length) return '<div class="empty-msg">Sem dados nesse período.</div>';
   const w = 900, h = 220, pad = 40;
@@ -372,10 +415,11 @@ async function carregarDados() {
 
 function renderDay(d) {
   document.getElementById('table-title').textContent = 'Apostas do dia';
-  document.getElementById('chart-title').textContent = 'Lucros x Prejuízos do dia';
+  document.getElementById('chart-title').textContent = 'Lucros x Prejuízos e evolução do dia';
   const cardsEl = document.getElementById('banca-cards');
   cardsEl.innerHTML =
     '<div class="card"><div class="lbl">Banca inicial (mês)</div><div class="val">'+fmtR$(d.bancaInicialMes)+'</div></div>' +
+    '<div class="card"><div class="lbl">Dinheiro transitado</div><div class="val" style="color:#3B82F7">'+fmtR$(d.dinheiroTransitado)+'</div></div>' +
     '<div class="card"><div class="lbl">Lucros do dia</div><div class="val pos">'+fmtR$(d.lucros)+'</div></div>' +
     '<div class="card"><div class="lbl">Prejuízos do dia</div><div class="val neg">'+fmtR$(-d.prejuizos)+'</div></div>' +
     '<div class="card"><div class="lbl">Saldo do dia</div><div class="val '+(d.saldoDia>=0?'pos':'neg')+'">'+fmtR$(d.saldoDia)+'</div></div>' +
@@ -385,10 +429,16 @@ function renderDay(d) {
   const chartSection = document.getElementById('banca-chart-section');
   if (d.lucros || d.prejuizos) {
     chartSection.style.display = 'block';
-    document.getElementById('banca-chart').innerHTML = barChart([
-      { label: 'Lucros', value: d.lucros, color: '#22c55e' },
-      { label: 'Prejuízos', value: -d.prejuizos, color: '#ef4444' }
-    ]);
+    document.getElementById('banca-chart').innerHTML =
+      '<div style="display:flex;gap:24px;align-items:stretch;flex-wrap:wrap">' +
+      '<div style="flex-shrink:0">' + barChart([
+        { label: 'Lucros', value: d.lucros, color: '#22c55e' },
+        { label: 'Prejuízos', value: -d.prejuizos, color: '#ef4444' }
+      ]) + '</div>' +
+      '<div style="flex:1;min-width:320px;border-left:1px solid #222;padding-left:24px">' +
+      '<div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:8px">Evolução do saldo — bet a bet</div>' +
+      intradayEquityChart(d.apostas) +
+      '</div></div>';
   } else { chartSection.style.display = 'none'; }
 
   const tblEl = document.getElementById('banca-table');
