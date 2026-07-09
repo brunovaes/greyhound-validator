@@ -87,6 +87,7 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
   <button type="button" class="tabbtn" data-tab="t-remarks" onclick="showTab('t-remarks')">${icon('message',{size:14})} Remarks</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
+  <button type="button" class="tabbtn" data-tab="t-banca" onclick="showTab('t-banca')">${icon('trophy',{size:14})} Banca</button>
 </div>
 
 <div>
@@ -322,6 +323,34 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </div>
 
+<div class="tab-panel" id="t-banca">
+<div class="section">
+<div class="sec-title">Banca — Unidade Padrão e Controle de Risco</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field">
+    <label>Valor da unidade (padrão por aposta)</label>
+    <input type="number" step="0.5" min="0" name="banca_unidade_padrao" value="${config.banca_unidade_padrao||2.5}">
+    <div class="hint">Quantas unidades entram automaticamente quando você marca "Apostei" (1 unidade = 1% da banca do mês)</div>
+  </div>
+  <div class="field">
+    <label>Valor da banca inicial (R$)</label>
+    <input type="number" step="1" min="0" name="banca_valor_inicial" value="${config.banca_valor_inicial||1000}">
+    <div class="hint">Usado como padrão no primeiro mês (ou se você ainda não configurou nada na aba Banca)</div>
+  </div>
+  <div class="field">
+    <label>Percentual de stop do dia (%)</label>
+    <input type="number" step="1" min="0" max="100" name="banca_pct_stop" value="${config.banca_pct_stop!=null?config.banca_pct_stop:20}">
+    <div class="hint">Se o prejuízo do dia atingir esse percentual da banca, mostra um aviso (não bloqueia apostas, só avisa). Reinicia todo dia.</div>
+  </div>
+  <div class="field" style="grid-column:1/-1">
+    <label>Mensagem do aviso de stop</label>
+    <textarea name="banca_aviso_stop" rows="2" style="width:100%;resize:vertical">${config.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'}</textarea>
+    <div class="hint">Texto exibido no banner de aviso quando o percentual de stop do dia é atingido</div>
+  </div>
+</div>
+</div>
+</div>
+
 <div class="btn-bar">
   <button type="submit" class="btn-save">Salvar Configurações</button>
   <button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button>
@@ -387,7 +416,11 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_interval_min INTEGER DEFAULT 60").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '09:00'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_end TEXT DEFAULT '20:00'").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_unidade_padrao REAL DEFAULT 2.5").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
@@ -408,6 +441,10 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.monitor_interval_min||60,
       d.monitor_window_start||'09:00',
       d.monitor_window_end||'20:00',
+      d.banca_unidade_padrao||2.5,
+      d.banca_valor_inicial||1000,
+      d.banca_pct_stop!=null&&d.banca_pct_stop!==''?d.banca_pct_stop:20,
+      d.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
       user.id
     );
     res.json({ ok: true });

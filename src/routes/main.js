@@ -55,6 +55,13 @@ function navBar(user, active) {
       <button onclick="dismissSuspiciousBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece se continuar suspeito depois)">×</button>
     </div>
   </div>
+  <div id="stop-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.12);border-bottom:1px solid rgba(239,68,68,.35)">
+    <span style="font-size:12px;color:#ef4444">&#128721; <strong>Stop do dia atingido</strong> — <span id="stop-banner-msg"></span></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="${BASE}/banca" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Banca →</a>
+      <button onclick="dismissStopBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece amanha se acontecer de novo)">×</button>
+    </div>
+  </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
@@ -95,6 +102,24 @@ function navBar(user, active) {
       var msg = document.getElementById('suspicious-banner-msg').textContent || '';
       banner.style.display = 'none';
       try { localStorage.setItem('suspicious_banner_dismissed', msg); } catch(e) {}
+    }
+    function dismissStopBanner() {
+      var banner = document.getElementById('stop-banner');
+      var today = new Date().toISOString().slice(0,10);
+      banner.style.display = 'none';
+      try { localStorage.setItem('stop_banner_dismissed', today); } catch(e) {}
+    }
+    function checkStopBanner() {
+      var today = new Date().toISOString().slice(0,10);
+      fetch(BASE + '/banca/data?view=day&date=' + today).then(function(r){return r.json();}).then(function(d){
+        var banner = document.getElementById('stop-banner');
+        if (!banner || !d.ok || !d.stopHit) { if(banner) banner.style.display='none'; return; }
+        var dismissed = false;
+        try { dismissed = localStorage.getItem('stop_banner_dismissed') === today; } catch(e) {}
+        if (dismissed) return;
+        document.getElementById('stop-banner-msg').textContent = d.avisoStop + ' (prejuízo hoje: ' + d.pctDia.toFixed(1) + '%, limite: ' + d.pctStop + '%)';
+        banner.style.display = 'flex';
+      }).catch(function(){});
     }
     function checkRobots() {
       Promise.all([
@@ -191,13 +216,15 @@ function navBar(user, active) {
     checkPdfBanner();
     checkResultsBanner();
     checkMonitorBanner();
-    setInterval(function(){ checkRobots(); checkResultsBanner(); checkMonitorBanner(); }, 60000);
+    checkStopBanner();
+    setInterval(function(){ checkRobots(); checkResultsBanner(); checkMonitorBanner(); checkStopBanner(); }, 60000);
     setInterval(checkRobots, 4000);
     // Expor funções de dismiss globalmente
     window.dismissPdfBanner = dismissPdfBanner;
     window.dismissResBanner = dismissResBanner;
     window.dismissMonBanner = dismissMonBanner;
     window.dismissSuspiciousBanner = dismissSuspiciousBanner;
+    window.dismissStopBanner = dismissStopBanner;
     window.downloadAndAnalyze = downloadAndAnalyze;
   })();
   </script>`;
@@ -1012,14 +1039,14 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 ${navBar(user, 'historico')}
 <div class="content">
 <div class="kpis">
-<div class="kpi b"><div class="kpi-label">Corridas</div><div class="kpi-val">${races.length}</div></div>
-<div class="kpi g"><div class="kpi-label">Acertos</div><div class="kpi-val">${ac}</div></div>
-<div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" style="color:${resolvidas>0&&ac/resolvidas>=.5?'#22c55e':'#f97316'}">${taxa}%</div></div>
-<div class="kpi o"><div class="kpi-label">Apostas</div><div class="kpi-val">${ap}</div></div>
-<div class="kpi g"><div class="kpi-label">Green</div><div class="kpi-val">${green}</div></div>
-<div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" style="color:${ap>0&&green/ap>=.5?'#22c55e':'#f97316'}">${pctGreen}%</div></div>
+<div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${races.length}</div></div>
+<div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
+<div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" id="kpi-taxa" style="color:${resolvidas>0&&ac/resolvidas>=.5?'#22C65E':'#ef4444'}">${taxa}%</div></div>
+<div class="kpi"><div class="kpi-label">Apostas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
+<div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
+<div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:110px">Aposta</th><th style="width:80px">Aberto?</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:24px"></th><th style="width:45px">Odd</th><th style="width:80px">Aposta</th><th style="width:80px">Aberto?</th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -1044,14 +1071,22 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
-<td style="text-align:center"><input type="text" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" style="width:44px;text-align:center;background:#0D1117;border:1px solid #333;color:#fff;border-radius:4px;padding:4px;font-size:11px"></td>
-<td style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:6px"><label style="display:flex;align-items:center;gap:3px;font-size:9px;color:#888;cursor:pointer;white-space:nowrap"><input type="checkbox" ${r.bet_entrou?'checked':''} data-id="${r.id}" data-f="bet_entrou" style="cursor:pointer"> Apostei</label><input type="number" step="0.5" min="0" value="${r.bet_unidades!=null?r.bet_unidades:2.5}" data-id="${r.id}" data-f="bet_unidades" style="width:44px;text-align:center;background:#0D1117;border:1px solid #333;color:#fff;border-radius:4px;padding:4px;font-size:11px" title="Unidades"></div></td>
-<td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:pointer"><input type="checkbox" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" style="cursor:pointer"> Não aberto</label></td>
+<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Aposta/Aberto">&#9998;</span></td>
+<td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px"></td>
+<td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#888;cursor:default"><input type="checkbox" class="hist-inp" ${r.bet_entrou?'checked':''} data-id="${r.id}" data-f="bet_entrou" disabled> Apostei</label></td>
+<td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:default"><input type="checkbox" class="hist-inp" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" disabled> Não aberto</label></td>
 </tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
+${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="11" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
 
 <style>
+.hist-inp{background:transparent;border:1px solid transparent;color:#ccc}
+.hist-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff;cursor:pointer}
+.hist-inp[type=checkbox]{cursor:default}
+.hist-inp[type=checkbox]:not([disabled]){cursor:pointer}
+.edit-pencil{cursor:pointer;font-size:13px;opacity:.55;transition:opacity .15s}
+.edit-pencil:hover{opacity:1}
+.edit-pencil.editing{opacity:1;color:#22c55e}
 #sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}#sv-modal.open{display:flex}
 #sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
 #sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
@@ -1110,13 +1145,36 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
-// Salva edicoes de Odd/Apostei/Unidades/Aberto direto no banco, sem precisar
-// voltar pra tela Analisar
+// Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
+// pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
 function saveHistField(id, field, value){
   var body={};
   body[field]=value;
   fetch(BASE+'/api/race/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .catch(function(e){console.error('[historico] erro ao salvar',field,e);});
+  var race = ALL_RACES.find(function(r){ return String(r.id)===String(id); });
+  if (race) { race[field] = value; recomputeKPIs(); }
+}
+function recomputeKPIs(){
+  var apostadas = ALL_RACES.filter(function(r){ return r.bet_entrou && r.odd; });
+  var ap = apostadas.length;
+  var green = apostadas.filter(function(r){ return r.bateu==='sim'; }).length;
+  var pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
+  document.getElementById('kpi-apostas').textContent = ap;
+  document.getElementById('kpi-green').textContent = green;
+  var pgEl = document.getElementById('kpi-pctgreen');
+  pgEl.textContent = pctGreen + '%';
+  pgEl.style.color = (ap>0 && green/ap>=.5) ? '#22C65E' : '#ef4444';
+}
+// Lapis: liga/desliga o modo de edicao so daquela linha (Odd/Apostei/Aberto
+// ficam desabilitados por padrao, pra nao editar sem querer)
+function toggleRowEdit(pencilEl){
+  var id = pencilEl.getAttribute('data-row');
+  var editing = pencilEl.classList.toggle('editing');
+  pencilEl.innerHTML = editing ? '&#10003;' : '&#9998;';
+  document.querySelectorAll('.hist-inp[data-id="'+id+'"]').forEach(function(el){
+    el.disabled = !editing;
+  });
 }
 document.querySelectorAll('table [data-f]').forEach(function(el){
   var evt = el.type==='checkbox' ? 'change' : (el.type==='number'||el.type==='text' ? 'input' : 'change');

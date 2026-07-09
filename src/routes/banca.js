@@ -7,13 +7,17 @@
 
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, getUserConfig } = require('../db/database');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
-const BANCA_PADRAO = 1000; // usado so se o usuario nunca configurou nada ainda
+
+function getBancaPadrao(userId) {
+  const cfg = getUserConfig(userId);
+  return (cfg && cfg.banca_valor_inicial) || 1000;
+}
 
 function getLogo() {
   const path = require('path'), fs = require('fs');
@@ -60,7 +64,7 @@ function getCadeiaBanca(userId) {
   const cadeia = {};
   let saldoAnterior = null;
   meses.forEach(ym => {
-    const inicial = overrides[ym] != null ? overrides[ym] : (saldoAnterior != null ? saldoAnterior : BANCA_PADRAO);
+    const inicial = overrides[ym] != null ? overrides[ym] : (saldoAnterior != null ? saldoAnterior : getBancaPadrao(userId));
     const apostasDoMes = porMes[ym].map(a => {
       const ganhoPct = calcGanhoPct(a);
       return Object.assign({}, a, {
@@ -80,7 +84,7 @@ function getCadeiaBanca(userId) {
 function getBancaAtualPadrao(userId) {
   const cadeia = getCadeiaBanca(userId);
   const meses = Object.keys(cadeia).sort();
-  if (!meses.length) return BANCA_PADRAO;
+  if (!meses.length) return getBancaPadrao(userId);
   const ymAtual = new Date().toISOString().slice(0, 7);
   if (cadeia[ymAtual]) return cadeia[ymAtual].inicial;
   return cadeia[meses[meses.length - 1]].final;
@@ -103,10 +107,15 @@ router.get('/data', (req, res) => {
       const prejuizos = resolvidas.filter(a => a.ganhoReais < 0).reduce((s, a) => s + Math.abs(a.ganhoReais), 0);
       const saldoDia = lucros - prejuizos;
       const pctDia = mes.inicial ? (saldoDia / mes.inicial) * 100 : 0;
+      const cfg = getUserConfig(userId);
+      const pctStop = cfg && cfg.banca_pct_stop != null ? cfg.banca_pct_stop : 20;
+      const stopHit = pctDia < 0 && Math.abs(pctDia) >= pctStop;
       res.json({
         ok: true, view: 'day', date: dateParam, bancaInicialMes: mes.inicial,
         apostas: apostasDoDia, lucros, prejuizos, saldoDia, pctDia,
-        pendentes: apostasDoDia.length - resolvidas.length
+        pendentes: apostasDoDia.length - resolvidas.length,
+        stopHit, pctStop,
+        avisoStop: cfg && cfg.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'
       });
     } else if (view === 'month') {
       const ym = dateParam.slice(0, 7);
