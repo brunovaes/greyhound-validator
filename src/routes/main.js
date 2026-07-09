@@ -240,7 +240,11 @@ router.get('/', (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(user.id);
-  const hojeStr = (function(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear(); })();
+  // new Date() roda no SERVIDOR (Railway = UTC), nao no relogio do Bruno.
+  // Sem o ajuste de -3h, depois das 21h BRT o servidor ja calcula a data de
+  // AMANHA (UTC ja virou o dia seguinte), fazendo o "Historico do dia" achar
+  // que nao existe sessao de hoje mesmo ela existindo.
+  const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
   const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
   const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
   const taxa = stats.t > 0 ? Math.round(stats.a/stats.t*100) : 0;
