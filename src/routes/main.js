@@ -1018,7 +1018,7 @@ router.get('/sessao/:id', (req, res) => {
   const resolvidas = races.filter(r=>r.bateu).length;
   const ac = races.filter(r=>r.bateu==='sim').length;
   const taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
-  const apostadas = races.filter(r=>r.bet_entrou && r.odd);
+  const apostadas = races.filter(r=>r.odd);
   const ap = apostadas.length;
   const green = apostadas.filter(r=>r.bateu==='sim').length;
   const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
@@ -1046,7 +1046,7 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:24px"></th><th style="width:45px">Odd</th><th style="width:80px">Aposta</th><th style="width:80px">Aberto?</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -1071,12 +1071,11 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
-<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Aposta/Aberto">&#9998;</span></td>
-<td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px"></td>
-<td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#888;cursor:default"><input type="checkbox" class="hist-inp" ${r.bet_entrou?'checked':''} data-id="${r.id}" data-f="bet_entrou" disabled> Apostei</label></td>
+<td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
 <td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:default"><input type="checkbox" class="hist-inp" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" disabled> Não aberto</label></td>
+<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Aberto">&#9998;</span></td>
 </tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="11" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
+${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
 
 <style>
@@ -1156,7 +1155,7 @@ function saveHistField(id, field, value){
   if (race) { race[field] = value; recomputeKPIs(); }
 }
 function recomputeKPIs(){
-  var apostadas = ALL_RACES.filter(function(r){ return r.bet_entrou && r.odd; });
+  var apostadas = ALL_RACES.filter(function(r){ return r.odd; });
   var ap = apostadas.length;
   var green = apostadas.filter(function(r){ return r.bateu==='sim'; }).length;
   var pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
@@ -1166,15 +1165,22 @@ function recomputeKPIs(){
   pgEl.textContent = pctGreen + '%';
   pgEl.style.color = (ap>0 && green/ap>=.5) ? '#22C65E' : '#ef4444';
 }
-// Lapis: liga/desliga o modo de edicao so daquela linha (Odd/Apostei/Aberto
-// ficam desabilitados por padrao, pra nao editar sem querer)
-function toggleRowEdit(pencilEl){
-  var id = pencilEl.getAttribute('data-row');
-  var editing = pencilEl.classList.toggle('editing');
-  pencilEl.innerHTML = editing ? '&#10003;' : '&#9998;';
+// Lapis: liga/desliga o modo de edicao so daquela linha (Odd/Aberto ficam
+// desabilitados por padrao, pra nao editar sem querer)
+function setRowEdit(id, editing){
+  var pencilEl = document.querySelector('.edit-pencil[data-row="'+id+'"]');
+  if (pencilEl) {
+    pencilEl.classList.toggle('editing', editing);
+    pencilEl.innerHTML = editing ? '&#10003;' : '&#9998;';
+  }
   document.querySelectorAll('.hist-inp[data-id="'+id+'"]').forEach(function(el){
     el.disabled = !editing;
   });
+}
+function toggleRowEdit(pencilEl){
+  var id = pencilEl.getAttribute('data-row');
+  var editing = !pencilEl.classList.contains('editing');
+  setRowEdit(id, editing);
 }
 document.querySelectorAll('table [data-f]').forEach(function(el){
   var evt = el.type==='checkbox' ? 'change' : (el.type==='number'||el.type==='text' ? 'input' : 'change');
@@ -1183,6 +1189,13 @@ document.querySelectorAll('table [data-f]').forEach(function(el){
     var val = this.type==='checkbox' ? (this.checked?1:0) : this.value;
     saveHistField(id, f, val);
   });
+  // Odd: perder o foco (clicar fora) tambem fecha a edicao, alem do Enter
+  // (que ja da blur() via onkeydown inline no input)
+  if (el.getAttribute('data-f')==='odd') {
+    el.addEventListener('blur', function(){
+      setRowEdit(this.getAttribute('data-id'), false);
+    });
+  }
 });
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
 document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});

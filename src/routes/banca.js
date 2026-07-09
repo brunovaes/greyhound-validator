@@ -1,9 +1,9 @@
 'use strict';
 // src/routes/banca.js
 // Gestao de Banca — acompanha as apostas reais feitas em cima dos AvBs
-// (bet_entrou=1), calculando ganho/perda por unidade (1 unidade = 1% da
-// banca inicial DO MES — fixa o mes inteiro, nao recalcula a cada aposta).
-// Visao diaria, mensal (fecha o mes) e anual.
+// (Odd preenchida = aposta feita), calculando ganho/perda por unidade (1
+// unidade = 1% da banca inicial DO MES — fixa o mes inteiro, nao recalcula a
+// cada aposta). Visao diaria, mensal (fecha o mes) e anual.
 
 const express = require('express');
 const router = express.Router();
@@ -41,7 +41,7 @@ function getApostas(userId) {
     `SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.name_fav, r.name_und, r.odd, r.bet_unidades, r.bateu,
             date(s.created_at, '-3 hours') as dia
      FROM races r JOIN race_sessions s ON s.id = r.session_id
-     WHERE r.user_id=? AND r.bet_entrou=1
+     WHERE r.user_id=? AND r.odd IS NOT NULL AND r.odd != ''
      ORDER BY s.created_at ASC, r.hora ASC`
   ).all(userId);
 }

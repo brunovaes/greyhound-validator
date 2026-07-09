@@ -980,10 +980,11 @@ router.put('/race/:id', express.json(), (req, res) => {
   // manda so odd/valor/avb_nao_aberto, ou vice-versa.
   const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades'];
   const body = { ...req.body };
-  // Se marcou "Apostei" (bet_entrou=1) sem mandar bet_unidades explicitamente,
-  // usa o valor padrao configurado — a UI nao pede mais unidade por corrida,
+  // Se a Odd esta sendo preenchida (nao vazia) e nao veio bet_unidades junto,
+  // usa o valor padrao configurado — Odd preenchida ja conta como aposta
+  // feita, nao precisa mais de checkbox separado nem de unidade por corrida,
   // fica tudo configurado uma vez em Configuracoes -> Banca.
-  if (String(body.bet_entrou) === '1' && !Object.prototype.hasOwnProperty.call(body, 'bet_unidades')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'odd') && String(body.odd || '').trim() !== '' && !Object.prototype.hasOwnProperty.call(body, 'bet_unidades')) {
     const cfg = getUserConfig(userId);
     body.bet_unidades = cfg.banca_unidade_padrao || 2.5;
   }
