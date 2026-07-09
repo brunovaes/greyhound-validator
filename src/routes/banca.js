@@ -373,7 +373,7 @@ function intradayEquityChart(apostas) {
   return '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:220px">' + linhaZero + segments.join('') + dots + labels + '</svg>';
 }
 
-
+function lineChart(pontos) {
   // pontos: [{label, valor}] — linha simples em SVG, eixo Y auto-escalado
   if (!pontos.length) return '<div class="empty-msg">Sem dados nesse período.</div>';
   const w = 900, h = 220, pad = 40;
