@@ -1271,12 +1271,26 @@ async function proceedAnalysis(){
     try{
       var r=await fetch(BASE+'/api/pdfs/hoje');
       var d=await r.json();
-      if(!d.count){setSt('Ainda não existe corridas disponíveis para serem carregadas.');return;}
+      if(!d.count){
+        setSt('');
+        results = [];
+        focusRaceIdx = -1;
+        saveSessionState();
+        showAllExpiredMsg();
+        return;
+      }
       var dateParts=(d.date||'').split('-');
       var dateLabel=dateParts.length===3?dateParts[2]+'/'+dateParts[1]:d.date;
       setSt(d.count+' corridas do dia '+dateLabel+' encontradas. Iniciando análise...');
       usandoPasta=true;
-    }catch(e){setSt('Ainda não existe corridas disponíveis para serem carregadas.');return;}
+    }catch(e){
+      setSt('');
+      results = [];
+      focusRaceIdx = -1;
+      saveSessionState();
+      showAllExpiredMsg();
+      return;
+    }
   }
   document.getElementById('btngo').disabled=true;
   document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
