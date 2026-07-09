@@ -263,6 +263,7 @@ async function runCardMonitorRobot(targetDate) {
   status.suspicious = false; status.suspiciousReason = '';
   let extractFailCount = 0;
   const pistasSuspeitas = new Set();
+  let avbsInvalidados = 0;
 
   const DATE = targetDate || new Date().toISOString().slice(0, 10);
   addLog('info', 'Monitorando cards de ' + DATE);
@@ -424,6 +425,31 @@ async function runCardMonitorRobot(targetDate) {
 
         if (vagos.length) {
           addLog('warn', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — trap(s) vago(s) sem substituto: ' + vagos.map(v => 'T'+v.trap+' "'+v.nome+'"').join(', ') + '. Card atualizado (retirada marcada), sem reanalise automatica pra esse(s) trap(s).');
+
+          // Se o trap vago e' justamente o Favorito ou o Underdog da AvB ja
+          // calculada, o confronto inteiro fica sem sentido (um dos dois nem
+          // corre mais) — invalida a AvB (skip) na hora, independente de
+          // outras mudancas simultaneas em traps diferentes.
+          const vagoAtingeAvB = vagos.find(v => v.trap === dbRace.trap_fav || v.trap === dbRace.trap_und);
+          if (vagoAtingeAvB) {
+            const papel = vagoAtingeAvB.trap === dbRace.trap_fav ? 'Favorito' : 'Underdog';
+            addLog('err', '  ⚠️ ' + dbRace.corrida + ' ' + dbRace.hora + ' — AvB INVALIDADO: T' + vagoAtingeAvB.trap + ' "' + vagoAtingeAvB.nome + '" era o ' + papel + ' dessa disputa e foi retirado sem substituto. Corrida marcada como skip.');
+            avbsInvalidados++;
+            if (dbRace.card_suspect) {
+              db.prepare('UPDATE races SET nivel=? WHERE id=?').run('skip', dbRace.id);
+            } else {
+              logChanges(dbRace.id, 'monitor_robot', dbRace, { nivel: 'skip' }, ['nivel']);
+              db.prepare('UPDATE races SET card_suspect=1, nivel_pre_suspeita=?, nivel=? WHERE id=?').run(dbRace.nivel, 'skip', dbRace.id);
+            }
+            // Ainda atualiza o race_card antes de sair, pra registro
+            const novoRaceCardInvalido = raceCard.map(function(g) {
+              const vg = vagos.find(function(v) { return v.trap === g.trap; });
+              return vg ? { trap: g.trap, nome: '' } : g;
+            });
+            db.prepare('UPDATE races SET race_card=? WHERE id=?').run(JSON.stringify(novoRaceCardInvalido), dbRace.id);
+            await new Promise(r => setTimeout(r, 1500));
+            continue;
+          }
         }
 
         status.changed++;
@@ -598,6 +624,14 @@ async function runCardMonitorRobot(targetDate) {
       status.suspiciousReason = (status.suspiciousReason ? status.suspiciousReason + ' | ' : '') +
         'Possivel cancelamento de card inteiro: ' + lista + ' — corrida(s) ainda no horario mas sumiram da lista ao vivo.';
       addLog('err', '⚠️ PISTA(S) POSSIVELMENTE CANCELADA(S) HOJE: ' + lista + ' — verificar manualmente.');
+    }
+
+    // Resumo de AvBs invalidados porque o Favorito ou Underdog foi retirado
+    // sem substituto — diferente do caso acima (aqui e' fato confirmado via
+    // scrape ao vivo, nao suspeita — a corrida ja foi corretamente marcada
+    // como skip, isso e' so um aviso informativo, nao dispara "rodada suspeita")
+    if (avbsInvalidados) {
+      addLog('warn', '📋 ' + avbsInvalidados + ' AvB(s) invalidada(s) hoje por retirada do Favorito/Underdog (marcadas como skip automaticamente).');
     }
 
   } catch (e) {
