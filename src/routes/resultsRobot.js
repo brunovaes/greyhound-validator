@@ -40,6 +40,26 @@ function horaDBTo24(horaDB) {
   return h24 + ':' + min;
 }
 
+// Converte hora UK crua (ex: "1:16") pra minutos do dia em BRT — mesma regra
+// usada no robo de monitoramento (10,11=AM; 12,1-9=PM; BRT=UK-4h)
+function horaUkParaMinutosBrt(horaUk) {
+  const p = (horaUk || '').split(':');
+  if (p.length < 2) return null;
+  let h = parseInt(p[0]);
+  const min = parseInt(p[1]) || 0;
+  if (h >= 1 && h <= 9) h += 12;
+  h = h - 4; if (h < 0) h += 24;
+  return h * 60 + min;
+}
+
+// Minutos do dia agora, em BRT (servidor roda em UTC no Railway; BRT = UTC-3)
+function agoraMinutosBrt() {
+  const now = new Date();
+  let m = (now.getUTCHours() * 60 + now.getUTCMinutes()) - 180;
+  if (m < 0) m += 1440;
+  return m;
+}
+
 // Similaridade entre dois strings (chars em comum / max length) — usada
 // tanto pra casar nome de galgo quanto nome de pista.
 function similarity(a, b) {
@@ -158,9 +178,9 @@ async function runResultsRobot(targetDate) {
     // seguinte) ficavam com a data errada nessa comparacao e a corrida nunca
     // era encontrada pelo robo de resultados — mesmo sendo do dia certo.
     const dbRaces = db.prepare(
-      "SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card, r.resultado_1, r.resultado_2, r.resultado_3 " +
+      "SELECT r.id, r.hora, r.corrida, r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.bateu, r.race_card, r.resultado_1, r.resultado_2, r.resultado_3, r.card_suspect, r.nivel, r.nivel_pre_suspeita " +
       "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-      "WHERE date(s.created_at, '-3 hours')=? AND r.nivel!=? ORDER BY r.hora"
+      "WHERE date(s.created_at, '-3 hours')=? AND (r.nivel!=? OR r.card_suspect=1) ORDER BY r.hora"
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
@@ -332,6 +352,14 @@ async function runResultsRobot(targetDate) {
         );
         updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
         status.updated++;
+        // Se essa corrida estava marcada como suspeita (provavel cancelamento)
+        // e agora achou resultado de verdade, desfaz a marcacao
+        if (dbRace.card_suspect) {
+          const nivelRestaurado = dbRace.nivel_pre_suspeita || dbRace.nivel;
+          logChanges(dbRace.id, 'results_robot', dbRace, { nivel: nivelRestaurado }, ['nivel']);
+          db.prepare('UPDATE races SET card_suspect=0, nivel=?, nivel_pre_suspeita=NULL WHERE id=?').run(nivelRestaurado, dbRace.id);
+          addLog('info', '  resultado encontrado apos suspeita de cancelamento — marcacao desfeita, nivel restaurado.');
+        }
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
           (bateu === 'sim' ? 'BATEU' : 'NAO') + ' ' + dbRace.corrida + ' ' + link.rTime +
@@ -365,6 +393,44 @@ async function runResultsRobot(targetDate) {
       status.suspicious = true;
       status.suspiciousReason = noPosicoesCount + ' de ' + status.processed + ' corridas processadas nao tiveram a ordem de chegada extraida — provavel mudanca no formato da pagina do Racing Post. Resultados dessa rodada podem estar incompletos ou errados.';
       addLog('err', '⚠️ RODADA SUSPEITA: ' + status.suspiciousReason);
+    }
+
+    // Corridas que NUNCA aparecem entre os raceLinks (pagina de resultados)
+    // nunca sao tocadas pelo loop acima — ele so percorre o que O RACING POST
+    // mostra, nao o que a gente esta esperando. Uma corrida cancelada
+    // simplesmente nao gera link de resultado nenhum, entao fica esquecida
+    // pra sempre (bateu/resultado ficam em branco, sem log, sem auditoria).
+    // Aqui a gente faz o caminho inverso: pega toda corrida do banco ainda
+    // sem resultado e ja bem depois do horario previsto, e marca como
+    // provavel cancelamento (mesma marcacao reversivel do robo de
+    // monitoramento — se algum dia aparecer resultado de verdade, desfaz
+    // sozinho, ver logica de UPDATE em cardMonitorRobot.js).
+    const ATRASO_MIN_SUSPEITO = 90;
+    const semResultado = db.prepare(
+      "SELECT r.id, r.hora, r.corrida, r.card_suspect, r.nivel, r.nivel_pre_suspeita " +
+      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at, '-3 hours')=? AND (r.nivel!=? OR r.card_suspect=1) AND (r.bateu IS NULL OR r.bateu='')"
+    ).all(DATE, 'skip');
+    let canceladasDetectadas = 0;
+    for (const r of semResultado) {
+      const minutosRace = horaUkParaMinutosBrt(r.hora);
+      if (minutosRace === null) continue;
+      let atraso = agoraMinutosBrt() - minutosRace;
+      if (atraso < 0) atraso += 1440; // corrida foi no dia anterior (virada de horario), ajusta
+      if (atraso < ATRASO_MIN_SUSPEITO) continue;
+      addLog('warn', '⚠️ ' + r.corrida + ' ' + r.hora + ' — sem resultado ' + Math.floor(atraso/60)+'h'+String(atraso%60).padStart(2,'0') + ' apos o horario previsto. Corrida provavelmente cancelada.');
+      canceladasDetectadas++;
+      if (r.card_suspect) {
+        db.prepare('UPDATE races SET nivel=? WHERE id=?').run('skip', r.id);
+      } else {
+        logChanges(r.id, 'results_robot', r, { nivel: 'skip' }, ['nivel']);
+        db.prepare('UPDATE races SET card_suspect=1, nivel_pre_suspeita=?, nivel=? WHERE id=?').run(r.nivel, 'skip', r.id);
+      }
+    }
+    if (canceladasDetectadas) {
+      status.suspicious = true;
+      status.suspiciousReason = (status.suspiciousReason ? status.suspiciousReason + ' | ' : '') + canceladasDetectadas + ' corrida(s) sem resultado muito tempo depois do horario — provavel cancelamento.';
+      addLog('err', '⚠️ ' + canceladasDetectadas + ' CORRIDA(S) PROVAVELMENTE CANCELADA(S) (sem resultado ha mais de ' + ATRASO_MIN_SUSPEITO + ' min) — verificar manualmente.');
     }
 
   } catch (e) {
