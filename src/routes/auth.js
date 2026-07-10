@@ -20,11 +20,21 @@ function getBg() {
   return '';
 }
 
+// Video de fundo — servido como arquivo estatico (nao da pra fazer base64
+// inline como a imagem, o HTML ficaria gigante). So usa se o arquivo existir;
+// senao cai pro fallback de imagem/preto normal.
+function getBgVideoUrl() {
+  const vidPath = path.join(__dirname, '../../public/img/login_bg.mp4');
+  if (fs.existsSync(vidPath)) return BASE + '/static/img/login_bg.mp4';
+  return null;
+}
+
 router.get('/login', (req, res) => {
   if (req.session.userId) return res.redirect(BASE);
   const err = req.query.err;
   const logoB64 = getLogo();
   const bgB64 = getBg();
+  const bgVideoUrl = getBgVideoUrl();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Login - Greyhound Validator</title>
@@ -33,6 +43,7 @@ ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .bg{position:fixed;inset:0;${bgB64 ? `background:url('${bgB64}') center center/cover no-repeat;` : 'background:#000;'}opacity:.5;z-index:0}
+.bg-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5;z-index:0}
 .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.3) 0%,rgba(0,0,0,.85) 100%);z-index:1}
 .card{position:relative;z-index:2;background:rgba(10,10,10,.92);border:1px solid rgba(34,197,94,.3);border-radius:14px;padding:32px;width:100%;max-width:420px;box-shadow:0 0 60px rgba(34,197,94,.08),0 20px 60px rgba(0,0,0,.8);backdrop-filter:blur(10px)}
 .logo-box{margin-bottom:22px;text-align:center}
@@ -45,7 +56,10 @@ button{width:100%;padding:13px;background:#22c55e;color:#000;font-weight:700;fon
 button:hover{background:#16a34a;box-shadow:0 4px 20px rgba(34,197,94,.3)}
 .err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:16px;text-align:center}
 </style></head><body>
-<div class="bg"></div>
+${bgVideoUrl
+  ? `<video class="bg-video" autoplay muted loop playsinline><source src="${bgVideoUrl}" type="video/mp4"></video>`
+  : `<div class="bg"></div>`
+}
 <div class="overlay"></div>
 <div class="card">
   <div class="logo-box">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
