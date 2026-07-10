@@ -109,7 +109,6 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">${icon('filter',{size:14})} Filtros de Corrida</button>
   <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
-  <button type="button" class="tabbtn" data-tab="t-remarks" onclick="showTab('t-remarks')">${icon('message',{size:14})} Remarks</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
   <button type="button" class="tabbtn" data-tab="t-banca" onclick="showTab('t-banca')">${icon('trophy',{size:14})} Banca</button>
 </div>
@@ -224,8 +223,6 @@ ${blocoToggle('bloco_confianca_ativo', 'Thresholds de Confiança')}
 <div class="field"><label>Média confiança (%)</label>
 <input type="range" name="pct_media" min="30" max="70" value="${config.pct_media}" oninput="upR(this)">
 <div style="display:flex;justify-content:space-between"><span class="hint">Minimo para badge Media</span><span class="rv" id="v_pct_media">${config.pct_media}%</span></div></div>
-<div class="field"><label>CalTm significativo (s)</label><input type="number" name="diff_caltm_significativa" value="${config.diff_caltm_significativa}" step="0.05" min="0.1" max="1"><span class="hint">Acima disso = vantagem clara</span></div>
-<div class="field"><label>CalTm empate (s)</label><input type="number" name="diff_caltm_empate" value="${config.diff_caltm_empate}" step="0.02" min="0.02" max="0.3"><span class="hint">Abaixo disso = empate tecnico</span></div>
 </div>
 </div>
 </div>
@@ -239,7 +236,6 @@ ${blocoToggle('bloco_motor_ativo', 'Motor de Pontuação')}
 <div class="field"><label>Ajuste por nivel de classe (s)</label><input type="number" name="ajuste_classe_segundos" value="${config.ajuste_classe_segundos||0.20}" step="0.05" min="0.05" max="0.50"><span class="hint">Ex: galgo em A5 correu em A3 = +0.20s no tempo (normaliza pra comparar)</span></div>
 <div class="field"><label>Desconto acidente leve (s)</label><input type="number" name="desconto_acidente_leve" value="${config.desconto_acidente_leve||0.10}" step="0.02" min="0" max="0.30"><span class="hint">Bmp, SAw, MsdBrk — tempo ajustado para baixo</span></div>
 <div class="field"><label>Desconto acidente medio (s)</label><input type="number" name="desconto_acidente_medio" value="${config.desconto_acidente_medio||0.20}" step="0.02" min="0" max="0.50"><span class="hint">Crd, FcdCk — desconto maior</span></div>
-<div class="field"><label>Desconto acidente grave (s)</label><input type="number" name="desconto_acidente_grave" value="${config.desconto_acidente_grave||0.35}" step="0.05" min="0" max="0.70"><span class="hint">BdBmp, Stmb — desconto máximo</span></div>
 <div class="field"><label>Teto normalizacao CalTm (s)</label><input type="number" name="teto_diff_normalizacao" value="${config.teto_diff_normalizacao||0.50}" step="0.05" min="0.20" max="1.00"><span class="hint">Diferenca maxima relevante entre galgos (acima disso = 0 pts)</span></div>
 <div class="field"><label>Proporcao media / melhor CalTm</label>
   <select name="proporcao_media_caltm">
@@ -286,19 +282,6 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 &bull; <strong>Back</strong>: So gerado se diferenca entre 1o e 2o &gt; ${config.threshold_back||25}pts (vantagem absurda).
 </div>
 </details>
-</div>
-</div>
-
-<div class="tab-panel" id="t-remarks">
-<div class="section">
-<div class="sec-title">Remarks — Listas Customizadas</div>
-${blocoToggle('bloco_remarks_ativo', 'Remarks')}
-<div class="grid bloco-fields" id="bloco_remarks_ativo_fields" data-ativo="${config.bloco_remarks_ativo===0?'0':'1'}" style="grid-template-columns:1fr 1fr">
-<div class="field"><label>Combinacoes muito positivas</label><textarea name="remarks_muito_positivos">${config.remarks_muito_positivos}</textarea><span class="hint">Ex: SAw+RnOn,Bmp+RnOn</span></div>
-<div class="field"><label>Remarks positivos</label><textarea name="remarks_positivos">${config.remarks_positivos}</textarea></div>
-<div class="field"><label>Atenuantes (nao penalizar)</label><textarea name="remarks_atenuantes">${config.remarks_atenuantes}</textarea><span class="hint">Acidentes externos</span></div>
-<div class="field"><label>Remarks negativos</label><textarea name="remarks_negativos">${config.remarks_negativos}</textarea></div>
-</div>
 </div>
 </div>
 
@@ -474,14 +457,12 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_filtros_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_confianca_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_motor_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_remarks_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,bloco_remarks_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
-      d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
-      d.remarks_muito_positivos,d.remarks_positivos,d.remarks_atenuantes,d.remarks_negativos,
+      d.pct_alta,d.pct_media,
       d.max_cat_diff_caltm||1, d.peso_post_pick||0,
-      d.ajuste_classe_segundos||0.20, d.desconto_acidente_leve||0.10, d.desconto_acidente_medio||0.20, d.desconto_acidente_grave||0.35,
+      d.ajuste_classe_segundos||0.20, d.desconto_acidente_leve||0.10, d.desconto_acidente_medio||0.20,
       d.proporcao_media_caltm||0.60, 1-(d.proporcao_media_caltm||0.60),
       d.teto_diff_normalizacao||0.50, d.threshold_skip_avb||10, d.threshold_back||25,
       d.max_niveis_pool||2,
@@ -505,7 +486,6 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.bloco_filtros_ativo==='1'||d.bloco_filtros_ativo===1?1:0,
       d.bloco_confianca_ativo==='1'||d.bloco_confianca_ativo===1?1:0,
       d.bloco_motor_ativo==='1'||d.bloco_motor_ativo===1?1:0,
-      d.bloco_remarks_ativo==='1'||d.bloco_remarks_ativo===1?1:0,
       user.id
     );
     res.json({ ok: true });
