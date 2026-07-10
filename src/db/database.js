@@ -169,6 +169,7 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN bet_entrou INTEGER DEFAULT 0",
   "ALTER TABLE races ADD COLUMN bet_unidades REAL DEFAULT 2.5",
   "ALTER TABLE races ADD COLUMN eliminados TEXT",
+  "ALTER TABLE races ADD COLUMN post_pick TEXT",
   'ALTER TABLE analysis_config ADD COLUMN teto_diff_normalizacao REAL DEFAULT 0.50',
   'ALTER TABLE analysis_config ADD COLUMN threshold_skip_avb REAL DEFAULT 10.0',
   'ALTER TABLE analysis_config ADD COLUMN threshold_back REAL DEFAULT 25.0',

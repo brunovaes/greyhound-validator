@@ -210,6 +210,7 @@ async function autoCheckAndAnalyze() {
                 avbNaoAberto: !!r.avb_nao_aberto,
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
                 eliminados: r.eliminados?JSON.parse(r.eliminados):[],
+                postPick: r.post_pick||'',
                 dataCard: r.data_card||null,
                 trackFull: r.track_full||null,
                 cardSuspect: !!r.card_suspect,
@@ -1036,6 +1037,50 @@ function openRelatorioModal(key){
   document.getElementById('val-body').innerHTML=buildRelatorioHtml(r);
   document.getElementById('val-modal').classList.add('open');
 }
+// Resumo humanizado — mesma logica do relatorio tecnico, so que organizada
+// como texto corrido (paragrafo), tipo um comentario de analista. 100% por
+// template/condicional, sem chamar IA nenhuma.
+function buildResumoHumanizado(r){
+  if (!r.scores || !r.scores.length || r.nivel==='skip') return '';
+  var fav = r.scores.find(function(g){return g.trap===r.trapFav;});
+  var und = r.scores.find(function(g){return g.trap===r.trapUnd;});
+  if (!fav || !und) return '';
+
+  var partes = [];
+  partes.push('AvB: T'+r.trapFav+' '+(r.nameFav||'')+' (Favorito) vs T'+r.trapUnd+' '+(r.nameUnd||'')+' (Underdog) — '+r.pct+'% ('+(r.nivel==='alta'?'Alta':'Média')+' confiança).');
+
+  // 2o colocado do ranking (pra comentario de Back)
+  var segundo = (r.scores[0] && r.scores[0].trap===r.trapFav) ? r.scores[1] : r.scores[0];
+  if (r.vencedor) {
+    partes.push('Recomendação de Back também — a vantagem de '+(r.nameFav||'')+' se estende até o 2º colocado, não só sobre o Underdog.');
+  } else if (segundo) {
+    if (segundo.score > fav.score) {
+      partes.push('Sem recomendação de Back (T'+segundo.trap+' '+(segundo.nome||'')+', o 2º colocado, na verdade tem score bruto maior que o Favorito — a diferença virou negativa, provavelmente por causa do desempate).');
+    } else {
+      partes.push('Sem recomendação de Back — a vantagem sobre o 2º colocado (T'+segundo.trap+' '+(segundo.nome||'')+') não foi grande o suficiente.');
+    }
+  }
+
+  // Curiosidade do Post Pick
+  if (r.postPick && r.top3 && r.top3.length>=3) {
+    var picks = r.postPick.split('-').map(Number).filter(function(n){return n>0;});
+    var top3Str = r.top3.slice(0,3).join('-');
+    var bateuExato = picks.length>=3 && picks[0]===r.top3[0] && picks[1]===r.top3[1] && picks[2]===r.top3[2];
+    var mesmosTres = picks.length>=3 && picks.slice(0,3).sort().join(',')===r.top3.slice(0,3).sort().join(',');
+    if (bateuExato) {
+      partes.push('Curiosamente, o top 3 bateu exatamente com o Post Pick do Racing Post ('+r.postPick+').');
+    } else if (mesmosTres) {
+      partes.push('Os mesmos 3 galgos do Post Pick do Racing Post ('+r.postPick+') aparecem no top 3 do motor, só em ordem diferente ('+top3Str+').');
+    }
+  }
+
+  // Eliminados relevantes
+  if (r.eliminados && r.eliminados.length) {
+    partes.push((r.eliminados.length===1?'Vale notar que 1 galgo foi eliminado':'Vale notar que '+r.eliminados.length+' galgos foram eliminados')+' antes do cálculo (detalhes abaixo).');
+  }
+
+  return partes.join(' ');
+}
 function buildRelatorioHtml(r){
   var sec = 'padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)';
   var title = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#22c55e;margin-bottom:10px';
@@ -1043,6 +1088,12 @@ function buildRelatorioHtml(r){
 
   if (!r.scores || !r.scores.length) {
     return '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Relatório detalhado não disponível para esta corrida (sessão salva antes deste recurso, ou corrida descartada antes do cálculo de scores).</div>';
+  }
+
+  // Resumo humanizado (paragrafo de abertura)
+  var resumo = buildResumoHumanizado(r);
+  if (resumo) {
+    html += '<div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(34,197,94,.04)"><div style="font-size:13px;color:#eee;line-height:1.6">'+resumo+'</div></div>';
   }
 
   // Eliminados
