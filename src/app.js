@@ -209,6 +209,7 @@ async function autoCheckAndAnalyze() {
                 obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
                 avbNaoAberto: !!r.avb_nao_aberto,
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
+                eliminados: r.eliminados?JSON.parse(r.eliminados):[],
                 dataCard: r.data_card||null,
                 trackFull: r.track_full||null,
                 cardSuspect: !!r.card_suspect,
@@ -643,6 +644,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-inputs-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)" style="width:52px;text-align:center"></span>'
     + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer;margin:0" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
+    + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;font-size:16px;line-height:1">&#128221;</a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:16px;line-height:1;margin-left:auto">&#128196;</a>'
     + '</div>'
     + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
@@ -1022,6 +1024,84 @@ function openAllDogsModal(key){
   }
   document.getElementById('val-modal').classList.add('open');
 }
+// Relatorio tecnico da analise — 100% gerado por parametro (le os dados ja
+// calculados pelo motor: scores, eliminados, histAll), sem chamar IA nenhuma.
+// Mesma logica que eu (Claude) apliquei manualmente ao ler um PDF, so que
+// aqui e' o proprio motor que ja calculou tudo — o relatorio so organiza.
+function openRelatorioModal(key){
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[RELATORIO] nao achou:',key);return;}
+  document.getElementById('val-title').textContent='Relatório de Análise — '+(r.corrida||'')+' '+(r.hora||'');
+  document.getElementById('val-body').classList.remove('val-compact');
+  document.getElementById('val-body').innerHTML=buildRelatorioHtml(r);
+  document.getElementById('val-modal').classList.add('open');
+}
+function buildRelatorioHtml(r){
+  var sec = 'padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)';
+  var title = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#22c55e;margin-bottom:10px';
+  var html = '';
+
+  if (!r.scores || !r.scores.length) {
+    return '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Relatório detalhado não disponível para esta corrida (sessão salva antes deste recurso, ou corrida descartada antes do cálculo de scores).</div>';
+  }
+
+  // Eliminados
+  if (r.eliminados && r.eliminados.length) {
+    html += '<div style="'+sec+'"><div style="'+title+'">Galgos eliminados antes do cálculo</div>';
+    html += r.eliminados.map(function(e){
+      return '<div style="font-size:12px;color:#ccc;padding:4px 0"><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
+    }).join('');
+    html += '</div>';
+  }
+
+  // Tabela de scores
+  html += '<div style="'+sec+'"><div style="'+title+'">Scores calculados (motor fixo/configurado)</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#888;text-align:left">'
+    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
+  html += r.scores.map(function(g){
+    var s = g.scores||{};
+    var isFav = g.trap===r.trapFav, isUnd = g.trap===r.trapUnd;
+    var rowStyle = 'border-top:1px solid rgba(255,255,255,.06)' + (isFav?';background:rgba(34,197,94,.08)':(isUnd?';background:rgba(239,68,68,.08)':''));
+    var tag = isFav?' <span style="color:#22c55e;font-size:9px">FAV</span>':(isUnd?' <span style="color:#ef4444;font-size:9px">UND</span>':'');
+    return '<tr style="'+rowStyle+'"><td style="padding:5px 6px">T'+g.trap+'</td><td style="padding:5px 6px">'+(g.nome||'')+tag+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.caltm!=null?s.caltm:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.bends!=null?s.bends:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.remarks!=null?s.remarks:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.brt!=null?s.brt:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.postPick!=null?s.postPick:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center;font-weight:700">'+g.score+'</td></tr>';
+  }).join('');
+  html += '</tbody></table></div>';
+
+  // Desempates (quando a diferenca entre colocados adjacentes e <= 5 pts)
+  var tbNotes = [];
+  for (var i=1;i<r.scores.length;i++) {
+    var diff = r.scores[i-1].score - r.scores[i].score;
+    if (diff <= 5) {
+      tbNotes.push('T'+r.scores[i-1].trap+' ('+r.scores[i-1].nome+') vs T'+r.scores[i].trap+' ('+r.scores[i].nome+'): diferença de apenas '+diff.toFixed(1)+' pts no score bruto — desempate aplicado (ordem: dias desde a penúltima corrida → posição na última → peso).');
+    }
+  }
+  if (tbNotes.length) {
+    html += '<div style="'+sec+'"><div style="'+title+'">Desempates aplicados (score final ≤ 5 pts de diferença)</div>';
+    html += tbNotes.map(function(t){return '<div style="font-size:12px;color:#ccc;padding:4px 0">'+t+'</div>';}).join('');
+    html += '</div>';
+  }
+
+  // Decisao final
+  html += '<div style="padding:16px 20px">';
+  if (r.nivel === 'skip') {
+    html += '<div style="font-size:12px;color:#f97316;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:12px">Corrida marcada como <strong>Skip</strong> — margem insuficiente pra indicação confiável.</div>';
+  } else {
+    html += '<div style="font-size:13px;color:#fff;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:14px">'
+      + 'Favorito: <strong style="color:#22c55e">T'+r.trapFav+' '+(r.nameFav||'')+'</strong> vs Underdog: <strong style="color:#ef4444">T'+r.trapUnd+' '+(r.nameUnd||'')+'</strong><br>'
+      + 'Confiança: <strong>'+r.pct+'% ('+r.nivel+')</strong>'
+      + (r.vencedor ? '<br><span style="color:#22c55e;font-weight:700">★ Recomendação de Back</span>' : '')
+      + '</div>';
+  }
+  html += '</div>';
+
+  return html;
+}
 function extrairRemarks(mixed){
   if(!mixed)return'';
   var commaIdx=mixed.indexOf(',');
@@ -1171,7 +1251,7 @@ function renderTable(){
           +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
         +'</div>'
       +'</div>';
-    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:13px;line-height:1;margin-left:auto">&#128196;</a></div></div>';
+    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise" style="cursor:pointer;font-size:13px;line-height:1;margin-left:auto">&#128221;</a><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;font-size:13px;line-height:1">&#128196;</a></div></div>';
     var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
     rows+='<tr class="row-avb'+(sk?' sk':'')+(isOldRaceCard(r)?' old-row':'')+'">'
       +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'
