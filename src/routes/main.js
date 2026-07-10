@@ -413,10 +413,10 @@ ${navBar(user, 'analisar')}
       <h2>Analisar corridas</h2>
       <div class="tabnav">
         <button class="tabbtn active" id="btngo">&#9889; Automaticamente</button>
-        ${sessaoHoje
+        <span id="hist-do-dia-slot">${sessaoHoje
           ? `<a href="${BASE}/sessao/${sessaoHoje.id}" class="tabbtn">&#128220; Histórico do dia</a>`
           : `<span class="tabbtn" style="opacity:.4;cursor:not-allowed" title="Ainda nao ha sessao analisada hoje">&#128220; Histórico do dia</span>`
-        }
+        }</span>
         <label class="tabbtn" id="rz" for="race-input">
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregando PDF
@@ -430,7 +430,7 @@ ${navBar(user, 'analisar')}
     <div class="dv"></div>
     <div>
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
-      ${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}
+      <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>

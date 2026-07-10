@@ -1054,6 +1054,21 @@ router.get('/sessions', (req, res) => {
   } catch(err) { res.status(500).json({ error:err.message }); }
 });
 
+// Rota dedicada pro sidebar da Analisar (Sessoes recentes + Historico do dia)
+// se auto-atualizar sem precisar de F5 — usa horario de Brasilia (nao o
+// relogio UTC do servidor) pra decidir qual sessao e' "hoje"
+router.get('/sidebar-sessions', (req, res) => {
+  try {
+    const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(req.user.id);
+    const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
+    const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
+    res.json({
+      sessions: sessions.map(s => ({ id: s.id, name: s.name, total_avbs: s.total_avbs })),
+      sessaoHojeId: sessaoHoje ? sessaoHoje.id : null
+    });
+  } catch(err) { res.status(500).json({ error:err.message }); }
+});
+
 router.delete('/session/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);

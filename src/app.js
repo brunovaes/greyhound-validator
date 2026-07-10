@@ -376,6 +376,29 @@ var serverSyncInterval = null;
 // resultado/monitoramento ja tiverem gravado) e atualiza `results` em
 // memoria — sem isso, mudancas feitas pelos robos so apareciam depois de
 // um F5 manual na pagina.
+// Atualiza "Historico do dia" e "Sessoes recentes" no sidebar sem precisar de
+// F5 — esses dois so eram montados no carregamento inicial da pagina, entao
+// se a aba ficar aberta e o robo salvar a sessao de hoje depois, ficavam
+// "congelados" mostrando informacao velha ate a pessoa atualizar manualmente.
+async function refreshSidebarSessions() {
+  try {
+    var r = await fetch(BASE + '/api/sidebar-sessions');
+    var d = await r.json();
+    var histSlot = document.getElementById('hist-do-dia-slot');
+    if (histSlot) {
+      histSlot.innerHTML = d.sessaoHojeId
+        ? '<a href="'+BASE+'/sessao/'+d.sessaoHojeId+'" class="tabbtn">&#128220; Histórico do dia</a>'
+        : '<span class="tabbtn" style="opacity:.4;cursor:not-allowed" title="Ainda nao ha sessao analisada hoje">&#128220; Histórico do dia</span>';
+    }
+    var sessSlot = document.getElementById('sessoes-recentes-slot');
+    if (sessSlot && d.sessions) {
+      sessSlot.innerHTML = d.sessions.length
+        ? d.sessions.map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
+        : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>';
+    }
+  } catch(e) { /* falha silenciosa - nao atrapalha o resto da tela */ }
+}
+
 async function syncFromServer() {
   try {
     var now = new Date();
@@ -1415,4 +1438,9 @@ document.addEventListener('DOMContentLoaded',async function(){
     var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});
     var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
   });
+
+  // Mantem "Historico do dia" e "Sessoes recentes" sempre atualizados, mesmo
+  // se a aba ficar aberta e o robo salvar a sessao de hoje so depois
+  refreshSidebarSessions();
+  setInterval(refreshSidebarSessions, 90000);
 });
