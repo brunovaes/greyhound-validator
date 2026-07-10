@@ -252,11 +252,11 @@ async function autoCheckAndAnalyze() {
 var focusRaceIdx = -1;
 
 function getDogImg(trap, corrida) {
-  var pelagens = ['branco', 'caramelo', 'preto'];
+  var pelagens = ['branco', 'caramelo', 'preto', 'mesclado'];
   var seed = 0;
   for (var i = 0; i < (corrida||'').length; i++) seed += corrida.charCodeAt(i);
   seed += (trap||1) * 13;
-  var p = pelagens[((seed % 3) + 3) % 3];
+  var p = pelagens[((seed % pelagens.length) + pelagens.length) % pelagens.length];
   return BASE + '/static/img/dogs/Trap' + (trap||1) + '_' + p + '.png';
 }
 
