@@ -18,8 +18,23 @@ function getLogo() {
 // CONFIG SO PARA ADMIN
 router.get('/', requireAdmin, (req, res) => {
   const user = req.user;
-  const config = getUserConfig(user.id);
+  const config = getUserConfig(user.id, false);
   const logoB64 = getLogo();
+
+  // Gera o switch liga/desliga de um bloco de configuracao. O input hidden
+  // ANTES do checkbox garante que o valor "0" sempre vai no FormData quando
+  // desmarcado (checkbox sozinho nao manda nada se desmarcado)
+  function blocoToggle(campo, label) {
+    const ativo = config[campo] === undefined ? 1 : config[campo];
+    return `<div class="bloco-toggle">
+      <input type="hidden" name="${campo}" value="0">
+      <label class="bloco-switch">
+        <input type="checkbox" name="${campo}" value="1" ${ativo ? 'checked' : ''} onchange="toggleBloco(this,'${campo}_fields')">
+        <span class="slider"></span>
+      </label>
+      <span class="bloco-toggle-label" id="${campo}_label" style="color:${ativo ? '#22c55e' : '#888'}">${ativo ? label + ' customizado ativo' : 'Motor fixo (padrão de fábrica) — campos abaixo desativados'}</span>
+    </div>`;
+  }
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -38,6 +53,15 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .tabbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s}
 .tabbtn:hover{background:rgba(34,197,94,.08);color:#ccc}
 .tabbtn.active{background:rgba(34,197,94,.12);color:#22c55e}
+.bloco-toggle{display:flex;align-items:center;gap:10px;background:#161B27;border:1px solid #222;border-radius:8px;padding:10px 14px;margin-bottom:16px}
+.bloco-switch{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0}
+.bloco-switch input{opacity:0;width:0;height:0}
+.bloco-switch .slider{position:absolute;cursor:pointer;inset:0;background:#333;border-radius:22px;transition:.15s}
+.bloco-switch .slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.15s}
+.bloco-switch input:checked+.slider{background:#22c55e}
+.bloco-switch input:checked+.slider:before{transform:translateX(18px)}
+.bloco-toggle-label{font-size:12px;font-weight:600}
+.bloco-fields[data-ativo="0"]{opacity:.4;pointer-events:none}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 .section{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:16px}
@@ -95,8 +119,9 @@ ${navBar(user, 'config')}
 <div class="tab-panel active" id="t-pesos">
 <div class="section">
 <div class="sec-title">Pesos dos Critérios</div>
+${blocoToggle('bloco_pesos_ativo', 'Pesos')}
 <div class="info-box">Os pesos orientam o Claude sobre qual critério priorizar. Valores maiores = mais importante no raciocinio.</div>
-<div class="grid">
+<div class="grid bloco-fields" id="bloco_pesos_ativo_fields" data-ativo="${config.bloco_pesos_ativo===0?'0':'1'}">
 ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm,1,10],
    ['peso_bends','Bends / Arranque','Perfil e evolucao nas marcacoes',config.peso_bends,1,10],
    ['peso_remarks','Remarks','Combinacoes positivas e negativas',config.peso_remarks,1,10],
@@ -114,11 +139,13 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="tab-panel" id="t-categoria">
 <div class="section">
 <div class="sec-title">Categoria</div>
+${blocoToggle('bloco_categoria_ativo', 'Categoria')}
 <div class="info-box">
   Controla como a classe historica dos galgos influencia a análise.<br>
   <strong>Diferenca que CalTm pode superar:</strong> quantos níveis de classe o tempo pode compensar entre dois galgos.<br>
   <strong>Niveis no pool:</strong> quantos níveis de diferença em relação a classe do card sao aceitos no historico valido.
 </div>
+<div class="bloco-fields" id="bloco_categoria_ativo_fields" data-ativo="${config.bloco_categoria_ativo===0?'0':'1'}">
 <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
 <div class="field">
   <label>Diferenca maxima de categoria que CalTm pode superar</label>
@@ -171,11 +198,13 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 </div>
 </div>
 </div>
+</div>
 
 <div class="tab-panel" id="t-filtros">
 <div class="section">
 <div class="sec-title">Filtros de Corrida</div>
-<div class="grid">
+${blocoToggle('bloco_filtros_ativo', 'Filtros de Corrida')}
+<div class="grid bloco-fields" id="bloco_filtros_ativo_fields" data-ativo="${config.bloco_filtros_ativo===0?'0':'1'}">
 <div class="field"><label>Distancia minima (m)</label><input type="number" name="dist_min" value="${config.dist_min}" min="200" max="600"><span class="hint">Corridas abaixo sao descartadas</span></div>
 <div class="field"><label>Distancia maxima (m)</label><input type="number" name="dist_max" value="${config.dist_max}" min="400" max="1000"><span class="hint">Corridas acima sao descartadas</span></div>
 <div class="field"><label>Mín. corridas na pista/distância exata</label><input type="number" name="min_corridas_uteis" value="${config.min_corridas_uteis}" min="1" max="10"><span class="hint">Quantas linhas do histórico precisam ser na MESMA pista e MESMA distância da corrida de hoje pra considerar o galgo elegível. Abaixo disso, ele é eliminado do AvB.</span></div>
@@ -187,7 +216,8 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="tab-panel" id="t-confianca">
 <div class="section">
 <div class="sec-title">Thresholds de Confiança</div>
-<div class="grid">
+${blocoToggle('bloco_confianca_ativo', 'Thresholds de Confiança')}
+<div class="grid bloco-fields" id="bloco_confianca_ativo_fields" data-ativo="${config.bloco_confianca_ativo===0?'0':'1'}">
 <div class="field"><label>Alta confiança (%)</label>
 <input type="range" name="pct_alta" min="50" max="90" value="${config.pct_alta}" oninput="upR(this)">
 <div style="display:flex;justify-content:space-between"><span class="hint">Minimo para badge Alta</span><span class="rv" id="v_pct_alta">${config.pct_alta}%</span></div></div>
@@ -203,8 +233,9 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
 <div class="tab-panel" id="t-motor">
 <div class="section">
 <div class="sec-title">Motor de Pontuação</div>
+${blocoToggle('bloco_motor_ativo', 'Motor de Pontuação')}
 <div class="info-box">Estes parametros controlam o calculo deterministico de scores. O Claude agora so extrai dados brutos — toda a decisao de favorito/ranking/AvB/Back e feita por codigo com base nesses valores.</div>
-<div class="grid">
+<div class="grid bloco-fields" id="bloco_motor_ativo_fields" data-ativo="${config.bloco_motor_ativo===0?'0':'1'}">
 <div class="field"><label>Ajuste por nivel de classe (s)</label><input type="number" name="ajuste_classe_segundos" value="${config.ajuste_classe_segundos||0.20}" step="0.05" min="0.05" max="0.50"><span class="hint">Ex: galgo em A5 correu em A3 = +0.20s no tempo (normaliza pra comparar)</span></div>
 <div class="field"><label>Desconto acidente leve (s)</label><input type="number" name="desconto_acidente_leve" value="${config.desconto_acidente_leve||0.10}" step="0.02" min="0" max="0.30"><span class="hint">Bmp, SAw, MsdBrk — tempo ajustado para baixo</span></div>
 <div class="field"><label>Desconto acidente medio (s)</label><input type="number" name="desconto_acidente_medio" value="${config.desconto_acidente_medio||0.20}" step="0.02" min="0" max="0.50"><span class="hint">Crd, FcdCk — desconto maior</span></div>
@@ -261,7 +292,8 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-remarks">
 <div class="section">
 <div class="sec-title">Remarks — Listas Customizadas</div>
-<div class="grid" style="grid-template-columns:1fr 1fr">
+${blocoToggle('bloco_remarks_ativo', 'Remarks')}
+<div class="grid bloco-fields" id="bloco_remarks_ativo_fields" data-ativo="${config.bloco_remarks_ativo===0?'0':'1'}" style="grid-template-columns:1fr 1fr">
 <div class="field"><label>Combinacoes muito positivas</label><textarea name="remarks_muito_positivos">${config.remarks_muito_positivos}</textarea><span class="hint">Ex: SAw+RnOn,Bmp+RnOn</span></div>
 <div class="field"><label>Remarks positivos</label><textarea name="remarks_positivos">${config.remarks_positivos}</textarea></div>
 <div class="field"><label>Atenuantes (nao penalizar)</label><textarea name="remarks_atenuantes">${config.remarks_atenuantes}</textarea><span class="hint">Acidentes externos</span></div>
@@ -377,6 +409,23 @@ function showTab(id){
   document.querySelector('.tabbtn[data-tab="'+id+'"]').classList.add('active');
 }
 function upR(input){var n=input.name;var v=document.getElementById('v_'+n);var b=document.getElementById('b_'+n);if(v)v.textContent=input.value+(n.startsWith('pct')?'%':'');if(b)b.style.width=(input.value*10)+'%';}
+// Liga/desliga visualmente os campos de um bloco quando o switch muda. NAO
+// usa o atributo "disabled" nos inputs — campos disabled ficam de fora do
+// FormData no submit, o que faria o valor do usuario se perder ao salvar.
+// O bloqueio e' so visual/de interacao, via CSS (pointer-events:none no
+// data-ativo="0") — o valor continua sendo enviado normalmente.
+function toggleBloco(checkbox, fieldsId){
+  var ativo = checkbox.checked;
+  var fields = document.getElementById(fieldsId);
+  if (fields) fields.setAttribute('data-ativo', ativo ? '1' : '0');
+  var campo = checkbox.name;
+  var label = document.getElementById(campo+'_label');
+  if (label) {
+    label.style.color = ativo ? '#22c55e' : '#888';
+    var textoBase = label.textContent.replace(' customizado ativo','').replace('Motor fixo (padrão de fábrica) — campos abaixo desativados','');
+    label.textContent = ativo ? (textoBase || 'Configuração') + ' customizado ativo' : 'Motor fixo (padrão de fábrica) — campos abaixo desativados';
+  }
+}
 document.getElementById('cf').addEventListener('submit',async function(e){
   e.preventDefault();
   var data=Object.fromEntries(new FormData(this));
@@ -420,7 +469,13 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_pesos_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_categoria_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_filtros_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_confianca_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_motor_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_remarks_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,diff_caltm_significativa=?,diff_caltm_empate=?,remarks_muito_positivos=?,remarks_positivos=?,remarks_atenuantes=?,remarks_negativos=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,desconto_acidente_grave=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,bloco_remarks_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,d.diff_caltm_significativa,d.diff_caltm_empate,
@@ -445,6 +500,12 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.banca_valor_inicial||1000,
       d.banca_pct_stop!=null&&d.banca_pct_stop!==''?d.banca_pct_stop:20,
       d.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
+      d.bloco_pesos_ativo==='1'||d.bloco_pesos_ativo===1?1:0,
+      d.bloco_categoria_ativo==='1'||d.bloco_categoria_ativo===1?1:0,
+      d.bloco_filtros_ativo==='1'||d.bloco_filtros_ativo===1?1:0,
+      d.bloco_confianca_ativo==='1'||d.bloco_confianca_ativo===1?1:0,
+      d.bloco_motor_ativo==='1'||d.bloco_motor_ativo===1?1:0,
+      d.bloco_remarks_ativo==='1'||d.bloco_remarks_ativo===1?1:0,
       user.id
     );
     res.json({ ok: true });

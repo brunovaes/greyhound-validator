@@ -190,6 +190,12 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000",
   "ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20",
   "ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT DEFAULT 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'",
+  "ALTER TABLE analysis_config ADD COLUMN bloco_pesos_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN bloco_categoria_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN bloco_filtros_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN bloco_confianca_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN bloco_motor_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN bloco_remarks_ativo INTEGER DEFAULT 1",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
@@ -217,12 +223,50 @@ function validatePassword(user, password) {
   return user.password_hash === hashPassword(password);
 }
 
-function getUserConfig(userId) {
+// "Motor fixo" — valores de fabrica de cada bloco, usados quando o usuario
+// desliga a customizacao daquele bloco (Configuracoes). Sao os MESMOS valores
+// originais do schema (DEFAULT de cada coluna), fixos aqui separadamente pra
+// nunca mudarem mesmo que o schema em si seja alterado no futuro.
+const MOTOR_FIXO_DEFAULTS = {
+  pesos: { peso_caltm: 4, peso_bends: 3, peso_remarks: 3, peso_brt: 1, peso_post_pick: 0 },
+  categoria: { max_cat_diff_caltm: 1, max_niveis_pool: 2, max_linhas_cat_inferior: 3, max_dias_gap_nova_cat: 14 },
+  filtros: { classes_aceitas: 'A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12', dist_min: 400, dist_max: 575, min_corridas_uteis: 3 },
+  confianca: { pct_alta: 65, pct_media: 50, diff_caltm_significativa: 0.3, diff_caltm_empate: 0.1 },
+  motor: { ajuste_classe_segundos: 0.20, desconto_acidente_leve: 0.10, desconto_acidente_medio: 0.20, desconto_acidente_grave: 0.35, proporcao_media_caltm: 0.60, teto_diff_normalizacao: 0.50, threshold_skip_avb: 10.0, threshold_back: 25.0 },
+  remarks: {
+    remarks_muito_positivos: 'SAw+RnOn,SAw+FinWll,FcdCk+RnOn,Bmp+RnOn,Crd+FinWll,Blk+StydOn',
+    remarks_positivos: 'RnOn,FinWll,StydOn,EP,Led,Chl,AHandy,ClrRn',
+    remarks_atenuantes: 'Bmp,Crd,Blk,FcdCk,Ck,Stb,Imp',
+    remarks_negativos: 'Fdd,NvrShwd,Outpaced,WeakFinish,SoonOutpaced,DroppedAway'
+  }
+};
+
+// aplicaBlocos=true (padrao): retorna os valores EFETIVOS (o que o motor de
+// analise/robos devem realmente usar) — troca pelo motor fixo nos blocos
+// desligados. aplicaBlocos=false: retorna os valores BRUTOS como estao
+// salvos no banco, sem substituicao — usado pela propria tela de
+// Configuracoes, pra nao "esconder"/perder a customizacao antiga do usuario
+// quando ele desliga um bloco temporariamente (se nao fizesse essa distincao,
+// religar o bloco depois mostraria os valores fixos como se fossem os dele).
+function getUserConfig(userId, aplicaBlocos) {
+  if (aplicaBlocos === undefined) aplicaBlocos = true;
   let config = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(userId);
   if (!config) {
     db.prepare('INSERT INTO analysis_config (user_id) VALUES (?)').run(userId);
     config = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(userId);
   }
+  if (!aplicaBlocos) return config;
+  // Bloco desligado (bloco_x_ativo=0) -> usa os valores de fabrica (motor
+  // fixo) daquele bloco em vez do que o usuario configurou manualmente.
+  // Aplicado aqui, central, pra valer automaticamente em qualquer lugar que
+  // chame getUserConfig (motor de analise, robos, etc), sem precisar mudar
+  // cada ponto de uso um por um.
+  if (!config.bloco_pesos_ativo) Object.assign(config, MOTOR_FIXO_DEFAULTS.pesos);
+  if (!config.bloco_categoria_ativo) Object.assign(config, MOTOR_FIXO_DEFAULTS.categoria);
+  if (!config.bloco_filtros_ativo) Object.assign(config, MOTOR_FIXO_DEFAULTS.filtros);
+  if (!config.bloco_confianca_ativo) Object.assign(config, MOTOR_FIXO_DEFAULTS.confianca);
+  if (!config.bloco_motor_ativo) Object.assign(config, MOTOR_FIXO_DEFAULTS.motor);
+  if (!config.bloco_remarks_ativo) Object.assign(config, MOTOR_FIXO_DEFAULTS.remarks);
   return config;
 }
 
