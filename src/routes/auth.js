@@ -55,7 +55,7 @@ body{background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:cen
 .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.3) 0%,rgba(0,0,0,.85) 100%);z-index:1}
 .card{position:relative;z-index:2;background:rgba(10,10,10,.92);border:1px solid rgba(34,197,94,.3);border-radius:14px;padding:32px;width:100%;max-width:420px;box-shadow:0 0 60px rgba(34,197,94,.08),0 20px 60px rgba(0,0,0,.8);backdrop-filter:blur(10px)}
 .logo-box{margin-bottom:22px;text-align:center}
-.logo-box img{width:100%;border-radius:8px}
+.logo-box img{width:100%;height:auto;object-fit:contain;display:block;border-radius:6px}
 p{font-size:13px;color:#888;text-align:center;margin-bottom:22px}
 label{display:block;font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
 input{width:100%;padding:11px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#f0f0f0;font-size:14px;margin-bottom:16px;transition:border-color .2s}
