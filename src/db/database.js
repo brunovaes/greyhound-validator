@@ -143,6 +143,15 @@ db.exec(`
     UNIQUE(user_id, year_month),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  -- Guarda o log da ULTIMA execucao de cada robo (PDF/Resultados/Monitoramento)
+  -- em disco, pra sobreviver a restart do servidor (deploy, etc). Sem isso, o
+  -- log some toda vez que o processo reinicia, porque hoje vive so na memoria.
+  CREATE TABLE IF NOT EXISTS robot_logs (
+    robot_name TEXT PRIMARY KEY,
+    status_json TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migracoes seguras para banco existente
@@ -271,4 +280,27 @@ if (!admin) {
   console.log('Admin criado: brunao@greyhound.com / greyhound2024');
 }
 
-module.exports = { db, hashPassword, createUser, findUserByEmail, validatePassword, getUserConfig };
+// Persiste o status/log de um robo (pdf/results/monitor) em disco, pra
+// sobreviver a restart do processo. Chamado no fim de cada execucao (e pode
+// ser chamado no meio tambem, pra nao perder nada se cair no meio do caminho).
+function saveRobotLog(robotName, status) {
+  try {
+    db.prepare(
+      'INSERT INTO robot_logs (robot_name, status_json, updated_at) VALUES (?,?,CURRENT_TIMESTAMP) ' +
+      'ON CONFLICT(robot_name) DO UPDATE SET status_json=excluded.status_json, updated_at=CURRENT_TIMESTAMP'
+    ).run(robotName, JSON.stringify(status));
+  } catch (e) { console.error('[robot_logs] erro ao salvar', robotName, e.message); }
+}
+// Recupera o ultimo status salvo de um robo — usado quando a memoria em RAM
+// esta vazia (acabou de reiniciar), pra mostrar a ultima execucao mesmo assim.
+function loadRobotLog(robotName) {
+  try {
+    const row = db.prepare('SELECT status_json, updated_at FROM robot_logs WHERE robot_name=?').get(robotName);
+    if (!row) return null;
+    const status = JSON.parse(row.status_json);
+    status._persistedAt = row.updated_at;
+    return status;
+  } catch (e) { return null; }
+}
+
+module.exports = { db, hashPassword, createUser, findUserByEmail, validatePassword, getUserConfig, saveRobotLog, loadRobotLog };

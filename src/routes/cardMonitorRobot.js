@@ -5,7 +5,7 @@
 // retirada ou troca de galgo, atualiza o grid E reanalisa so aquela corrida
 // (usando a mesma engine de pontuacao do api.js, sem duplicar logica).
 
-const { db, getUserConfig } = require('../db/database');
+const { db, getUserConfig, saveRobotLog, loadRobotLog } = require('../db/database');
 const { processarCorrida } = require('./api');
 const { logChanges } = require('../utils/auditLog');
 const { parseHistoryLine, isHistLine, isColHeader, isBrtLine } = require('../utils/pdfParser');
@@ -649,6 +649,7 @@ async function runCardMonitorRobot(targetDate) {
   } finally {
     if (browser) { try { await browser.disconnect(); } catch(e) {} }
     status.running = false;
+    saveRobotLog('monitor', status);
   }
 }
 

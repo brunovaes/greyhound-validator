@@ -2,7 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 const { requireAdmin } = require('../middleware/auth');
-const { db } = require('../db/database');
+const { db, saveRobotLog, loadRobotLog } = require('../db/database');
 const { logChanges } = require('../utils/auditLog');
 
 require('dns').setDefaultResultOrder('ipv4first');
@@ -450,6 +450,7 @@ async function runResultsRobot(targetDate) {
   } finally {
     if (browser) { try { await browser.disconnect(); } catch(e) {} }
     status.running = false;
+    saveRobotLog('results', status);
   }
 }
 
@@ -467,7 +468,13 @@ router.post('/run', requireAdmin, express.json(), (req, res) => {
   res.json({ ok: true, date });
 });
 
-router.get('/status', requireAdmin, (req, res) => res.json(status));
+router.get('/status', requireAdmin, (req, res) => {
+  if (!status.running && !status.logs.length) {
+    const persisted = loadRobotLog('results');
+    if (persisted) return res.json(persisted);
+  }
+  res.json(status);
+});
 
 module.exports = router;
 module.exports.runResultsRobot  = runResultsRobot;

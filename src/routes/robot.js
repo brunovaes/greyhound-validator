@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAdmin } = require('../middleware/auth');
-const { getUserConfig } = require('../db/database');
+const { getUserConfig, saveRobotLog, loadRobotLog } = require('../db/database');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
@@ -969,7 +969,15 @@ loadAuditLog();
 });
 
 // ─── STATUS ───
-router.get('/status', requireAdmin, (req, res) => res.json(robotStatus));
+router.get('/status', requireAdmin, (req, res) => {
+  // Se a memoria esta vazia (servidor acabou de reiniciar) e existe um log
+  // salvo da ultima execucao, devolve ele em vez de um status em branco.
+  if (!robotStatus.running && !robotStatus.log.length) {
+    const persisted = loadRobotLog('pdf');
+    if (persisted) return res.json(persisted);
+  }
+  res.json(robotStatus);
+});
 
 // ─── STOP ───
 router.post('/stop', requireAdmin, (req, res) => {
@@ -1347,6 +1355,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     }
     robotStatus.running = false;
     robotStatus.current = 'Concluido';
+    saveRobotLog('pdf', robotStatus);
   }
 }
 
@@ -1458,7 +1467,12 @@ router.post('/monitor/run', requireAdmin, express.json(), async (req, res) => {
 });
 
 router.get('/monitor/status', requireAdmin, (req, res) => {
-  res.json(getMonitorStatus());
+  const st = getMonitorStatus();
+  if (!st.running && !st.logs.length) {
+    const persisted = loadRobotLog('monitor');
+    if (persisted) return res.json(persisted);
+  }
+  res.json(st);
 });
 
 // ── Ferramenta de teste: forca uma "mudanca falsa" no trap 1 de uma corrida,
