@@ -415,8 +415,20 @@ async function runResultsRobot(targetDate) {
     for (const r of semResultado) {
       const minutosRace = horaUkParaMinutosBrt(r.hora);
       if (minutosRace === null) continue;
-      let atraso = agoraMinutosBrt() - minutosRace;
-      if (atraso < 0) atraso += 1440; // corrida foi no dia anterior (virada de horario), ajusta
+      const atraso = agoraMinutosBrt() - minutosRace;
+      if (atraso < 0) {
+        // Corrida ainda vai acontecer mais tarde hoje — nao esta atrasada.
+        // Se ela tinha sido marcada como suspeita por engano (bug anterior
+        // que tratava "ainda nao aconteceu" como "muito atrasada"), desfaz
+        // a marcacao agora, de forma automatica.
+        if (r.card_suspect) {
+          const nivelRestaurado = r.nivel_pre_suspeita || r.nivel;
+          logChanges(r.id, 'results_robot', r, { nivel: nivelRestaurado }, ['nivel']);
+          db.prepare('UPDATE races SET card_suspect=0, nivel=?, nivel_pre_suspeita=NULL WHERE id=?').run(nivelRestaurado, r.id);
+          addLog('info', '  ' + r.corrida + ' ' + r.hora + ' — corrigido: a corrida ainda nao aconteceu hoje, marcacao de suspeita desfeita.');
+        }
+        continue;
+      }
       if (atraso < ATRASO_MIN_SUSPEITO) continue;
       addLog('warn', '⚠️ ' + r.corrida + ' ' + r.hora + ' — sem resultado ' + Math.floor(atraso/60)+'h'+String(atraso%60).padStart(2,'0') + ' apos o horario previsto. Corrida provavelmente cancelada.');
       canceladasDetectadas++;
