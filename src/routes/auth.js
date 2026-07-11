@@ -14,6 +14,14 @@ function getLogo() {
   return '';
 }
 
+// Logo especifica da tela de login (separada da logo padrao usada no resto
+// do app) — se nao existir, cai pra logo padrao como fallback
+function getLoginLogo() {
+  const logoPath = path.join(__dirname, '../../public/img/logo_login.png');
+  if (fs.existsSync(logoPath)) return 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
+  return getLogo();
+}
+
 function getBg() {
   const bgPath = path.join(__dirname, '../../public/img/login_bg.png');
   if (fs.existsSync(bgPath)) return 'data:image/png;base64,' + fs.readFileSync(bgPath).toString('base64');
@@ -32,7 +40,7 @@ function getBgVideoUrl() {
 router.get('/login', (req, res) => {
   if (req.session.userId) return res.redirect(BASE);
   const err = req.query.err;
-  const logoB64 = getLogo();
+  const logoB64 = getLoginLogo();
   const bgB64 = getBg();
   const bgVideoUrl = getBgVideoUrl();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
