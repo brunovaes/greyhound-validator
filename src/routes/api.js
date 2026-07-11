@@ -836,8 +836,7 @@ router.get('/pdfs/hoje/zip', (req, res) => {
   const today = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="PDFs_${today}.zip"`);
-  const { ZipArchive } = require('archiver');
-  const archive = new ZipArchive({ zlib: { level: 6 } });
+  const archive = archiver('zip', { zlib: { level: 6 } });
   archive.on('error', e => { console.error('[ZIP]', e.message); });
   archive.pipe(res);
   for (const f of files) {
