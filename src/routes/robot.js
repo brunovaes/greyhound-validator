@@ -306,7 +306,11 @@ function addLog(type, msg) {
 
 // ─── PÁGINA DO ROBÔ ───
 router.get('/', requireAdmin, (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  // "Hoje" precisa ser BRT, nao UTC cru — Railway roda em UTC, entao entre
+  // 21h e 23h59 BRT isso virava o dia seguinte e pre-preenchia os 4 campos de
+  // data da tela (race-date/res-date/mon-date/audit-date) com amanha, causando
+  // "Nenhum PDF encontrado para esta data" no download mesmo com tudo certo no disco.
+  const today = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().split('T')[0];
   const logoPath = path.join(__dirname, '../../public/img/logo.png');
   let logoB64 = '';
   if (fs.existsSync(logoPath)) logoB64 = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
