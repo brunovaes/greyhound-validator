@@ -953,25 +953,49 @@ function renderImportantEvents(logs) {
   if (!el) return;
   var important = (logs || []).filter(function(l) {
     return l.type === 'err' || l.type === 'warn' ||
-      /MUDANCA DETECTADA|REANALISADO/.test(l.msg);
+      /MUDANCA DETECTADA|REANALISADO|REFEITA|card intacto, validado/.test(l.msg);
   });
   if (!important.length) {
     el.innerHTML = '<div style="padding:10px;color:#555;font-size:11px">Nenhum evento importante ainda.</div>';
     return;
   }
   el.innerHTML = important.map(function(l) {
-    const cls = l.type === 'err' ? 'res-err' : l.type === 'warn' ? 'res-warn' : /REANALISADO/.test(l.msg) ? 'res-ok' : 'res-info';
-    return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
+    const cls = l.type === 'err' ? 'res-err' : l.type === 'warn' ? 'res-warn' : /REANALISADO|REFEITA|validado/.test(l.msg) ? 'res-ok' : 'res-info';
+    const tag = l.robot === 'final' ? '<span style="color:#a78bfa;font-weight:700">[Checagem Final]</span> ' : '<span style="color:#60a5fa;font-weight:700">[Monitoramento]</span> ';
+    return '<div class="' + cls + '">[' + l.ts + '] ' + tag + l.msg + '</div>';
   }).join('');
+}
+
+// Busca os logs dos DOIS robôs que mexem em corrida perto do horário
+// (Monitoramento de hora em hora + Checagem Final dos 15 min antes) e junta
+// numa unica lista, marcada por origem, ordenada por horario — assim da pra
+// ver os dois na mesma tela sem ficar alternando aba nem confundir qual
+// robo fez o que (REANALISADO = Monitoramento, REFEITA = Checagem Final).
+async function fetchMergedImportantLogs() {
+  let monLogs = [], finalLogs = [];
+  try {
+    const r1 = await fetch(BASE + '/robot/monitor/status');
+    const d1 = await r1.json();
+    monLogs = (d1.logs || []).map(function(l) { return Object.assign({}, l, { robot: 'monitor' }); });
+  } catch(e) {}
+  try {
+    const r2 = await fetch(BASE + '/robot/final-check/status');
+    const d2 = await r2.json();
+    finalLogs = (d2.logs || []).map(function(l) { return Object.assign({}, l, { robot: 'final' }); });
+  } catch(e) {}
+  return monLogs.concat(finalLogs).sort(function(a, b) { return (a.ts || '').localeCompare(b.ts || ''); });
 }
 
 async function loadMonitorImportantOnce() {
   try {
-    const r = await fetch(BASE + '/robot/monitor/status');
-    const d = await r.json();
-    renderImportantEvents(d.logs);
+    const merged = await fetchMergedImportantLogs();
+    renderImportantEvents(merged);
   } catch(e) {}
 }
+// Atualiza sozinho a cada 30s, independente de ter clicado em "Iniciar" —
+// os dois robôs rodam em background pelo cron, sem precisar de clique
+// nenhum, entao o painel precisa se atualizar sozinho pra refletir isso.
+setInterval(loadMonitorImportantOnce, 30000);
 
 async function pollMonitorStatus() {
   try {
@@ -983,7 +1007,7 @@ async function pollMonitorStatus() {
       return '<div class="' + cls + '">[' + l.ts + '] ' + l.msg + '</div>';
     }).join('');
     logEl.scrollTop = logEl.scrollHeight;
-    renderImportantEvents(d.logs);
+    loadMonitorImportantOnce();
 
     const stEl = document.getElementById('mon-st-txt');
     const sbar = document.getElementById('mon-sbar');
@@ -1541,6 +1565,15 @@ router.get('/monitor/status', requireAdmin, (req, res) => {
   const st = getMonitorStatus();
   if (!st.running && !st.logs.length) {
     const persisted = loadRobotLog('monitor');
+    if (persisted) return res.json(persisted);
+  }
+  res.json(st);
+});
+
+router.get('/final-check/status', requireAdmin, (req, res) => {
+  const st = getFinalCheckStatus();
+  if (!st.running && !st.logs.length) {
+    const persisted = loadRobotLog('final_check');
     if (persisted) return res.json(persisted);
   }
   res.json(st);
