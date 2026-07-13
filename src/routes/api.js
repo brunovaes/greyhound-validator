@@ -112,7 +112,7 @@ function getClassLevel(classe) {
 }
 
 // Remarks que indicam acidente GRAVE (descarta a linha inteira)
-const REMARKS_DESCARTE = ['BrkDown', 'BroughtDown', 'Bmp&BroughtDown', 'Fell', 'Fll', 'Fall'];
+const REMARKS_DESCARTE = ['BrkDown', 'BroughtDown', 'Bmp&BroughtDown', 'Fell', 'Fll', 'Fall', 'KO1','KO2','KO3','KO4','KO5','KO6'];
 // Remarks de acidente MEDIO
 const REMARKS_MEDIO = ['Crd','FcdCk','BlkOff'];
 // Remarks de acidente LEVE
