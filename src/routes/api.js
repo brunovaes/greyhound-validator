@@ -112,7 +112,7 @@ function getClassLevel(classe) {
 }
 
 // Remarks que indicam acidente GRAVE (descarta a linha inteira)
-const REMARKS_DESCARTE = ['Fall','Fll','Unseated','BdBmp','Stmb','Stumbled','UR'];
+const REMARKS_DESCARTE = ['BrkDown', 'BroughtDown', 'Bmp&BroughtDown', 'Fell', 'Fll', 'Fall'];
 // Remarks de acidente MEDIO
 const REMARKS_MEDIO = ['Crd','FcdCk','BlkOff'];
 // Remarks de acidente LEVE
@@ -305,7 +305,7 @@ function detectarNovoNaCategoriaComGap(linhasValidas, corridaClasse, config) {
 }
 
 // CAMADA 1: Filtrar linhas validas do historico de cada galgo
-function filtrarLinhasValidas(historico, corridaDist, corridaClasse, corridaPista, config) {
+function filtrarLinhasValidas(historico, corridaDist, corridaClasse, corridaPista, config, mediaBRT) {
   const classeLevel = getClassLevel(corridaClasse);
   const pistaAlvo = (corridaPista||'').trim().toLowerCase();
 
@@ -325,12 +325,21 @@ function filtrarLinhasValidas(historico, corridaDist, corridaClasse, corridaPist
     const linhaLevel = getClassLevel(linha.classe);
     if (classeLevel && linhaLevel && Math.abs(linhaLevel - classeLevel) > (config.max_niveis_pool||2)) return false;
 
-    // Sem acidente gravissimo
+    // So descarta a linha inteira quando o remark tira o galgo da prova de
+    // verdade (caiu, foi derrubado, quebrou) — remark de trombada comum
+    // (BdBmp, Stmb, etc) NAO descarta mais: conta como perda normal, e quem
+    // filtra isso e a regra de tempo logo abaixo (mais de 2s da media).
     const remarks = parseRemarks(linha.remarks);
     if (hasAnyRemark(remarks, REMARKS_DESCARTE)) return false;
 
     // Precisa ter CalTm valido
     if (!linha.caltm || linha.caltm <= 0) return false;
+
+    // Descarta se o tempo ficou muito pior que a media da pista (BRT medio
+    // do campo de hoje — soma dos BRT de todos os galgos do PDF / qtd) —
+    // mais de 2s pior que essa media e tratado como corrida atipica (nao
+    // representa o nivel real do galgo), independente do remark que teve.
+    if (mediaBRT != null && (linha.caltm - mediaBRT) > 2) return false;
 
     return true;
   });
@@ -575,9 +584,16 @@ function processarCorrida(corridaRaw, config) {
   const pistaAtual = (corrida||'').split(' ')[0] || '';
   const minCorridasUteis = config.min_corridas_uteis || 3;
 
+  // "Media da pista" (o BRT medio do campo de hoje) — soma o BRT de TODOS os
+  // galgos do PDF (o card inteiro, nao so os elegiveis) e divide pela
+  // quantidade. Usado como referencia pra descartar linha de historico com
+  // tempo muito fora da curva (ver filtrarLinhasValidas).
+  const brtsDoCard = (galgos||[]).map(g => g.brt).filter(v => v && v > 0);
+  const mediaBRT = brtsDoCard.length ? brtsDoCard.reduce((a,b)=>a+b,0) / brtsDoCard.length : null;
+
   for (const galgo of (galgos||[])) {
     if (trapsCard && trapsCard.length && !trapsCard.includes(galgo.trap)) continue;
-    const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config);
+    const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config, mediaBRT);
 
     // Verificar retorno de inatividade longa (trial/solo após pausa >= threshold dias)
     const inatividade = detectarRetornoInatividade(galgo.historico||[], config);
