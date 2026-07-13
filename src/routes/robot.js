@@ -1582,7 +1582,7 @@ ${navBar(req.user, 'robot')}
   Fora da janela (PDF provavelmente ja foi limpo): <b>${linhas.length - recuperaveis}</b>
 </div>
 ${linhas.length === 0 ? '<div class="empty">Nenhuma corrida em risco encontrada. 🎉</div>' : `
-${recuperaveis > 0 ? `<form method="POST" action="${BASE}/robot/diagnostico-traps/corrigir" style="margin-bottom:16px" onsubmit="return confirm('Reprocessar ${recuperaveis} corrida(s) e corrigir o trap Fav/Und/card? Isso NAO mexe em resultado/aposta ja registrado, so no trap.')">
+${recuperaveis > 0 ? `<form method="POST" action="${BASE}/robot/diagnostico-traps/corrigir" style="margin-bottom:16px" onsubmit="return confirm('Reprocessar ${recuperaveis} corrida(s)? Corrige o AvB (Fav/Und/card) sempre. Nas que ja tem resultado registrado, corrige o podio tambem. O bateu nunca muda.')">
   <button type="submit" class="btn" style="width:auto;padding:10px 20px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:13px">🔧 Reprocessar e corrigir as ${recuperaveis} recuperáveis</button>
 </form>` : ''}
 <table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Galgos no card</th><th>Fav/Und salvos</th><th>PDF ainda existe?</th></tr></thead><tbody>
@@ -1621,21 +1621,22 @@ function findPdfFileForRace(dataCard, hora, trackFull) {
 }
 
 // ── Reprocessa (SOMENTE as corridas dentro da janela de 7 dias) o PDF
-// original com o parser novo (leitura de badge) e corrige trap_fav/trap_und/
-// race_card no banco, com trilha de auditoria (mesmo mecanismo ja usado
-// pelos robos de resultado/monitoramento).
-//
-// ESCOPO DELIBERADAMENTE LIMITADO: so corrige a NUMERACAO do trap (rotulo),
-// nunca resultado_1/2/3/bateu. A decisao de Favorito/Underdog (por nome) e o
-// resultado da corrida (bateu ou nao) nao mudam — so o numero mostrado. Os
-// campos de resultado ficam de fora de proposito porque nao da pra saber com
-// certeza, so pelo dado salvo, se aquele valor ja veio do trap real da
-// pagina de resultado (correto) ou do race_card antigo (contaminado) —
-// arriscar corrigir errado ali mexeria com aposta/banca ja registrada.
+// original com o parser novo (leitura de badge) e corrige o banco, com
+// trilha de auditoria (mesmo mecanismo ja usado pelos robos de resultado/
+// monitoramento). Regra (definida com o Bruno em 13/07):
+//   - SEMPRE corrige trap_fav/trap_und/race_card (o AvB) — fonte de verdade
+//     e o proprio PDF, entao da pra confiar 100%.
+//   - Corridas que JA TEM resultado registrado (resultado_1/2/3 ou bateu
+//     preenchido) TAMBEM tem o podio corrigido, remapeado pelo NOME: o
+//     card antigo (mesmo errado) ainda registra "esse nome era chamado de
+//     trap X" — usa isso como traducao pro nome certo, e dai pro trap novo
+//     certo. `bateu` NUNCA precisa mexer — e calculado comparando nomes na
+//     posicao de chegada, nunca usou numero de trap, entao nunca foi afetado.
 router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
   const { db } = require('../db/database');
   const races = db.prepare(
-    "SELECT id, hora, hora_br, corrida, dist, data_card, trap_fav, name_fav, trap_und, name_und, race_card, track_full " +
+    "SELECT id, hora, hora_br, corrida, dist, data_card, trap_fav, name_fav, trap_und, name_und, race_card, track_full, " +
+    "resultado_1, resultado_2, resultado_3, bateu " +
     "FROM races WHERE race_card IS NOT NULL AND race_card != ''"
   ).all();
 
@@ -1643,6 +1644,25 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
   const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
   let palette = getTrapBadgeColors() || undefined;
   const relatorio = [];
+
+  // Traduz um valor de resultado_N (pode ser um numero de trap ANTIGO,
+  // possivelmente errado, ou — em casos raros — o proprio nome do galgo
+  // quando o robo de resultados nao achou trap nenhum na epoca) pro trap
+  // NOVO e correto, usando o card antigo como dicionario trap->nome.
+  function remapResultadoValue(oldCardByTrapNum, novoTrapPorNome, valor) {
+    if (!valor) return { value: valor, changed: false };
+    const n = parseInt(valor);
+    let nome = null;
+    if (!isNaN(n) && n >= 1 && n <= 6 && String(n) === String(valor).trim()) {
+      nome = oldCardByTrapNum[n]; // valor era um trap antigo — traduz pro nome
+    } else {
+      nome = String(valor).trim(); // valor ja era um nome
+    }
+    if (!nome) return { value: valor, changed: false };
+    const novoTrap = novoTrapPorNome[nome];
+    if (novoTrap === undefined) return { value: valor, changed: false, nomeNaoBateu: nome };
+    return { value: String(novoTrap), changed: String(novoTrap) !== String(valor) };
+  }
 
   for (const r of races) {
     let card;
@@ -1680,28 +1700,49 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
       continue;
     }
 
+    // Dicionario trap ANTIGO -> nome, a partir do card como estava salvo ATE
+    // AGORA (antes dessa correcao) — e a "chave de traducao" pro podio.
+    const oldCardByTrapNum = {};
+    card.forEach(g => { oldCardByTrapNum[g.trap] = g.nome; });
+
     const cardNovo = card.map(g => ({ trap: nomeParaTrap[g.nome] !== undefined ? nomeParaTrap[g.nome] : g.trap, nome: g.nome }));
     const newValues = { race_card: JSON.stringify(cardNovo) };
     if (tinhaFav) newValues.trap_fav = nomeParaTrap[r.name_fav];
     if (tinhaUnd) newValues.trap_und = nomeParaTrap[r.name_und];
-
-    const oldRowForAudit = { trap_fav: r.trap_fav, trap_und: r.trap_und, race_card: r.race_card };
     const fields = ['race_card'].concat(tinhaFav ? ['trap_fav'] : []).concat(tinhaUnd ? ['trap_und'] : []);
+
+    const temResultado = !!(r.resultado_1 || r.resultado_2 || r.resultado_3 || r.bateu);
+    let podioNaoBateu = [];
+    if (temResultado) {
+      ['resultado_1', 'resultado_2', 'resultado_3'].forEach(campo => {
+        const remap = remapResultadoValue(oldCardByTrapNum, nomeParaTrap, r[campo]);
+        if (remap.nomeNaoBateu) { podioNaoBateu.push(campo + ' (' + remap.nomeNaoBateu + ')'); return; }
+        if (remap.changed) { newValues[campo] = remap.value; fields.push(campo); }
+      });
+    }
+
+    const oldRowForAudit = { trap_fav: r.trap_fav, trap_und: r.trap_und, race_card: r.race_card, resultado_1: r.resultado_1, resultado_2: r.resultado_2, resultado_3: r.resultado_3 };
     const changed = logChanges(r.id, 'trap_recalibracao', oldRowForAudit, newValues, fields);
 
     if (changed > 0) {
       const sets = ['race_card=?']; const vals = [newValues.race_card];
       if (tinhaFav) { sets.push('trap_fav=?'); vals.push(newValues.trap_fav); }
       if (tinhaUnd) { sets.push('trap_und=?'); vals.push(newValues.trap_und); }
+      ['resultado_1','resultado_2','resultado_3'].forEach(campo => {
+        if (newValues[campo] !== undefined) { sets.push(campo + '=?'); vals.push(newValues[campo]); }
+      });
       vals.push(r.id);
       db.prepare(`UPDATE races SET ${sets.join(',')} WHERE id=?`).run(...vals);
+      const podioMudou = ['resultado_1','resultado_2','resultado_3'].some(c => newValues[c] !== undefined);
       relatorio.push({
         ...base, status: 'corrigido',
-        antes: `T${r.trap_fav||'-'} ${r.name_fav||''} vs T${r.trap_und||'-'} ${r.name_und||''}`,
-        depois: `T${tinhaFav?newValues.trap_fav:r.trap_fav||'-'} ${r.name_fav||''} vs T${tinhaUnd?newValues.trap_und:r.trap_und||'-'} ${r.name_und||''}`
+        antes: `T${r.trap_fav||'-'} ${r.name_fav||''} vs T${r.trap_und||'-'} ${r.name_und||''}` + (podioMudou ? ` | Pódio: ${r.resultado_1||'-'},${r.resultado_2||'-'},${r.resultado_3||'-'}` : ''),
+        depois: `T${tinhaFav?newValues.trap_fav:r.trap_fav||'-'} ${r.name_fav||''} vs T${tinhaUnd?newValues.trap_und:r.trap_und||'-'} ${r.name_und||''}` + (podioMudou ? ` | Pódio: ${newValues.resultado_1||r.resultado_1||'-'},${newValues.resultado_2||r.resultado_2||'-'},${newValues.resultado_3||r.resultado_3||'-'}` : ''),
+        podioMudou,
+        podioNaoBateu: podioNaoBateu.length ? podioNaoBateu.join(', ') : null
       });
     } else {
-      relatorio.push({ ...base, status: 'ja_estava_certo' });
+      relatorio.push({ ...base, status: 'ja_estava_certo', podioNaoBateu: podioNaoBateu.length ? podioNaoBateu.join(', ') : null });
     }
   }
 
@@ -1711,10 +1752,11 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
   const nomeNaoBateu = relatorio.filter(r => r.status === 'nome_nao_bateu');
   const naoConfiaveis = relatorio.filter(r => r.status === 'nao_confiavel');
   const erros = relatorio.filter(r => r.status === 'erro_ao_ler_pdf');
+  const podioComPendencia = relatorio.filter(r => r.podioNaoBateu);
 
   const linha = (r, tipo) => `<tr>
     <td>${r.dataCard||'?'}</td><td>${r.hora||'?'}</td><td>${r.corrida||'?'}</td>
-    <td>${tipo==='corrigido' ? `<span style="color:#888">${r.antes}</span> → <strong style="color:#22c55e">${r.depois}</strong>` : (r.detalhe||'')}</td>
+    <td>${tipo==='corrigido' ? `<span style="color:#888">${r.antes}</span> → <strong style="color:#22c55e">${r.depois}</strong>` : (r.detalhe||r.podioNaoBateu||'')}</td>
   </tr>`;
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
@@ -1741,14 +1783,16 @@ a.voltar{color:#22c55e;font-size:13px;text-decoration:none}
 ${navBar(req.user, 'robot')}
 <div class="content">
 <h1>Correção de Traps — resultado</h1>
-<div class="sub">Só o número do trap (Fav/Und/card) foi corrigido. Resultado/aposta já registrados NÃO foram tocados.</div>
+<div class="sub">AvB (Fav/Und/card) sempre corrigido. Pódio corrigido também nas corridas que já tinham resultado registrado. "bateu" nunca precisou mudar (não usa número de trap).</div>
 
 <div class="banner ${corrigidos.length ? 'banner-ok' : 'banner-warn'}">
   <b>${corrigidos.length} corrida(s) corrigida(s)</b>
   ${jaCertos.length} já estavam certas · ${naoEncontrados.length} sem PDF encontrado · ${nomeNaoBateu.length} nome não bateu (revisão manual) · ${naoConfiaveis.length} badge não confiável · ${erros.length} erro ao ler PDF
+  ${podioComPendencia.length ? `<br>⚠️ ${podioComPendencia.length} corrida(s) corrigida(s) no AvB mas com alguma posição do pódio que não bateu com nenhum nome — ficou como estava, revisar à mão (veja replay).` : ''}
 </div>
 
 ${corrigidos.length ? `<h2>✅ Corrigidas</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Antes → Depois</th></tr></thead><tbody>${corrigidos.map(r=>linha(r,'corrigido')).join('')}</tbody></table>` : ''}
+${podioComPendencia.length ? `<h2>⚠️ Pódio com posição pendente (revisar à mão)</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Posição não traduzida</th></tr></thead><tbody>${podioComPendencia.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
 ${nomeNaoBateu.length ? `<h2>⚠️ Nome não bateu (não mexi, revisar à mão)</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th></th></tr></thead><tbody>${nomeNaoBateu.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
 ${naoEncontrados.length ? `<h2>❌ PDF não encontrado</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th></th></tr></thead><tbody>${naoEncontrados.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
 ${naoConfiaveis.length ? `<h2>⚠️ Badge não confiável de novo</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th></th></tr></thead><tbody>${naoConfiaveis.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
