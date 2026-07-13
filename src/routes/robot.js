@@ -1516,4 +1516,80 @@ router.get('/audit/list', requireAdmin, (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Diagnostico (SOMENTE LEITURA) — lista corridas cujo race_card salvo tem
+// menos de 6 galgos, ou seja, corridas onde algum trap ficou ausente do PDF
+// e por isso correm risco de terem o trap Fav/Und/resultado errado (bug do
+// numero de trap sequencial, corrigido em 13/07 via leitura do badge de
+// imagem). Nao altera nada no banco — so mostra o tamanho do problema.
+router.get('/diagnostico-traps', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  let linhas = [];
+  try {
+    const races = db.prepare(
+      "SELECT id, hora, hora_br, corrida, dist, data_card, trap_fav, name_fav, trap_und, name_und, race_card " +
+      "FROM races WHERE race_card IS NOT NULL AND race_card != ''"
+    ).all();
+
+    const hoje = new Date(Date.now() - 3 * 60 * 60 * 1000); // BRT
+    const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    for (const r of races) {
+      let card;
+      try { card = JSON.parse(r.race_card); } catch(e) { continue; }
+      if (!Array.isArray(card) || card.length === 0 || card.length >= 6) continue;
+      const dataCard = r.data_card ? new Date(r.data_card + 'T12:00:00') : null;
+      const recuperavel = dataCard && dataCard >= seteDiasAtras;
+      linhas.push({ ...r, qtdGalgos: card.length, recuperavel });
+    }
+    linhas.sort((a, b) => (b.data_card || '').localeCompare(a.data_card || ''));
+  } catch(e) {
+    return res.status(500).send('Erro ao consultar o banco: ' + e.message);
+  }
+
+  const recuperaveis = linhas.filter(l => l.recuperavel).length;
+
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Diagnostico de Traps - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>
+${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:1100px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:6px}
+.sub{color:#888;font-size:13px;margin-bottom:20px}
+.resumo{background:#161B27;border:1px solid #222;border-radius:10px;padding:16px 20px;margin-bottom:20px;border-top:2px solid #22c55e}
+.resumo b{color:#22c55e}
+table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden}
+th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}
+td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.badge-ok{background:rgba(34,197,94,.15);color:#22c55e}
+.badge-no{background:rgba(239,68,68,.12);color:#ef4444}
+.empty{color:#888;padding:30px;text-align:center}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>Diagnostico de Traps</h1>
+<div class="sub">Corridas com menos de 6 galgos no card salvo — candidatas a terem o trap errado (bug corrigido em 13/07). So leitura, nada foi alterado.</div>
+<div class="resumo">
+  Total de corridas em risco: <b>${linhas.length}</b> &nbsp;|&nbsp;
+  Ainda dentro da janela de 7 dias (dá pra corrigir reprocessando o PDF): <b>${recuperaveis}</b> &nbsp;|&nbsp;
+  Fora da janela (PDF provavelmente ja foi limpo): <b>${linhas.length - recuperaveis}</b>
+</div>
+${linhas.length === 0 ? '<div class="empty">Nenhuma corrida em risco encontrada. 🎉</div>' : `
+<table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Galgos no card</th><th>Fav/Und salvos</th><th>PDF ainda existe?</th></tr></thead><tbody>
+${linhas.map(l => `<tr>
+  <td>${l.data_card||'?'}</td>
+  <td>${l.hora_br||l.hora||'?'}</td>
+  <td><strong>${l.corrida||'?'}</strong> <span style="color:#666">(${l.dist||'?'}m)</span></td>
+  <td>${l.qtdGalgos} de 6</td>
+  <td style="color:#888">T${l.trap_fav||'-'} ${l.name_fav||''} vs T${l.trap_und||'-'} ${l.name_und||''}</td>
+  <td><span class="badge ${l.recuperavel ? 'badge-ok' : 'badge-no'}">${l.recuperavel ? 'Sim, ainda dá' : 'Nao, ja limpou'}</span></td>
+</tr>`).join('')}
+</tbody></table>`}
+</div></body></html>`);
+});
+
 module.exports = router;
