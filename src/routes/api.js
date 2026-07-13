@@ -460,13 +460,23 @@ function calcularPerfil(linhasValidas) {
     const remarks = parseRemarks(linha.remarks);
     const temAtenuante = hasAnyRemark(remarks, REMARKS_ATENUAM_BENDS);
 
+    // Diferencas entre curvas CONSECUTIVAS (nao so primeiro vs ultimo) —
+    // negativo = melhorou naquela curva, positivo = piorou.
+    const diffs = [];
+    for (let i = 1; i < nums.length; i++) diffs.push(nums[i] - nums[i-1]);
     const primeiro = nums[0];
     const ultimo = nums[nums.length - 1];
-    const diff = primeiro - ultimo; // positivo = subiu posicoes (melhorou)
+    const terminouMelhor = ultimo < primeiro;
+    const terminouPior = ultimo > primeiro;
+    const nuncaMelhorou = diffs.every(d => d >= 0);   // nenhuma curva com diff negativo
+    const nuncaPiorou   = diffs.every(d => d <= 0);   // nenhuma curva com diff positivo
+    const qtdPrimeiro = nums.filter(n => n === 1).length;
 
-    if (primeiro <= 2 && Math.abs(diff) <= 1) return 'frontrunner';
-    if (diff >= 2) return 'recuperador';
-    if (diff <= -2 && !temAtenuante) return 'fumador';
+    // Regra definida com o Bruno em 13/07 — ordem importa (a 1a que bater vence):
+    if (qtdPrimeiro >= 3) return 'avassalador';                                  // ficou em 1o quase o tempo todo
+    if (nuncaPiorou && terminouMelhor) return 'modoturbo';                       // so melhora, direto, do inicio ao fim
+    if (nuncaMelhorou && terminouPior && !temAtenuante) return 'fumador';        // so piora/empata, sem desculpa
+    if (terminouMelhor) return 'recuperador';                                    // melhorou no total, mas nao foi so-melhora
     return 'estavel';
   }).filter(Boolean);
 
@@ -479,7 +489,7 @@ function calcularPerfil(linhasValidas) {
 // Score 0-100 para Bends/Perfil — perfil calculado pelo motor JS
 function scoreBends(galgo) {
   const perfil = (calcularPerfil(galgo.linhasValidas)||'Estavel').toLowerCase();
-  const baseScores = { frontrunner:80, recuperador:90, estavel:60, fumador:20 };
+  const baseScores = { avassalador:80, modoturbo:80, recuperador:65, estavel:50, fumador:25 };
   let score = baseScores[perfil] || 50;
 
   // Bonus por split bom
