@@ -1879,7 +1879,7 @@ router.get('/diagnostico-traps/suspeitas', requireAdmin, (req, res) => {
   try {
     const rows = db.prepare(
       "SELECT a.id as audit_id, a.race_id, a.field, a.valor_antigo, a.valor_novo, a.changed_at, " +
-      "r.data_card, r.hora_br, r.hora, r.corrida, r.video_url, r.resultado_1, r.resultado_2, r.resultado_3 " +
+      "r.data_card, r.hora_br, r.hora, r.corrida, r.track_full, r.video_url, r.resultado_1, r.resultado_2, r.resultado_3 " +
       "FROM race_audit_log a JOIN races r ON r.id = a.race_id " +
       "WHERE a.source='trap_recalibracao' AND a.field IN ('resultado_1','resultado_2','resultado_3') " +
       "ORDER BY a.changed_at DESC"
@@ -1948,9 +1948,10 @@ ${linhas.length === 0 ? '<div class="empty">Nenhuma pendente. 🎉</div>' : `
 <div class="banner">${linhas.length} pra revisar. Em azul: o valor de <b>antes</b> da correção. Em vermelho: o valor <b>atual</b> (depois da correção). Confira no histórico ou no replay qual dos dois é o certo.</div>
 ${linhas.map(l => `<div class="card">
   <div class="card-head">
-    <span class="card-title">${l.corrida||'?'} — ${l.field.replace('resultado_','')}º colocado</span>
-    <span class="card-meta">${l.data_card||'?'} às ${l.hora_br||l.hora||'?'}</span>
+    <span class="card-title">${l.track_full || l.corrida || '?'} — ${l.field.replace('resultado_','')}º colocado</span>
+    <span class="card-meta">Como aparece no Racing Post: <strong>${l.track_full || '?'} ${l.data_card ? l.data_card.split('-').reverse().join('/') : ''}</strong>, corrida das <strong>${l.hora || '?'}</strong> (horário Reino Unido)</span>
   </div>
+  <div class="card-meta" style="margin-bottom:10px">Card interno: ${l.corrida||'?'} · Horário Brasil: ${l.hora_br||'?'}</div>
   <div class="compare">
     <span class="val val-antigo">T${l.valor_antigo}</span>
     <span style="color:#666">era isso antes →  agora está →</span>
