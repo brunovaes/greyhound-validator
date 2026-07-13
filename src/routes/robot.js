@@ -16,6 +16,8 @@ const BASE = process.env.BASE_PATH || '/greyhound';
 const resultsRobotModule = require('./resultsRobot');
 const cardMonitorModule = require('./cardMonitorRobot');
 const { runCardMonitorRobot, getMonitorStatus } = cardMonitorModule;
+const finalCheckModule = require('./finalCheckRobot');
+const { runFinalCheckRobot, getFinalCheckStatus } = finalCheckModule;
 const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
 // PDF_DIR é dinâmico por data — criado em runRobot
@@ -224,6 +226,68 @@ function scheduleMonitorCron() {
   }, msUntil);
 }
 scheduleMonitorCron();
+
+// ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
+// estao dentro da janela de X minutos antes do horario (configuravel,
+// default 15 — ver final_check_min_antes em Configuracoes). Complementa o
+// monitor de hora em hora acima: esse aqui e' o "ultima palavra" pertinho
+// do horario da corrida, prefere refazer a analise inteira a remendar.
+function scheduleFinalCheckCron() {
+  // 20:30 BRT (nao 21:xx+) de proposito — BRT >= 21:00 cruza meia-noite UTC
+  // (21:00+3h=00:00 UTC do dia seguinte) e quebra essa comparacao de janela
+  // (mesma classe de bug ja corrigida em outros lugares nessa sessao — as
+  // corridas de galgo no UK acabam por volta de ~23:45 UK = ~19:45 BRT
+  // mesmo assim, entao 20:30 ja cobre com folga).
+  const intervalMin = 5, startBRT = '09:00', endBRT = '20:30';
+
+  function brtToUtcH(t) { const p=t.split(':'); return (parseInt(p[0])+3)%24; }
+  function brtToUtcM(t) { return parseInt(t.split(':')[1]||0); }
+  const startUtcH = brtToUtcH(startBRT), startUtcM = brtToUtcM(startBRT);
+  const endUtcH = brtToUtcH(endBRT), endUtcM = brtToUtcM(endBRT);
+
+  const now = new Date();
+  let nextRun = new Date(now);
+  const mins = nextRun.getUTCMinutes();
+  const nextSlot = Math.ceil((mins + 1) / intervalMin) * intervalMin;
+  nextRun.setUTCMinutes(nextSlot % 60, 0, 0);
+  if (nextSlot >= 60) nextRun.setUTCHours(nextRun.getUTCHours() + Math.floor(nextSlot / 60));
+
+  const h = nextRun.getUTCHours(), m = nextRun.getUTCMinutes();
+  const afterEnd = h > endUtcH || (h === endUtcH && m > endUtcM);
+  const beforeStart = h < startUtcH || (h === startUtcH && m < startUtcM);
+  if (afterEnd) {
+    nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+    nextRun.setUTCHours(startUtcH, startUtcM, 0, 0);
+  } else if (beforeStart) {
+    nextRun.setUTCHours(startUtcH, startUtcM, 0, 0);
+  }
+
+  const msUntil = nextRun - now;
+  console.log('[CRON-FINALCHECK] Próxima checagem em ' + Math.round(msUntil/60000) + ' min');
+
+  setTimeout(async function() {
+    const nowUtc = new Date();
+    const uh = nowUtc.getUTCHours(), um = nowUtc.getUTCMinutes();
+    const dentroJanela = (uh > startUtcH || (uh===startUtcH && um>=startUtcM)) &&
+                         (uh < endUtcH || (uh===endUtcH && um<=endUtcM));
+    if (dentroJanela) {
+      const st = getFinalCheckStatus();
+      if (!st.running) {
+        const date = getTodayDate();
+        runFinalCheckRobot(date).then(function() {
+          const s = getFinalCheckStatus();
+          console.log('[CRON-FINALCHECK] ✅ ' + s.processed + ' verificada(s), ' + s.ok + ' ok, ' + s.refeitas + ' refeita(s)');
+        }).catch(function(e) {
+          console.error('[CRON-FINALCHECK] ❌ Erro:', e.message);
+        });
+      } else {
+        console.log('[CRON-FINALCHECK] Já rodando, pulando.');
+      }
+    }
+    scheduleFinalCheckCron();
+  }, msUntil);
+}
+scheduleFinalCheckCron();
 
 // Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11 = AM (cedo) | 12,1-9 = PM (meio-dia em diante)
 function formatTime(t) {
@@ -1993,3 +2057,7 @@ router.post('/diagnostico-traps/reverter', requireAdmin, express.urlencoded({ ex
 });
 
 module.exports = router;
+module.exports.formatTime = formatTime;
+module.exports.getPdfDir = getPdfDir;
+module.exports.PDF_BASE = PDF_BASE;
+module.exports.inTimeRange = inTimeRange;

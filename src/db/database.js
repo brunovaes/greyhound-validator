@@ -221,6 +221,9 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN bloco_filtros_ativo INTEGER DEFAULT 1",
   "ALTER TABLE analysis_config ADD COLUMN bloco_confianca_ativo INTEGER DEFAULT 1",
   "ALTER TABLE analysis_config ADD COLUMN bloco_motor_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE races ADD COLUMN final_check_status TEXT DEFAULT NULL",
+  "ALTER TABLE races ADD COLUMN final_check_at DATETIME DEFAULT NULL",
+  "ALTER TABLE analysis_config ADD COLUMN final_check_min_antes INTEGER DEFAULT 15",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

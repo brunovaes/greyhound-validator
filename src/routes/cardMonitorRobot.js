@@ -306,7 +306,7 @@ async function runCardMonitorRobot(targetDate) {
       "SELECT r.id, r.user_id, r.hora, r.corrida, r.dist, r.trap_fav, r.name_fav, r.trap_und, r.name_und, " +
       "r.race_card, r.hist_all, r.top3, r.pct, r.nivel, r.perfil_fav, r.perfil_und, r.track_full, r.card_suspect, r.nivel_pre_suspeita " +
       "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-      "WHERE date(s.created_at, '-3 hours')=? AND (r.nivel!=? OR r.card_suspect=1) ORDER BY r.hora"
+      "WHERE date(s.created_at, '-3 hours')=? AND (r.nivel!=? OR r.card_suspect=1) AND r.final_check_status IS NULL ORDER BY r.hora"
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
@@ -656,5 +656,18 @@ async function runCardMonitorRobot(targetDate) {
 module.exports = {
   runCardMonitorRobot,
   getMonitorStatus: () => ({ ...status }),
-  requestStop: () => { status.stopRequested = true; }
+  requestStop: () => { status.stopRequested = true; },
+  // Exportados pra reaproveitar no robo de checagem final pre-corrida — a
+  // logica de casar corredores atuais contra o race_card salvo (por
+  // identidade, nao posicao) e a mesma, so muda o que se faz depois de
+  // detectar uma mudanca.
+  similarity,
+  namesMatch,
+  trackAbbrMatches,
+  extractTrackFromText,
+  extractCurrentRunnersFromText,
+  matchRunnersToRaceCard,
+  horaUkParaMinutosBrt,
+  agoraMinutosBrt,
+  KNOWN_TRACK_ABBR
 };
