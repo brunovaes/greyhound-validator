@@ -346,7 +346,28 @@ function filtrarLinhasValidas(historico, corridaDist, corridaClasse, corridaPist
 }
 
 // CAMADA 2: Ajustar CalTm de cada linha com contexto
-function ajustarCaltm(linha, corridaClasse, config) {
+// Decide, POR GALGO (uma vez so, nao linha a linha), se o ajuste de classe
+// (CAMADA 2 abaixo) deve ser pulado pra esse galgo — regra definida com o
+// Bruno em 13/07. Categoria "maior"/"superior" = mais FORTE (numero MENOR:
+// A1 e a mais forte de todas, A1>A2>A3...). Usa as linhas VALIDAS (as que ja
+// passaram pelo filtro de elegibilidade), ordenadas mais recente primeiro.
+function decidirPularAjusteClasse(linhasValidas, corridaClasse) {
+  const corridaLevel = getClassLevel(corridaClasse);
+  if (!corridaLevel || linhasValidas.length < 2) return false; // sem base pra decidir, aplica normal
+
+  // Regra 1: as 2 linhas MAIS RECENTES sao categoria igual ou mais forte que hoje
+  const nivel0 = getClassLevel(linhasValidas[0].classe);
+  const nivel1 = getClassLevel(linhasValidas[1].classe);
+  if (nivel0 && nivel1 && nivel0 <= corridaLevel && nivel1 <= corridaLevel) return true;
+
+  // Regra 2: a corrida mais recente terminou em 1o ou 2o lugar
+  const posUltima = linhasValidas[0].pos;
+  if (posUltima === 1 || posUltima === 2) return true;
+
+  return false;
+}
+
+function ajustarCaltm(linha, corridaClasse, config, pularAjusteClasse) {
   let caltm = linha.caltm;
   const remarks = parseRemarks(linha.remarks);
 
@@ -354,12 +375,16 @@ function ajustarCaltm(linha, corridaClasse, config) {
   if (hasAnyRemark(remarks, REMARKS_LEVE)) caltm -= (config.desconto_acidente_leve || 0.10);
   if (hasAnyRemark(remarks, REMARKS_MEDIO)) caltm -= (config.desconto_acidente_medio || 0.20);
 
-  // Ajuste por nivel de classe (classe mais fraca = tempo mais facil = ajustar para cima)
-  const classeLevel = getClassLevel(corridaClasse);
-  const linhaLevel = getClassLevel(linha.classe);
-  if (classeLevel && linhaLevel) {
-    const diff = linhaLevel - classeLevel; // positivo = linha foi em classe mais fraca
-    caltm += diff * (config.ajuste_classe_segundos || 0.20);
+  // Ajuste por nivel de classe (classe mais fraca = tempo mais facil = ajustar
+  // para cima) — pulado quando decidirPularAjusteClasse() decidiu que esse
+  // galgo ja mostrou forma/nivel suficiente pra nao precisar dessa compensacao.
+  if (!pularAjusteClasse) {
+    const classeLevel = getClassLevel(corridaClasse);
+    const linhaLevel = getClassLevel(linha.classe);
+    if (classeLevel && linhaLevel) {
+      const diff = linhaLevel - classeLevel; // positivo = linha foi em classe mais fraca
+      caltm += diff * (config.ajuste_classe_segundos || 0.20);
+    }
   }
 
   return Math.max(caltm, 10);
@@ -614,7 +639,8 @@ function processarCorrida(corridaRaw, config) {
       eliminados.push({ trap:galgo.trap, motivo:`${linhasValidas.length} linha(s) na pista/distancia exata (min. ${minCorridasUteis})` });
       continue;
     }
-    const calTmsAjustados = linhasValidas.map(l=>ajustarCaltm(l, classe, config));
+    const pularAjusteClasse = decidirPularAjusteClasse(linhasValidas, classe);
+    const calTmsAjustados = linhasValidas.map(l=>ajustarCaltm(l, classe, config, pularAjusteClasse));
     const caltmAgregado = agregarCaltm(calTmsAjustados, config);
     const classesHist = linhasValidas.map(l=>l.classe).filter(Boolean);
     const histClasse = classesHist.length ? classesHist.sort((a,b)=>classesHist.filter(c=>c===b).length-classesHist.filter(c=>c===a).length)[0] : classe;
