@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { requireAdmin } = require('../middleware/auth');
-const { getUserConfig, saveRobotLog, loadRobotLog } = require('../db/database');
+const { getUserConfig, saveRobotLog, loadRobotLog, getTrapBadgeColors, saveTrapBadgeColors } = require('../db/database');
+const { parseRacingPostPDF } = require('../utils/pdfParser');
+const { logChanges } = require('../utils/auditLog');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
@@ -402,6 +404,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
+  <a class="robot-menu-item" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
@@ -1579,6 +1582,9 @@ ${navBar(req.user, 'robot')}
   Fora da janela (PDF provavelmente ja foi limpo): <b>${linhas.length - recuperaveis}</b>
 </div>
 ${linhas.length === 0 ? '<div class="empty">Nenhuma corrida em risco encontrada. 🎉</div>' : `
+${recuperaveis > 0 ? `<form method="POST" action="${BASE}/robot/diagnostico-traps/corrigir" style="margin-bottom:16px" onsubmit="return confirm('Reprocessar ${recuperaveis} corrida(s) e corrigir o trap Fav/Und/card? Isso NAO mexe em resultado/aposta ja registrado, so no trap.')">
+  <button type="submit" class="btn" style="width:auto;padding:10px 20px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:13px">🔧 Reprocessar e corrigir as ${recuperaveis} recuperáveis</button>
+</form>` : ''}
 <table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Galgos no card</th><th>Fav/Und salvos</th><th>PDF ainda existe?</th></tr></thead><tbody>
 ${linhas.map(l => `<tr>
   <td>${l.data_card||'?'}</td>
@@ -1589,6 +1595,165 @@ ${linhas.map(l => `<tr>
   <td><span class="badge ${l.recuperavel ? 'badge-ok' : 'badge-no'}">${l.recuperavel ? 'Sim, ainda dá' : 'Nao, ja limpou'}</span></td>
 </tr>`).join('')}
 </tbody></table>`}
+</div></body></html>`);
+});
+
+// ── Encontra o PDF de uma corrida especifica na pasta do dia, reaproveitando
+// a MESMA formatacao de nome usada quando o robo salva (formatTime + track),
+// pra minimizar chance de casar com o arquivo errado.
+function findPdfFileForRace(dataCard, hora, trackFull) {
+  const dir = path.join(PDF_BASE, dataCard || '');
+  if (!dataCard || !fs.existsSync(dir)) return null;
+  const track = (trackFull || '').split(/[\s,]/)[0].replace(/[^a-zA-Z]/g, '');
+  const timeFormatted = formatTime(hora || '');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.pdf'));
+  const exactName = `${timeFormatted}_${track}.pdf`;
+  if (files.includes(exactName)) return path.join(dir, exactName);
+  // Fallback 1: mesmo horario+ampm exato (prefixo antes do "_"), so um candidato
+  const porHorario = files.filter(f => f.startsWith(timeFormatted + '_'));
+  if (porHorario.length === 1) return path.join(dir, porHorario[0]);
+  // Fallback 2: mesmo track, so um candidato (cobre pequena diferenca de minuto)
+  if (track) {
+    const porTrack = files.filter(f => f.toLowerCase().includes('_' + track.toLowerCase() + '.pdf'));
+    if (porTrack.length === 1) return path.join(dir, porTrack[0]);
+  }
+  return null; // ambiguo ou nao encontrado — melhor nao arriscar
+}
+
+// ── Reprocessa (SOMENTE as corridas dentro da janela de 7 dias) o PDF
+// original com o parser novo (leitura de badge) e corrige trap_fav/trap_und/
+// race_card no banco, com trilha de auditoria (mesmo mecanismo ja usado
+// pelos robos de resultado/monitoramento).
+//
+// ESCOPO DELIBERADAMENTE LIMITADO: so corrige a NUMERACAO do trap (rotulo),
+// nunca resultado_1/2/3/bateu. A decisao de Favorito/Underdog (por nome) e o
+// resultado da corrida (bateu ou nao) nao mudam — so o numero mostrado. Os
+// campos de resultado ficam de fora de proposito porque nao da pra saber com
+// certeza, so pelo dado salvo, se aquele valor ja veio do trap real da
+// pagina de resultado (correto) ou do race_card antigo (contaminado) —
+// arriscar corrigir errado ali mexeria com aposta/banca ja registrada.
+router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
+  const { db } = require('../db/database');
+  const races = db.prepare(
+    "SELECT id, hora, hora_br, corrida, dist, data_card, trap_fav, name_fav, trap_und, name_und, race_card, track_full " +
+    "FROM races WHERE race_card IS NOT NULL AND race_card != ''"
+  ).all();
+
+  const hoje = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+  let palette = getTrapBadgeColors() || undefined;
+  const relatorio = [];
+
+  for (const r of races) {
+    let card;
+    try { card = JSON.parse(r.race_card); } catch(e) { continue; }
+    if (!Array.isArray(card) || card.length === 0 || card.length >= 6) continue;
+    const dataCardDate = r.data_card ? new Date(r.data_card + 'T12:00:00') : null;
+    if (!dataCardDate || dataCardDate < seteDiasAtras) continue; // fora da janela, nem tenta
+
+    const base = { id: r.id, corrida: r.corrida, hora: r.hora_br || r.hora, dataCard: r.data_card };
+
+    const pdfPath = findPdfFileForRace(r.data_card, r.hora, r.track_full);
+    if (!pdfPath) { relatorio.push({ ...base, status: 'pdf_nao_encontrado' }); continue; }
+
+    let result;
+    try {
+      const buf = fs.readFileSync(pdfPath);
+      result = await parseRacingPostPDF(buf, palette);
+    } catch(e) { relatorio.push({ ...base, status: 'erro_ao_ler_pdf', detalhe: e.message }); continue; }
+
+    if (!result || !result.trapsConfiaveis) { relatorio.push({ ...base, status: 'nao_confiavel' }); continue; }
+
+    if (result.badgeCalibration) {
+      saveTrapBadgeColors(result.badgeCalibration);
+      palette = Object.assign({}, palette, result.badgeCalibration);
+    }
+
+    const nomeParaTrap = {};
+    result.galgos.forEach(g => { nomeParaTrap[g.nome] = g.trap; });
+
+    const tinhaFav = !!r.name_fav, tinhaUnd = !!r.name_und;
+    if ((tinhaFav && nomeParaTrap[r.name_fav] === undefined) || (tinhaUnd && nomeParaTrap[r.name_und] === undefined)) {
+      // O PDF encontrado nao tem os mesmos nomes salvos — provavelmente casou
+      // com o arquivo errado. Nao aplica nada nessa corrida, fica pra revisao manual.
+      relatorio.push({ ...base, status: 'nome_nao_bateu' });
+      continue;
+    }
+
+    const cardNovo = card.map(g => ({ trap: nomeParaTrap[g.nome] !== undefined ? nomeParaTrap[g.nome] : g.trap, nome: g.nome }));
+    const newValues = { race_card: JSON.stringify(cardNovo) };
+    if (tinhaFav) newValues.trap_fav = nomeParaTrap[r.name_fav];
+    if (tinhaUnd) newValues.trap_und = nomeParaTrap[r.name_und];
+
+    const oldRowForAudit = { trap_fav: r.trap_fav, trap_und: r.trap_und, race_card: r.race_card };
+    const fields = ['race_card'].concat(tinhaFav ? ['trap_fav'] : []).concat(tinhaUnd ? ['trap_und'] : []);
+    const changed = logChanges(r.id, 'trap_recalibracao', oldRowForAudit, newValues, fields);
+
+    if (changed > 0) {
+      const sets = ['race_card=?']; const vals = [newValues.race_card];
+      if (tinhaFav) { sets.push('trap_fav=?'); vals.push(newValues.trap_fav); }
+      if (tinhaUnd) { sets.push('trap_und=?'); vals.push(newValues.trap_und); }
+      vals.push(r.id);
+      db.prepare(`UPDATE races SET ${sets.join(',')} WHERE id=?`).run(...vals);
+      relatorio.push({
+        ...base, status: 'corrigido',
+        antes: `T${r.trap_fav||'-'} ${r.name_fav||''} vs T${r.trap_und||'-'} ${r.name_und||''}`,
+        depois: `T${tinhaFav?newValues.trap_fav:r.trap_fav||'-'} ${r.name_fav||''} vs T${tinhaUnd?newValues.trap_und:r.trap_und||'-'} ${r.name_und||''}`
+      });
+    } else {
+      relatorio.push({ ...base, status: 'ja_estava_certo' });
+    }
+  }
+
+  const corrigidos = relatorio.filter(r => r.status === 'corrigido');
+  const jaCertos = relatorio.filter(r => r.status === 'ja_estava_certo');
+  const naoEncontrados = relatorio.filter(r => r.status === 'pdf_nao_encontrado');
+  const nomeNaoBateu = relatorio.filter(r => r.status === 'nome_nao_bateu');
+  const naoConfiaveis = relatorio.filter(r => r.status === 'nao_confiavel');
+  const erros = relatorio.filter(r => r.status === 'erro_ao_ler_pdf');
+
+  const linha = (r, tipo) => `<tr>
+    <td>${r.dataCard||'?'}</td><td>${r.hora||'?'}</td><td>${r.corrida||'?'}</td>
+    <td>${tipo==='corrigido' ? `<span style="color:#888">${r.antes}</span> → <strong style="color:#22c55e">${r.depois}</strong>` : (r.detalhe||'')}</td>
+  </tr>`;
+
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Correcao de Traps - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>
+${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:1100px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:6px}
+.sub{color:#888;font-size:13px;margin-bottom:20px}
+.banner{border-radius:10px;padding:16px 20px;margin-bottom:16px;border-top:2px solid}
+.banner-ok{background:rgba(34,197,94,.08);border-top-color:#22c55e}
+.banner-warn{background:rgba(239,68,68,.08);border-top-color:#ef4444}
+.banner b{display:block;font-size:15px;margin-bottom:4px}
+h2{font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:24px 0 8px}
+table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden;margin-bottom:8px}
+th{padding:8px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}
+td{padding:8px 12px;border-bottom:1px solid #222;font-size:12px}
+tr:last-child td{border-bottom:none}
+a.voltar{color:#22c55e;font-size:13px;text-decoration:none}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>Correção de Traps — resultado</h1>
+<div class="sub">Só o número do trap (Fav/Und/card) foi corrigido. Resultado/aposta já registrados NÃO foram tocados.</div>
+
+<div class="banner ${corrigidos.length ? 'banner-ok' : 'banner-warn'}">
+  <b>${corrigidos.length} corrida(s) corrigida(s)</b>
+  ${jaCertos.length} já estavam certas · ${naoEncontrados.length} sem PDF encontrado · ${nomeNaoBateu.length} nome não bateu (revisão manual) · ${naoConfiaveis.length} badge não confiável · ${erros.length} erro ao ler PDF
+</div>
+
+${corrigidos.length ? `<h2>✅ Corrigidas</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Antes → Depois</th></tr></thead><tbody>${corrigidos.map(r=>linha(r,'corrigido')).join('')}</tbody></table>` : ''}
+${nomeNaoBateu.length ? `<h2>⚠️ Nome não bateu (não mexi, revisar à mão)</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th></th></tr></thead><tbody>${nomeNaoBateu.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
+${naoEncontrados.length ? `<h2>❌ PDF não encontrado</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th></th></tr></thead><tbody>${naoEncontrados.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
+${naoConfiaveis.length ? `<h2>⚠️ Badge não confiável de novo</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th></th></tr></thead><tbody>${naoConfiaveis.map(r=>linha(r,'')).join('')}</tbody></table>` : ''}
+
+<p style="margin-top:20px"><a class="voltar" href="${BASE}/robot/diagnostico-traps">← Voltar pro diagnóstico</a></p>
 </div></body></html>`);
 });
 
