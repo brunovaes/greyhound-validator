@@ -1887,9 +1887,30 @@ router.get('/diagnostico-traps/suspeitas', requireAdmin, (req, res) => {
     // So as suspeitas: valor ANTIGO ja era numerico 1-6 (nao veio de um nome
     // cru) — essas sao as que podem ter corrompido um valor ja bom.
     linhas = rows.filter(r => /^[1-6]$/.test(String(r.valor_antigo || '').trim()));
+
+    // Pra cada uma, busca o HISTORICO COMPLETO daquele campo (qualquer
+    // fonte — results_robot, trap_recalibracao, reversao) em ordem
+    // cronologica, pra dar contexto sem precisar abrir o replay. E marca
+    // como "ja resolvida" se ja tiver uma reversao DEPOIS dessa correcao
+    // suspeita (some da lista de pendentes).
+    linhas = linhas.map(l => {
+      const historico = db.prepare(
+        "SELECT id, source, valor_antigo, valor_novo, changed_at FROM race_audit_log " +
+        "WHERE race_id=? AND field=? ORDER BY id ASC"
+      ).all(l.race_id, l.field);
+      // Compara por id (sempre crescente), nao por changed_at — duas
+      // gravacoes no mesmo segundo tem timestamp IGUAL no SQLite, o que
+      // faria uma reversao recem-feita nao ser reconhecida como "depois".
+      const jaRevertida = historico.some(h => h.source === 'trap_recalibracao_reversao' && h.id > l.audit_id);
+      return { ...l, historico, jaRevertida };
+    }).filter(l => !l.jaRevertida);
   } catch(e) {
     return res.status(500).send('Erro ao consultar o banco: ' + e.message);
   }
+
+  const reverted = req.query.revertido === '1';
+
+  const fonteLabel = { results_robot: '🤖 robô de resultados (leu a página oficial)', trap_recalibracao: '🔧 correção de traps', trap_recalibracao_reversao: '↩ reversão manual', monitor_robot: '🔍 robô de monitoramento' };
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Correções suspeitas - Greyhound Validator</title>
@@ -1898,40 +1919,57 @@ router.get('/diagnostico-traps/suspeitas', requireAdmin, (req, res) => {
 ${designTokensCSS()}
 body{background:#0D1117}
 nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
-.content{padding:24px;max-width:1100px;margin:0 auto}
+.content{padding:24px;max-width:1000px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:6px}
-.sub{color:#888;font-size:13px;margin-bottom:20px}
-.banner{background:rgba(239,68,68,.08);border-top:2px solid #ef4444;border-radius:10px;padding:16px 20px;margin-bottom:20px}
-table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden}
-th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}
-td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}
-tr:last-child td{border-bottom:none}
-.btn-revert{font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.12);color:#ef4444;cursor:pointer;font-weight:600}
+.sub{color:#888;font-size:13px;margin-bottom:20px;line-height:1.5}
+.banner{background:rgba(239,68,68,.08);border-top:2px solid #ef4444;border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:13px}
+.banner-ok{background:rgba(34,197,94,.1);border-top:2px solid #22c55e;border-radius:10px;padding:14px 20px;margin-bottom:20px;font-weight:700;color:#22c55e}
+.card{background:#161B27;border:1px solid #222;border-radius:10px;padding:18px 20px;margin-bottom:14px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;flex-wrap:wrap;gap:6px}
+.card-title{font-weight:700;font-size:14px}
+.card-meta{color:#888;font-size:11px}
+.compare{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:14px}
+.compare .val{padding:6px 14px;border-radius:6px;font-weight:700}
+.val-antigo{background:rgba(96,165,250,.12);color:#60a5fa}
+.val-atual{background:rgba(239,68,68,.12);color:#ef4444}
+.timeline{font-size:11px;color:#888;margin-top:10px;border-top:1px solid #222;padding-top:10px}
+.timeline div{margin-bottom:3px}
+.acoes{display:flex;gap:10px;align-items:center;margin-top:12px}
+.btn-revert{font-size:12px;padding:7px 14px;border-radius:6px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.12);color:#ef4444;cursor:pointer;font-weight:600}
+a.replay{color:#60a5fa;font-size:12px;text-decoration:none;padding:7px 14px;border:1px solid rgba(96,165,250,.3);border-radius:6px}
 .empty{color:#888;padding:30px;text-align:center}
-a.replay{color:#60a5fa;font-size:11px;text-decoration:none}
 </style></head><body>
 ${navBar(req.user, 'robot')}
 <div class="content">
 <h1>⚠️ Correções suspeitas do pódio</h1>
-<div class="sub">Mudanças de número pra número (não de nome pra número) feitas pela correção de traps antes da trava de segurança — podem ter sobrescrito um valor que já estava certo por outro caminho. Confirme pelo replay antes de reverter.</div>
+<div class="sub">Essas posições do pódio foram trocadas de um número pra outro número (não de um nome pra número) — o tipo de mudança que pode ter sobrescrito um valor que já estava certo, vindo de outro lugar (o robô de resultados normal, por exemplo). Cada card mostra o histórico completo daquele campo pra te ajudar a decidir.</div>
+${reverted ? '<div class="banner-ok">✅ Revertido com sucesso.</div>' : ''}
 ${linhas.length === 0 ? '<div class="empty">Nenhuma pendente. 🎉</div>' : `
-<div class="banner">${linhas.length} correção(ões) pra revisar</div>
-<table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Campo</th><th>Antes → Depois (atual)</th><th>Replay</th><th>Ação</th></tr></thead><tbody>
-${linhas.map(l => `<tr>
-  <td>${l.data_card||'?'}</td>
-  <td>${l.hora_br||l.hora||'?'}</td>
-  <td>${l.corrida||'?'}</td>
-  <td>${l.field}</td>
-  <td>T${l.valor_antigo} → <strong style="color:#ef4444">T${l.valor_novo}</strong></td>
-  <td>${l.video_url ? `<a class="replay" href="${l.video_url}" target="_blank">▶ Ver replay</a>` : '-'}</td>
-  <td><form method="POST" action="${BASE}/robot/diagnostico-traps/reverter" onsubmit="return confirm('Reverter ${l.field} da corrida ${l.corrida} de T${l.valor_novo} de volta pra T${l.valor_antigo}?')">
-    <input type="hidden" name="race_id" value="${l.race_id}">
-    <input type="hidden" name="field" value="${l.field}">
-    <input type="hidden" name="valor_antigo" value="${l.valor_antigo}">
-    <button type="submit" class="btn-revert">↩ Reverter pra T${l.valor_antigo}</button>
-  </form></td>
-</tr>`).join('')}
-</tbody></table>`}
+<div class="banner">${linhas.length} pra revisar. Em azul: o valor de <b>antes</b> da correção. Em vermelho: o valor <b>atual</b> (depois da correção). Confira no histórico ou no replay qual dos dois é o certo.</div>
+${linhas.map(l => `<div class="card">
+  <div class="card-head">
+    <span class="card-title">${l.corrida||'?'} — ${l.field.replace('resultado_','')}º colocado</span>
+    <span class="card-meta">${l.data_card||'?'} às ${l.hora_br||l.hora||'?'}</span>
+  </div>
+  <div class="compare">
+    <span class="val val-antigo">T${l.valor_antigo}</span>
+    <span style="color:#666">era isso antes →  agora está →</span>
+    <span class="val val-atual">T${l.valor_novo}</span>
+  </div>
+  <div class="timeline">
+    <div style="color:#666;margin-bottom:5px">Histórico completo desse campo:</div>
+    ${l.historico.map(h => `<div>${new Date(h.changed_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})} — ${fonteLabel[h.source]||h.source}: ${h.valor_antigo||'(vazio)'} → <strong>${h.valor_novo}</strong></div>`).join('')}
+  </div>
+  <div class="acoes">
+    <form method="POST" action="${BASE}/robot/diagnostico-traps/reverter" onsubmit="return confirm('Reverter pra T${l.valor_antigo}?')">
+      <input type="hidden" name="race_id" value="${l.race_id}">
+      <input type="hidden" name="field" value="${l.field}">
+      <input type="hidden" name="valor_antigo" value="${l.valor_antigo}">
+      <button type="submit" class="btn-revert">↩ Reverter pra T${l.valor_antigo}</button>
+    </form>
+    ${l.video_url ? `<a class="replay" href="${l.video_url}" target="_blank">▶ Ver replay</a>` : ''}
+  </div>
+</div>`).join('')}`}
 <p style="margin-top:20px"><a class="voltar" href="${BASE}/robot/diagnostico-traps" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pro diagnóstico</a></p>
 </div></body></html>`);
 });
@@ -1947,7 +1985,7 @@ router.post('/diagnostico-traps/reverter', requireAdmin, express.urlencoded({ ex
     if (!r) return res.status(404).send('Corrida não encontrada.');
     logChanges(race_id, 'trap_recalibracao_reversao', { [field]: r.atual }, { [field]: valor_antigo }, [field]);
     db.prepare(`UPDATE races SET ${field}=? WHERE id=?`).run(valor_antigo, race_id);
-    res.redirect(BASE + '/robot/diagnostico-traps/suspeitas');
+    res.redirect(BASE + '/robot/diagnostico-traps/suspeitas?revertido=1');
   } catch(e) {
     res.status(500).send('Erro ao reverter: ' + e.message);
   }
