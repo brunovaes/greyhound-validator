@@ -152,6 +152,21 @@ db.exec(`
     status_json TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- Paleta de cores dos badges de trap (1-6), usada pelo pdfParser.js pra
+  -- identificar o trap real de cada galgo pela imagem do card, em vez de
+  -- assumir posicao sequencial (que quebra quando um trap fica ausente do
+  -- PDF). Semeada com valores padrao (ver seedTrapBadgeColors abaixo) e
+  -- recalibrada automaticamente sempre que um card com os 6 galgos completos
+  -- e processado (nesse caso a ordem 1..6 e garantidamente correta, entao da
+  -- pra confiar na cor medida daquele PDF como referencia mais fresca).
+  CREATE TABLE IF NOT EXISTS trap_badge_colors (
+    trap INTEGER PRIMARY KEY,
+    r INTEGER NOT NULL,
+    g INTEGER NOT NULL,
+    b INTEGER NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migracoes seguras para banco existente
@@ -280,6 +295,60 @@ if (!admin) {
   console.log('Admin criado: brunao@greyhound.com / greyhound2024');
 }
 
+// Semente da paleta de cores dos badges de trap — so insere se a tabela
+// ainda estiver vazia (primeira vez), pra nunca sobrescrever uma calibracao
+// mais fresca que ja tenha sido aprendida de um PDF real. Precisa ficar em
+// sincronia com DEFAULT_TRAP_COLORS em src/utils/pdfParser.js (mesmos
+// valores — a semente aqui so existe pra popular o banco no primeiro boot).
+const SEED_TRAP_COLORS = {
+  1: [212, 12, 2],
+  2: [34, 150, 218],
+  3: [196, 196, 196],
+  4: [38, 38, 38],
+  5: [255, 159, 40],
+  6: [134, 95, 95],
+};
+try {
+  const jaTem = db.prepare('SELECT COUNT(*) as n FROM trap_badge_colors').get();
+  if (!jaTem || jaTem.n === 0) {
+    const ins = db.prepare('INSERT INTO trap_badge_colors (trap,r,g,b) VALUES (?,?,?,?)');
+    for (const trap of Object.keys(SEED_TRAP_COLORS)) {
+      const [r,g,b] = SEED_TRAP_COLORS[trap];
+      ins.run(parseInt(trap), r, g, b);
+    }
+    console.log('[trap_badge_colors] paleta semeada com valores padrao');
+  }
+} catch (e) { console.error('[trap_badge_colors] erro ao semear', e.message); }
+
+// Le a paleta atual (calibrada) do banco -> {1:[r,g,b], ..., 6:[r,g,b]}.
+// Se por algum motivo a tabela estiver vazia/inacessivel, devolve null e
+// quem chamou (api.js) cai pro DEFAULT_TRAP_COLORS do proprio pdfParser.js.
+function getTrapBadgeColors() {
+  try {
+    const rows = db.prepare('SELECT trap,r,g,b FROM trap_badge_colors').all();
+    if (!rows.length) return null;
+    const palette = {};
+    rows.forEach(row => { palette[row.trap] = [row.r, row.g, row.b]; });
+    return palette;
+  } catch (e) { return null; }
+}
+
+// Atualiza a paleta com cores medidas de um card real com os 6 galgos
+// completos (a unica situacao em que a cor medida e garantidamente
+// confiavel como referencia — ver comentario em parseRacingPostPDF).
+function saveTrapBadgeColors(colorsByTrap) {
+  try {
+    const upd = db.prepare(
+      'INSERT INTO trap_badge_colors (trap,r,g,b,updated_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP) ' +
+      'ON CONFLICT(trap) DO UPDATE SET r=excluded.r, g=excluded.g, b=excluded.b, updated_at=CURRENT_TIMESTAMP'
+    );
+    for (const trap of Object.keys(colorsByTrap)) {
+      const [r,g,b] = colorsByTrap[trap];
+      upd.run(parseInt(trap), r, g, b);
+    }
+  } catch (e) { console.error('[trap_badge_colors] erro ao recalibrar', e.message); }
+}
+
 // Persiste o status/log de um robo (pdf/results/monitor) em disco, pra
 // sobreviver a restart do processo. Chamado no fim de cada execucao (e pode
 // ser chamado no meio tambem, pra nao perder nada se cair no meio do caminho).
@@ -303,4 +372,4 @@ function loadRobotLog(robotName) {
   } catch (e) { return null; }
 }
 
-module.exports = { db, hashPassword, createUser, findUserByEmail, validatePassword, getUserConfig, saveRobotLog, loadRobotLog };
+module.exports = { db, hashPassword, createUser, findUserByEmail, validatePassword, getUserConfig, saveRobotLog, loadRobotLog, getTrapBadgeColors, saveTrapBadgeColors };

@@ -67,7 +67,7 @@ function fetchAnthropicStream(apiKey, body) {
     req.end();
   });
 }
-const { db, getUserConfig } = require('../db/database');
+const { db, getUserConfig, getTrapBadgeColors, saveTrapBadgeColors } = require('../db/database');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -557,16 +557,16 @@ function mapHistLinhas(linhasValidas) {
 
 // FUNCAO PRINCIPAL: processa uma corrida extraida
 function processarCorrida(corridaRaw, config) {
-  const { hora, corrida, dist, classe, postPick, trapsCard, galgos, dataCard, trackFull } = corridaRaw;
+  const { hora, corrida, dist, classe, postPick, trapsCard, galgos, dataCard, trackFull, trapsConfiaveis } = corridaRaw;
   const distNum = parseInt((dist||'').replace(/[^0-9]/g,''))||0;
 
   // Filtros de corrida
   if (distNum < (config.dist_min||400) || distNum > (config.dist_max||575)) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Distancia ${dist} fora do range`, trapsCard:trapsCard||[], eliminados:[], dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Distancia ${dist} fora do range`, trapsCard:trapsCard||[], trapsConfiaveis, eliminados:[], dataCard, trackFull };
   }
   const classesAceitas = (config.classes_aceitas||'').split(',').map(c=>c.trim());
   if (classe && !classesAceitas.includes(classe)) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Classe ${classe} nao aceita`, trapsCard:trapsCard||[], eliminados:[], dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Classe ${classe} nao aceita`, trapsCard:trapsCard||[], trapsConfiaveis, eliminados:[], dataCard, trackFull };
   }
 
   const elegiveis = [];
@@ -607,7 +607,7 @@ function processarCorrida(corridaRaw, config) {
   }
 
   if (elegiveis.length < 4) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Galgos insuficientes com histórico válido para esta corrida.`, trapsCard:trapsCard||[], eliminados, dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Galgos insuficientes com histórico válido para esta corrida.`, trapsCard:trapsCard||[], trapsConfiaveis, eliminados, dataCard, trackFull };
   }
 
   // Calcular scores com todos os elegiveis como referencia
@@ -752,7 +752,7 @@ function processarCorrida(corridaRaw, config) {
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
 
   if (diffAvB < thresholdSkip) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, trapsCard:trapsCard||[], scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
   }
 
   const pct = scoreToPct(diffAvB);
@@ -763,7 +763,7 @@ function processarCorrida(corridaRaw, config) {
     trapUnd:pior.trap, nameUnd:pior.nome,
     pct, nivel,
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
-    top3, trapsCard:trapsCard||[],
+    top3, trapsCard:trapsCard||[], trapsConfiaveis,
     obs:`${ranking} | ${narrativa}${notaReanalise}`,
     histFav:mapHistLinhas(melhor.linhasValidas),
     histUnd:mapHistLinhas(pior.linhasValidas),
@@ -793,9 +793,17 @@ function sanitizeEliminatedTraps(races) {
       if (out.trapFav && !cardTraps.has(out.trapFav)) eliminados.add(out.trapFav);
       if (out.trapUnd && !cardTraps.has(out.trapUnd)) eliminados.add(out.trapUnd);
     }
-    if (!eliminados.size) return r;
-    out.nivel='skip'; out.pct=0; out.trapFav=0; out.trapUnd=0; out.nameFav=''; out.nameUnd='';
-    out.obs=(out.obs||'')+' [Auto-correcao: trap invalido]';
+    if (eliminados.size) {
+      out.nivel='skip'; out.pct=0; out.trapFav=0; out.trapUnd=0; out.nameFav=''; out.nameUnd='';
+      out.obs=(out.obs||'')+' [Auto-correcao: trap invalido]';
+    }
+    // trapsConfiaveis===false: o badge de trap do PDF nao pode ser lido com
+    // confianca (card com trap ausente + falha ao ler a imagem, ou imagem
+    // ambigua) — nao forca skip (pode estar certo mesmo assim), mas avisa
+    // visivelmente em vez de deixar passar em silencio, pra revisao manual.
+    if (out.trapsConfiaveis === false) {
+      out.obs=(out.obs||'')+' [⚠️ Traps podem estar incorretos — nao foi possivel confirmar pela imagem do card]';
+    }
     return out;
   });
 }
@@ -886,11 +894,27 @@ function parseClaudeJson(raw) {
 async function extractBatch(pdfFiles, capFiles, apiKey) {
   // Parser determinístico — zero tokens de API
   const corridas = [];
+  // Paleta calibrada do banco (cai pro DEFAULT_TRAP_COLORS do proprio
+  // pdfParser.js se a tabela ainda nao tiver nada). Carregada uma vez por
+  // lote e atualizada em memoria a cada card completo (6 galgos) processado
+  // nesse MESMO lote, pra ja se beneficiar da calibracao mais fresca sem
+  // esperar o proximo lote.
+  let palette = getTrapBadgeColors() || undefined;
   for (const pdfFile of pdfFiles) {
     try {
       const buf = Buffer.from(pdfFile.buffer || pdfFile.data, pdfFile.buffer ? undefined : 'base64');
-      const result = await parseRacingPostPDF(buf);
-      if (result) corridas.push(result);
+      const result = await parseRacingPostPDF(buf, palette);
+      if (result) {
+        corridas.push(result);
+        if (!result.trapsConfiaveis) {
+          console.warn('[PARSER] traps NAO confiaveis (badge nao bateu com a paleta) — usando ordem sequencial de fallback:', result.corrida, result.hora);
+        }
+        if (result.badgeCalibration) {
+          saveTrapBadgeColors(result.badgeCalibration);
+          palette = Object.assign({}, palette, result.badgeCalibration);
+          console.log('[PARSER] paleta de traps recalibrada a partir de card completo:', result.corrida, result.hora);
+        }
+      }
       else console.warn('[PARSER] PDF sem resultado:', pdfFile.name || '?');
     } catch(e) {
       console.error('[PARSER] Erro ao parsear PDF:', pdfFile.name || '?', e.message);
