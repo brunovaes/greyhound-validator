@@ -469,6 +469,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
   <a class="robot-menu-item" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
+  <a class="robot-menu-item" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
@@ -1621,6 +1622,106 @@ router.get('/audit/list', requireAdmin, (req, res) => {
 // e por isso correm risco de terem o trap Fav/Und/resultado errado (bug do
 // numero de trap sequencial, corrigido em 13/07 via leitura do badge de
 // imagem). Nao altera nada no banco — so mostra o tamanho do problema.
+// ── Catalogo de remarks — varre TODO o historico ja analisado (coluna
+// hist_all, que fica salva pra sempre, ao contrario dos PDFs que somem em 7
+// dias) e extrai cada token de remark separado, contando quantas vezes
+// apareceu. Cruza contra as listas ja categorizadas hoje (POS/NEG/LEVE/
+// MEDIO/DESCARTE/ATENUAM_BENDS) pra mostrar o que ja tem categoria e o que
+// ainda esta sem, ordenado por frequencia — prioriza o que mais aparece.
+router.get('/diagnostico-remarks', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+
+  // Mesmas listas do api.js (duplicadas aqui de proposito — e so leitura pra
+  // exibicao, nao vale a pena criar export/dependencia so pra essa telinha).
+  const CATEGORIAS = {
+    'Descarta linha': ['BrkDown','BroughtDown','Bmp&BroughtDown','Fell','Fll','Fall','KO1','KO2','KO3','KO4','KO5','KO6'],
+    'Acidente medio': ['Crd','FcdCk','Fcd-Ck','BlkOff'],
+    'Acidente leve': ['Bmp','SAw','MsdBrk','SlwAw','SltBmp','SltCrd'],
+    'Positivo (+15)': ['RnOn','FinWll','StydOn','EP','Led','Chl','AHandy','ClrRn','QAw','LdRnIn','SnLd','LdRnUp'],
+    'Negativo (-20)': ['Fdd','NvrShwd','Outpaced','WeakFinish','SoonOutpaced','DroppedAway','DropAway'],
+    'So atenua Fumador': ['Stmb','BdBmp'],
+  };
+  function categoriaDoToken(token) {
+    const t = token.toUpperCase();
+    for (const [cat, lista] of Object.entries(CATEGORIAS)) {
+      if (lista.some(alvo => t.includes(alvo.toUpperCase()))) return cat;
+    }
+    return null;
+  }
+
+  let linhas = [];
+  try {
+    const races = db.prepare("SELECT hist_all FROM races WHERE hist_all IS NOT NULL AND hist_all != ''").all();
+
+    const contagem = {}; // token -> { count, categoria, exemplos:[textoOriginalCompleto] }
+    races.forEach(r => {
+      let histAll;
+      try { histAll = JSON.parse(r.hist_all); } catch(e) { return; }
+      if (!Array.isArray(histAll)) return;
+      histAll.forEach(galgo => {
+        (galgo.historico || []).forEach(linha => {
+          const raw = (linha.remarks || '').trim();
+          if (!raw) return;
+          raw.split(',').forEach(tokenBruto => {
+            const token = tokenBruto.trim();
+            if (!token) return;
+            if (!contagem[token]) contagem[token] = { count: 0, categoria: categoriaDoToken(token) };
+            contagem[token].count++;
+          });
+        });
+      });
+    });
+
+    linhas = Object.entries(contagem)
+      .map(([token, info]) => ({ token, ...info }))
+      .sort((a, b) => b.count - a.count);
+  } catch(e) {
+    return res.status(500).send('Erro ao consultar o banco: ' + e.message);
+  }
+
+  const categorizados = linhas.filter(l => l.categoria);
+  const semCategoria = linhas.filter(l => !l.categoria);
+
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Catálogo de Remarks - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>
+${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:900px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:6px}
+.sub{color:#888;font-size:13px;margin-bottom:20px;line-height:1.5}
+.banner{background:rgba(34,197,94,.08);border-top:2px solid #22c55e;border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:13px}
+h2{font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:24px 0 8px}
+table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden;margin-bottom:8px}
+th{padding:8px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}
+td{padding:8px 12px;border-bottom:1px solid #222;font-size:12px}
+tr:last-child td{border-bottom:none}
+.cnt{color:#22c55e;font-weight:700}
+.cat{color:#60a5fa;font-size:11px}
+.semcat{color:#f97316}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>Catálogo de Remarks</h1>
+<div class="sub">Todos os tokens de remark encontrados no histórico já analisado (fica salvo pra sempre no banco, não some como os PDFs). Ordenado por frequência — o que mais aparece primeiro.</div>
+<div class="banner"><b>${linhas.length}</b> tokens distintos encontrados &nbsp;|&nbsp; <b>${categorizados.length}</b> já categorizados &nbsp;|&nbsp; <b style="color:#f97316">${semCategoria.length}</b> sem categoria ainda</div>
+
+<h2>⚠️ Sem categoria (${semCategoria.length}) — priorize os de maior frequência</h2>
+<table><thead><tr><th>Remark</th><th>Quantas vezes apareceu</th></tr></thead><tbody>
+${semCategoria.map(l => `<tr><td class="semcat">${l.token}</td><td class="cnt">${l.count}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;color:#666">Nenhum — tudo já categorizado 🎉</td></tr>'}
+</tbody></table>
+
+<h2>Já categorizados (${categorizados.length})</h2>
+<table><thead><tr><th>Remark</th><th>Categoria atual</th><th>Quantas vezes apareceu</th></tr></thead><tbody>
+${categorizados.map(l => `<tr><td>${l.token}</td><td class="cat">${l.categoria}</td><td class="cnt">${l.count}</td></tr>`).join('')}
+</tbody></table>
+
+<p style="margin-top:20px"><a href="${BASE}/robot/diagnostico-traps" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pro diagnóstico</a></p>
+</div></body></html>`);
+});
+
 router.get('/diagnostico-traps', requireAdmin, (req, res) => {
   const { db } = require('../db/database');
   let linhas = [];
