@@ -1575,6 +1575,7 @@ tr:last-child td{border-bottom:none}
 ${navBar(req.user, 'robot')}
 <div class="content">
 <h1>Diagnostico de Traps</h1>
+<p style="margin-bottom:12px"><a href="${BASE}/robot/diagnostico-traps/suspeitas" style="color:#ef4444;font-size:12px;text-decoration:none">⚠️ Ver correções suspeitas do pódio (achado em 13/07 — revisar antes de confiar)</a></p>
 <div class="sub">Corridas com menos de 6 galgos no card salvo — candidatas a terem o trap errado (bug corrigido em 13/07). So leitura, nada foi alterado.</div>
 <div class="resumo">
   Total de corridas em risco: <b>${linhas.length}</b> &nbsp;|&nbsp;
@@ -1665,14 +1666,23 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
     return matches / longer.length;
   }
 
-  function remapResultadoValue(oldCardByTrapNum, novoTrapPorNome, valor) {
+  function remapResultadoValue(currentCardTrapSet, oldCardByTrapNum, novoTrapPorNome, valor) {
     if (!valor) return { value: valor, changed: false };
     const n = parseInt(valor);
+    const isNumeric = !isNaN(n) && n >= 1 && n <= 6 && String(n) === String(valor).trim();
     let nome = null;
-    if (!isNaN(n) && n >= 1 && n <= 6 && String(n) === String(valor).trim()) {
-      nome = oldCardByTrapNum[n]; // valor era um trap antigo — traduz pro nome
+    if (isNumeric) {
+      // CONSERVADOR DE PROPOSITO: so mexe se esse numero for IMPOSSIVEL no
+      // card corrigido (prova cabal de que e resquicio da numeracao antiga).
+      // NUNCA retraduz um numero que ja e um trap valido hoje — pode ja
+      // estar certo por um caminho que a gente nao rastreia aqui (ex: o
+      // results_robot normal rodou em background e leu o trap real direto
+      // da pagina, sem passar por essa correcao) — reescrever as cegas
+      // corrompe um valor bom achando que era ruim.
+      if (currentCardTrapSet.has(n)) return { value: valor, changed: false };
+      nome = oldCardByTrapNum[n]; // impossivel -> so pode ser resquicio antigo, traduz pro nome
     } else {
-      nome = String(valor).trim(); // valor ja era um nome (fallback antigo do resultsRobot)
+      nome = String(valor).trim(); // valor ja e um nome (fallback antigo do resultsRobot) — sempre seguro resolver
     }
     if (!nome) return { value: valor, changed: false };
     // Match difuso (mesmo limiar 0.5 do nameToTrap original) em vez de
@@ -1752,13 +1762,15 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
     const fields = ['race_card'].concat(tinhaFav ? ['trap_fav'] : []).concat(tinhaUnd ? ['trap_und'] : []);
 
     const temResultado = !!(r.resultado_1 || r.resultado_2 || r.resultado_3 || r.bateu);
+    const currentCardTrapSet = new Set(cardNovo.map(g => g.trap));
     let podioNaoBateu = [];
     if (temResultado) {
       ['resultado_1', 'resultado_2', 'resultado_3'].forEach(campo => {
         // Trava de idempotencia: se esse campo especifico ja foi corrigido
-        // numa rodada anterior, nao mexe de novo — evita corromper um valor
-        // ja certo numa terceira execucao (a traducao so vale indo do
-        // original pro novo UMA vez).
+        // POR ESSA MESMA ferramenta numa rodada anterior, nao mexe de novo.
+        // (Nao cobre valores que ficaram certos por outro caminho, tipo o
+        // results_robot normal rodando em background — pra esse caso quem
+        // protege e o check de "numero ja valido" dentro de remapResultadoValue.)
         let jaCorrigidoAntes = false;
         try {
           jaCorrigidoAntes = !!db.prepare(
@@ -1766,7 +1778,7 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
           ).get(r.id, campo);
         } catch(e) {}
         if (jaCorrigidoAntes) return;
-        const remap = remapResultadoValue(oldCardByTrapNum, nomeParaTrap, r[campo]);
+        const remap = remapResultadoValue(currentCardTrapSet, oldCardByTrapNum, nomeParaTrap, r[campo]);
         if (remap.nomeNaoBateu) { podioNaoBateu.push(campo + ' (' + remap.nomeNaoBateu + ')'); return; }
         if (remap.changed) { newValues[campo] = remap.value; fields.push(campo); }
       });
@@ -1850,6 +1862,95 @@ ${naoConfiaveis.length ? `<h2>⚠️ Badge não confiável de novo</h2><table><t
 
 <p style="margin-top:20px"><a class="voltar" href="${BASE}/robot/diagnostico-traps">← Voltar pro diagnóstico</a></p>
 </div></body></html>`);
+});
+
+// ── Achado em 13/07: a correcao de podio (numero antigo -> numero novo) e
+// arriscada quando o valor ANTIGO ja era numerico, porque nao da pra saber
+// se aquele numero ja estava CERTO (por um caminho independente, tipo o
+// results_robot normal lendo direto da pagina em background) ou se era
+// mesmo o resquicio do bug antigo. A partir de agora o codigo so mexe em
+// numero comprovadamente IMPOSSIVEL — mas as correcoes feitas ANTES dessa
+// trava (numero->numero) ficam registradas na auditoria e precisam de
+// revisao manual, porque uma delas (Hove A1) provou ser uma corrupcao real
+// de um valor que ja estava certo.
+router.get('/diagnostico-traps/suspeitas', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  let linhas = [];
+  try {
+    const rows = db.prepare(
+      "SELECT a.id as audit_id, a.race_id, a.field, a.valor_antigo, a.valor_novo, a.changed_at, " +
+      "r.data_card, r.hora_br, r.hora, r.corrida, r.video_url, r.resultado_1, r.resultado_2, r.resultado_3 " +
+      "FROM race_audit_log a JOIN races r ON r.id = a.race_id " +
+      "WHERE a.source='trap_recalibracao' AND a.field IN ('resultado_1','resultado_2','resultado_3') " +
+      "ORDER BY a.changed_at DESC"
+    ).all();
+    // So as suspeitas: valor ANTIGO ja era numerico 1-6 (nao veio de um nome
+    // cru) — essas sao as que podem ter corrompido um valor ja bom.
+    linhas = rows.filter(r => /^[1-6]$/.test(String(r.valor_antigo || '').trim()));
+  } catch(e) {
+    return res.status(500).send('Erro ao consultar o banco: ' + e.message);
+  }
+
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Correções suspeitas - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>
+${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:1100px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:6px}
+.sub{color:#888;font-size:13px;margin-bottom:20px}
+.banner{background:rgba(239,68,68,.08);border-top:2px solid #ef4444;border-radius:10px;padding:16px 20px;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden}
+th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}
+td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.btn-revert{font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.12);color:#ef4444;cursor:pointer;font-weight:600}
+.empty{color:#888;padding:30px;text-align:center}
+a.replay{color:#60a5fa;font-size:11px;text-decoration:none}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>⚠️ Correções suspeitas do pódio</h1>
+<div class="sub">Mudanças de número pra número (não de nome pra número) feitas pela correção de traps antes da trava de segurança — podem ter sobrescrito um valor que já estava certo por outro caminho. Confirme pelo replay antes de reverter.</div>
+${linhas.length === 0 ? '<div class="empty">Nenhuma pendente. 🎉</div>' : `
+<div class="banner">${linhas.length} correção(ões) pra revisar</div>
+<table><thead><tr><th>Data</th><th>Hora</th><th>Corrida</th><th>Campo</th><th>Antes → Depois (atual)</th><th>Replay</th><th>Ação</th></tr></thead><tbody>
+${linhas.map(l => `<tr>
+  <td>${l.data_card||'?'}</td>
+  <td>${l.hora_br||l.hora||'?'}</td>
+  <td>${l.corrida||'?'}</td>
+  <td>${l.field}</td>
+  <td>T${l.valor_antigo} → <strong style="color:#ef4444">T${l.valor_novo}</strong></td>
+  <td>${l.video_url ? `<a class="replay" href="${l.video_url}" target="_blank">▶ Ver replay</a>` : '-'}</td>
+  <td><form method="POST" action="${BASE}/robot/diagnostico-traps/reverter" onsubmit="return confirm('Reverter ${l.field} da corrida ${l.corrida} de T${l.valor_novo} de volta pra T${l.valor_antigo}?')">
+    <input type="hidden" name="race_id" value="${l.race_id}">
+    <input type="hidden" name="field" value="${l.field}">
+    <input type="hidden" name="valor_antigo" value="${l.valor_antigo}">
+    <button type="submit" class="btn-revert">↩ Reverter pra T${l.valor_antigo}</button>
+  </form></td>
+</tr>`).join('')}
+</tbody></table>`}
+<p style="margin-top:20px"><a class="voltar" href="${BASE}/robot/diagnostico-traps" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pro diagnóstico</a></p>
+</div></body></html>`);
+});
+
+router.post('/diagnostico-traps/reverter', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  const { db } = require('../db/database');
+  const { race_id, field, valor_antigo } = req.body;
+  if (!race_id || !['resultado_1','resultado_2','resultado_3'].includes(field)) {
+    return res.status(400).send('Parâmetros inválidos.');
+  }
+  try {
+    const r = db.prepare(`SELECT ${field} as atual, corrida, hora FROM races WHERE id=?`).get(race_id);
+    if (!r) return res.status(404).send('Corrida não encontrada.');
+    logChanges(race_id, 'trap_recalibracao_reversao', { [field]: r.atual }, { [field]: valor_antigo }, [field]);
+    db.prepare(`UPDATE races SET ${field}=? WHERE id=?`).run(valor_antigo, race_id);
+    res.redirect(BASE + '/robot/diagnostico-traps/suspeitas');
+  } catch(e) {
+    res.status(500).send('Erro ao reverter: ' + e.message);
+  }
 });
 
 module.exports = router;
