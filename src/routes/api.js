@@ -1036,7 +1036,7 @@ router.post('/session', express.json(), (req, res) => {
     const { name, races } = req.body;
     const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(user.id, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
     const sessionId = result.lastInsertRowid;
-    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for(const r of races) {
       const p=(r.hora||'').split(':');
       let h=parseInt(p[0]||0);
@@ -1044,7 +1044,7 @@ router.post('/session', express.json(), (req, res) => {
       h=h-4; if(h<0)h+=24; // UK→BRT
       const horaBr=p.length>=2?h+':'+p[1]:'';
       const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,r.avbNaoAberto?1:0,r.histAll?JSON.stringify(r.histAll):null,r.videoUrl||null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null);
+      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,r.avbNaoAberto?1:0,r.histAll?JSON.stringify(r.histAll):null,r.videoUrl||null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
     }
     res.json({ ok:true, sessionId });
   } catch(err) { res.status(500).json({ error:err.message }); }
@@ -1071,6 +1071,14 @@ router.get('/session/:id/races', (req, res) => {
     const sess = db.prepare('SELECT id, name FROM race_sessions WHERE id=? AND user_id=?').get(id, req.user.id);
     if (!sess) return res.status(404).json({ error: 'Sessão não encontrada' });
     const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(id);
+    // Reconstroi 'scores' (usado pelo Relatorio de Analise) a partir da coluna
+    // scores_json — o cliente sempre espera esse campo como array, nunca como
+    // a string JSON crua salva no banco.
+    races.forEach(r => {
+      if (r.scores_json) {
+        try { r.scores = JSON.parse(r.scores_json); } catch(e) { r.scores = null; }
+      }
+    });
     res.json({ session: sess, races });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

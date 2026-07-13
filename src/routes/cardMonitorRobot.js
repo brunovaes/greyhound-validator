@@ -571,7 +571,7 @@ async function runCardMonitorRobot(targetDate) {
         if (auditCount) addLog('info', '  auditoria: ' + auditCount + ' campo(s) registrado(s) no historico de alteracoes');
 
         db.prepare(
-          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=? WHERE id=?'
+          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=?,scores_json=? WHERE id=?'
         ).run(
           novoResultado.trapFav || 0, novoResultado.nameFav || '',
           novoResultado.trapUnd || 0, novoResultado.nameUnd || '',
@@ -584,6 +584,7 @@ async function runCardMonitorRobot(targetDate) {
           novoResultado.raceCard ? JSON.stringify(novoResultado.raceCard) : JSON.stringify(novoRaceCard),
           Array.isArray(novoResultado.top3) ? novoResultado.top3.filter(function(x){return x>0;}).join('-') : (novoResultado.top3 || null),
           novoResultado.trackFull || dbRace.track_full || null,
+          novoResultado.scores ? JSON.stringify(novoResultado.scores) : null,
           dbRace.id
         );
         status.reanalyzed++;

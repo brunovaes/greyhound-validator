@@ -254,17 +254,18 @@ async function runFinalCheckRobot(targetDate) {
           race_card: novoResultado.raceCard ? JSON.stringify(novoResultado.raceCard) : JSON.stringify(resultParse.galgos.map(function(g) { return { trap: g.trap, nome: g.nome }; })),
           track_full: novoResultado.trackFull || scrapedTrack || dbRace.track_full || null,
           eliminados: novoResultado.eliminados ? JSON.stringify(novoResultado.eliminados) : null,
-          post_pick: novoResultado.postPick || null
+          post_pick: novoResultado.postPick || null,
+          scores_json: novoResultado.scores ? JSON.stringify(novoResultado.scores) : null
         };
 
         logChanges(dbRace.id, 'final_check_robot', oldRowForAudit, newValues, ['trap_fav', 'name_fav', 'trap_und', 'name_und', 'pct', 'nivel']);
 
         db.prepare(
-          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,track_full=?,eliminados=?,post_pick=?,final_check_status=?,final_check_at=CURRENT_TIMESTAMP WHERE id=?'
+          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,track_full=?,eliminados=?,post_pick=?,scores_json=?,final_check_status=?,final_check_at=CURRENT_TIMESTAMP WHERE id=?'
         ).run(
           newValues.trap_fav, newValues.name_fav, newValues.trap_und, newValues.name_und, newValues.pct, newValues.nivel,
           newValues.perfil_fav, newValues.perfil_und, newValues.obs, newValues.hist_fav, newValues.hist_und, newValues.hist_all,
-          newValues.race_card, newValues.track_full, newValues.eliminados, newValues.post_pick,
+          newValues.race_card, newValues.track_full, newValues.eliminados, newValues.post_pick, newValues.scores_json,
           novoResultado.nivel === 'skip' ? 'refeita_skip' : 'refeita',
           dbRace.id
         );

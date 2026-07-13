@@ -224,6 +224,7 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN final_check_status TEXT DEFAULT NULL",
   "ALTER TABLE races ADD COLUMN final_check_at DATETIME DEFAULT NULL",
   "ALTER TABLE analysis_config ADD COLUMN final_check_min_antes INTEGER DEFAULT 15",
+  "ALTER TABLE races ADD COLUMN scores_json TEXT DEFAULT NULL",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
