@@ -1042,6 +1042,10 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
 <div class="content">
+<div id="stale-banner" style="display:none;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:12px;color:#f97316;align-items:center;justify-content:space-between;gap:10px">
+  <span>🔄 Algum robô atualizou dados dessa sessão em segundo plano.</span>
+  <button onclick="location.reload()" style="background:#f97316;color:#000;border:none;border-radius:5px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">Atualizar agora</button>
+</div>
 <div class="kpis">
 <div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${races.length}</div></div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
@@ -1148,6 +1152,41 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
+var SESS_ID=${sess.id};
+var SESS_NAME=${JSON.stringify(sess.name || '')};
+
+// So faz sentido ficar checando por atualizacao numa sessao que ainda pode
+// mudar — ou seja, a sessao de HOJE (corridas futuras ainda podem ser
+// alteradas pelos robos de Monitoramento/Checagem Final). Sessao de dia
+// passado e historico fechado, nunca muda sozinho, nao precisa checar.
+(function(){
+  var hoje = new Date();
+  var hojeLabel = String(hoje.getDate()).padStart(2,'0')+'/'+String(hoje.getMonth()+1).padStart(2,'0')+'/'+hoje.getFullYear();
+  if (SESS_NAME !== ('Races '+hojeLabel)) return; // sessao antiga, nao liga o polling
+
+  function assinatura(races){
+    // Só os campos que o robo pode mudar sozinho — nao precisa comparar tudo
+    return races.map(function(r){ return [r.id,r.trap_fav,r.trap_und,r.pct,r.nivel,r.resultado_1,r.resultado_2,r.resultado_3,r.bateu].join(':'); }).join('|');
+  }
+  var assinaturaAtual = assinatura(ALL_RACES);
+  var jaAvisou = false;
+
+  setInterval(function(){
+    if (jaAvisou) return; // ja mostrou o aviso, nao precisa checar de novo ate recarregar
+    // Nao interrompe se tiver alguma linha em edicao no momento (Odd/Aberto?)
+    if (document.querySelector('.hist-inp:not([disabled])')) return;
+    fetch(BASE+'/api/session/'+SESS_ID+'/races').then(function(r){return r.json();}).then(function(d){
+      if (!d.races) return;
+      var novaAssinatura = assinatura(d.races.filter(function(r){return r.nivel!=='skip'&&r.trap_fav>0;}));
+      if (novaAssinatura !== assinaturaAtual) {
+        jaAvisou = true;
+        var banner = document.getElementById('stale-banner');
+        if (banner) banner.style.display = 'flex';
+      }
+    }).catch(function(e){});
+  }, 60000);
+})();
+
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
 // pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
 function saveHistField(id, field, value){

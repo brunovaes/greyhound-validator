@@ -372,6 +372,7 @@ function isDayClosed(avbs) {
 
 var focusRefreshInterval = null;
 var alertCheckInterval = null;
+var syncFromServerInterval = null;
 var serverSyncInterval = null;
 
 // Busca do banco os dados atualizados da sessao de hoje (o que os robos de
@@ -562,6 +563,13 @@ function enterFocusMode() {
   // Auto-refresh a cada minuto
   if (focusRefreshInterval) clearInterval(focusRefreshInterval);
   focusRefreshInterval = setInterval(refreshFocusMode, AUTO_REFRESH_MIN * 60000);
+
+  // Sincroniza com o servidor no mesmo ritmo — pega mudanças feitas pelos
+  // robôs em background (Monitoramento, Checagem Final) sem precisar
+  // recarregar a página na mão. syncFromServer() já existia pronta, só
+  // faltava ser chamada de algum lugar.
+  if (syncFromServerInterval) clearInterval(syncFromServerInterval);
+  syncFromServerInterval = setInterval(syncFromServer, AUTO_REFRESH_MIN * 60000);
 
   // Checagem de alerta de proximidade (independente, mais frequente)
   if (alertCheckInterval) clearInterval(alertCheckInterval);
