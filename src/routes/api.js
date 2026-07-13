@@ -114,13 +114,13 @@ function getClassLevel(classe) {
 // Remarks que indicam acidente GRAVE (descarta a linha inteira)
 const REMARKS_DESCARTE = ['BrkDown', 'BroughtDown', 'Bmp&BroughtDown', 'Fell', 'Fll', 'Fall', 'KO1','KO2','KO3','KO4','KO5','KO6'];
 // Remarks de acidente MEDIO
-const REMARKS_MEDIO = ['Crd','FcdCk','BlkOff'];
+const REMARKS_MEDIO = ['Crd','FcdCk','Fcd-Ck','BlkOff'];
 // Remarks de acidente LEVE
 const REMARKS_LEVE = ['Bmp','SAw','MsdBrk','SlwAw','SltBmp','SltCrd'];
 // Remarks que ATENUAM queda nos bends (nao classifica como fumador)
-const REMARKS_ATENUAM_BENDS = ['Crd','FcdCk','Bmp','BlkOff','Stmb','BdBmp'];
+const REMARKS_ATENUAM_BENDS = ['Crd','FcdCk','Fcd-Ck','Bmp','BlkOff','Stmb','BdBmp'];
 // Remarks MUITO POSITIVOS (combinacoes)
-const REMARKS_MUITO_POS_COMBOS = [['SAw','RnOn'],['SAw','FinWll'],['FcdCk','RnOn'],['Bmp','RnOn'],['Crd','FinWll'],['Blk','StydOn']];
+const REMARKS_MUITO_POS_COMBOS = [['SAw','RnOn'],['SAw','FinWll'],['FcdCk','RnOn'],['Fcd-Ck','RnOn'],['Bmp','RnOn'],['Crd','FinWll'],['Blk','StydOn']];
 // Remarks POSITIVOS simples
 const REMARKS_POS = ['RnOn','FinWll','StydOn','EP','Led','Chl','AHandy','ClrRn','QAw','LdRnIn','SnLd','LdRnUp'];
 // Remarks NEGATIVOS
