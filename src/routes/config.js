@@ -334,6 +334,11 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <input type="time" name="monitor_window_end" value="${config.monitor_window_end||'20:00'}">
     <div class="hint">Horário BRT de encerramento da checagem automática de cards</div>
   </div>
+  <div class="field">
+    <label>Checagem final — minutos antes da corrida</label>
+    <input type="number" name="final_check_min_antes" value="${config.final_check_min_antes||15}" min="5" max="60">
+    <div class="hint">Quanto tempo antes do horário da corrida o robô faz a validação final do card — se mudou algo, refaz a análise do zero (PDF novo + reprocessamento)</div>
+  </div>
 </div>
 </div>
 </div>
@@ -457,7 +462,8 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_filtros_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_confianca_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN bloco_motor_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN final_check_min_antes INTEGER DEFAULT 15").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_brt,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -477,6 +483,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.monitor_interval_min||60,
       d.monitor_window_start||'09:00',
       d.monitor_window_end||'20:00',
+      d.final_check_min_antes||15,
       d.banca_unidade_padrao||2.5,
       d.banca_valor_inicial||1000,
       d.banca_pct_stop!=null&&d.banca_pct_stop!==''?d.banca_pct_stop:20,
