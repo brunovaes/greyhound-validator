@@ -1649,6 +1649,22 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
   // possivelmente errado, ou — em casos raros — o proprio nome do galgo
   // quando o robo de resultados nao achou trap nenhum na epoca) pro trap
   // NOVO e correto, usando o card antigo como dicionario trap->nome.
+  // Mesma funcao de similaridade ja usada e validada em producao pelo
+  // resultsRobot.js (nameToTrap) — reaproveitada aqui pra nao inventar uma
+  // regra nova de comparacao de nome.
+  function similarity(a, b) {
+    a = (a || '').toLowerCase().replace(/\s/g, '');
+    b = (b || '').toLowerCase().replace(/\s/g, '');
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (b.includes(a) || a.includes(b)) return 0.9;
+    let matches = 0;
+    const shorter = a.length < b.length ? a : b;
+    const longer  = a.length < b.length ? b : a;
+    for (let k = 0; k < shorter.length; k++) { if (longer.includes(shorter[k])) matches++; }
+    return matches / longer.length;
+  }
+
   function remapResultadoValue(oldCardByTrapNum, novoTrapPorNome, valor) {
     if (!valor) return { value: valor, changed: false };
     const n = parseInt(valor);
@@ -1656,10 +1672,19 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
     if (!isNaN(n) && n >= 1 && n <= 6 && String(n) === String(valor).trim()) {
       nome = oldCardByTrapNum[n]; // valor era um trap antigo — traduz pro nome
     } else {
-      nome = String(valor).trim(); // valor ja era um nome
+      nome = String(valor).trim(); // valor ja era um nome (fallback antigo do resultsRobot)
     }
     if (!nome) return { value: valor, changed: false };
-    const novoTrap = novoTrapPorNome[nome];
+    // Match difuso (mesmo limiar 0.5 do nameToTrap original) em vez de
+    // igualdade exata — cobre pequenas diferencas de formatacao entre as
+    // duas fontes (ex: sufixo de estilo de corrida que o pdfParser adiciona
+    // e o resultsRobot nao usa).
+    let melhorNome = null, melhorScore = 0.5;
+    for (const candidato of Object.keys(novoTrapPorNome)) {
+      const score = similarity(nome, candidato);
+      if (score > melhorScore) { melhorScore = score; melhorNome = candidato; }
+    }
+    const novoTrap = melhorNome !== null ? novoTrapPorNome[melhorNome] : undefined;
     if (novoTrap === undefined) return { value: valor, changed: false, nomeNaoBateu: nome };
     return { value: String(novoTrap), changed: String(novoTrap) !== String(valor) };
   }
