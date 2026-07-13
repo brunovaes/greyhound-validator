@@ -813,7 +813,10 @@ function getPdfFolder(date) {
   // Estritamente a data informada (ou hoje, por padrao) — sem fallback pra
   // ontem/amanha. Se nao existir PDF de hoje, quem chama trata como vazio
   // e a tela mostra a mensagem padrao de "sem corridas disponiveis hoje".
-  const base = date ? new Date(date) : new Date();
+  // "Hoje" precisa ser BRT, nao UTC cru — Railway roda em UTC, entao entre
+  // 21h e 23h59 BRT o new Date() do servidor ja virou o dia seguinte e essa
+  // funcao olhava pra pasta errada (vazia), mesmo com os PDFs certos no disco.
+  const base = date ? new Date(date) : new Date(Date.now() - 3 * 60 * 60 * 1000);
   return require('path').join(PDF_PATH, fmtDate(base));
 }
 
