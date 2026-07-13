@@ -1700,10 +1700,25 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
       continue;
     }
 
-    // Dicionario trap ANTIGO -> nome, a partir do card como estava salvo ATE
-    // AGORA (antes dessa correcao) — e a "chave de traducao" pro podio.
+    // Dicionario trap ANTIGO -> nome, usado pra traduzir o podio. IMPORTANTE:
+    // usa o race_card ORIGINAL DE VERDADE (o primeiro "antes" registrado na
+    // auditoria), NAO o que esta salvo agora — porque se essa corrida ja foi
+    // corrigida uma vez antes (ex: rodou a correcao so-AvB de uma versao
+    // anterior), o card atual JA esta certo, e usar ele como dicionario faria
+    // a traducao do podio falhar em silencio (o trap antigo que o resultado_N
+    // referencia nem existe mais no card corrigido).
+    let cardOriginal = card;
+    try {
+      const primeiraAuditoria = db.prepare(
+        "SELECT valor_antigo FROM race_audit_log WHERE race_id=? AND field='race_card' AND source='trap_recalibracao' ORDER BY changed_at ASC LIMIT 1"
+      ).get(r.id);
+      if (primeiraAuditoria && primeiraAuditoria.valor_antigo) {
+        const parsed = JSON.parse(primeiraAuditoria.valor_antigo);
+        if (Array.isArray(parsed) && parsed.length) cardOriginal = parsed;
+      }
+    } catch(e) { /* mantem card atual como fallback */ }
     const oldCardByTrapNum = {};
-    card.forEach(g => { oldCardByTrapNum[g.trap] = g.nome; });
+    cardOriginal.forEach(g => { oldCardByTrapNum[g.trap] = g.nome; });
 
     const cardNovo = card.map(g => ({ trap: nomeParaTrap[g.nome] !== undefined ? nomeParaTrap[g.nome] : g.trap, nome: g.nome }));
     const newValues = { race_card: JSON.stringify(cardNovo) };
@@ -1715,6 +1730,17 @@ router.post('/diagnostico-traps/corrigir', requireAdmin, async (req, res) => {
     let podioNaoBateu = [];
     if (temResultado) {
       ['resultado_1', 'resultado_2', 'resultado_3'].forEach(campo => {
+        // Trava de idempotencia: se esse campo especifico ja foi corrigido
+        // numa rodada anterior, nao mexe de novo — evita corromper um valor
+        // ja certo numa terceira execucao (a traducao so vale indo do
+        // original pro novo UMA vez).
+        let jaCorrigidoAntes = false;
+        try {
+          jaCorrigidoAntes = !!db.prepare(
+            "SELECT 1 FROM race_audit_log WHERE race_id=? AND field=? AND source='trap_recalibracao' LIMIT 1"
+          ).get(r.id, campo);
+        } catch(e) {}
+        if (jaCorrigidoAntes) return;
         const remap = remapResultadoValue(oldCardByTrapNum, nomeParaTrap, r[campo]);
         if (remap.nomeNaoBateu) { podioNaoBateu.push(campo + ' (' + remap.nomeNaoBateu + ')'); return; }
         if (remap.changed) { newValues[campo] = remap.value; fields.push(campo); }
