@@ -1,5 +1,6 @@
 const express = require('express');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
+const { scoreRemarksNovo } = require('../utils/remarksEngine');
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
@@ -504,26 +505,12 @@ function scoreBends(galgo) {
 }
 
 // Score 0-100 para Remarks (media das 3 linhas mais recentes)
+// Score 0-100 para Remarks — motor novo (Merito + Corrida Escondida),
+// especificacao fechada com o Bruno em 13/07/2026. Mantem o nome/assinatura
+// da funcao antiga de proposito, pra nao precisar mexer no ponto de chamada
+// (calcularScoreGalgo continua chamando scoreRemarks() normalmente).
 function scoreRemarks(linhasValidas) {
-  if (!linhasValidas.length) return 50;
-  let totalScore = 0;
-  const linhas = linhasValidas.slice(0, 3);
-  linhas.forEach(linha => {
-    const remarks = parseRemarks(linha.remarks);
-    let linhaScore = 50;
-    // Combos muito positivos
-    for (const combo of REMARKS_MUITO_POS_COMBOS) {
-      if (combo.every(r => hasAnyRemark(remarks, [r]))) { linhaScore = Math.min(100, linhaScore+30); break; }
-    }
-    // Positivos simples
-    const posEncontrados = REMARKS_POS.filter(r=>hasAnyRemark(remarks,[r]));
-    linhaScore = Math.min(100, linhaScore + posEncontrados.slice(0,2).length * 15);
-    // Negativos
-    const negEncontrados = REMARKS_NEG.filter(r=>hasAnyRemark(remarks,[r]));
-    linhaScore = Math.max(0, linhaScore - negEncontrados.length * 20);
-    totalScore += linhaScore;
-  });
-  return Math.round(totalScore / linhas.length);
+  return scoreRemarksNovo(linhasValidas);
 }
 
 // Score 0-100 para BRT

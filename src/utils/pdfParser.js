@@ -203,7 +203,13 @@ function parseRightSide(text) {
   };
 }
 
-// ── Parse da esquerda: [SPLIT] [BENDS] [POS] ... REMARKS ────────────────────
+// ── Parse da esquerda: [SPLIT] [BENDS] [POS] [By] [Win/Sec] REMARKS ────────
+// O remark de verdade e' sempre o ULTIMO token (bloco colado por virgula,
+// sem espaco) — "By" (margem) e "Win/Sec" (nome do vencedor/2o colocado)
+// vem sempre ANTES, separados por espaco. Confirmado em todos os exemplos
+// reais revisados em 13/07/2026 — sem isso, o campo remarks vinha
+// contaminado com o nome do outro galgo (ex: "Kopek" contendo "KO" por
+// coincidencia, ou "Bmp1" perdido dentro de "The Other Rafa Bmp1").
 function parseLeftSide(text) {
   if (!text) return { split: null, bends: '', pos: 0, remarks: '' };
   const tokens = text.trim().split(/\s+/);
@@ -221,7 +227,9 @@ function parseLeftSide(text) {
     const m = tokens[i++].match(/^(\d+)/);
     pos = m ? parseInt(m[1]) : 0;
   }
-  return { split, bends, pos, remarks: tokens.slice(i).join(' ') };
+  const resto = tokens.slice(i);
+  const remarks = resto.length ? resto[resto.length - 1] : '';
+  return { split, bends, pos, remarks };
 }
 
 // ── Parse de uma linha de histórico ──────────────────────────────────────────
