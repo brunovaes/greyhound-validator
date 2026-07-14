@@ -1692,6 +1692,120 @@ router.get('/audit/list', requireAdmin, (req, res) => {
 // apareceu. Cruza contra as listas ja categorizadas hoje (POS/NEG/LEVE/
 // MEDIO/DESCARTE/ATENUAM_BENDS) pra mostrar o que ja tem categoria e o que
 // ainda esta sem, ordenado por frequencia — prioriza o que mais aparece.
+// ── Reprocessamento completo do dia — reroda TODAS as corridas de hoje (ja
+// rodadas ou nao) com o motor ATUAL, usando o PDF que ja esta salvo no disco
+// (sem precisar buscar nada ao vivo). Sobrescreve trap_fav/pct/nivel/etc,
+// mas PRESERVA o que foi preenchido na mao (odd, valor, resultado, bateu,
+// aberto?, video) — mesmo esquema que o "Automaticamente + Sobrescrever" ja
+// usa na tela normal. Pedido do Bruno em 14/07/2026, depois de mudar os
+// pesos/motor varias vezes no mesmo dia — ele confirmou que hoje nao teve
+// aposta registrada, entao topou sobrescrever tudo sem guardar comparacao.
+async function reprocessarDiaInteiro(DATE) {
+  const { db } = require('../db/database');
+  const { processarCorrida } = require('./api');
+
+  const rows = db.prepare(
+    "SELECT r.* FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?"
+  ).all(DATE);
+
+  const PDF_DIR = getPdfDir(DATE);
+  let arquivos = [];
+  try { arquivos = fs.readdirSync(PDF_DIR); } catch(e) { return { total: rows.length, refeitas: 0, semPdf: rows.length, erros: 0, log: ['Pasta de PDFs de hoje nao encontrada.'] }; }
+
+  let refeitas = 0, semPdf = 0, erros = 0;
+  const log = [];
+
+  for (const row of rows) {
+    try {
+      const trackAbbr = (row.corrida || '').split(' ')[0].toLowerCase();
+      const timeFormatted = formatTime(row.hora);
+      const candidato = arquivos.find(f => f.startsWith(timeFormatted) && f.toLowerCase().includes(trackAbbr));
+      if (!candidato) { semPdf++; log.push(row.hora + ' ' + row.corrida + ' — sem PDF salvo, pulando'); continue; }
+
+      const buf = fs.readFileSync(path.join(PDF_DIR, candidato));
+      const palette = getTrapBadgeColors() || undefined;
+      const resultParse = await parseRacingPostPDF(buf, palette);
+      if (!resultParse) { erros++; log.push(row.hora + ' ' + row.corrida + ' — falha ao reprocessar o PDF'); continue; }
+      if (resultParse.badgeCalibration) saveTrapBadgeColors(resultParse.badgeCalibration);
+
+      const config = getUserConfig(row.user_id);
+      const novo = processarCorrida(resultParse, config);
+
+      db.prepare(
+        `UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,
+         hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=?,eliminados=?,post_pick=?,scores_json=?
+         WHERE id=?`
+      ).run(
+        novo.trapFav||0, novo.nameFav||'', novo.trapUnd||0, novo.nameUnd||'',
+        novo.pct||0, novo.nivel||'', novo.perfilFav||'', novo.perfilUnd||'', novo.obs||'',
+        novo.histFav?JSON.stringify(novo.histFav):null, novo.histUnd?JSON.stringify(novo.histUnd):null,
+        novo.histAll?JSON.stringify(novo.histAll):null,
+        novo.raceCard?JSON.stringify(novo.raceCard):(resultParse.galgos?JSON.stringify(resultParse.galgos.map(g=>({trap:g.trap,nome:g.nome}))):null),
+        Array.isArray(novo.top3)?novo.top3.filter(x=>x>0).join('-'):(novo.top3||null),
+        novo.trackFull||row.track_full||null,
+        novo.eliminados?JSON.stringify(novo.eliminados):null,
+        novo.postPick||null,
+        novo.scores?JSON.stringify(novo.scores):null,
+        row.id
+      );
+      // odd, valor, resultado_1/2/3, bateu, avb_nao_aberto, video_url NAO sao tocados —
+      // preservados automaticamente por nao estarem no UPDATE acima.
+
+      refeitas++;
+      log.push(row.hora + ' ' + row.corrida + ' — refeita: T' + (novo.trapFav||0) + ' vs T' + (novo.trapUnd||0) + ' (' + (novo.pct||0) + '% ' + (novo.nivel||'skip') + ')');
+    } catch(e) {
+      erros++;
+      log.push(row.hora + ' ' + row.corrida + ' — erro: ' + e.message);
+    }
+  }
+
+  return { total: rows.length, refeitas, semPdf, erros, log };
+}
+
+router.get('/reprocessar-dia', requireAdmin, (req, res) => {
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Reprocessar Dia - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:700px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:10px}
+.warn{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:16px;font-size:13px;line-height:1.6;margin-bottom:20px}
+.btn{background:#22c55e;color:#000;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>Reprocessar o dia inteiro</h1>
+<div class="warn">⚠️ Isso vai <b>sobrescrever</b> trap_fav/pct/nível/scores de <b>todas</b> as corridas de hoje (já rodadas ou não), usando o motor atual e os PDFs já salvos. Odd, resultado e "bateu" que você preencheu na mão <b>não são tocados</b>. Não tem volta — use só se tiver certeza.</div>
+<button class="btn" onclick="if(confirm('Confirma? Isso reescreve a análise de TODAS as corridas de hoje.')){document.getElementById('f').submit();}">Reprocessar corridas de hoje</button>
+<form id="f" method="POST" action="${BASE}/robot/reprocessar-dia" style="display:none"></form>
+</div></body></html>`);
+});
+
+router.post('/reprocessar-dia', requireAdmin, async (req, res) => {
+  const date = getTodayDate();
+  const resultado = await reprocessarDiaInteiro(date);
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Reprocessar Dia - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:700px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:10px}
+.banner{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:16px;font-size:13px;margin-bottom:20px}
+.log{background:#161B27;border:1px solid #222;border-radius:8px;padding:12px;font-size:11px;font-family:monospace;max-height:500px;overflow-y:auto;white-space:pre-wrap;line-height:1.6}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>Resultado do reprocessamento</h1>
+<div class="banner"><b>${resultado.total}</b> corrida(s) total &nbsp;|&nbsp; <b style="color:#22c55e">${resultado.refeitas}</b> refeita(s) &nbsp;|&nbsp; <b style="color:#f97316">${resultado.semPdf}</b> sem PDF &nbsp;|&nbsp; <b style="color:#ef4444">${resultado.erros}</b> erro(s)</div>
+<div class="log">${resultado.log.map(l => l.replace(/</g,'&lt;')).join('\n')}</div>
+<p style="margin-top:16px"><a href="${BASE}/greyhound" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pra Analisar</a></p>
+</div></body></html>`);
+});
+
 router.get('/diagnostico-remarks', requireAdmin, (req, res) => {
   const { db } = require('../db/database');
 
@@ -2257,6 +2371,7 @@ router.post('/diagnostico-traps/reverter', requireAdmin, express.urlencoded({ ex
 module.exports = router;
 module.exports.formatTime = formatTime;
 module.exports.preencherScoresJsonFaltando = preencherScoresJsonFaltando;
+module.exports.reprocessarDiaInteiro = reprocessarDiaInteiro;
 module.exports.getPdfDir = getPdfDir;
 module.exports.PDF_BASE = PDF_BASE;
 module.exports.inTimeRange = inTimeRange;
