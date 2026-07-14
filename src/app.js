@@ -1106,9 +1106,20 @@ async function openRelatorioModal(key){
   document.getElementById('val-modal').classList.add('open');
   try { await syncFromServer(); } catch(e) {}
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
-  if(!r){console.warn('[RELATORIO] nao achou:',key);return;}
+  if(!r){
+    document.getElementById('val-body').innerHTML = '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Não encontrei essa corrida depois de sincronizar (pode ter saído da lista de hoje). Tenta fechar e abrir de novo.</div>';
+    return;
+  }
   document.getElementById('val-title').textContent='Relatório de Análise — '+(r.corrida||'')+' '+(r.hora||'');
-  document.getElementById('val-body').innerHTML=buildRelatorioHtml(r);
+  // Nunca deixa a tela travada em "Carregando" se algo quebrar aqui dentro —
+  // mostra o erro de verdade, pra dar pra investigar (achado 14/07/2026,
+  // depois de um caso que travava sem nenhuma pista do que aconteceu).
+  try {
+    document.getElementById('val-body').innerHTML=buildRelatorioHtml(r);
+  } catch(e) {
+    console.error('[RELATORIO] erro ao montar', e);
+    document.getElementById('val-body').innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444;font-size:12px">Erro ao montar o relatório: '+(e.message||e)+'<br><br><span style="color:rgba(255,255,255,.4);font-size:11px">Manda esse texto pro Claude — isso ajuda a achar a causa.</span></div>';
+  }
 }
 // Resumo humanizado — mesma logica do relatorio tecnico, so que organizada
 // como texto corrido (paragrafo), tipo um comentario de analista. 100% por
