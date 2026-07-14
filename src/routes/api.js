@@ -590,7 +590,9 @@ function scorePostPick(trap, postPick) {
 function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
   const sc = {
     caltm: normalizarCaltm(galgo.caltmAgregado, elegiveis, config),
-    // categoria removida dos pesos — influencia via ajuste CalTm + max_niveis_pool + max_cat_diff_caltm
+    // categoria: virou criterio com peso proprio em 14/07/2026 (antes so
+    // aparecia pra referencia/desempate) — decidido com o Bruno.
+    categoria: scoreCategoriaNova(galgo.linhasValidas, corridaClasse),
     bends: scoreBends(galgo),
     split: scoreSplit(galgo.splitMedio, elegiveis, config),
     remarks: scoreRemarks(galgo.linhasValidas),
@@ -599,13 +601,14 @@ function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
     postPick: scorePostPick(galgo.trap, postPick)
   };
   const pesos = {
-    caltm: config.peso_caltm||4,
+    caltm: config.peso_caltm||5,
+    categoria: config.peso_categoria||4,
     bends: config.peso_bends||3,
-    split: config.peso_split||2,
-    remarks: config.peso_remarks||3,
+    split: config.peso_split||3,
+    remarks: config.peso_remarks||2,
     sp: config.peso_sp||3,
     brt: config.peso_brt||1,
-    postPick: config.peso_post_pick||0
+    postPick: config.peso_post_pick||2
   };
   const somaPesos = Object.values(pesos).reduce((a,b)=>a+b,0);
   const scoreFinal = Object.entries(sc).reduce((acc,[k,v])=>acc+v*(pesos[k]||0),0)/somaPesos;
@@ -704,8 +707,7 @@ function processarCorrida(corridaRaw, config) {
     const caltmA = a.scores.caltm, caltmB = b.scores.caltm;
     if (Math.abs(caltmA-caltmB) > 1) return caltmB - caltmA;
     // Tiebreaker 2: melhor nota de Categoria
-    const catA = scoreCategoriaNova(a.linhasValidas, classe);
-    const catB = scoreCategoriaNova(b.linhasValidas, classe);
+    const catA = a.scores.categoria, catB = b.scores.categoria;
     if (Math.abs(catA-catB) > 1) return catB - catA;
     return diff;
   });
@@ -1139,7 +1141,9 @@ router.get('/config', (req, res) => {
       results_interval_min: config.results_interval_min || 30,
       results_window_start: config.results_window_start || '09:00',
       results_window_end: config.results_window_end || '18:30',
-      pdf_cron_time: config.pdf_cron_time || '13:30'
+      pdf_cron_time: config.pdf_cron_time || '13:30',
+      alerta_min_antes: config.alerta_min_antes || 3,
+      tela_grace_min: config.tela_grace_min != null ? config.tela_grace_min : 0
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });

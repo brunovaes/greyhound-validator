@@ -102,6 +102,8 @@ function injectStyles(){
 
 var RACAS_EM_TELA = 6;
 var AUTO_REFRESH_MIN = 1;
+var ALERTA_MIN_ANTES = 3;
+var TELA_GRACE_MIN = 0;
 
 async function loadSystemConfig() {
   try {
@@ -109,6 +111,8 @@ async function loadSystemConfig() {
     var c = await r.json();
     if (c.racas_em_tela) RACAS_EM_TELA = parseInt(c.racas_em_tela);
     if (c.auto_refresh_min) AUTO_REFRESH_MIN = parseInt(c.auto_refresh_min);
+    if (c.alerta_min_antes != null) ALERTA_MIN_ANTES = parseInt(c.alerta_min_antes);
+    if (c.tela_grace_min != null) TELA_GRACE_MIN = parseInt(c.tela_grace_min);
   } catch(e) {}
 }
 
@@ -333,7 +337,7 @@ function isUpcoming(r) {
   var nowMin = now.getHours()*60 + now.getMinutes();
   var parts = hbr.split(':');
   var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
-  return raceMin >= nowMin;
+  return (raceMin + TELA_GRACE_MIN) >= nowMin;
 }
 
 function minutesToRace(r) {
@@ -472,7 +476,7 @@ function checkRaceAlerts() {
     el.classList.toggle('rc-old', isOldRaceCard(r));
     if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); return; } // corrida antiga nunca pisca/soa
     var mins = minutesToRace(r);
-    var shouldAlert = mins !== null && mins >= 0 && mins <= 3;
+    var shouldAlert = mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     if (shouldAlert) {
       el.classList.add('rc-alert');
       var key = raceAlertKey(r);
@@ -1116,7 +1120,7 @@ function buildRelatorioHtml(r){
   // Tabela de scores
   html += '<div style="'+sec+'"><div style="'+title+'">Scores calculados (motor fixo/configurado)</div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#888;text-align:left">'
-    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Split</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
+    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Categoria</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Split</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
   html += r.scores.map(function(g){
     var s = g.scores||{};
     var isFav = g.trap===r.trapFav, isUnd = g.trap===r.trapUnd;
@@ -1124,6 +1128,7 @@ function buildRelatorioHtml(r){
     var tag = isFav?' <span style="color:#22c55e;font-size:9px">FAV</span>':(isUnd?' <span style="color:#ef4444;font-size:9px">UND</span>':'');
     return '<tr style="'+rowStyle+'"><td style="padding:5px 6px">T'+g.trap+'</td><td style="padding:5px 6px">'+(g.nome||'')+tag+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.caltm!=null?s.caltm:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.categoria!=null?s.categoria:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.bends!=null?s.bends:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.split!=null?s.split:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.remarks!=null?s.remarks:'-')+'</td>'

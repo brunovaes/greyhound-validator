@@ -121,13 +121,14 @@ ${navBar(user, 'config')}
 ${blocoToggle('bloco_pesos_ativo', 'Pesos')}
 <div class="info-box">Os pesos orientam o Claude sobre qual critério priorizar. Valores maiores = mais importante no raciocinio.</div>
 <div class="grid bloco-fields" id="bloco_pesos_ativo_fields" data-ativo="${config.bloco_pesos_ativo===0?'0':'1'}">
-${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm,1,10],
-   ['peso_bends','Bends / Perfil','Padrao de corrida (Avassalador/Turbo/Recuperador/Estavel/Fumador)',config.peso_bends,1,10],
-   ['peso_split','Split','Velocidade de saida ate a 1a curva, comparado ao melhor da corrida',config.peso_split||2,1,10],
-   ['peso_remarks','Remarks','Merito + corrida escondida (HiddenRun)',config.peso_remarks,1,10],
+${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm||5,1,10],
+   ['peso_categoria','Categoria','Diferenca de classe nas 3 linhas mais recentes',config.peso_categoria||4,1,10],
+   ['peso_bends','Bends / Perfil','Padrao de corrida (Avassalador/Turbo/Recuperador/Estavel/Fumador)',config.peso_bends||3,1,10],
+   ['peso_split','Split','Velocidade de saida ate a 1a curva, comparado ao melhor da corrida',config.peso_split||3,1,10],
    ['peso_sp','SP (Starting Price)','Confianca do mercado nas ultimas corridas',config.peso_sp||3,1,10],
-   ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt,1,10],
-   ['peso_post_pick','Post Pick (Racing Post)','Indicacao dos 3 melhores no cabecalho do PDF',config.peso_post_pick||0,0,10]].map(([n,l,h,v,mn,mx])=>
+   ['peso_remarks','Remarks','Merito + corrida escondida (HiddenRun)',config.peso_remarks||2,1,10],
+   ['peso_post_pick','Post Pick (Racing Post)','Indicacao dos 3 melhores no cabecalho do PDF',config.peso_post_pick||2,0,10],
+   ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt||1,1,10]].map(([n,l,h,v,mn,mx])=>
 `<div class="field"><label>${l}</label>
 <input type="range" name="${n}" min="${mn}" max="${mx}" value="${v}" oninput="upR(this)">
 <div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">${h}</span><span class="rv" id="v_${n}">${v}</span></div>
@@ -341,6 +342,16 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <input type="number" name="final_check_min_antes" value="${config.final_check_min_antes||15}" min="5" max="60">
     <div class="hint">Quanto tempo antes do horário da corrida o robô faz a validação final do card — se mudou algo, refaz a análise do zero (PDF novo + reprocessamento)</div>
   </div>
+  <div class="field">
+    <label>Alerta sonoro — minutos antes da corrida</label>
+    <input type="number" name="alerta_min_antes" value="${config.alerta_min_antes||3}" min="0" max="15">
+    <div class="hint">Quantos minutos antes do horário a tela pisca e toca o sininho (padrão: 3)</div>
+  </div>
+  <div class="field">
+    <label>Corrida fica em tela após rodar (minutos)</label>
+    <input type="number" name="tela_grace_min" value="${config.tela_grace_min!=null?config.tela_grace_min:0}" min="0" max="30">
+    <div class="hint">Quanto tempo depois do horário da corrida ela ainda aparece como "próxima" antes de sumir da lista (padrão: 0, some na hora exata)</div>
+  </div>
 </div>
 </div>
 </div>
@@ -468,11 +479,13 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN peso_sp INTEGER DEFAULT 3").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN peso_split INTEGER DEFAULT 2").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN teto_diff_split REAL DEFAULT 0.15").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
-      d.peso_caltm,d.peso_bends,d.peso_remarks,d.peso_sp||3,d.peso_split||2,d.peso_brt,
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alerta_min_antes INTEGER DEFAULT 3").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN tela_grace_min INTEGER DEFAULT 0").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+      d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
-      d.max_cat_diff_caltm||1, d.peso_post_pick||0,
+      d.max_cat_diff_caltm||1, d.peso_post_pick||2,
       d.ajuste_classe_segundos||0.20, d.desconto_acidente_leve||0.10, d.desconto_acidente_medio||0.20,
       d.proporcao_media_caltm||0.60, 1-(d.proporcao_media_caltm||0.60),
       d.teto_diff_normalizacao||0.50, d.threshold_skip_avb||10, d.threshold_back||25,
@@ -489,6 +502,8 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.monitor_window_start||'07:00',
       d.monitor_window_end||'20:00',
       d.final_check_min_antes||15,
+      d.alerta_min_antes!=null?d.alerta_min_antes:3,
+      d.tela_grace_min!=null?d.tela_grace_min:0,
       d.banca_unidade_padrao||2.5,
       d.banca_valor_inicial||1000,
       d.banca_pct_stop!=null&&d.banca_pct_stop!==''?d.banca_pct_stop:20,

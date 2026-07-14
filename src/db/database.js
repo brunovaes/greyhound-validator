@@ -74,12 +74,12 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER UNIQUE NOT NULL,
     -- Pesos dos criterios (1-10)
-    peso_categoria INTEGER DEFAULT 5,
-    peso_caltm INTEGER DEFAULT 4,
+    peso_categoria INTEGER DEFAULT 4,
+    peso_caltm INTEGER DEFAULT 5,
     peso_bends INTEGER DEFAULT 3,
-    peso_remarks INTEGER DEFAULT 3,
+    peso_remarks INTEGER DEFAULT 2,
     peso_brt INTEGER DEFAULT 1,
-    peso_post_pick INTEGER DEFAULT 0,
+    peso_post_pick INTEGER DEFAULT 2,
     -- Filtros de corrida
     dist_min INTEGER DEFAULT 400,
     dist_max INTEGER DEFAULT 575,
@@ -226,8 +226,10 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN final_check_min_antes INTEGER DEFAULT 15",
   "ALTER TABLE races ADD COLUMN scores_json TEXT DEFAULT NULL",
   "ALTER TABLE analysis_config ADD COLUMN peso_sp INTEGER DEFAULT 3", // adicionado 13/07 — motor de SP (Starting Price / IRM)
-  "ALTER TABLE analysis_config ADD COLUMN peso_split INTEGER DEFAULT 2", // adicionado 14/07 — Split virou criterio proprio (antes era bonus fixo dentro do Bends)
+  "ALTER TABLE analysis_config ADD COLUMN peso_split INTEGER DEFAULT 3", // adicionado 14/07 — Split virou criterio proprio (antes era bonus fixo dentro do Bends); peso atualizado no mesmo dia
   "ALTER TABLE analysis_config ADD COLUMN teto_diff_split REAL DEFAULT 0.15",
+  "ALTER TABLE analysis_config ADD COLUMN alerta_min_antes INTEGER DEFAULT 3", // adicionado 14/07 — antes fixo em 3, agora configuravel
+  "ALTER TABLE analysis_config ADD COLUMN tela_grace_min INTEGER DEFAULT 0", // adicionado 14/07 — quanto tempo apos a corrida rodar ela ainda fica em tela (antes fixo em 0)
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
@@ -242,6 +244,15 @@ try {
   db.prepare("UPDATE analysis_config SET results_window_start='07:30' WHERE results_window_start='09:00'").run();
   db.prepare("UPDATE analysis_config SET results_window_end='19:30' WHERE results_window_end='18:30'").run();
   db.prepare("UPDATE analysis_config SET monitor_window_start='07:00' WHERE monitor_window_start='09:00'").run();
+  // Pesos novos confirmados com o Bruno em 14/07/2026 — so aplica se ainda
+  // estiver exatamente no valor padrao antigo (nao sobrescreve customizacao).
+  db.prepare("UPDATE analysis_config SET peso_caltm=5 WHERE peso_caltm=4").run();
+  db.prepare("UPDATE analysis_config SET peso_remarks=2 WHERE peso_remarks=3").run();
+  db.prepare("UPDATE analysis_config SET peso_post_pick=2 WHERE peso_post_pick=0").run();
+  db.prepare("UPDATE analysis_config SET peso_split=3 WHERE peso_split=2").run();
+  db.prepare("UPDATE analysis_config SET peso_categoria=4 WHERE peso_categoria=5").run();
+  // Categoria fica sempre em 4 pra quem ainda nao tem opiniao formada — coluna
+  // nova, nao precisa de checagem de "valor antigo" (nunca existiu antes).
 } catch(e) { /* ignora */ }
 
 // Funções de autenticação
