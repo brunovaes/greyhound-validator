@@ -1145,12 +1145,16 @@ function buildResumoHumanizado(r){
     }
   }
 
-  // Curiosidade do Post Pick
-  if (r.postPick && r.top3 && r.top3.length>=3) {
+  // Curiosidade do Post Pick — top3 pode chegar como array (analise ao vivo,
+  // recem-calculada) OU como string "3-1-6-4-5" (lida do banco, formato de
+  // armazenamento) — normaliza pra array sempre, antes de usar .slice/.join.
+  // Achado 14/07/2026: quebrava toda vez que vinha do banco (string).
+  var top3Arr = Array.isArray(r.top3) ? r.top3 : (typeof r.top3 === 'string' && r.top3 ? r.top3.split('-').map(Number).filter(function(n){return n>0;}) : []);
+  if (r.postPick && top3Arr.length>=3) {
     var picks = r.postPick.split('-').map(Number).filter(function(n){return n>0;});
-    var top3Str = r.top3.slice(0,3).join('-');
-    var bateuExato = picks.length>=3 && picks[0]===r.top3[0] && picks[1]===r.top3[1] && picks[2]===r.top3[2];
-    var mesmosTres = picks.length>=3 && picks.slice(0,3).sort().join(',')===r.top3.slice(0,3).sort().join(',');
+    var top3Str = top3Arr.slice(0,3).join('-');
+    var bateuExato = picks.length>=3 && picks[0]===top3Arr[0] && picks[1]===top3Arr[1] && picks[2]===top3Arr[2];
+    var mesmosTres = picks.length>=3 && picks.slice(0,3).sort().join(',')===top3Arr.slice(0,3).sort().join(',');
     if (bateuExato) {
       partes.push('Curiosamente, o top 3 bateu exatamente com o Post Pick do Racing Post ('+r.postPick+').');
     } else if (mesmosTres) {
