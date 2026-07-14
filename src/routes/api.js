@@ -1,6 +1,7 @@
 const express = require('express');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
 const { scoreRemarksNovo } = require('../utils/remarksEngine');
+const { calcularSP } = require('../utils/spEngine');
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
@@ -554,6 +555,7 @@ function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
     // categoria removida dos pesos — influencia via ajuste CalTm + max_niveis_pool + max_cat_diff_caltm
     bends: scoreBends(galgo),
     remarks: scoreRemarks(galgo.linhasValidas),
+    sp: calcularSP(galgo.linhasValidas),
     brt: scoreBRT(galgo, elegiveis, corridaClasse, config),
     postPick: scorePostPick(galgo.trap, postPick)
   };
@@ -561,6 +563,7 @@ function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
     caltm: config.peso_caltm||4,
     bends: config.peso_bends||3,
     remarks: config.peso_remarks||3,
+    sp: config.peso_sp||3,
     brt: config.peso_brt||1,
     postPick: config.peso_post_pick||0
   };

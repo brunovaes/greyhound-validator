@@ -1116,7 +1116,7 @@ function buildRelatorioHtml(r){
   // Tabela de scores
   html += '<div style="'+sec+'"><div style="'+title+'">Scores calculados (motor fixo/configurado)</div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#888;text-align:left">'
-    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
+    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
   html += r.scores.map(function(g){
     var s = g.scores||{};
     var isFav = g.trap===r.trapFav, isUnd = g.trap===r.trapUnd;
@@ -1126,6 +1126,7 @@ function buildRelatorioHtml(r){
       +'<td style="padding:5px 6px;text-align:center">'+(s.caltm!=null?s.caltm:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.bends!=null?s.bends:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.remarks!=null?s.remarks:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.sp!=null?s.sp:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.brt!=null?s.brt:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.postPick!=null?s.postPick:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center;font-weight:700">'+g.score+'</td></tr>';
