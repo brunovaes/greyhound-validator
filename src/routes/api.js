@@ -451,6 +451,42 @@ function scoreCategoria(histClasse, corridaClasse, posicoes, config) {
   return Math.min(100, Math.max(0, baseScore));
 }
 
+// Score 0-100 para Categoria — motor novo, usado no DESEMPATE (nao na soma
+// ponderada geral). Decidido com o Bruno em 14/07/2026. Olha as 3 linhas
+// mais recentes, classifica cada uma pela diferenca de nivel de classe
+// contra a corrida de hoje, usa a MAIORIA (2 de 3 ou 3 de 3) — se as 3
+// discordarem total entre si, cai pra linha mais recente sozinha.
+// "Mais forte" = nivel de classe MENOR (A1 e a mais forte de todas).
+function scoreCategoriaNova(linhasValidas, corridaClasse) {
+  const corridaLevel = getClassLevel(corridaClasse);
+  if (!corridaLevel) return 50;
+
+  function classificar(linha) {
+    const nivel = getClassLevel(linha.classe);
+    if (!nivel) return null;
+    const diff = corridaLevel - nivel; // positivo = linha foi em classe MAIS FORTE
+    if (diff === 0) return 0;
+    if (diff >= 2) return 2;    // 2+ niveis mais forte
+    if (diff === 1) return 1;   // 1 nivel mais forte
+    if (diff === -1) return -1; // 1 nivel mais fraco
+    if (diff === -2) return -2; // 2 niveis mais fraco
+    return -3;                  // 3+ niveis mais fraco
+  }
+
+  const TABELA = { '0':70, '1':60, '2':50, '-1':40, '-2':30, '-3':20 };
+
+  const linhas3 = (linhasValidas||[]).slice(0, 3);
+  const classificacoes = linhas3.map(classificar).filter(c => c !== null);
+  if (!classificacoes.length) return 50;
+
+  const contagem = {};
+  classificacoes.forEach(c => { contagem[c] = (contagem[c]||0) + 1; });
+  const maisComum = Object.entries(contagem).sort((a,b) => b[1]-a[1])[0];
+
+  const categoriaFinal = maisComum[1] >= 2 ? parseInt(maisComum[0]) : classificacoes[0];
+  return TABELA[String(categoriaFinal)] || 50;
+}
+
 // Perfil do galgo baseado nos bends das linhas validas
 function calcularPerfil(linhasValidas) {
   const resultados = linhasValidas.slice(0, 5).map(linha => {
@@ -664,18 +700,13 @@ function processarCorrida(corridaRaw, config) {
   comScores.sort((a,b) => {
     const diff = b.scoreFinal - a.scoreFinal;
     if (Math.abs(diff) > 5) return diff;
-    // Tiebreaker 1: menor intervalo entre últimas = mais em forma
-    const diasA = getDiasEntreUltimas(a.linhasValidas);
-    const diasB = getDiasEntreUltimas(b.linhasValidas);
-    if (Math.abs(diasA-diasB) > 1) return diasA - diasB;
-    // Tiebreaker 2: melhor posição na última corrida
-    const posA = (a.linhasValidas&&a.linhasValidas[0]&&a.linhasValidas[0].pos)||6;
-    const posB = (b.linhasValidas&&b.linhasValidas[0]&&b.linhasValidas[0].pos)||6;
-    if (posA !== posB) return posA - posB;
-    // Tiebreaker 3: peso (maior peso = mais força = melhor)
-    const pA = parseFloat((a.linhasValidas&&a.linhasValidas[0]&&a.linhasValidas[0].peso)||0);
-    const pB = parseFloat((b.linhasValidas&&b.linhasValidas[0]&&b.linhasValidas[0].peso)||0);
-    if (Math.abs(pA-pB) > 0.3) return pB - pA;
+    // Tiebreaker 1: melhor nota de CalTm (decidido com o Bruno 14/07/2026)
+    const caltmA = a.scores.caltm, caltmB = b.scores.caltm;
+    if (Math.abs(caltmA-caltmB) > 1) return caltmB - caltmA;
+    // Tiebreaker 2: melhor nota de Categoria
+    const catA = scoreCategoriaNova(a.linhasValidas, classe);
+    const catB = scoreCategoriaNova(b.linhasValidas, classe);
+    if (Math.abs(catA-catB) > 1) return catB - catA;
     return diff;
   });
 

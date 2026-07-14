@@ -1139,7 +1139,7 @@ function buildRelatorioHtml(r){
   for (var i=1;i<r.scores.length;i++) {
     var diff = r.scores[i-1].score - r.scores[i].score;
     if (diff <= 5) {
-      tbNotes.push('T'+r.scores[i-1].trap+' ('+r.scores[i-1].nome+') vs T'+r.scores[i].trap+' ('+r.scores[i].nome+'): diferença de apenas '+diff.toFixed(1)+' pts no score bruto — desempate aplicado (ordem: dias desde a penúltima corrida → posição na última → peso).');
+      tbNotes.push('T'+r.scores[i-1].trap+' ('+r.scores[i-1].nome+') vs T'+r.scores[i].trap+' ('+r.scores[i].nome+'): diferença de apenas '+diff.toFixed(1)+' pts no score bruto — desempate aplicado (ordem: nota de CalTm → nota de Categoria).');
     }
   }
   if (tbNotes.length) {
