@@ -1700,6 +1700,25 @@ router.get('/audit/list', requireAdmin, (req, res) => {
 // usa na tela normal. Pedido do Bruno em 14/07/2026, depois de mudar os
 // pesos/motor varias vezes no mesmo dia — ele confirmou que hoje nao teve
 // aposta registrada, entao topou sobrescrever tudo sem guardar comparacao.
+// Recalcula 'bateu' usando resultado_1/2/3 JA SALVOS (numero de trap, nao
+// nome — confirmado olhando o resultsRobot.js) contra o Fav/Und NOVO. Nao
+// precisa buscar nada ao vivo — so reaplica a mesma logica de sempre
+// (fav bateu = chegou antes do und) com o AvB atualizado. So mexe em
+// corrida que ja tem resultado (resultado_1 preenchido); corrida que ainda
+// nao rodou fica de fora, sem bateu, do jeito que ja estava.
+function recalcularBateu(resultado_1, resultado_2, resultado_3, novoTrapFav, novoTrapUnd) {
+  if (!resultado_1) return null;
+  const posicoes = {};
+  if (resultado_1) posicoes[String(resultado_1)] = 1;
+  if (resultado_2) posicoes[String(resultado_2)] = 2;
+  if (resultado_3) posicoes[String(resultado_3)] = 3;
+  const posFav = posicoes[String(novoTrapFav)] || 99;
+  const posUnd = posicoes[String(novoTrapUnd)] || 99;
+  if (posFav < 99 && posUnd < 99) return posFav < posUnd ? 'sim' : 'nao';
+  if (posFav < 99) return posFav <= 3 ? 'sim' : 'nao'; // und fora do top3, mesma heuristica do resultsRobot
+  return 'nao';
+}
+
 async function reprocessarDiaInteiro(DATE) {
   const { db } = require('../db/database');
   const { processarCorrida } = require('./api');
@@ -1712,7 +1731,7 @@ async function reprocessarDiaInteiro(DATE) {
   let arquivos = [];
   try { arquivos = fs.readdirSync(PDF_DIR); } catch(e) { return { total: rows.length, refeitas: 0, semPdf: rows.length, erros: 0, log: ['Pasta de PDFs de hoje nao encontrada.'] }; }
 
-  let refeitas = 0, semPdf = 0, erros = 0;
+  let refeitas = 0, semPdf = 0, erros = 0, bateuRecalculado = 0;
   const log = [];
 
   for (const row of rows) {
@@ -1730,10 +1749,12 @@ async function reprocessarDiaInteiro(DATE) {
 
       const config = getUserConfig(row.user_id);
       const novo = processarCorrida(resultParse, config);
+      const novoBateu = recalcularBateu(row.resultado_1, row.resultado_2, row.resultado_3, novo.trapFav, novo.trapUnd);
 
       db.prepare(
         `UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,
-         hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=?,eliminados=?,post_pick=?,scores_json=?
+         hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=?,eliminados=?,post_pick=?,scores_json=?,
+         bateu=COALESCE(?,bateu)
          WHERE id=?`
       ).run(
         novo.trapFav||0, novo.nameFav||'', novo.trapUnd||0, novo.nameUnd||'',
@@ -1746,20 +1767,25 @@ async function reprocessarDiaInteiro(DATE) {
         novo.eliminados?JSON.stringify(novo.eliminados):null,
         novo.postPick||null,
         novo.scores?JSON.stringify(novo.scores):null,
+        novoBateu,
         row.id
       );
-      // odd, valor, resultado_1/2/3, bateu, avb_nao_aberto, video_url NAO sao tocados —
-      // preservados automaticamente por nao estarem no UPDATE acima.
+      // odd, valor, resultado_1/2/3, avb_nao_aberto, video_url NAO sao
+      // tocados — preservados automaticamente por nao estarem no UPDATE
+      // acima. 'bateu' e a UNICA excecao: recalculado quando ja tem
+      // resultado salvo (COALESCE mantem o valor antigo se a corrida ainda
+      // nao tiver resultado_1, ou seja, novoBateu=null).
+      if (novoBateu !== null) bateuRecalculado++;
 
       refeitas++;
-      log.push(row.hora + ' ' + row.corrida + ' — refeita: T' + (novo.trapFav||0) + ' vs T' + (novo.trapUnd||0) + ' (' + (novo.pct||0) + '% ' + (novo.nivel||'skip') + ')');
+      log.push(row.hora + ' ' + row.corrida + ' — refeita: T' + (novo.trapFav||0) + ' vs T' + (novo.trapUnd||0) + ' (' + (novo.pct||0) + '% ' + (novo.nivel||'skip') + ')' + (novoBateu!==null?' | bateu recalculado: '+novoBateu.toUpperCase():''));
     } catch(e) {
       erros++;
       log.push(row.hora + ' ' + row.corrida + ' — erro: ' + e.message);
     }
   }
 
-  return { total: rows.length, refeitas, semPdf, erros, log };
+  return { total: rows.length, refeitas, semPdf, erros, bateuRecalculado, log };
 }
 
 router.get('/reprocessar-dia', requireAdmin, (req, res) => {
@@ -1800,7 +1826,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:10px}
 ${navBar(req.user, 'robot')}
 <div class="content">
 <h1>Resultado do reprocessamento</h1>
-<div class="banner"><b>${resultado.total}</b> corrida(s) total &nbsp;|&nbsp; <b style="color:#22c55e">${resultado.refeitas}</b> refeita(s) &nbsp;|&nbsp; <b style="color:#f97316">${resultado.semPdf}</b> sem PDF &nbsp;|&nbsp; <b style="color:#ef4444">${resultado.erros}</b> erro(s)</div>
+<div class="banner"><b>${resultado.total}</b> corrida(s) total &nbsp;|&nbsp; <b style="color:#22c55e">${resultado.refeitas}</b> refeita(s) &nbsp;|&nbsp; <b style="color:#60a5fa">${resultado.bateuRecalculado||0}</b> com "bateu" recalculado &nbsp;|&nbsp; <b style="color:#f97316">${resultado.semPdf}</b> sem PDF &nbsp;|&nbsp; <b style="color:#ef4444">${resultado.erros}</b> erro(s)</div>
 <div class="log">${resultado.log.map(l => l.replace(/</g,'&lt;')).join('\n')}</div>
 <p style="margin-top:16px"><a href="${BASE}/greyhound" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pra Analisar</a></p>
 </div></body></html>`);
