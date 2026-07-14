@@ -1815,6 +1815,78 @@ async function reprocessarDiaInteiro(DATE) {
 // todos os dias que existem no banco. Pedido do Bruno em 14/07/2026: olhar
 // pro dado cru, sem se apoiar nas regras do motor (CalTm/Bends/etc), pra
 // tentar achar padrao novo direto nos dados.
+// ── Diagnostico pontual — mostra EXATAMENTE o que o preenchimento
+// automatico/reprocessamento enxergam pra uma corrida especifica: o que
+// esta salvo no banco, quais arquivos existem na pasta do dia, e se o
+// casamento de nome bate ou nao. Construido em 14/07/2026 depois de 3
+// tentativas de "corrigir no escuro" nao resolverem o caso real do Bruno —
+// em vez de mais um chute, isso mostra o dado de verdade.
+router.get('/diagnostico-pdf', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  const hora = req.query.hora || '';
+  const corrida = req.query.corrida || '';
+  const date = req.query.date || getTodayDate();
+
+  let linhaHtml = '<p style="color:#666">Preencha hora + corrida no formulário abaixo e clique em Diagnosticar.</p>';
+
+  if (hora && corrida) {
+    const rows = db.prepare(
+      "SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.trap_fav, r.name_fav, r.nivel, r.scores_json, s.created_at " +
+      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.hora=? AND r.corrida LIKE ?"
+    ).all(date, hora, '%' + corrida.split(' ')[0] + '%');
+
+    const PDF_DIR = getPdfDir(date);
+    let arquivos = [];
+    let pastaErro = null;
+    try { arquivos = fs.readdirSync(PDF_DIR); } catch(e) { pastaErro = e.message; }
+
+    const trackAbbr = corrida.split(' ')[0];
+    const timeFormatted = formatTime(hora);
+    const candidato = arquivos.length ? encontrarPdfDaCorrida(arquivos, timeFormatted, trackAbbr) : null;
+
+    linhaHtml = `
+      <h3 style="color:#60a5fa;font-size:13px;margin-bottom:8px">1) O que está no banco (${rows.length} linha${rows.length===1?'':'s'} encontrada${rows.length===1?'':'s'})</h3>
+      <pre style="background:#161B27;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto">${rows.map(r => JSON.stringify({id:r.id, hora:r.hora, hora_br:r.hora_br, corrida:r.corrida, trap_fav:r.trap_fav, name_fav:r.name_fav, nivel:r.nivel, tem_scores_json: !!r.scores_json, sessao_criada_em: r.created_at}, null, 2)).join('\n\n') || '(nenhuma linha encontrada com essa hora+corrida na data '+date+')'}</pre>
+
+      <h3 style="color:#60a5fa;font-size:13px;margin:16px 0 8px">2) Pasta de PDFs de hoje (${PDF_DIR})</h3>
+      ${pastaErro ? `<p style="color:#ef4444">Erro ao abrir a pasta: ${pastaErro}</p>` : `
+      <p style="font-size:12px;color:#888">Formatado como esperamos: <b style="color:#fff">${timeFormatted}</b> (a partir da hora "${hora}") | Abreviação da pista: <b style="color:#fff">${trackAbbr}</b></p>
+      <pre style="background:#161B27;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;max-height:300px;overflow-y:auto">${arquivos.length ? arquivos.join('\n') : '(pasta vazia ou sem nenhum arquivo)'}</pre>
+      `}
+
+      <h3 style="color:#60a5fa;font-size:13px;margin:16px 0 8px">3) Resultado do casamento</h3>
+      <div style="background:${candidato?'rgba(34,197,94,.1)':'rgba(239,68,68,.1)'};border:1px solid ${candidato?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)'};border-radius:8px;padding:12px;font-size:13px">
+        ${candidato ? '✅ Achou: <b>'+candidato+'</b>' : '❌ Nenhum arquivo bateu com "'+timeFormatted+'" + pista "'+trackAbbr+'"'}
+      </div>
+    `;
+  }
+
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Diagnóstico de PDF - Greyhound Validator</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>${designTokensCSS()}
+body{background:#0D1117}
+nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}
+.content{padding:24px;max-width:800px;margin:0 auto}
+h1{font-size:20px;font-weight:700;margin-bottom:16px}
+.form-row{display:flex;gap:10px;margin-bottom:20px}
+input{background:#161B27;border:1px solid #333;border-radius:6px;padding:8px 12px;color:#fff;font-size:13px}
+.btn{background:#22c55e;color:#000;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer}
+</style></head><body>
+${navBar(req.user, 'robot')}
+<div class="content">
+<h1>Diagnóstico de PDF — corrida específica</h1>
+<form class="form-row" method="GET" action="${BASE}/robot/diagnostico-pdf">
+  <input type="text" name="hora" placeholder="Hora UK (ex: 7:27)" value="${hora}">
+  <input type="text" name="corrida" placeholder="Corrida (ex: Sland A6)" value="${corrida}">
+  <input type="text" name="date" placeholder="Data (AAAA-MM-DD)" value="${req.query.date || getTodayDate()}">
+  <button class="btn" type="submit">Diagnosticar</button>
+</form>
+${linhaHtml}
+</div></body></html>`);
+});
+
 router.get('/exportar-dados-brutos', requireAdmin, (req, res) => {
   const { db } = require('../db/database');
   try {
