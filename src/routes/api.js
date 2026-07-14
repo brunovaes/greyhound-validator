@@ -1177,6 +1177,26 @@ router.get('/sessions', (req, res) => {
 // Rota dedicada pro sidebar da Analisar (Sessoes recentes + Historico do dia)
 // se auto-atualizar sem precisar de F5 — usa horario de Brasilia (nao o
 // relogio UTC do servidor) pra decidir qual sessao e' "hoje"
+// Rota leve pro alerta de corrida proxima funcionar em QUALQUER pagina do
+// site (nao so na Analisar) — so os campos minimos, sem hist_all/scores_json
+// pesados, pra poder ser chamada de 15 em 15s de qualquer tela sem pesar.
+// Pedido do Bruno em 14/07/2026.
+router.get('/proxima-corrida', (req, res) => {
+  try {
+    const now = new Date();
+    const todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    const sessionName = 'Races '+todayLabel;
+    const sess = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(req.user.id, sessionName);
+    if (!sess) return res.json({ races: [] });
+    const races = db.prepare(
+      "SELECT hora, hora_br, corrida, trap_fav, name_fav, trap_und, name_und FROM races WHERE session_id=? AND nivel!='skip' AND trap_fav>0"
+    ).all(sess.id);
+    const { getUserConfig } = require('../db/database');
+    const config = getUserConfig(req.user.id);
+    res.json({ races, alerta_min_antes: config.alerta_min_antes||3, som_alerta: config.som_alerta||'sino' });
+  } catch(e) { res.json({ races: [] }); }
+});
+
 router.get('/sidebar-sessions', (req, res) => {
   try {
     const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(req.user.id);

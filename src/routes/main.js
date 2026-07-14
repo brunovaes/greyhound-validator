@@ -26,6 +26,10 @@ function navBar(user, active) {
       <a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>
     </div>
     <div style="display:flex;align-items:center;gap:14px">
+      <a href="${BASE}" id="race-alert-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.4);background:rgba(249,115,22,.1);border-radius:20px;padding:3px 10px;animation:blink 1.2s ease-in-out infinite">
+        <span style="display:inline-block;width:7px;height:7px;background:#f97316;border-radius:50%"></span>
+        <span id="race-alert-txt">Corrida em breve</span>
+      </a>
       <a href="${BASE}/robot" id="robot-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.08);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
         <span style="display:inline-block;width:7px;height:7px;background:#60a5fa;border-radius:50%"></span>
         <span id="robot-badge-txt">Robô rodando...</span>
@@ -219,6 +223,55 @@ function navBar(user, active) {
     checkStopBanner();
     setInterval(function(){ checkRobots(); checkResultsBanner(); checkMonitorBanner(); checkStopBanner(); }, 60000);
     setInterval(checkRobots, 4000);
+
+    // ── Alerta de corrida proxima, em QUALQUER pagina do site (nao so na
+    // Analisar) — pedido do Bruno em 14/07/2026. Usa sessionStorage pra nao
+    // repetir o som pra mesma corrida ao navegar entre paginas.
+    var alertedRacesGlobal = {};
+    try { var stored = sessionStorage.getItem('alertedRacesGlobal'); if (stored) alertedRacesGlobal = JSON.parse(stored); } catch(e) {}
+    function salvarAlertedRacesGlobal() { try { sessionStorage.setItem('alertedRacesGlobal', JSON.stringify(alertedRacesGlobal)); } catch(e) {} }
+
+    function tocarSino(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(1046.5,0,0.25);tone(1318.5,0.15,0.35);}
+    function tocarBeep(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='square';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.2,ctx.currentTime+start+0.01);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.03);}tone(1500,0,0.08);tone(1500,0.14,0.08);}
+    function tocarAlarme(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sawtooth';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(880,0,0.15);tone(660,0.15,0.15);tone(880,0.30,0.15);tone(660,0.45,0.15);}
+    function tocarSuave(ctx){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
+    var SONS_GLOBAIS = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
+    function tocarSomAlertaGlobal(escolha) {
+      try { var ctx = new (window.AudioContext||window.webkitAudioContext)(); (SONS_GLOBAIS[escolha]||tocarSino)(ctx); } catch(e) {}
+    }
+
+    function minutosAteAgoraGlobal(horaBr) {
+      if (!horaBr) return null;
+      var now = new Date();
+      var nowMin = now.getHours()*60+now.getMinutes();
+      var p = horaBr.split(':');
+      var raceMin = parseInt(p[0]||0)*60+parseInt(p[1]||0);
+      return raceMin - nowMin;
+    }
+
+    function checkRaceProximity() {
+      fetch(BASE + '/api/proxima-corrida').then(function(r){return r.json();}).then(function(d){
+        var badge = document.getElementById('race-alert-badge');
+        if (!badge || !d.races || !d.races.length) { if(badge) badge.style.display='none'; return; }
+        var alertaMin = d.alerta_min_antes || 3;
+        var proxima = null, proximaMin = 999;
+        d.races.forEach(function(r) {
+          var mins = minutosAteAgoraGlobal(r.hora_br);
+          if (mins !== null && mins >= 0 && mins <= alertaMin && mins < proximaMin) { proxima = r; proximaMin = mins; }
+        });
+        if (!proxima) { badge.style.display = 'none'; return; }
+        document.getElementById('race-alert-txt').textContent = proxima.corrida + ' em ' + proximaMin + ' min';
+        badge.style.display = 'flex';
+        var key = proxima.hora + '|' + proxima.corrida;
+        if (!alertedRacesGlobal[key]) {
+          alertedRacesGlobal[key] = true;
+          salvarAlertedRacesGlobal();
+          tocarSomAlertaGlobal(d.som_alerta);
+        }
+      }).catch(function(){});
+    }
+    checkRaceProximity();
+    setInterval(checkRaceProximity, 15000);
     // Expor funções de dismiss globalmente
     window.dismissPdfBanner = dismissPdfBanner;
     window.dismissResBanner = dismissResBanner;
@@ -1042,10 +1095,6 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
 <div class="content">
-<div id="stale-banner" style="display:none;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:12px;color:#f97316;align-items:center;justify-content:space-between;gap:10px">
-  <span>🔄 Algum robô atualizou dados dessa sessão em segundo plano.</span>
-  <button onclick="location.reload()" style="background:#f97316;color:#000;border:none;border-radius:5px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">Atualizar agora</button>
-</div>
 <div class="kpis">
 <div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${races.length}</div></div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
@@ -1060,7 +1109,7 @@ ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
   return`<tr>
-<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaBr}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${horaUk?('UK '+horaUk):''}</div></td>
+<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 <td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:12px">
 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">
@@ -1152,41 +1201,6 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 <script>
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
-var SESS_ID=${sess.id};
-var SESS_NAME=${JSON.stringify(sess.name || '')};
-
-// So faz sentido ficar checando por atualizacao numa sessao que ainda pode
-// mudar — ou seja, a sessao de HOJE (corridas futuras ainda podem ser
-// alteradas pelos robos de Monitoramento/Checagem Final). Sessao de dia
-// passado e historico fechado, nunca muda sozinho, nao precisa checar.
-(function(){
-  var hoje = new Date();
-  var hojeLabel = String(hoje.getDate()).padStart(2,'0')+'/'+String(hoje.getMonth()+1).padStart(2,'0')+'/'+hoje.getFullYear();
-  if (SESS_NAME !== ('Races '+hojeLabel)) return; // sessao antiga, nao liga o polling
-
-  function assinatura(races){
-    // Só os campos que o robo pode mudar sozinho — nao precisa comparar tudo
-    return races.map(function(r){ return [r.id,r.trap_fav,r.trap_und,r.pct,r.nivel,r.resultado_1,r.resultado_2,r.resultado_3,r.bateu].join(':'); }).join('|');
-  }
-  var assinaturaAtual = assinatura(ALL_RACES);
-  var jaAvisou = false;
-
-  setInterval(function(){
-    if (jaAvisou) return; // ja mostrou o aviso, nao precisa checar de novo ate recarregar
-    // Nao interrompe se tiver alguma linha em edicao no momento (Odd/Aberto?)
-    if (document.querySelector('.hist-inp:not([disabled])')) return;
-    fetch(BASE+'/api/session/'+SESS_ID+'/races').then(function(r){return r.json();}).then(function(d){
-      if (!d.races) return;
-      var novaAssinatura = assinatura(d.races.filter(function(r){return r.nivel!=='skip'&&r.trap_fav>0;}));
-      if (novaAssinatura !== assinaturaAtual) {
-        jaAvisou = true;
-        var banner = document.getElementById('stale-banner');
-        if (banner) banner.style.display = 'flex';
-      }
-    }).catch(function(e){});
-  }, 60000);
-})();
-
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
 // pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
 function saveHistField(id, field, value){
