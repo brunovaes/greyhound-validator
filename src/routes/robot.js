@@ -17,6 +17,7 @@ const resultsRobotModule = require('./resultsRobot');
 const cardMonitorModule = require('./cardMonitorRobot');
 const { runCardMonitorRobot, getMonitorStatus } = cardMonitorModule;
 const finalCheckModule = require('./finalCheckRobot');
+const { trackAbbrMatches } = require('./cardMonitorRobot');
 const { runFinalCheckRobot, getFinalCheckStatus } = finalCheckModule;
 const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
@@ -322,7 +323,7 @@ async function preencherScoresJsonFaltando(DATE) {
     try {
       const trackAbbr = (row.corrida || '').split(' ')[0].toLowerCase();
       const timeFormatted = formatTime(row.hora);
-      const candidato = arquivos.find(f => f.startsWith(timeFormatted) && f.toLowerCase().includes(trackAbbr));
+      const candidato = encontrarPdfDaCorrida(arquivos, timeFormatted, trackAbbr);
       if (!candidato) continue;
 
       const buf = fs.readFileSync(path.join(PDF_DIR, candidato));
@@ -369,6 +370,22 @@ function formatTime(t) {
 const PDF_BASE = process.env.PDF_PATH || path.join(__dirname, '../../public/pdfs');
 function getPdfDir(date) {
   return path.join(PDF_BASE, date);
+}
+
+// Acha o PDF de uma corrida especifica dentro da pasta do dia — usa
+// trackAbbrMatches (o mesmo dicionario curado de abreviacoes do
+// cardMonitorRobot, ex: "Sland"->"Sunderland") em vez de comparacao ingenua
+// de substring, que falhava sempre que a abreviacao nao aparece literalmente
+// dentro do nome completo da pista (achado 14/07/2026, bug meu — corridas de
+// pistas como Sunderland nunca eram encontradas pelo preenchimento
+// automatico nem pelo reprocessamento do dia).
+function encontrarPdfDaCorrida(arquivos, timeFormatted, trackAbbr) {
+  const candidatos = arquivos.filter(f => f.startsWith(timeFormatted));
+  for (const f of candidatos) {
+    const nomeArquivo = f.replace(timeFormatted, '').replace(/^_/, '').replace(/\.pdf$/i, '').replace(/_refeito$/i, '');
+    if (trackAbbrMatches(trackAbbr, nomeArquivo)) return f;
+  }
+  return null;
 }
 
 // Converte horário UK (12h sem AM/PM) para minutos do dia (24h)
@@ -1738,7 +1755,7 @@ async function reprocessarDiaInteiro(DATE) {
     try {
       const trackAbbr = (row.corrida || '').split(' ')[0].toLowerCase();
       const timeFormatted = formatTime(row.hora);
-      const candidato = arquivos.find(f => f.startsWith(timeFormatted) && f.toLowerCase().includes(trackAbbr));
+      const candidato = encontrarPdfDaCorrida(arquivos, timeFormatted, trackAbbr);
       if (!candidato) { semPdf++; log.push(row.hora + ' ' + row.corrida + ' — sem PDF salvo, pulando'); continue; }
 
       const buf = fs.readFileSync(path.join(PDF_DIR, candidato));
@@ -2441,5 +2458,6 @@ module.exports.formatTime = formatTime;
 module.exports.preencherScoresJsonFaltando = preencherScoresJsonFaltando;
 module.exports.reprocessarDiaInteiro = reprocessarDiaInteiro;
 module.exports.getPdfDir = getPdfDir;
+module.exports.encontrarPdfDaCorrida = encontrarPdfDaCorrida;
 module.exports.PDF_BASE = PDF_BASE;
 module.exports.inTimeRange = inTimeRange;
