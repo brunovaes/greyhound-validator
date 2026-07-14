@@ -446,6 +446,7 @@ async function syncFromServer() {
       cur.cardSuspect = !!r.card_suspect;
       cur.betEntrou = !!r.bet_entrou;
       cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:2.5;
+      cur.scores = r.scores || cur.scores; // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
       cur.id = r.id;
     });
 
@@ -1094,13 +1095,20 @@ function openAllDogsModal(key){
 // calculados pelo motor: scores, eliminados, histAll), sem chamar IA nenhuma.
 // Mesma logica que eu (Claude) apliquei manualmente ao ler um PDF, so que
 // aqui e' o proprio motor que ja calculou tudo — o relatorio so organiza.
-function openRelatorioModal(key){
+async function openRelatorioModal(key){
+  // Sempre sincroniza com o servidor ANTES de montar o relatorio — a copia
+  // local (results) pode estar desatualizada (carregada antes de algum
+  // conserto/reprocessamento no backend), e o relatorio processado errado
+  // nunca teria como saber disso sem buscar de novo. Achado 14/07/2026.
+  document.getElementById('val-title').textContent = 'Relatório de Análise';
+  document.getElementById('val-body').classList.remove('val-compact');
+  document.getElementById('val-body').innerHTML = '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Carregando…</div>';
+  document.getElementById('val-modal').classList.add('open');
+  try { await syncFromServer(); } catch(e) {}
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[RELATORIO] nao achou:',key);return;}
   document.getElementById('val-title').textContent='Relatório de Análise — '+(r.corrida||'')+' '+(r.hora||'');
-  document.getElementById('val-body').classList.remove('val-compact');
   document.getElementById('val-body').innerHTML=buildRelatorioHtml(r);
-  document.getElementById('val-modal').classList.add('open');
 }
 // Resumo humanizado — mesma logica do relatorio tecnico, so que organizada
 // como texto corrido (paragrafo), tipo um comentario de analista. 100% por
