@@ -104,6 +104,7 @@ var RACAS_EM_TELA = 6;
 var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
 var TELA_GRACE_MIN = 0;
+var SOM_ALERTA = 'sino';
 
 async function loadSystemConfig() {
   try {
@@ -113,6 +114,7 @@ async function loadSystemConfig() {
     if (c.auto_refresh_min) AUTO_REFRESH_MIN = parseInt(c.auto_refresh_min);
     if (c.alerta_min_antes != null) ALERTA_MIN_ANTES = parseInt(c.alerta_min_antes);
     if (c.tela_grace_min != null) TELA_GRACE_MIN = parseInt(c.tela_grace_min);
+    if (c.som_alerta) SOM_ALERTA = c.som_alerta;
   } catch(e) {}
 }
 
@@ -699,23 +701,74 @@ function updateFocusField(field, value) {
 // Sino gerado via Web Audio API (sem precisar de arquivo de audio externo).
 var alertedRaces = {};
 
+// 4 sons prontos, escolhidos via SOM_ALERTA (configuravel em Configuracoes)
+function tocarSino(ctx) {
+  function tone(freq, start, dur) {
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime+start+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(ctx.currentTime+start);
+    o.stop(ctx.currentTime+start+dur+0.05);
+  }
+  tone(1046.5, 0, 0.25);    // C6
+  tone(1318.5, 0.15, 0.35); // E6
+}
+function tocarBeep(ctx) {
+  function tone(freq, start, dur) {
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+start+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(ctx.currentTime+start);
+    o.stop(ctx.currentTime+start+dur+0.03);
+  }
+  tone(1500, 0, 0.08);
+  tone(1500, 0.14, 0.08);
+}
+function tocarAlarme(ctx) {
+  function tone(freq, start, dur) {
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime+start+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(ctx.currentTime+start);
+    o.stop(ctx.currentTime+start+dur+0.05);
+  }
+  tone(880, 0, 0.15); tone(660, 0.15, 0.15);
+  tone(880, 0.30, 0.15); tone(660, 0.45, 0.15);
+}
+function tocarSuave(ctx) {
+  var o = ctx.createOscillator();
+  var g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.value = 700;
+  g.gain.setValueAtTime(0.0001, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime+0.05);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.6);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(ctx.currentTime);
+  o.stop(ctx.currentTime+0.65);
+}
+var SONS_DISPONIVEIS = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
+
 function playBellSound() {
   try {
     var ctx = new (window.AudioContext||window.webkitAudioContext)();
-    function tone(freq, start, dur) {
-      var o = ctx.createOscillator();
-      var g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
-      g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime+start+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(ctx.currentTime+start);
-      o.stop(ctx.currentTime+start+dur+0.05);
-    }
-    tone(1046.5, 0, 0.25);   // C6
-    tone(1318.5, 0.15, 0.35); // E6
+    var fn = SONS_DISPONIVEIS[SOM_ALERTA] || tocarSino;
+    fn(ctx);
   } catch(e) { console.error('[playBellSound] erro', e); }
 }
 
@@ -738,7 +791,7 @@ function renderRaceListPanel(avbs) {
     var div = document.createElement('div');
     var isOld = isOldRaceCard(r);
     var mins = minutesToRace(r);
-    var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= 3;
+    var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '') + (isOld ? ' rc-old' : '');
     if (isAlerting) {
       var key = raceAlertKey(r);

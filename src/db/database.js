@@ -230,6 +230,7 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN teto_diff_split REAL DEFAULT 0.15",
   "ALTER TABLE analysis_config ADD COLUMN alerta_min_antes INTEGER DEFAULT 3", // adicionado 14/07 — antes fixo em 3, agora configuravel
   "ALTER TABLE analysis_config ADD COLUMN tela_grace_min INTEGER DEFAULT 0", // adicionado 14/07 — quanto tempo apos a corrida rodar ela ainda fica em tela (antes fixo em 0)
+  "ALTER TABLE analysis_config ADD COLUMN som_alerta TEXT DEFAULT 'sino'", // adicionado 14/07 — sino/beep/alarme/suave
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

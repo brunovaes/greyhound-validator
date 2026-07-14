@@ -1143,7 +1143,8 @@ router.get('/config', (req, res) => {
       results_window_end: config.results_window_end || '18:30',
       pdf_cron_time: config.pdf_cron_time || '13:30',
       alerta_min_antes: config.alerta_min_antes || 3,
-      tela_grace_min: config.tela_grace_min != null ? config.tela_grace_min : 0
+      tela_grace_min: config.tela_grace_min != null ? config.tela_grace_min : 0,
+      som_alerta: config.som_alerta || 'sino'
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
