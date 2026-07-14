@@ -1788,6 +1788,48 @@ async function reprocessarDiaInteiro(DATE) {
   return { total: rows.length, refeitas, semPdf, erros, bateuRecalculado, log };
 }
 
+// ── Exportacao pra analise purista — pacote com o historico completo de
+// cada galgo (o que ja estava disponivel ANTES da corrida) + o resultado
+// REAL (quem chegou em 1o/2o/3o, por trap) de toda corrida ja rodada, em
+// todos os dias que existem no banco. Pedido do Bruno em 14/07/2026: olhar
+// pro dado cru, sem se apoiar nas regras do motor (CalTm/Bends/etc), pra
+// tentar achar padrao novo direto nos dados.
+router.get('/exportar-dados-brutos', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  try {
+    const rows = db.prepare(
+      "SELECT r.id, s.name as sessao, r.hora, r.hora_br, r.corrida, r.dist, r.hist_all, " +
+      "r.resultado_1, r.resultado_2, r.resultado_3, r.race_card " +
+      "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
+      "WHERE r.resultado_1 IS NOT NULL AND r.resultado_1 != '' AND r.hist_all IS NOT NULL " +
+      "ORDER BY s.created_at, r.hora"
+    ).all();
+
+    const pacote = rows.map(r => {
+      let histAll = [], raceCard = [];
+      try { histAll = JSON.parse(r.hist_all); } catch(e) {}
+      try { if (r.race_card) raceCard = JSON.parse(r.race_card); } catch(e) {}
+      return {
+        sessao: r.sessao,
+        hora_uk: r.hora,
+        hora_br: r.hora_br,
+        corrida: r.corrida,
+        dist: r.dist,
+        resultado_real: { primeiro: r.resultado_1, segundo: r.resultado_2, terceiro: r.resultado_3 },
+        card_do_dia: raceCard,
+        galgos: histAll
+      };
+    });
+
+    const filename = 'dados_brutos_' + new Date().toISOString().slice(0,10) + '.json';
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.send(JSON.stringify({ total_corridas: pacote.length, corridas: pacote }, null, 2));
+  } catch(err) {
+    res.status(500).send('Erro ao exportar: ' + err.message);
+  }
+});
+
 router.get('/reprocessar-dia', requireAdmin, (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Reprocessar Dia - Greyhound Validator</title>
