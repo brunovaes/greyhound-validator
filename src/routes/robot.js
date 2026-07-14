@@ -342,17 +342,21 @@ async function preencherScoresJsonFaltando(DATE) {
   return { total: rows.length, corrigidas };
 }
 
+async function rodarBackfillScoresAgora() {
+  try {
+    const date = getTodayDate();
+    const r = await preencherScoresJsonFaltando(date);
+    if (r.corrigidas) console.log('[BACKFILL-SCORES] ' + r.corrigidas + '/' + r.total + ' corrida(s) ganharam o relatorio de volta.');
+  } catch(e) { console.error('[BACKFILL-SCORES] erro:', e.message); }
+}
 function scheduleBackfillScoresCron() {
   setTimeout(async function() {
-    try {
-      const date = getTodayDate();
-      const r = await preencherScoresJsonFaltando(date);
-      if (r.corrigidas) console.log('[BACKFILL-SCORES] ' + r.corrigidas + '/' + r.total + ' corrida(s) ganharam o relatorio de volta.');
-    } catch(e) { console.error('[BACKFILL-SCORES] erro:', e.message); }
+    await rodarBackfillScoresAgora();
     scheduleBackfillScoresCron();
-  }, 10 * 60000);
+  }, 3 * 60000);
 }
-scheduleBackfillScoresCron();
+setTimeout(rodarBackfillScoresAgora, 0); // roda assim que o modulo terminar de carregar — nao espera minuto nenhum
+scheduleBackfillScoresCron(); // e depois continua de 3 em 3 min
 
 // Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11 = AM (cedo) | 12,1-9 = PM (meio-dia em diante)
 function formatTime(t) {
