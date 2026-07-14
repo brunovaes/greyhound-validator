@@ -296,6 +296,63 @@ function scheduleFinalCheckCron() {
 }
 scheduleFinalCheckCron();
 
+// ─── PREENCHIMENTO AUTOMATICO DE scores_json — corridas que ficaram sem o
+// campo do Relatorio de Analise (corrida salva antes do fix de scores_json
+// ir pro ar) ganham o dado de volta sozinhas, sem precisar clicar em nada.
+// So le o PDF que ja esta salvo no disco (rapido, sem navegador, sem
+// internet) e so escreve a coluna scores_json — nao mexe em trap_fav,
+// pct, nivel nem em nada que ja decidiu o AvB, entao nao tem risco de
+// mudar uma analise que voce ja viu. Roda de 10 em 10 min.
+async function preencherScoresJsonFaltando(DATE) {
+  const { db } = require('../db/database');
+  const { processarCorrida } = require('./api');
+
+  const rows = db.prepare(
+    "SELECT r.id, r.hora, r.corrida, r.user_id FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at,'-3 hours')=? AND r.scores_json IS NULL AND r.nivel != 'skip' AND r.trap_fav > 0"
+  ).all(DATE);
+  if (!rows.length) return { total: 0, corrigidas: 0 };
+
+  const PDF_DIR = getPdfDir(DATE);
+  let arquivos = [];
+  try { arquivos = fs.readdirSync(PDF_DIR); } catch(e) { return { total: rows.length, corrigidas: 0 }; }
+
+  let corrigidas = 0;
+  for (const row of rows) {
+    try {
+      const trackAbbr = (row.corrida || '').split(' ')[0].toLowerCase();
+      const timeFormatted = formatTime(row.hora);
+      const candidato = arquivos.find(f => f.startsWith(timeFormatted) && f.toLowerCase().includes(trackAbbr));
+      if (!candidato) continue;
+
+      const buf = fs.readFileSync(path.join(PDF_DIR, candidato));
+      const palette = getTrapBadgeColors() || undefined;
+      const resultParse = await parseRacingPostPDF(buf, palette);
+      if (!resultParse) continue;
+
+      const config = getUserConfig(row.user_id);
+      const novoResultado = processarCorrida(resultParse, config);
+      if (novoResultado && novoResultado.scores) {
+        db.prepare('UPDATE races SET scores_json=? WHERE id=?').run(JSON.stringify(novoResultado.scores), row.id);
+        corrigidas++;
+      }
+    } catch(e) { /* pula essa corrida, tenta as outras */ }
+  }
+  return { total: rows.length, corrigidas };
+}
+
+function scheduleBackfillScoresCron() {
+  setTimeout(async function() {
+    try {
+      const date = getTodayDate();
+      const r = await preencherScoresJsonFaltando(date);
+      if (r.corrigidas) console.log('[BACKFILL-SCORES] ' + r.corrigidas + '/' + r.total + ' corrida(s) ganharam o relatorio de volta.');
+    } catch(e) { console.error('[BACKFILL-SCORES] erro:', e.message); }
+    scheduleBackfillScoresCron();
+  }, 10 * 60000);
+}
+scheduleBackfillScoresCron();
+
 // Corridas de galgo no UK rodam de ~10h ate ~meia-noite. 10,11 = AM (cedo) | 12,1-9 = PM (meio-dia em diante)
 function formatTime(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
@@ -2199,6 +2256,7 @@ router.post('/diagnostico-traps/reverter', requireAdmin, express.urlencoded({ ex
 
 module.exports = router;
 module.exports.formatTime = formatTime;
+module.exports.preencherScoresJsonFaltando = preencherScoresJsonFaltando;
 module.exports.getPdfDir = getPdfDir;
 module.exports.PDF_BASE = PDF_BASE;
 module.exports.inTimeRange = inTimeRange;
