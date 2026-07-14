@@ -92,10 +92,10 @@ function scheduleCronRobot() {
 scheduleCronRobot();
 
 
-// ─── CRON RESULTADOS — a cada 30 min entre 08:00–17:00 UTC ───────────────────
+// ─── CRON RESULTADOS — a cada 30 min entre 07:30–19:30 BRT ───────────────────
 function scheduleResultsCron() {
   const { db } = require('../db/database');
-  let intervalMin = 30, startBRT = '09:00', endBRT = '18:30';
+  let intervalMin = 30, startBRT = '07:30', endBRT = '19:30';
   try {
     const cfg = db.prepare('SELECT results_interval_min, results_window_start, results_window_end FROM analysis_config WHERE user_id=1').get();
     if (cfg) {

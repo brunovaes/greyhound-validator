@@ -204,8 +204,8 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14',
   'ALTER TABLE analysis_config ADD COLUMN visibility_interval_min INTEGER DEFAULT 120',
   'ALTER TABLE analysis_config ADD COLUMN results_interval_min INTEGER DEFAULT 30',
-  'ALTER TABLE analysis_config ADD COLUMN results_window_start TEXT DEFAULT \'09:00\'',
-  'ALTER TABLE analysis_config ADD COLUMN results_window_end TEXT DEFAULT \'18:30\'',
+  'ALTER TABLE analysis_config ADD COLUMN results_window_start TEXT DEFAULT \'07:30\'',
+  'ALTER TABLE analysis_config ADD COLUMN results_window_end TEXT DEFAULT \'19:30\'',
   'ALTER TABLE analysis_config ADD COLUMN pdf_cron_time TEXT DEFAULT \'13:30\'',
   'ALTER TABLE analysis_config ADD COLUMN auto_refresh_min INTEGER DEFAULT 1',
   'ALTER TABLE analysis_config ADD COLUMN racas_em_tela INTEGER DEFAULT 6',
@@ -230,6 +230,16 @@ const migrations = [
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
 }
+
+// Ajuste pontual 13/07/2026: muda a janela padrao do robo de Resultados de
+// 09:00-18:30 pra 07:30-19:30 — corridas do fim do dia UK (ate ~20:00 BRT)
+// estavam ficando de fora da janela antiga, e nunca pegavam resultado
+// automatico. So aplica se a coluna ainda estiver exatamente no valor
+// padrao antigo (nao sobrescreve se o usuario ja tiver customizado).
+try {
+  db.prepare("UPDATE analysis_config SET results_window_start='07:30' WHERE results_window_start='09:00'").run();
+  db.prepare("UPDATE analysis_config SET results_window_end='19:30' WHERE results_window_end='18:30'").run();
+} catch(e) { /* ignora */ }
 
 // Funções de autenticação
 function hashPassword(password) {

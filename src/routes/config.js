@@ -307,12 +307,12 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
   <div class="field">
     <label>Início da janela de resultados (BRT)</label>
-    <input type="time" name="results_window_start" value="${config.results_window_start||'09:00'}">
+    <input type="time" name="results_window_start" value="${config.results_window_start||'07:30'}">
     <div class="hint">Horário BRT de início das atualizações automáticas</div>
   </div>
   <div class="field">
     <label>Fim da janela de resultados (BRT)</label>
-    <input type="time" name="results_window_end" value="${config.results_window_end||'18:30'}">
+    <input type="time" name="results_window_end" value="${config.results_window_end||'19:30'}">
     <div class="hint">Horário BRT de encerramento das atualizações automáticas</div>
   </div>
   <div class="field">
@@ -479,8 +479,8 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.auto_refresh_min||1,
       d.racas_em_tela||6,
       d.results_interval_min||30,
-      d.results_window_start||'09:00',
-      d.results_window_end||'18:30',
+      d.results_window_start||'07:30',
+      d.results_window_end||'19:30',
       d.pdf_cron_time||'13:30',
       d.monitor_interval_min||60,
       d.monitor_window_start||'09:00',
