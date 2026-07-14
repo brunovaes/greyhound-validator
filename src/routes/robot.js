@@ -163,7 +163,7 @@ scheduleResultsCron();
 // ─── CRON MONITORAMENTO DE CARD — intervalo/janela configuraveis ──────────────
 function scheduleMonitorCron() {
   const { db } = require('../db/database');
-  let intervalMin = 60, startBRT = '09:00', endBRT = '20:00';
+  let intervalMin = 60, startBRT = '07:00', endBRT = '20:00';
   try {
     const cfg = db.prepare('SELECT monitor_interval_min, monitor_window_start, monitor_window_end FROM analysis_config WHERE user_id=1').get();
     if (cfg) {

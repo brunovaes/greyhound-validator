@@ -328,7 +328,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
   <div class="field">
     <label>Início da janela de monitoramento (BRT)</label>
-    <input type="time" name="monitor_window_start" value="${config.monitor_window_start||'09:00'}">
+    <input type="time" name="monitor_window_start" value="${config.monitor_window_start||'07:00'}">
     <div class="hint">Horário BRT de início da checagem automática de cards</div>
   </div>
   <div class="field">
@@ -453,7 +453,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_dias_gap_nova_cat INTEGER DEFAULT 14').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN racas_em_tela INTEGER DEFAULT 6').run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_interval_min INTEGER DEFAULT 60").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '09:00'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '07:00'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN monitor_window_end TEXT DEFAULT '20:00'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_unidade_padrao REAL DEFAULT 2.5").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000").run(); } catch(e) {}
@@ -486,7 +486,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.results_window_end||'19:30',
       d.pdf_cron_time||'13:30',
       d.monitor_interval_min||60,
-      d.monitor_window_start||'09:00',
+      d.monitor_window_start||'07:00',
       d.monitor_window_end||'20:00',
       d.final_check_min_antes||15,
       d.banca_unidade_padrao||2.5,

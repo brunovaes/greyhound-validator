@@ -210,7 +210,7 @@ const migrations = [
   'ALTER TABLE analysis_config ADD COLUMN auto_refresh_min INTEGER DEFAULT 1',
   'ALTER TABLE analysis_config ADD COLUMN racas_em_tela INTEGER DEFAULT 6',
   "ALTER TABLE analysis_config ADD COLUMN monitor_interval_min INTEGER DEFAULT 60",
-  "ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '09:00'",
+  "ALTER TABLE analysis_config ADD COLUMN monitor_window_start TEXT DEFAULT '07:00'",
   "ALTER TABLE analysis_config ADD COLUMN monitor_window_end TEXT DEFAULT '20:00'",
   "ALTER TABLE analysis_config ADD COLUMN banca_unidade_padrao REAL DEFAULT 2.5",
   "ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000",
@@ -241,6 +241,7 @@ for (const sql of migrations) {
 try {
   db.prepare("UPDATE analysis_config SET results_window_start='07:30' WHERE results_window_start='09:00'").run();
   db.prepare("UPDATE analysis_config SET results_window_end='19:30' WHERE results_window_end='18:30'").run();
+  db.prepare("UPDATE analysis_config SET monitor_window_start='07:00' WHERE monitor_window_start='09:00'").run();
 } catch(e) { /* ignora */ }
 
 // Funções de autenticação
