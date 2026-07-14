@@ -238,7 +238,14 @@ function scheduleFinalCheckCron() {
   // (mesma classe de bug ja corrigida em outros lugares nessa sessao — as
   // corridas de galgo no UK acabam por volta de ~23:45 UK = ~19:45 BRT
   // mesmo assim, entao 20:30 ja cobre com folga).
-  const intervalMin = 5, startBRT = '09:00', endBRT = '20:30';
+  // 07:00 (nao 09:00) de proposito — corrida de galgo no UK pode comecar bem
+  // cedo (ja vimos corridas as 8:26 BRT, que precisam de checagem as 8:11).
+  // Erro que eu mesmo cometi ontem: copiei o horario de inicio dos outros
+  // robos sem considerar que ESSE precisa acordar antes da primeira corrida
+  // do dia, nao junto com os outros. Mesmo raciocinio ja aplicado no robo de
+  // Resultados (07:30) — aqui preciso de uma margem ainda maior, ja que a
+  // checagem precisa rodar ATE 15 min ANTES da corrida, nao durante ela.
+  const intervalMin = 5, startBRT = '07:00', endBRT = '20:30';
 
   function brtToUtcH(t) { const p=t.split(':'); return (parseInt(p[0])+3)%24; }
   function brtToUtcM(t) { return parseInt(t.split(':')[1]||0); }

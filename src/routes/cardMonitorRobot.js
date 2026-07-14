@@ -416,8 +416,22 @@ async function runCardMonitorRobot(targetDate) {
           continue;
         }
 
-        const changes = matchResult.changes;
-        const vagos = matchResult.vagos;
+        let changes = matchResult.changes;
+        let vagos = matchResult.vagos;
+
+        // "RESERVE" (ou variantes) e' um nome-placeholder — o Racing Post
+        // mostra isso quando um reserva assume a vaga mas o nome de verdade
+        // do cao ainda nao apareceu na pagina. Nao tem historico nenhum pra
+        // buscar com esse "nome", entao trata como retirada sem substituto
+        // (pula da lista de trocas-pra-reanalisar, joga pra vagos) — decidido
+        // com o Bruno em 14/07/2026.
+        const reclassificados = changes.filter(function(c) { return /^RESERVE$/i.test((c.nomeNovo||'').trim()); });
+        if (reclassificados.length) {
+          addLog('warn', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — ' + reclassificados.map(function(c){return 'T'+c.trap;}).join(', ') +
+            ' veio como "RESERVE" (nome ainda nao definido) — tratando como vago, sem tentar reanalisar com nome falso');
+          changes = changes.filter(function(c) { return !/^RESERVE$/i.test((c.nomeNovo||'').trim()); });
+          vagos = vagos.concat(reclassificados.map(function(c) { return { trap: c.trap, nome: c.nomeAntigo }; }));
+        }
 
         if (!changes.length && !vagos.length) {
           addLog('ok', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — sem alteracoes no card');
