@@ -492,17 +492,19 @@ function calcularPerfil(linhasValidas) {
 function scoreBends(galgo) {
   const perfil = (calcularPerfil(galgo.linhasValidas)||'Estavel').toLowerCase();
   const baseScores = { avassalador:80, modoturbo:80, recuperador:65, estavel:50, fumador:25 };
-  let score = baseScores[perfil] || 50;
+  return baseScores[perfil] || 50;
+}
 
-  // Bonus por split bom
-  const splits = (galgo.linhasValidas||[]).filter(l=>l.split>0).map(l=>l.split);
-  if (splits.length) {
-    const mediaSplit = splits.reduce((a,b)=>a+b,0)/splits.length;
-    if (mediaSplit < 5.10) score += 10;
-    else if (mediaSplit < 5.20) score += 5;
-  }
-
-  return Math.min(100, Math.max(0, score));
+// Score 0-100 para Split — mesma logica do CalTm: compara a media do galgo
+// contra o MELHOR (mais rapido) da corrida, nao contra numero fixo. Criterio
+// separado desde 14/07/2026 (antes era um bonus fixo escondido no Bends).
+function scoreSplit(splitGalgo, elegiveis, config) {
+  const validos = elegiveis.map(g => g.splitMedio).filter(v => v !== null && v > 0);
+  if (!validos.length || !splitGalgo) return 50;
+  const melhor = Math.min(...validos);
+  const teto = config.teto_diff_split || 0.15;
+  const diff = splitGalgo - melhor;
+  return Math.max(0, Math.round(100 - (diff / teto) * 100));
 }
 
 // Score 0-100 para Remarks (media das 3 linhas mais recentes)
@@ -554,6 +556,7 @@ function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
     caltm: normalizarCaltm(galgo.caltmAgregado, elegiveis, config),
     // categoria removida dos pesos — influencia via ajuste CalTm + max_niveis_pool + max_cat_diff_caltm
     bends: scoreBends(galgo),
+    split: scoreSplit(galgo.splitMedio, elegiveis, config),
     remarks: scoreRemarks(galgo.linhasValidas),
     sp: calcularSP(galgo.linhasValidas),
     brt: scoreBRT(galgo, elegiveis, corridaClasse, config),
@@ -562,6 +565,7 @@ function calcularScoreGalgo(galgo, elegiveis, corridaClasse, postPick, config) {
   const pesos = {
     caltm: config.peso_caltm||4,
     bends: config.peso_bends||3,
+    split: config.peso_split||2,
     remarks: config.peso_remarks||3,
     sp: config.peso_sp||3,
     brt: config.peso_brt||1,
@@ -645,7 +649,9 @@ function processarCorrida(corridaRaw, config) {
     const classesHist = linhasValidas.map(l=>l.classe).filter(Boolean);
     const histClasse = classesHist.length ? classesHist.sort((a,b)=>classesHist.filter(c=>c===b).length-classesHist.filter(c=>c===a).length)[0] : classe;
     const posicoes = linhasValidas.slice(0,3).map(l=>l.pos).filter(p=>p>0);
-    elegiveis.push({ trap:galgo.trap, nome:galgo.nome, brt:galgo.brt, brtClasse:galgo.brtClasse, histClasse, linhasValidas, caltmAgregado, posicoes, perfil:calcularPerfil(linhasValidas) });
+    const splitsValidos = linhasValidas.filter(l=>l.split>0).map(l=>l.split);
+    const splitMedio = splitsValidos.length ? splitsValidos.reduce((a,b)=>a+b,0)/splitsValidos.length : null;
+    elegiveis.push({ trap:galgo.trap, nome:galgo.nome, brt:galgo.brt, brtClasse:galgo.brtClasse, histClasse, linhasValidas, caltmAgregado, splitMedio, posicoes, perfil:calcularPerfil(linhasValidas) });
   }
 
   if (elegiveis.length < 4) {
