@@ -703,6 +703,12 @@ function saveRaceField(idx, field, value) {
 
 function updateFocusField(field, value) {
   saveRaceField(focusRaceIdx, field, value);
+  // Desmarcar "atrasada" pode fazer a corrida sumir da lista na hora (se ja
+  // passou do horario) — sem isso, ela ficava presa em tela ate o proximo
+  // ciclo automatico. Achado 14/07/2026, pedido do Bruno.
+  if (field === 'flag_atrasada' && !value) {
+    refreshFocusMode();
+  }
 }
 
 // Alerta de proximidade da corrida (3 min antes): som de sino + piscar o card.
