@@ -30,6 +30,10 @@ function navBar(user, active) {
         <span style="display:inline-block;width:7px;height:7px;background:#f97316;border-radius:50%"></span>
         <span id="race-alert-txt">Corrida em breve</span>
       </a>
+      <a href="${BASE}/robot" id="results-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#a78bfa;text-decoration:none;border:1px solid rgba(167,139,250,.4);background:rgba(167,139,250,.1);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
+        <span style="display:inline-block;width:7px;height:7px;background:#a78bfa;border-radius:50%"></span>
+        <span>Robô Resultados rodando...</span>
+      </a>
       <a href="${BASE}/robot" id="robot-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.08);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
         <span style="display:inline-block;width:7px;height:7px;background:#60a5fa;border-radius:50%"></span>
         <span id="robot-badge-txt">Robô rodando...</span>
@@ -132,12 +136,11 @@ function navBar(user, active) {
         fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).catch(function(){return {};})
       ]).then(function(results) {
         var pdf = results[0]; var res = results[1]; var mon = results[2];
+        var resultsBadge = document.getElementById('results-badge');
+        if (resultsBadge) resultsBadge.style.display = res.running ? 'flex' : 'none';
         if (pdf.running) {
           badge.style.display = 'flex';
           badgeTxt.textContent = 'Robô PDF: ' + (pdf.progress||0) + '/' + (pdf.total||'?');
-        } else if (res.running) {
-          badge.style.display = 'flex';
-          badgeTxt.textContent = 'Robô Resultados rodando...';
         } else if (mon.running) {
           badge.style.display = 'flex';
           badgeTxt.textContent = 'Robô Monitoramento: ' + (mon.processed||0) + ' verificadas...';
