@@ -78,6 +78,28 @@ function scheduleCronRobot() {
         addLog('ok', '✅ Coleta automática concluída — ' + robotStatus.pdfs.length + ' PDFs');
         console.log('[CRON] Coleta concluída: ' + robotStatus.pdfs.length + ' PDFs');
         cleanOldPdfFolders();
+
+        // Encadeia a analise automatica logo depois — antes, so a coleta de
+        // PDF era automatica; a analise em si (rodar o motor, criar a sessao
+        // do dia) dependia de alguem abrir o navegador. Pedido do Bruno em
+        // 15/07/2026.
+        try {
+          addLog('info', '🧠 Iniciando analise automatica — ' + date);
+          const { rodarAnaliseAutomatica } = require('./api');
+          const resultado = await rodarAnaliseAutomatica(date, 1);
+          if (resultado.ok) {
+            addLog('ok', '✅ Analise automatica concluida — ' + resultado.avbs + '/' + resultado.total + ' AvBs (sessao ' + resultado.sessionId + ')');
+            console.log('[CRON] Analise automatica concluida: ' + resultado.avbs + ' AvBs');
+          } else if (resultado.jaExistia) {
+            addLog('info', 'ℹ️ Sessao de ' + date + ' ja existia, analise automatica pulada.');
+          } else {
+            addLog('err', '❌ Analise automatica falhou: ' + resultado.erro);
+            console.error('[CRON] Analise automatica falhou:', resultado.erro);
+          }
+        } catch(errAnalise) {
+          addLog('err', '❌ Erro na analise automatica: ' + errAnalise.message);
+          console.error('[CRON] Erro na analise automatica:', errAnalise.message);
+        }
       } catch(e) {
         addLog('err', '❌ Erro na coleta automática: ' + e.message);
         console.error('[CRON] Erro:', e.message);

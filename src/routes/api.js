@@ -1076,6 +1076,63 @@ router.post('/analyze', upload.fields([{name:'pdfs'},{name:'caps'}]), async (req
   }
 });
 
+// Analise automatica — roda sozinha no servidor, sem ninguem precisar abrir
+// o navegador. Pedido do Bruno em 15/07/2026: antes so a coleta de PDF era
+// automatica; quem realmente rodava o motor e criava a sessao do dia era
+// sempre disparado pelo navegador (manual ou autoCheckAndAnalyze no load).
+// Reaproveita a MESMA logica de /api/analyze (extrai+processa) e /api/session
+// (salva), so que direto, sem precisar de requisicao HTTP nenhuma no meio.
+async function rodarAnaliseAutomatica(date, userId) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { ok: false, erro: 'API Key nao configurada' };
+
+  const config = getUserConfig(userId);
+  const folder = getPdfFolder(date);
+  const folderPdfs = readFolderPdfs(folder);
+  if (!folderPdfs.length) return { ok: false, erro: 'Nenhum PDF encontrado na pasta de ' + date };
+
+  const dateParts = date.split('-'); // date vem como YYYY-MM-DD
+  const sessionName = 'Races ' + dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0];
+  const jaExiste = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(userId, sessionName);
+  if (jaExiste) return { ok: false, erro: 'Sessao "' + sessionName + '" ja existe (id ' + jaExiste.id + ')', jaExistia: true };
+
+  const batches = [];
+  for (let i = 0; i < folderPdfs.length; i += BATCH_SIZE) batches.push(folderPdfs.slice(i, i + BATCH_SIZE));
+
+  let allRaces = [];
+  const errors = [];
+  for (let i = 0; i < batches.length; i++) {
+    try {
+      const rawRaces = await extractBatch(batches[i], [], apiKey);
+      const processadas = rawRaces.map(corridaRaw => {
+        try { return processarCorrida(corridaRaw, config); }
+        catch(e) { console.error('[ANALISE-AUTO] Erro motor:', corridaRaw?.hora, e.message); return null; }
+      }).filter(Boolean);
+      allRaces = allRaces.concat(sanitizeEliminatedTraps(processadas));
+    } catch(errBatch) {
+      console.error('[ANALISE-AUTO] Erro lote ' + (i+1) + ':', errBatch.message);
+      errors.push('Lote ' + (i+1) + ': ' + errBatch.message);
+    }
+  }
+  if (!allRaces.length) return { ok: false, erro: 'Nenhuma corrida processada com sucesso', errors };
+
+  const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(userId, sessionName, allRaces.length, allRaces.filter(r=>r.nivel!=='skip').length);
+  const sessionId = result.lastInsertRowid;
+  const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  for (const r of allRaces) {
+    const p = (r.hora||'').split(':');
+    let h = parseInt(p[0]||0);
+    if (h>=1 && h<=9) h+=12;
+    h = h-4; if (h<0) h+=24;
+    const horaBr = p.length>=2 ? h+':'+p[1] : '';
+    const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
+    ins.run(sessionId,userId,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
+  }
+  db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(userId);
+
+  return { ok: true, sessionId, total: allRaces.length, avbs: allRaces.filter(r=>r.nivel!=='skip').length, errors: errors.length ? errors : undefined };
+}
+
 router.put('/race/:id', express.json(), (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
   const userId = req.user.id;
@@ -1253,3 +1310,4 @@ module.exports = router;
 // parcial de uma corrida so, sem duplicar a engine de pontuacao)
 module.exports.processarCorrida = processarCorrida;
 module.exports.mapHistLinhas = mapHistLinhas;
+module.exports.rodarAnaliseAutomatica = rodarAnaliseAutomatica;
