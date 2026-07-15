@@ -462,7 +462,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 ${navBar(user, 'analisar')}
 <div class="main" id="main-layout">
   <div class="sidebar">
-    <div>
+    <div style="margin-bottom:-3px">
       <h2>Analisar corridas</h2>
       <div class="tabnav">
         <button class="tabbtn active" id="btngo">&#9889; Automaticamente</button>
@@ -478,7 +478,7 @@ ${navBar(user, 'analisar')}
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin:5px 0;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin:-4px 0 -2px;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
     <div>
