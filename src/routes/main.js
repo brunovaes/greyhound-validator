@@ -292,7 +292,7 @@ router.get('/app.js', (req, res) => {
 router.get('/', (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
-  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(user.id);
+  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7').all(user.id);
   // new Date() roda no SERVIDOR (Railway = UTC), nao no relogio do Bruno.
   // Sem o ajuste de -3h, depois das 21h BRT o servidor ja calcula a data de
   // AMANHA (UTC ja virou o dia seguinte), fazendo o "Historico do dia" achar
@@ -478,10 +478,14 @@ ${navBar(user, 'analisar')}
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <div class="st" id="st" style="font-size:12px;color:var(--mut2);text-align:center;margin-top:3px;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin:8px 0;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
+    <div>
+      <h2 style="margin-bottom:6px">Sessoes recentes</h2>
+      <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
       <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
         <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
         <div id="acertos-dia" style="font-size:20px;font-weight:700;color:#666">-</div>
@@ -490,10 +494,6 @@ ${navBar(user, 'analisar')}
         <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
         <div id="acertos-mes" style="font-size:20px;font-weight:700;color:#666">-</div>
       </div>
-    </div>
-    <div>
-      <h2 style="margin-bottom:6px">Sessoes recentes</h2>
-      <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
