@@ -435,7 +435,7 @@ async function syncFromServer() {
       var idx = results.findIndex(function(x){ return x.hora===r.hora && x.corrida===r.corrida; });
       if (idx === -1) return;
       var cur = results[idx];
-      if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel) {
+      if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel || cur.flagAtrasada!==!!r.flag_atrasada) {
         changedAny = true;
       }
       cur.nivel = r.nivel; cur.trapFav = r.trap_fav; cur.nameFav = r.name_fav;
