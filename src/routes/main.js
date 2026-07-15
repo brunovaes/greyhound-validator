@@ -478,9 +478,19 @@ ${navBar(user, 'analisar')}
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin-top:6px;min-height:16px"></div>
+    <div class="st" id="st" style="font-size:10px;color:var(--mut2);text-align:center;margin-top:3px;min-height:12px;line-height:1.3"></div>
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
+        <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
+        <div id="acertos-dia" style="font-size:20px;font-weight:700;color:#666">-</div>
+      </div>
+      <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
+        <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
+        <div id="acertos-mes" style="font-size:20px;font-weight:700;color:#666">-</div>
+      </div>
+    </div>
     <div>
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
       <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>

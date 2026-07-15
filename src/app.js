@@ -108,6 +108,23 @@ var ALERTA_MIN_ANTES = 3;
 var TELA_GRACE_MIN = 0;
 var SOM_ALERTA = 'sino';
 
+async function loadAcertosResumo() {
+  try {
+    var r = await fetch(BASE + '/api/acertos-resumo');
+    var d = await r.json();
+    var elDia = document.getElementById('acertos-dia');
+    var elMes = document.getElementById('acertos-mes');
+    if (elDia) {
+      elDia.textContent = d.dia.pct==null ? '-' : d.dia.pct + '%';
+      elDia.style.color = d.dia.pct==null ? '#666' : (d.dia.pct>=50 ? '#22c55e' : '#ef4444');
+    }
+    if (elMes) {
+      elMes.textContent = d.mes.pct==null ? '-' : d.mes.pct + '%';
+      elMes.style.color = d.mes.pct==null ? '#666' : (d.mes.pct>=50 ? '#22c55e' : '#ef4444');
+    }
+  } catch(e) {}
+}
+
 async function loadSystemConfig() {
   try {
     var r = await fetch(BASE+'/api/config');
@@ -582,7 +599,7 @@ function enterFocusMode() {
   // recarregar a página na mão. syncFromServer() já existia pronta, só
   // faltava ser chamada de algum lugar.
   if (syncFromServerInterval) clearInterval(syncFromServerInterval);
-  syncFromServerInterval = setInterval(syncFromServer, AUTO_REFRESH_MIN * 60000);
+  syncFromServerInterval = setInterval(function(){ syncFromServer(); loadAcertosResumo(); }, AUTO_REFRESH_MIN * 60000);
 
   // Checagem de alerta de proximidade (independente, mais frequente)
   if (alertCheckInterval) clearInterval(alertCheckInterval);
@@ -1635,6 +1652,7 @@ document.addEventListener('DOMContentLoaded',async function(){
     +'</div>';
 
   await loadSystemConfig();
+  loadAcertosResumo();
   if(restoreSessionState()){
     updCards();
     setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');

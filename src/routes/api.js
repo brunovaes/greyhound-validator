@@ -1181,6 +1181,34 @@ router.get('/sessions', (req, res) => {
 // site (nao so na Analisar) — so os campos minimos, sem hist_all/scores_json
 // pesados, pra poder ser chamada de 15 em 15s de qualquer tela sem pesar.
 // Pedido do Bruno em 14/07/2026.
+// Acertos do dia / do mes — pra sidebar da Analisar. Pedido do Bruno em
+// 14/07/2026. 'bateu' preenchido = corrida ja resolvida (tem resultado).
+router.get('/acertos-resumo', (req, res) => {
+  try {
+    const now = new Date();
+    const todayStr = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    const todayISO = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+    const yearMonth = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+    const dia = db.prepare(
+      "SELECT COUNT(*) as total, SUM(CASE WHEN r.bateu='sim' THEN 1 ELSE 0 END) as acertos " +
+      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.bateu IS NOT NULL AND r.bateu!=''"
+    ).get(todayISO, req.user.id);
+
+    const mes = db.prepare(
+      "SELECT COUNT(*) as total, SUM(CASE WHEN r.bateu='sim' THEN 1 ELSE 0 END) as acertos " +
+      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE strftime('%Y-%m', s.created_at, '-3 hours')=? AND r.user_id=? AND r.bateu IS NOT NULL AND r.bateu!=''"
+    ).get(yearMonth, req.user.id);
+
+    res.json({
+      dia: { total: dia.total||0, acertos: dia.acertos||0, pct: dia.total ? Math.round(dia.acertos/dia.total*100) : null },
+      mes: { total: mes.total||0, acertos: mes.acertos||0, pct: mes.total ? Math.round(mes.acertos/mes.total*100) : null }
+    });
+  } catch(e) { res.json({ dia:{total:0,acertos:0,pct:null}, mes:{total:0,acertos:0,pct:null} }); }
+});
+
 router.get('/proxima-corrida', (req, res) => {
   try {
     const now = new Date();
