@@ -478,7 +478,7 @@ ${navBar(user, 'analisar')}
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <div class="st" id="st" style="font-size:10px;color:var(--mut2);text-align:center;margin-top:3px;min-height:12px;line-height:1.3"></div>
+    <div class="st" id="st" style="font-size:12px;color:var(--mut2);text-align:center;margin-top:3px;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
     <div style="display:flex;gap:8px;margin-bottom:10px">

@@ -248,7 +248,7 @@ async function autoCheckAndAnalyze() {
               });
             });
             updCards();
-            setSt('Sessão '+sessionName+' carregada — '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
+            setSt('Sessão '+todayLabel.slice(0,5)+' carregada com '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
             enterFocusMode();
             return;
           }
