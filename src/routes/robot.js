@@ -1727,12 +1727,26 @@ router.get('/audit/list', requireAdmin, (req, res) => {
 // (fav bateu = chegou antes do und) com o AvB atualizado. So mexe em
 // corrida que ja tem resultado (resultado_1 preenchido); corrida que ainda
 // nao rodou fica de fora, sem bateu, do jeito que ja estava.
-function recalcularBateu(resultado_1, resultado_2, resultado_3, novoTrapFav, novoTrapUnd) {
+function recalcularBateu(resultado_1, resultado_2, resultado_3, novoTrapFav, novoTrapUnd, finishingOrderJson) {
   if (!resultado_1) return null;
   const posicoes = {};
-  if (resultado_1) posicoes[String(resultado_1)] = 1;
-  if (resultado_2) posicoes[String(resultado_2)] = 2;
-  if (resultado_3) posicoes[String(resultado_3)] = 3;
+
+  // Prefere a chegada COMPLETA (1o-6o) quando disponivel — corridas
+  // raspadas antes de 14/07/2026 nao tem isso, cai pro fallback so-top3.
+  // Achado real do Bruno: quando os dois traps do AvB ficam fora do top3,
+  // o fallback antigo nao tinha como saber quem bateu e chutava 'nao'.
+  let completa = null;
+  if (finishingOrderJson) {
+    try { completa = JSON.parse(finishingOrderJson); } catch(e) {}
+  }
+  if (completa && completa.length) {
+    completa.forEach(function(f) { posicoes[String(f.trap)] = f.pos; });
+  } else {
+    if (resultado_1) posicoes[String(resultado_1)] = 1;
+    if (resultado_2) posicoes[String(resultado_2)] = 2;
+    if (resultado_3) posicoes[String(resultado_3)] = 3;
+  }
+
   const posFav = posicoes[String(novoTrapFav)] || 99;
   const posUnd = posicoes[String(novoTrapUnd)] || 99;
   if (posFav < 99 && posUnd < 99) return posFav < posUnd ? 'sim' : 'nao';
@@ -1770,7 +1784,7 @@ async function reprocessarDiaInteiro(DATE) {
 
       const config = getUserConfig(row.user_id);
       const novo = processarCorrida(resultParse, config);
-      const novoBateu = recalcularBateu(row.resultado_1, row.resultado_2, row.resultado_3, novo.trapFav, novo.trapUnd);
+      const novoBateu = recalcularBateu(row.resultado_1, row.resultado_2, row.resultado_3, novo.trapFav, novo.trapUnd, row.finishing_order_json);
 
       db.prepare(
         `UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,

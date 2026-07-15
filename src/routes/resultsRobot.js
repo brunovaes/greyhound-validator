@@ -184,7 +184,7 @@ async function runResultsRobot(targetDate) {
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
-    const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=? WHERE id=?');
+    const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=?,finishing_order_json=? WHERE id=?');
 
     // 3. Processar cada link
     for (const link of raceLinks) {
@@ -345,12 +345,29 @@ async function runResultsRobot(targetDate) {
           r3 = nameToTrap(p3 ? p3.name : null);
         }
 
+        // Chegada COMPLETA (1o-6o), nao so o top3 — precisa pra recalcular
+        // 'bateu' corretamente depois, se o AvB mudar e nenhum dos dois
+        // (Fav/Und) tiver ficado no top3. Antes essa informacao (que ja
+        // vinha raspada, ver trapOrder acima) era descartada — achado
+        // 14/07/2026 com um caso real do Bruno onde os dois traps do AvB
+        // ficaram fora do top3 e o recalculo nao tinha como saber quem bateu.
+        const finishingOrderCompleto = [];
+        for (let pos = 1; pos <= 6; pos++) {
+          const doHtml = (pageText.trapOrder || []).find(function(t){ return t.pos === pos; });
+          if (doHtml) { finishingOrderCompleto.push({ pos: pos, trap: doHtml.trap }); continue; }
+          const porNome = finishing.find(function(f){ return f.pos === pos; });
+          if (porNome) {
+            const trap = nameToTrap(porNome.name);
+            if (trap && /^\d+$/.test(trap)) finishingOrderCompleto.push({ pos: pos, trap: parseInt(trap) });
+          }
+        }
+
         logChanges(
           dbRace.id, 'results_robot', dbRace,
           { bateu: bateu, resultado_1: r1, resultado_2: r2, resultado_3: r3 },
           ['bateu', 'resultado_1', 'resultado_2', 'resultado_3']
         );
-        updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, dbRace.id);
+        updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, finishingOrderCompleto.length ? JSON.stringify(finishingOrderCompleto) : null, dbRace.id);
         status.updated++;
         // Se essa corrida estava marcada como suspeita (provavel cancelamento)
         // e agora achou resultado de verdade, desfaz a marcacao
