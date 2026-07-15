@@ -89,6 +89,8 @@ function injectStyles(){
     '.ps-btn-warn:hover{opacity:.88;}',
     '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
+    '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
+    '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
     '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
     '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
     '.rc-suspect-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#000;background:#f59e0b;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
@@ -223,6 +225,8 @@ async function autoCheckAndAnalyze() {
                 betEntrou: !!r.bet_entrou,
                 betUnidades: r.bet_unidades!=null?r.bet_unidades:2.5,
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
+                flagAtrasada: !!r.flag_atrasada,
+                scores: r.scores || null,
                 id:r.id
               });
             });
@@ -333,6 +337,7 @@ function buildGauges(hist, raceClass, otherHist) {
 }
 
 function isUpcoming(r) {
+  if (r.flagAtrasada) return true; // marcada como atrasada na mao — nunca some sozinha
   var hbr = r.hora_br || convertHora(r.hora||'');
   if (!hbr) return true;
   var now = new Date();
@@ -447,6 +452,7 @@ async function syncFromServer() {
       cur.betEntrou = !!r.bet_entrou;
       cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:2.5;
       cur.scores = r.scores || cur.scores; // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
+      cur.flagAtrasada = !!r.flag_atrasada;
       cur.id = r.id;
     });
 
@@ -660,6 +666,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-inputs-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)" style="width:52px;text-align:center"></span>'
     + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer;margin:0" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
+    + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> 🚩 Atrasada</label>'
     + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '</div>'
@@ -671,7 +678,7 @@ function renderFocusPanel(r, idx) {
 var FIELD_DB_MAP = { r1:'resultado_1', r2:'resultado_2', r3:'resultado_3', hit:'bateu' };
 // Mapeia campo em snake_case (nome no banco/data-f) pro nome camelCase usado
 // no objeto `results` em memoria
-var LOCAL_FIELD_MAP = { avb_nao_aberto: 'avbNaoAberto', bet_entrou: 'betEntrou', bet_unidades: 'betUnidades' };
+var LOCAL_FIELD_MAP = { avb_nao_aberto: 'avbNaoAberto', bet_entrou: 'betEntrou', bet_unidades: 'betUnidades', flag_atrasada: 'flagAtrasada' };
 
 // Atualiza um campo da corrida em memoria (sessionStorage) e, se a corrida ja
 // existe no banco (tem id — ou seja, a sessao ja foi salva no Historico),
@@ -793,7 +800,7 @@ function renderRaceListPanel(avbs) {
     var isOld = isOldRaceCard(r);
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '') + (isOld ? ' rc-old' : '');
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
     if (isAlerting) {
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {

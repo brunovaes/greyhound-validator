@@ -1103,12 +1103,12 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th style="width:60px">🚩</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
-  return`<tr>
+  return`<tr${r.flag_atrasada?' class="row-atrasada"':''}>
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 <td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:12px">
@@ -1126,16 +1126,23 @@ ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
 <td style="text-align:center"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td>
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
-<td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}">${r.bateu==='sim'?'✓':r.bateu==='nao'?'✗':'-'}</td>
+<td style="text-align:center" class="${r.bateu==='sim'?'sim':r.bateu==='nao'?'nao':''}"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer">
+<option value="" ${!r.bateu?'selected':''}>-</option>
+<option value="sim" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
+<option value="nao" ${r.bateu==='nao'?'selected':''}>✗ Não</option>
+</select></td>
+<td style="text-align:center">${!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':'')}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
 <td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
 <td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:default"><input type="checkbox" class="hist-inp" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" disabled> Não aberto</label></td>
-<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Aberto">&#9998;</span></td>
+<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
 </tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
+${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="11" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
 
 <style>
+.row-atrasada{animation:rowAtrasadaBlink 1.2s ease-in-out infinite}
+@keyframes rowAtrasadaBlink{0%,100%{background:transparent}50%{background:rgba(234,179,8,.18)}}
 .hist-inp{background:transparent;border:1px solid transparent;color:#ccc}
 .hist-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff;cursor:pointer}
 .hist-inp[type=checkbox]{cursor:default}
@@ -1212,6 +1219,13 @@ function saveHistField(id, field, value){
   if (race) { race[field] = value; recomputeKPIs(); }
 }
 function recomputeKPIs(){
+  var resolvidas = ALL_RACES.filter(function(r){ return r.bateu; }).length;
+  var ac = ALL_RACES.filter(function(r){ return r.bateu==='sim'; }).length;
+  var taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
+  var acEl = document.getElementById('kpi-acertos');
+  if (acEl) acEl.textContent = ac;
+  var taxaEl = document.getElementById('kpi-taxa');
+  if (taxaEl) { taxaEl.textContent = taxa + '%'; taxaEl.style.color = (resolvidas>0 && ac/resolvidas>=.5) ? '#22C65E' : '#ef4444'; }
   var apostadas = ALL_RACES.filter(function(r){ return r.odd; });
   var ap = apostadas.length;
   var green = apostadas.filter(function(r){ return r.bateu==='sim'; }).length;
@@ -1245,6 +1259,14 @@ document.querySelectorAll('table [data-f]').forEach(function(el){
     var id=this.getAttribute('data-id'), f=this.getAttribute('data-f');
     var val = this.type==='checkbox' ? (this.checked?1:0) : this.value;
     saveHistField(id, f, val);
+    if (f === 'flag_atrasada') {
+      var tr = this.closest('tr');
+      if (tr) tr.classList.toggle('row-atrasada', !!val);
+    }
+    if (f === 'bateu') {
+      var td = this.closest('td');
+      if (td) td.className = val==='sim' ? 'sim' : val==='nao' ? 'nao' : '';
+    }
   });
   // Odd: perder o foco (clicar fora) tambem fecha a edicao, alem do Enter
   // (que ja da blur() via onkeydown inline no input)

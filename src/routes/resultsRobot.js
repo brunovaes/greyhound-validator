@@ -184,7 +184,7 @@ async function runResultsRobot(targetDate) {
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
-    const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=?,finishing_order_json=? WHERE id=?');
+    const updateStmt = db.prepare('UPDATE races SET bateu=?,resultado_1=?,resultado_2=?,resultado_3=?,video_url=?,finishing_order_json=?,flag_atrasada=0 WHERE id=?');
 
     // 3. Processar cada link
     for (const link of raceLinks) {

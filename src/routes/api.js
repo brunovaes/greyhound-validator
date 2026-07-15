@@ -1087,7 +1087,7 @@ router.put('/race/:id', express.json(), (req, res) => {
   // Update PARCIAL: so mexe nos campos que vieram no body, pra nao apagar
   // resultado_1/2/3/bateu (escritos pelo robo de resultados) quando o front
   // manda so odd/valor/avb_nao_aberto, ou vice-versa.
-  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades'];
+  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada'];
   const body = { ...req.body };
   // Se a Odd esta sendo preenchida (nao vazia) e nao veio bet_unidades junto,
   // usa o valor padrao configurado — Odd preenchida ja conta como aposta

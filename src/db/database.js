@@ -232,6 +232,7 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN tela_grace_min INTEGER DEFAULT 0", // adicionado 14/07 — quanto tempo apos a corrida rodar ela ainda fica em tela (antes fixo em 0)
   "ALTER TABLE analysis_config ADD COLUMN som_alerta TEXT DEFAULT 'sino'", // adicionado 14/07 — sino/beep/alarme/suave
   "ALTER TABLE races ADD COLUMN finishing_order_json TEXT DEFAULT NULL", // adicionado 14/07 — chegada completa (1o-6o), nao so o top3
+  "ALTER TABLE races ADD COLUMN flag_atrasada INTEGER DEFAULT 0", // adicionado 14/07 — corrida atrasada, marcada na mao, pisca ate ter resultado
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
