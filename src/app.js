@@ -1633,6 +1633,12 @@ document.addEventListener('DOMContentLoaded',async function(){
     updCards();
     setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
     enterFocusMode();
+    // Sincroniza com o servidor na hora, mesmo restaurando do cache — sem
+    // isso, qualquer mudanca feita em OUTRA tela (ex: marcar "atrasada" no
+    // Historico) enquanto essa aba ficou fechada/em segundo plano so
+    // apareceria depois do proximo ciclo automatico (ate 1 min de atraso).
+    // Achado 14/07/2026.
+    syncFromServer();
   } else {
     setTimeout(autoCheckAndAnalyze, 100);
   }
