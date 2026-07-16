@@ -210,6 +210,13 @@ function scheduleMonitorCron() {
   nextRun.setUTCMinutes(nextSlot % 60, 0, 0);
   if (nextSlot >= 60) nextRun.setUTCHours(nextRun.getUTCHours() + Math.floor(nextSlot / 60));
 
+  // Desloca 15 min pra nunca cair no mesmo minuto exato do robo de
+  // Resultados (que tambem costuma rodar de 30 em 30, arredondado pra
+  // :00/:30) — os dois competindo pelo MESMO Browserless ao mesmo tempo
+  // sobrecarrega e derruba os dois com timeout de navegacao. Achado
+  // 16/07/2026, caso real do Bruno (3 robos falharam juntos as 08:00).
+  nextRun.setUTCMinutes(nextRun.getUTCMinutes() + 15);
+
   const h = nextRun.getUTCHours(), m = nextRun.getUTCMinutes();
   const afterEnd = h > endUtcH || (h === endUtcH && m > endUtcM);
   const beforeStart = h < startUtcH || (h === startUtcH && m < startUtcM);
@@ -281,6 +288,12 @@ function scheduleFinalCheckCron() {
   const nextSlot = Math.ceil((mins + 1) / intervalMin) * intervalMin;
   nextRun.setUTCMinutes(nextSlot % 60, 0, 0);
   if (nextSlot >= 60) nextRun.setUTCHours(nextRun.getUTCHours() + Math.floor(nextSlot / 60));
+
+  // Desloca 2 min pra nunca cair no mesmo minuto exato dos robos de
+  // Resultados (:00/:30) ou Monitoramento (:15/:45) — 3 robos abrindo
+  // Browserless ao mesmo tempo sobrecarrega e todos caem com timeout de
+  // navegacao. Achado 16/07/2026, caso real do Bruno.
+  nextRun.setUTCMinutes(nextRun.getUTCMinutes() + 2);
 
   const h = nextRun.getUTCHours(), m = nextRun.getUTCMinutes();
   const afterEnd = h > endUtcH || (h === endUtcH && m > endUtcM);
