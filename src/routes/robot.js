@@ -1936,6 +1936,68 @@ ${linhaHtml}
 </div></body></html>`);
 });
 
+// ── Exportacao pra backtest do motor — junta a PREVISAO (Fav/Und, %, nivel,
+// scores por criterio, bateu) com o RESULTADO REAL de toda corrida ja
+// rodada, em todos os dias que existem no banco. Diferente do
+// /exportar-dados-brutos (que deixa a previsao de fora de proposito, pra
+// analise sem vies) — aqui e o oposto: junta os dois pra cruzar "o motor
+// disse X, o resultado real foi Y" e afinar parametros. Pedido do Bruno em
+// 16/07/2026.
+router.get('/exportar-backtest', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  try {
+    const rows = db.prepare(
+      "SELECT r.id, s.name as sessao, r.hora, r.hora_br, r.corrida, r.dist, r.hist_all, " +
+      "r.trap_fav, r.name_fav, r.trap_und, r.name_und, r.pct, r.nivel, r.perfil_fav, r.perfil_und, " +
+      "r.scores_json, r.eliminados, r.resultado_1, r.resultado_2, r.resultado_3, r.finishing_order_json, r.bateu " +
+      "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
+      "WHERE r.resultado_1 IS NOT NULL AND r.resultado_1 != '' AND r.trap_fav > 0 " +
+      "ORDER BY s.created_at, r.hora"
+    ).all();
+
+    const pacote = rows.map(r => {
+      let histAll = [], scores = [], eliminados = [], chegadaCompleta = null;
+      try { histAll = r.hist_all ? JSON.parse(r.hist_all) : []; } catch(e) {}
+      try { scores = r.scores_json ? JSON.parse(r.scores_json) : []; } catch(e) {}
+      try { eliminados = r.eliminados ? JSON.parse(r.eliminados) : []; } catch(e) {}
+      try { chegadaCompleta = r.finishing_order_json ? JSON.parse(r.finishing_order_json) : null; } catch(e) {}
+      return {
+        sessao: r.sessao,
+        hora_uk: r.hora,
+        hora_br: r.hora_br,
+        corrida: r.corrida,
+        dist: r.dist,
+        previsao_do_motor: {
+          favorito: { trap: r.trap_fav, nome: r.name_fav, perfil: r.perfil_fav },
+          underdog: { trap: r.trap_und, nome: r.name_und, perfil: r.perfil_und },
+          confianca_pct: r.pct,
+          nivel: r.nivel,
+          scores_por_criterio: scores
+        },
+        resultado_real: {
+          primeiro: r.resultado_1, segundo: r.resultado_2, terceiro: r.resultado_3,
+          chegada_completa: chegadaCompleta
+        },
+        bateu: r.bateu,
+        eliminados_antes_do_calculo: eliminados,
+        historico_pre_corrida: histAll
+      };
+    });
+
+    const filename = 'backtest_motor_' + new Date().toISOString().slice(0,10) + '.json';
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.send(JSON.stringify({
+      total_corridas: pacote.length,
+      total_bateu_sim: pacote.filter(c => c.bateu === 'sim').length,
+      total_bateu_nao: pacote.filter(c => c.bateu === 'nao').length,
+      corridas: pacote
+    }, null, 2));
+  } catch(err) {
+    res.status(500).send('Erro ao exportar: ' + err.message);
+  }
+});
+
 router.get('/exportar-dados-brutos', requireAdmin, (req, res) => {
   const { db } = require('../db/database');
   try {
