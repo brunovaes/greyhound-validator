@@ -1085,10 +1085,12 @@ router.get('/sessao/:id', (req, res) => {
   const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, user.id);
   if (!sess) return res.redirect(BASE + '/historico');
   const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(sess.id);
-  const resolvidas = races.filter(r=>r.bateu).length;
-  const ac = races.filter(r=>r.bateu==='sim').length;
+  const racesValidas = races.filter(r=>r.nivel!=='skip');
+  const skipCount = races.length - racesValidas.length;
+  const resolvidas = racesValidas.filter(r=>r.bateu).length;
+  const ac = racesValidas.filter(r=>r.bateu==='sim').length;
   const taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
-  const apostadas = races.filter(r=>r.odd);
+  const apostadas = racesValidas.filter(r=>r.odd);
   const ap = apostadas.length;
   const green = apostadas.filter(r=>r.bateu==='sim').length;
   const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
@@ -1109,7 +1111,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 ${navBar(user, 'historico')}
 <div class="content">
 <div class="kpis">
-<div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${races.length}</div></div>
+<div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
 <div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" id="kpi-taxa" style="color:${resolvidas>0&&ac/resolvidas>=.5?'#22C65E':'#ef4444'}">${taxa}%</div></div>
 <div class="kpi"><div class="kpi-label">Apostas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
