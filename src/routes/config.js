@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
-const { buildDerrotasWorkbook } = require('../utils/exportDerrotas');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
@@ -582,6 +581,15 @@ router.get('/reset', requireAdmin, (req, res) => {
 // (AAAA-MM-DD, inclusivo). Ver src/utils/exportDerrotas.js. So admin.
 router.get('/export-derrotas', requireAdmin, async (req, res) => {
   try {
+    // Require preguicoso e protegido: se o exceljs nao estiver instalado, so
+    // esta rota falha (com mensagem clara) — o resto do app continua de pe.
+    let buildDerrotasWorkbook;
+    try {
+      ({ buildDerrotasWorkbook } = require('../utils/exportDerrotas'));
+    } catch (e) {
+      console.error('[export-derrotas] modulo indisponivel:', e.message);
+      return res.status(500).send('Exportacao indisponivel: rode "npm install exceljs" e faca o deploy novamente. (' + e.message + ')');
+    }
     const from = String(req.query.from || '').trim();
     const to = String(req.query.to || '').trim();
     const re = /^\d{4}-\d{2}-\d{2}$/;
