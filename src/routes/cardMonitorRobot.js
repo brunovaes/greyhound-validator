@@ -28,18 +28,22 @@ function addLog(type, msg) {
 
 // Similaridade entre dois strings (mesma logica usada no resultsRobot)
 function similarity(a, b) {
-  a = (a || '').toLowerCase().replace(/\s/g, '');
-  b = (b || '').toLowerCase().replace(/\s/g, '');
+  a = (a || '').toLowerCase().trim();
+  b = (b || '').toLowerCase().trim();
   if (!a || !b) return 0;
-  if (a === b) return 1;
-  if (b.includes(a) || a.includes(b)) return 0.9;
-  var matches = 0;
-  var shorter = a.length < b.length ? a : b;
-  var longer  = a.length < b.length ? b : a;
-  for (var k = 0; k < shorter.length; k++) {
-    if (longer.includes(shorter[k])) matches++;
-  }
-  return matches / longer.length;
+  const aFlat = a.replace(/\s/g, ''), bFlat = b.replace(/\s/g, '');
+  if (aFlat === bFlat) return 1;
+  if (bFlat.includes(aFlat) || aFlat.includes(bFlat)) return 0.9;
+  // Comparacao por PALAVRA INTEIRA — mesma correcao aplicada no
+  // resultsRobot.js em 16/07/2026 (a versao anterior confundia nomes
+  // diferentes que so compartilhavam letras soltas, sem considerar ordem).
+  const wordsA = a.split(/\s+/).filter(w => w.length > 1);
+  const wordsB = b.split(/\s+/).filter(w => w.length > 1);
+  if (!wordsA.length || !wordsB.length) return 0;
+  let matches = 0;
+  for (const w of wordsA) if (wordsB.includes(w)) matches++;
+  const shorter = wordsA.length < wordsB.length ? wordsA : wordsB;
+  return matches / shorter.length;
 }
 
 // Converte hora UK crua (ex: "9:16") pra minutos do dia em BRT — mesma regra

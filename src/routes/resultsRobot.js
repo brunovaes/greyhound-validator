@@ -63,18 +63,25 @@ function agoraMinutosBrt() {
 // Similaridade entre dois strings (chars em comum / max length) — usada
 // tanto pra casar nome de galgo quanto nome de pista.
 function similarity(a, b) {
-  a = (a || '').toLowerCase().replace(/\s/g, '');
-  b = (b || '').toLowerCase().replace(/\s/g, '');
+  a = (a || '').toLowerCase().trim();
+  b = (b || '').toLowerCase().trim();
   if (!a || !b) return 0;
-  if (a === b) return 1;
-  if (b.includes(a) || a.includes(b)) return 0.9;
-  var matches = 0;
-  var shorter = a.length < b.length ? a : b;
-  var longer  = a.length < b.length ? b : a;
-  for (var k = 0; k < shorter.length; k++) {
-    if (longer.includes(shorter[k])) matches++;
-  }
-  return matches / longer.length;
+  const aFlat = a.replace(/\s/g, ''), bFlat = b.replace(/\s/g, '');
+  if (aFlat === bFlat) return 1;
+  if (bFlat.includes(aFlat) || aFlat.includes(bFlat)) return 0.9;
+  // Comparacao por PALAVRA INTEIRA (nao letra solta) — muito mais resistente a
+  // falso positivo entre nomes de cao diferentes que só compartilham letras
+  // comuns. Achado 16/07/2026: a versao anterior (contagem de letras em
+  // comum, sem considerar ordem) confundia caes diferentes, produzindo
+  // resultado_1/2/3 duplicados (o mesmo trap "vencendo" em 2 ou 3 posicoes
+  // ao mesmo tempo — fisicamente impossivel, caso real do Bruno).
+  const wordsA = a.split(/\s+/).filter(w => w.length > 1);
+  const wordsB = b.split(/\s+/).filter(w => w.length > 1);
+  if (!wordsA.length || !wordsB.length) return 0;
+  let matches = 0;
+  for (const w of wordsA) if (wordsB.includes(w)) matches++;
+  const shorter = wordsA.length < wordsB.length ? wordsA : wordsB;
+  return matches / shorter.length;
 }
 
 // Extrai o nome da pista direto do texto raspado da pagina de resultado
@@ -310,7 +317,7 @@ async function runResultsRobot(targetDate) {
             const nmF = nm.split(' ')[0];
             if (favFirst && (nmF === favFirst || nm.includes(favFirst))) return String(dbRace.trap_fav);
             if (undFirst && (nmF === undFirst || nm.includes(undFirst))) return String(dbRace.trap_und);
-            return name;
+            return null;
           }
           // Buscar melhor match no race_card pelos 6 galgos da corrida
           var bestTrap = null;
@@ -327,7 +334,7 @@ async function runResultsRobot(targetDate) {
           }
           addLog('info', 'Match "'+name+'" → '+scores.join(' | ')+' → BEST:'+bestTrap+'('+bestScore.toFixed(2)+')');
           if (bestTrap) return bestTrap;
-          return name;
+          return null;
         }
 
         let r1, r2, r3;
