@@ -77,7 +77,7 @@ db.exec(`
     peso_categoria INTEGER DEFAULT 4,
     peso_caltm INTEGER DEFAULT 5,
     peso_bends INTEGER DEFAULT 3,
-    peso_remarks INTEGER DEFAULT 2,
+    peso_remarks INTEGER DEFAULT 1, -- baixado de 2->1 em 19/07: backtest mostrou que Remarks discrimina pro lado errado; reducao consertou 2 e nao quebrou nenhum acerto
     peso_brt INTEGER DEFAULT 1,
     peso_post_pick INTEGER DEFAULT 2,
     -- Filtros de corrida
@@ -250,7 +250,9 @@ try {
   // Pesos novos confirmados com o Bruno em 14/07/2026 — so aplica se ainda
   // estiver exatamente no valor padrao antigo (nao sobrescreve customizacao).
   db.prepare("UPDATE analysis_config SET peso_caltm=5 WHERE peso_caltm=4").run();
-  db.prepare("UPDATE analysis_config SET peso_remarks=2 WHERE peso_remarks=3").run();
+  // Remarks: baixado para 1 (validado no backtest 19/07). So aplica sobre o valor
+  // gerador antigo (3) — nao mexe se o usuario ja customizou pra outro valor.
+  db.prepare("UPDATE analysis_config SET peso_remarks=1 WHERE peso_remarks=3").run();
   db.prepare("UPDATE analysis_config SET peso_post_pick=2 WHERE peso_post_pick=0").run();
   db.prepare("UPDATE analysis_config SET peso_split=3 WHERE peso_split=2").run();
   db.prepare("UPDATE analysis_config SET peso_categoria=4 WHERE peso_categoria=5").run();
@@ -285,7 +287,7 @@ function validatePassword(user, password) {
 // originais do schema (DEFAULT de cada coluna), fixos aqui separadamente pra
 // nunca mudarem mesmo que o schema em si seja alterado no futuro.
 const MOTOR_FIXO_DEFAULTS = {
-  pesos: { peso_caltm: 4, peso_bends: 3, peso_remarks: 3, peso_brt: 1, peso_post_pick: 0 },
+  pesos: { peso_caltm: 4, peso_bends: 3, peso_remarks: 1, peso_brt: 1, peso_post_pick: 0 },
   categoria: { max_cat_diff_caltm: 1, max_niveis_pool: 2, max_linhas_cat_inferior: 3, max_dias_gap_nova_cat: 14 },
   filtros: { classes_aceitas: 'A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12', dist_min: 400, dist_max: 575, min_corridas_uteis: 3 },
   confianca: { pct_alta: 65, pct_media: 50 },
