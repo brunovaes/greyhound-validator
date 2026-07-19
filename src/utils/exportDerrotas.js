@@ -231,4 +231,141 @@ function buildDerrotasWorkbook(userId, fromISO, toISO, dbOverride) {
   return { wb, total: linhas.length, suspeitos: suspeitos.length };
 }
 
-module.exports = { buildDerrotasWorkbook, coletarDerrotas };
+// ============================================================
+// DESEMPENHO POR CONTEXTO (HR por pista / nº de cães / classe)
+// Instrumento de monitoramento — usa o "bateu" CORRIGIDO pela chegada real,
+// e mostra o "bateu" cru lado a lado pra flagrar erro de resultado.
+// ============================================================
+
+// Coleta todos os AvBs resolvidos (favorito e underdog definidos + resultado
+// que permite derivar o bateu). Se from/to forem nulos, pega tudo (all-time).
+function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
+  const db = getDb(dbOverride);
+  const rows = db.prepare(
+    `SELECT r.*, s.name AS sessao
+       FROM races r JOIN race_sessions s ON s.id = r.session_id
+      WHERE r.user_id = ? AND r.trap_fav > 0 AND r.trap_und > 0`
+  ).all(userId);
+  const from = fromISO ? new Date(fromISO + 'T00:00:00') : null;
+  const to = toISO ? new Date(toISO + 'T23:59:59') : null;
+  const out = [];
+  for (const r of rows) {
+    const dt = parseSessionDate(r.sessao);
+    if (from && (!dt || dt < from)) continue;
+    if (to && (!dt || dt > to)) continue;
+    let ordemFull = null;
+    try { ordemFull = r.finishing_order_json ? JSON.parse(r.finishing_order_json) : null; } catch (e) { ordemFull = null; }
+    const temFull = !!(ordemFull && ordemFull.length);
+    const pf = posDoTrap(r, r.trap_fav, ordemFull);
+    const pu = posDoTrap(r, r.trap_und, ordemFull);
+    const der = derivarBateu(pf, pu, temFull);
+    if (der == null) continue; // sem como derivar -> fora do HR
+    let scores = [];
+    try { scores = r.scores_json ? JSON.parse(r.scores_json) : []; } catch (e) { scores = []; }
+    const partes = (r.corrida || '').split(' ');
+    out.push({
+      pista: partes[0] || '?',
+      classe: partes[partes.length - 1] || '?',
+      dist: r.dist || '?',
+      nElig: scores.length || null,
+      der, raw: r.bateu
+    });
+  }
+  return out;
+}
+
+function agrupaPor(items, keyFn) {
+  const g = {};
+  for (const it of items) {
+    const k = keyFn(it);
+    if (k == null || k === '' || k === '?') continue;
+    const b = (g[k] = g[k] || { n: 0, ac: 0, nRaw: 0, acRaw: 0, err: 0 });
+    b.n++; if (it.der === 'sim') b.ac++;
+    if (it.raw === 'sim' || it.raw === 'nao') {
+      b.nRaw++; if (it.raw === 'sim') b.acRaw++;
+      if (it.raw !== it.der) b.err++;
+    }
+  }
+  return g;
+}
+
+function buildDesempenhoWorkbook(userId, fromISO, toISO, dbOverride) {
+  const items = coletarResolvidos(userId, fromISO || null, toISO || null, dbOverride);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Greyhound Factory';
+
+  const amostraLabel = n => (n >= 30 ? 'boa' : n >= 15 ? 'media' : 'baixa (ruido)');
+  const fmtPct = { numFmt: '0.0%' };
+
+  // Aba generica: recebe o agrupamento e o rotulo da 1a coluna
+  function abaGrupo(nome, rotulo, grupo, ordenarPorHR) {
+    const ws = wb.addWorksheet(nome, { views: [{ showGridLines: false, state: 'frozen', ySplit: 1 }] });
+    const headers = [rotulo, 'AvBs (n)', 'Acertos', 'HR corrigido', 'HR cru', 'Erros de label', 'Amostra'];
+    headers.forEach((h, i) => {
+      const cc = ws.getCell(1, i + 1);
+      cc.value = h; cc.font = fontHdr; cc.fill = fillHdr; cc.border = borderAll;
+      cc.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+    ws.getRow(1).height = 26;
+    let entries = Object.entries(grupo);
+    if (ordenarPorHR) entries.sort((a, b) => (a[1].ac / a[1].n) - (b[1].ac / b[1].n)); // pior primeiro
+    else entries.sort((a, b) => (isNaN(+a[0]) ? String(a[0]).localeCompare(b[0]) : (+a[0]) - (+b[0])));
+    let row = 2;
+    for (const [k, b] of entries) {
+      const hrCru = b.nRaw ? b.acRaw / b.nRaw : '';
+      const vals = [k, b.n, b.ac, { formula: `C${row}/B${row}` }, hrCru, b.err, amostraLabel(b.n)];
+      vals.forEach((v, i) => {
+        const cc = ws.getCell(row, i + 1);
+        cc.value = v; cc.font = fontBase; cc.border = borderAll;
+        cc.alignment = { horizontal: i === 0 ? 'left' : 'center', vertical: 'middle' };
+        if (i === 3 || i === 4) cc.numFmt = fmtPct.numFmt;
+        if (i === 5 && b.err > 0) cc.fill = fillSusp;         // erros de label em rosa
+        if (i === 3) {
+          const hr = b.ac / b.n;
+          cc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hr >= 0.65 ? 'FFDDF3E4' : hr < 0.5 ? 'FFF7D6D6' : 'FFFDF3D6' } };
+        }
+      });
+      row++;
+    }
+    const wds = [rotulo.length > 10 ? 16 : 12, 10, 10, 13, 10, 14, 14];
+    wds.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    return ws;
+  }
+
+  // Resumo geral
+  const total = items.length;
+  const acTot = items.filter(x => x.der === 'sim').length;
+  const rawItems = items.filter(x => x.raw === 'sim' || x.raw === 'nao');
+  const errTot = rawItems.filter(x => x.raw !== x.der).length;
+  const wr = wb.addWorksheet('Resumo', { views: [{ showGridLines: false }] });
+  const putR = (cell, val, font, align, numFmt) => {
+    wr.getCell(cell).value = val; wr.getCell(cell).font = font || fontBase;
+    if (align) wr.getCell(cell).alignment = align; if (numFmt) wr.getCell(cell).numFmt = numFmt;
+  };
+  putR('B2', 'Desempenho por Contexto — HR dos AvBs', { name: 'Arial', bold: true, size: 14, color: { argb: DARKG } });
+  const periodo = (fromISO || toISO) ? `Periodo: ${fromISO || 'inicio'} a ${toISO || 'hoje'}` : 'Periodo: todo o historico';
+  putR('B3', periodo, { name: 'Arial', italic: true, size: 10, color: { argb: 'FF666666' } });
+  putR('B5', 'HR = acertos / AvBs resolvidos. "Corrigido" usa a chegada real; "cru" usa o campo bateu do banco.', fontBase);
+  putR('B6', 'A coluna Erros de label conta onde os dois discordam — provavel resultado digitado errado.', fontBase);
+  const linhasR = [
+    ['B8', 'Total de AvBs resolvidos', total, null],
+    ['B9', 'HR corrigido (geral)', total ? acTot / total : 0, '0.0%'],
+    ['B10', 'HR cru (geral)', rawItems.length ? rawItems.filter(x => x.raw === 'sim').length / rawItems.length : 0, '0.0%'],
+    ['B11', 'Erros de label detectados', errTot, null]
+  ];
+  linhasR.forEach(([c, lbl, val, nf]) => {
+    putR(c, lbl, fontBase);
+    const fc = 'E' + c.slice(1);
+    putR(fc, val, { name: 'Arial', bold: true, size: 11 }, { horizontal: 'center' }, nf);
+  });
+  wr.getColumn('B').width = 34; wr.getColumn('C').width = 4; wr.getColumn('D').width = 4; wr.getColumn('E').width = 12;
+
+  abaGrupo('HR por Pista', 'Pista', agrupaPor(items, x => x.pista), true);
+  abaGrupo('HR por No de Caes', 'Nº cães elegiveis', agrupaPor(items, x => x.nElig), false);
+  abaGrupo('HR por Classe', 'Classe', agrupaPor(items, x => x.classe), true);
+
+  return { wb, total, acTot, errTot };
+}
+
+module.exports = { buildDerrotasWorkbook, coletarDerrotas, buildDesempenhoWorkbook, coletarResolvidos };

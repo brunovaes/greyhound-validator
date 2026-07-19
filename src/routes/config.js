@@ -406,7 +406,15 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   <div class="field"><label>Data final</label><input type="date" id="exp_to"><span class="hint">Último dia do período (inclusivo)</span></div>
 </div>
 <div style="margin-top:18px">
-  <button type="button" class="btn-save" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha</button>
+  <button type="button" class="btn-save" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha de derrotas</button>
+</div>
+</div>
+
+<div class="section">
+<div class="sec-title">Desempenho por Contexto — HR (Taxa de Acerto)</div>
+<div class="info-box">Gera um <strong>.xlsx</strong> com a taxa de acerto dos AvBs quebrada por <strong>pista</strong>, por <strong>nº de cães elegíveis</strong> e por <strong>classe</strong> — sempre com o "bateu" <strong>corrigido pela chegada real</strong> e o "cru" do banco lado a lado (a coluna de Erros de label mostra onde discordam = provável resultado digitado errado). É o instrumento pra decidir onde o motor é confiável e onde vale dar skip por contexto. Deixe as datas em branco para usar todo o histórico.</div>
+<div style="margin-top:6px">
+  <button type="button" class="btn-save" onclick="baixarDesempenho()">${icon('trophy',{size:14})} Baixar HR por contexto</button>
 </div>
 </div>
 </div>
@@ -443,6 +451,13 @@ function baixarDerrotas(){
   if(!f||!t){alert('Escolha a data inicial e a final.');return;}
   if(f>t){alert('A data inicial não pode ser maior que a final.');return;}
   window.location.href='${BASE}/config/export-derrotas?from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t);
+}
+// HR por contexto: datas opcionais (em branco = todo o historico).
+function baixarDesempenho(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
+  window.location.href='${BASE}/config/export-desempenho'+(qs.length?'?'+qs.join('&'):'');
 }
 // Mesmos 4 sons do app.js (Analisar) — pra poder testar aqui antes de salvar
 function tocarSino(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(1046.5,0,0.25);tone(1318.5,0.15,0.35);}
@@ -608,6 +623,36 @@ router.get('/export-derrotas', requireAdmin, async (req, res) => {
     res.end();
   } catch (err) {
     console.error('[export-derrotas] erro:', err);
+    res.status(500).send('Erro ao gerar planilha: ' + err.message);
+  }
+});
+
+// Exporta o desempenho por contexto (HR por pista / nº de cães / classe),
+// com bateu corrigido pela chegada. Datas opcionais (sem elas = all-time).
+router.get('/export-desempenho', requireAdmin, async (req, res) => {
+  try {
+    let buildDesempenhoWorkbook;
+    try {
+      ({ buildDesempenhoWorkbook } = require('../utils/exportDerrotas'));
+    } catch (e) {
+      console.error('[export-desempenho] modulo indisponivel:', e.message);
+      return res.status(500).send('Exportacao indisponivel: rode "npm install exceljs" e faca o deploy novamente. (' + e.message + ')');
+    }
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    const from = String(req.query.from || '').trim();
+    const to = String(req.query.to || '').trim();
+    if ((from && !re.test(from)) || (to && !re.test(to))) {
+      return res.status(400).send('Datas inválidas — use o formato AAAA-MM-DD ou deixe em branco.');
+    }
+    const { wb, total } = buildDesempenhoWorkbook(req.user.id, from || null, to || null);
+    const sufixo = (from || to) ? `${from || 'inicio'}_a_${to || 'hoje'}` : 'geral';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="HR_por_contexto_${sufixo}.xlsx"`);
+    res.setHeader('X-Total-AvBs', String(total));
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[export-desempenho] erro:', err);
     res.status(500).send('Erro ao gerar planilha: ' + err.message);
   }
 });
