@@ -75,6 +75,10 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .field textarea{min-height:70px;resize:vertical;font-family:monospace;font-size:11px}
 .rv{font-size:11px;color:#f97316;font-weight:700;margin-top:2px}
 .hint{font-size:10px;color:#666;margin-top:2px;line-height:1.4}
+.field-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.field-head label{margin:0}
+.field-head .rv{margin-top:0}
+.hint-peso{display:block;overflow-wrap:anywhere;word-break:break-word;margin-top:6px;min-height:26px}
 .pbar{width:100%;height:4px;background:#0D1117;border-radius:2px;overflow:hidden;margin-top:4px}
 .pfill{height:100%;background:#22c55e;border-radius:2px;transition:width .3s}
 .btn-bar{display:flex;align-items:center;gap:10px;position:sticky;bottom:0;background:#0D1117;padding:14px 0;margin-top:4px;border-top:1px solid #222}
@@ -130,10 +134,11 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
    ['peso_remarks','Remarks','Merito + corrida escondida (HiddenRun)',config.peso_remarks||2,1,10],
    ['peso_post_pick','Post Pick (Racing Post)','Indicacao dos 3 melhores no cabecalho do PDF',config.peso_post_pick||2,0,10],
    ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt||1,1,10]].map(([n,l,h,v,mn,mx])=>
-`<div class="field"><label>${l}</label>
+`<div class="field">
+<div class="field-head"><label>${l}</label><span class="rv" id="v_${n}">${v}</span></div>
 <input type="range" name="${n}" min="${mn}" max="${mx}" value="${v}" oninput="upR(this)">
-<div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">${h}</span><span class="rv" id="v_${n}">${v}</span></div>
 <div class="pbar"><div class="pfill" id="b_${n}" style="width:${v*10}%"></div></div>
+<span class="hint hint-peso">${h}</span>
 </div>`).join('')}
 </div>
 </div>
