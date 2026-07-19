@@ -90,6 +90,7 @@ function injectStyles(){
     '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
     '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
+    '.rc-reanalise-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:8px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-bottom:3px}',
     '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
     '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
     '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
@@ -447,11 +448,13 @@ async function syncFromServer() {
 
     var focusedKey = (focusRaceIdx>=0 && results[focusRaceIdx]) ? (results[focusRaceIdx].hora+'|'+results[focusRaceIdx].corrida) : null;
     var changedAny = false;
+    var changes = [];
 
     dd.races.forEach(function(r){
       var idx = results.findIndex(function(x){ return x.hora===r.hora && x.corrida===r.corrida; });
       if (idx === -1) return;
       var cur = results[idx];
+      var oldNivel = cur.nivel, oldFav = cur.trapFav, oldUnd = cur.trapUnd;
       if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel || cur.flagAtrasada!==!!r.flag_atrasada) {
         changedAny = true;
       }
@@ -471,6 +474,21 @@ async function syncFromServer() {
       cur.scores = r.scores || cur.scores; // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
       cur.flagAtrasada = !!r.flag_atrasada;
       cur.id = r.id;
+      cur.finalCheckStatus = r.final_check_status || null;
+      cur.finalCheckAt = r.final_check_at || null;
+      // Sinaliza reanalise/skip vindos do robo (ex.: checagem final antes da
+      // largada) — selo na lista + toast + som, pra nunca apostar no palpite
+      // velho. Detecta pela transicao real dos campos (independe do texto que
+      // o robo grava em final_check_status).
+      var _pista = getPista(cur.corrida) || cur.corrida || '';
+      var _hbr = cur.hora_br || convertHora(cur.hora||'') || cur.hora || '';
+      if (oldNivel !== 'skip' && cur.nivel === 'skip') {
+        cur._reanaliseFlag = { type:'skip', at: Date.now() };
+        changes.push({ tipo:'skip', txt: _hbr+' '+_pista+' virou SKIP (card mudou)' });
+      } else if (oldNivel !== 'skip' && cur.nivel !== 'skip' && (oldFav !== cur.trapFav || oldUnd !== cur.trapUnd)) {
+        cur._reanaliseFlag = { type:'reanalise', at: Date.now() };
+        changes.push({ tipo:'reanalise', txt: _hbr+' '+_pista+' reanalisada (fav agora T'+cur.trapFav+')' });
+      }
     });
 
     if (changedAny) {
@@ -485,7 +503,13 @@ async function syncFromServer() {
           renderFocusPanel(results[stillIdx], stillIdx);
         }
       }
-      showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
+      if (changes.length) {
+        var _hasSkip = changes.some(function(c){ return c.tipo==='skip'; });
+        try { playBellSound(); } catch(e){}
+        showToast((_hasSkip?'\u26A0\uFE0F ':'\uD83D\uDD04 ') + changes.map(function(c){ return c.txt; }).join(' \u00B7 '), !_hasSkip);
+      } else {
+        showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
+      }
     }
   } catch(e) { console.error('[syncFromServer] erro', e); }
 }
@@ -841,6 +865,7 @@ function renderRaceListPanel(avbs) {
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
       + (r.cardSuspect ? '<div class="rc-suspect-badge">⚠ PISTA PODE TER CANCELADO</div>' : '')
+      + (r._reanaliseFlag && r._reanaliseFlag.type==='reanalise' && (Date.now()-r._reanaliseFlag.at)<300000 ? '<div class="rc-reanalise-badge">🔄 REANALISADA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+(r.corrida||'-')+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
