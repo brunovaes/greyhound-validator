@@ -368,4 +368,70 @@ function buildDesempenhoWorkbook(userId, fromISO, toISO, dbOverride) {
   return { wb, total, acTot, errTot };
 }
 
-module.exports = { buildDerrotasWorkbook, coletarDerrotas, buildDesempenhoWorkbook, coletarResolvidos };
+// ============================================================
+// EXPORT DE DADOS BRUTOS (JSON) — pra analise/afinacao do motor.
+// Reproduz a estrutura do backtest_motor_*.json direto do banco, e agora
+// inclui automaticamente race_card + trapsCard (composicao do pareo, de onde
+// saem as traps vazias) e o estilo no nome (W)/(M) — sem nenhum trabalho
+// manual. O robo ja salvou tudo isso; aqui so empacota.
+// ============================================================
+function jp(s, fallback) { try { return s ? JSON.parse(s) : fallback; } catch (e) { return fallback; } }
+
+function buildBacktestJson(userId, fromISO, toISO, dbOverride) {
+  const db = getDb(dbOverride);
+  const rows = db.prepare(
+    `SELECT r.*, s.name AS sessao
+       FROM races r JOIN race_sessions s ON s.id = r.session_id
+      WHERE r.user_id = ? AND r.trap_fav > 0 AND r.trap_und > 0
+      ORDER BY s.created_at, r.hora`
+  ).all(userId);
+  const from = fromISO ? new Date(fromISO + 'T00:00:00') : null;
+  const to = toISO ? new Date(toISO + 'T23:59:59') : null;
+
+  const corridas = [];
+  for (const r of rows) {
+    const dt = parseSessionDate(r.sessao);
+    if (from && (!dt || dt < from)) continue;
+    if (to && (!dt || dt > to)) continue;
+
+    const raceCard = jp(r.race_card, []);                 // [{trap,nome}] — nomes trazem (W)/(M)
+    const trapsCard = raceCard.map(g => g.trap).filter(t => t != null).sort((a, b) => a - b);
+    const presentes = new Set(trapsCard);
+    const trapsVazias = [1, 2, 3, 4, 5, 6].filter(t => !presentes.has(t)); // derivado, so pra conveniencia
+
+    corridas.push({
+      sessao: r.sessao,
+      hora_uk: r.hora || '', hora_br: r.hora_br || '',
+      corrida: r.corrida || '', dist: r.dist || '',
+      previsao_do_motor: {
+        favorito: { trap: r.trap_fav, nome: r.name_fav, perfil: r.perfil_fav },
+        underdog: { trap: r.trap_und, nome: r.name_und, perfil: r.perfil_und },
+        confianca_pct: r.pct, nivel: r.nivel,
+        scores_por_criterio: jp(r.scores_json, [])
+      },
+      resultado_real: {
+        primeiro: r.resultado_1, segundo: r.resultado_2, terceiro: r.resultado_3,
+        chegada_completa: jp(r.finishing_order_json, null)
+      },
+      bateu: r.bateu,
+      eliminados_antes_do_calculo: jp(r.eliminados, []),
+      historico_pre_corrida: jp(r.hist_all, []),
+      // --- NOVO: composicao do pareo p/ validacao de trap vazia/vizinho ---
+      race_card: raceCard,
+      trapsCard,
+      traps_vazias: trapsVazias
+    });
+  }
+  return {
+    total_corridas: corridas.length,
+    total_bateu_sim: corridas.filter(c => c.bateu === 'sim').length,
+    total_bateu_nao: corridas.filter(c => c.bateu === 'nao').length,
+    corridas
+  };
+}
+
+module.exports = {
+  buildDerrotasWorkbook, coletarDerrotas,
+  buildDesempenhoWorkbook, coletarResolvidos,
+  buildBacktestJson
+};

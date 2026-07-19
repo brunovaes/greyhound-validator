@@ -417,6 +417,14 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   <button type="button" class="btn-save" onclick="baixarDesempenho()">${icon('trophy',{size:14})} Baixar HR por contexto</button>
 </div>
 </div>
+
+<div class="section">
+<div class="sec-title">Exportar Dados Brutos (JSON) — para análise do motor</div>
+<div class="info-box">Gera o <strong>.json</strong> completo do backtest direto do banco (previsão, scores por critério, histórico, resultado real) — o arquivo usado pra afinar o motor. Agora já inclui automaticamente o <strong>race_card / trapsCard</strong> (composição do páreo e traps vazias) e o estilo <code>(W)/(M)</code> no nome de cada galgo. Nenhum preenchimento manual. Deixe as datas em branco para todo o histórico.</div>
+<div style="margin-top:6px">
+  <button type="button" class="btn-save" onclick="baixarDados()">${icon('gear',{size:14})} Baixar dados brutos (JSON)</button>
+</div>
+</div>
 </div>
 
 <div class="btn-bar">
@@ -458,6 +466,13 @@ function baixarDesempenho(){
   if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
   var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
   window.location.href='${BASE}/config/export-desempenho'+(qs.length?'?'+qs.join('&'):'');
+}
+// Dados brutos (JSON) pra analise: datas opcionais (em branco = tudo).
+function baixarDados(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
+  window.location.href='${BASE}/config/export-dados'+(qs.length?'?'+qs.join('&'):'');
 }
 // Mesmos 4 sons do app.js (Analisar) — pra poder testar aqui antes de salvar
 function tocarSino(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(1046.5,0,0.25);tone(1318.5,0.15,0.35);}
@@ -654,6 +669,34 @@ router.get('/export-desempenho', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[export-desempenho] erro:', err);
     res.status(500).send('Erro ao gerar planilha: ' + err.message);
+  }
+});
+
+// Exporta os dados brutos do backtest em JSON (inclui race_card/trapsCard).
+// Datas opcionais (sem elas = todo o historico).
+router.get('/export-dados', requireAdmin, (req, res) => {
+  try {
+    let buildBacktestJson;
+    try {
+      ({ buildBacktestJson } = require('../utils/exportDerrotas'));
+    } catch (e) {
+      console.error('[export-dados] modulo indisponivel:', e.message);
+      return res.status(500).send('Exportacao indisponivel: ' + e.message);
+    }
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    const from = String(req.query.from || '').trim();
+    const to = String(req.query.to || '').trim();
+    if ((from && !re.test(from)) || (to && !re.test(to))) {
+      return res.status(400).send('Datas inválidas — use AAAA-MM-DD ou deixe em branco.');
+    }
+    const payload = buildBacktestJson(req.user.id, from || null, to || null);
+    const sufixo = (from || to) ? `${from || 'inicio'}_a_${to || 'hoje'}` : 'geral';
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="backtest_motor_${sufixo}.json"`);
+    res.send(JSON.stringify(payload));
+  } catch (err) {
+    console.error('[export-dados] erro:', err);
+    res.status(500).send('Erro ao gerar JSON: ' + err.message);
   }
 });
 
