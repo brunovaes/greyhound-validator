@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
+const { buildDerrotasWorkbook } = require('../utils/exportDerrotas');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
@@ -111,6 +112,7 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
   <button type="button" class="tabbtn" data-tab="t-banca" onclick="showTab('t-banca')">${icon('trophy',{size:14})} Banca</button>
+  <button type="button" class="tabbtn" data-tab="t-export" onclick="showTab('t-export')">${icon('scroll',{size:14})} Exportar Derrotas</button>
 </div>
 
 <div>
@@ -396,6 +398,20 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </div>
 
+<div class="tab-panel" id="t-export">
+<div class="section">
+<div class="sec-title">Exportar Derrotas — Planilha de Revisão</div>
+<div class="info-box">Gera uma planilha <strong>.xlsx</strong> com todas as derrotas (AvB que não bateu) do intervalo escolhido, já ordenadas por prioridade de revisão (maior confiança + favorito que chegou mais atrás primeiro). Traz as notas 0-100 de cada critério do favorito e colunas em branco pra marcação manual: <em>resultado confere / pista limpa / análise ruim / observações</em>. Inclui aba separada com os resultados suspeitos (onde o "bateu" gravado contradiz a chegada).</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field"><label>Data inicial</label><input type="date" id="exp_from"><span class="hint">Primeiro dia do período (inclusivo)</span></div>
+  <div class="field"><label>Data final</label><input type="date" id="exp_to"><span class="hint">Último dia do período (inclusivo)</span></div>
+</div>
+<div style="margin-top:18px">
+  <button type="button" class="btn-save" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha</button>
+</div>
+</div>
+</div>
+
 <div class="btn-bar">
   <button type="submit" class="btn-save">Salvar Configurações</button>
   <button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button>
@@ -420,6 +436,14 @@ function showTab(id){
   document.querySelectorAll('.tabbtn').forEach(function(b){b.classList.remove('active');});
   document.getElementById(id).classList.add('active');
   document.querySelector('.tabbtn[data-tab="'+id+'"]').classList.add('active');
+}
+// Exportar Derrotas: monta a URL com o intervalo e dispara o download (a rota
+// responde com Content-Disposition attachment, entao window.location baixa).
+function baixarDerrotas(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(!f||!t){alert('Escolha a data inicial e a final.');return;}
+  if(f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  window.location.href='${BASE}/config/export-derrotas?from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t);
 }
 // Mesmos 4 sons do app.js (Analisar) — pra poder testar aqui antes de salvar
 function tocarSino(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(1046.5,0,0.25);tone(1318.5,0.15,0.35);}
@@ -552,6 +576,32 @@ router.get('/reset', requireAdmin, (req, res) => {
   const { getUserConfig } = require('../db/database');
   getUserConfig(user.id);
   res.redirect(BASE + '/config');
+});
+
+// Exporta a planilha de revisao de derrotas para o intervalo [from,to]
+// (AAAA-MM-DD, inclusivo). Ver src/utils/exportDerrotas.js. So admin.
+router.get('/export-derrotas', requireAdmin, async (req, res) => {
+  try {
+    const from = String(req.query.from || '').trim();
+    const to = String(req.query.to || '').trim();
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    if (!re.test(from) || !re.test(to)) {
+      return res.status(400).send('Datas inválidas — use o formato AAAA-MM-DD.');
+    }
+    if (from > to) {
+      return res.status(400).send('A data inicial não pode ser maior que a final.');
+    }
+    const { wb, total } = buildDerrotasWorkbook(req.user.id, from, to);
+    const fname = `Derrotas_${from}_a_${to}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    res.setHeader('X-Total-Derrotas', String(total));
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[export-derrotas] erro:', err);
+    res.status(500).send('Erro ao gerar planilha: ' + err.message);
+  }
 });
 
 module.exports = router;
