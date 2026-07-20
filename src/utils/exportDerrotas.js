@@ -263,17 +263,34 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
     let scores = [];
     try { scores = r.scores_json ? JSON.parse(r.scores_json) : []; } catch (e) { scores = []; }
     const partes = (r.corrida || '').split(' ');
+    // timestamp (ord) pra ordenar por recencia — data da sessao + hora da corrida
+    let hhmin = 0;
+    { const pp = String(r.hora || '').split(':'); let H = parseInt(pp[0], 10); if (!isNaN(H)) { if (H >= 1 && H <= 9) H += 12; hhmin = H * 60 + (parseInt(pp[1], 10) || 0); } }
     out.push({
       pista: partes[0] || '?',
       classe: partes[partes.length - 1] || '?',
       dist: r.dist || '?',
       nElig: scores.length || null,
       hora: r.hora || '',
+      ord: (dt ? dt.getTime() : 0) + hhmin * 60000,
       der, raw: r.bateu
     });
   }
   return out;
 }
+
+// Nomes completos das pistas (codigo do Racing Post -> nome). AJUSTE aqui se
+// algum estiver errado — os incertos estao marcados. Usado no filtro e no
+// relatorio; o filtro/agrupamento continua usando o codigo por baixo.
+const NOMES_PISTAS = {
+  CPark: 'Central Park', Cork: 'Cork', Donc: 'Doncaster', DunPk: 'Dundalk',
+  Harlow: 'Harlow', Hove: 'Hove', Kilky: 'Kilkenny', Kinsly: 'Kinsley',
+  Limrk: 'Limerick', Monmr: 'Monmore', Mulgr: 'Mullingar', Newc: 'Newcastle',
+  Notts: 'Nottingham', Pelaw: 'Pelaw Grange', Romfd: 'Romford', Sheff: 'Sheffield',
+  Sland: 'Sunderland', Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley',
+  Yrmth: 'Yarmouth', Youghl: 'Youghal'
+};
+function nomePista(code) { return NOMES_PISTAS[code] || code; }
 
 // hora_uk ("H:MM") -> hora em 24h UK (o sistema trata 1-9 como PM).
 function horaUk24(h) {
@@ -342,9 +359,20 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     classes: uniq(todos.map(x => x.classe)).sort()
   };
 
+  // Janela de recencia: se "limite" foi passado, usa so as N corridas mais
+  // recentes (por data+hora) ANTES de cruzar os filtros.
+  const limite = parseInt(f.limite, 10);
+  const janela = (limite && limite > 0)
+    ? todos.slice().sort((a, b) => b.ord - a.ord).slice(0, limite)
+    : todos;
+
+  // Nomes completos das pistas disponiveis (pro filtro e o relatorio).
+  const nomes = {};
+  opcoes.pistas.forEach(p => { nomes[p] = nomePista(p); });
+
   // Aplica o cruzamento. Pista aceita MULTIPLA (lista separada por virgula).
   const pistaSel = String(f.pista || '').split(',').map(s => s.trim()).filter(Boolean);
-  const items = todos.filter(x =>
+  const items = janela.filter(x =>
     (!f.turno || x.turno === f.turno) &&
     (!pistaSel.length || pistaSel.includes(x.pista)) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
@@ -360,8 +388,8 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   return {
     periodo: { from: fromISO || null, to: toISO || null },
     turnos: { t1, t2, t3 },
-    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '' },
-    opcoes,
+    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', limite: f.limite || '' },
+    opcoes, nomes,
     resumo: {
       total, acertos: ac,
       hr: total ? ac / total : 0,

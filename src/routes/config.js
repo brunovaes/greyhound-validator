@@ -435,6 +435,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
   <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="dash_from" onclick="try{this.showPicker()}catch(e){}"></div>
   <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="dash_to" onclick="try{this.showPicker()}catch(e){}"></div>
+  <div class="field" style="width:120px;flex-shrink:0"><label style="white-space:nowrap">Qtd corridas</label><select id="dash_f_qtd" onchange="carregarDashboard()"><option value="">Todas</option><option value="10">0-10</option><option value="20">0-20</option><option value="30">0-30</option><option value="40">0-40</option><option value="50">0-50</option><option value="100">0-100</option><option value="150">0-150</option><option value="200">0-200</option><option value="300">0-300</option></select></div>
   <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Manhã (BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
   <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Tarde (BR)</label><input type="number" id="dash_t2" value="10" min="0" max="23"></div>
   <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Noite (BR)</label><input type="number" id="dash_t3" value="14" min="0" max="23"></div>
@@ -526,14 +527,23 @@ function dashSecao(titulo,arr){
   if(!arr||!arr.length) return '';
   return '<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">'+titulo+'</div>'+arr.map(dashBar).join('')+'</div>';
 }
-var dashPistasSel = [];
-function togglePistaPanel(e){ if(e&&e.stopPropagation)e.stopPropagation(); var p=document.getElementById('dash_f_pista_panel'); if(p)p.style.display=(p.style.display==='block')?'none':'block'; }
+var dashPistasSel = [], dashPistaDirty = false, dashNomes = {};
+function nomePistaCli(code){ return (dashNomes && dashNomes[code]) || code; }
+function fecharPistaEComitar(){
+  var p=document.getElementById('dash_f_pista_panel'); if(p) p.style.display='none';
+  if(dashPistaDirty){ dashPistaDirty=false; carregarDashboard(); }
+}
+function togglePistaPanel(e){
+  if(e&&e.stopPropagation)e.stopPropagation();
+  var p=document.getElementById('dash_f_pista_panel'); if(!p) return;
+  if(p.style.display==='block'){ fecharPistaEComitar(); } else { p.style.display='block'; }
+}
 function preenchePistaPanel(pistas){
   var pan=document.getElementById('dash_f_pista_panel'); if(!pan) return;
   dashPistasSel = dashPistasSel.filter(function(p){ return (pistas||[]).indexOf(p)>=0; });
   var h=(pistas||[]).map(function(p){
     var ck = dashPistasSel.indexOf(p)>=0?'checked':'';
-    return '<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:12px;color:#ccc;cursor:pointer;white-space:nowrap"><input type="checkbox" value="'+p+'" '+ck+' onchange="onPistaCheck(this)" style="margin:0;cursor:pointer">'+p+'</label>';
+    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:12px;color:#ccc;cursor:pointer;white-space:nowrap;text-align:left"><input type="checkbox" value="'+p+'" '+ck+' onchange="onPistaCheck(this)" style="margin:0;cursor:pointer;flex-shrink:0">'+nomePistaCli(p)+'</label>';
   }).join('');
   pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem pistas no período</div>';
   atualizaPistaBox();
@@ -542,15 +552,17 @@ function onPistaCheck(cb){
   var v=cb.value;
   if(cb.checked){ if(dashPistasSel.indexOf(v)<0) dashPistasSel.push(v); }
   else { dashPistasSel = dashPistasSel.filter(function(p){return p!==v;}); }
-  atualizaPistaBox(); carregarDashboard();
+  dashPistaDirty=true; atualizaPistaBox();  // NAO recarrega aqui — so ao sair do campo
 }
 function atualizaPistaBox(){
   var box=document.getElementById('dash_f_pista_box'); if(!box) return;
-  box.textContent = !dashPistasSel.length ? 'Todas ▾' : (dashPistasSel.length<=2 ? dashPistasSel.join(', ')+' ▾' : dashPistasSel.length+' pistas ▾');
+  if(!dashPistasSel.length) box.textContent='Todas ▾';
+  else if(dashPistasSel.length<=2) box.textContent=dashPistasSel.map(nomePistaCli).join(', ')+' ▾';
+  else box.textContent=dashPistasSel.length+' pistas ▾';
 }
 document.addEventListener('click', function(e){
   var box=document.getElementById('dash_f_pista_box'), pan=document.getElementById('dash_f_pista_panel');
-  if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box) pan.style.display='none';
+  if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box){ fecharPistaEComitar(); }
 });
 function dashPreencheSelect(id, valores, sel, prefixoTodos){
   var el=document.getElementById(id); if(!el) return;
@@ -559,8 +571,8 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_caes','dash_f_classe'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
-  dashPistasSel=[]; atualizaPistaBox();
+  ['dash_f_turno','dash_f_caes','dash_f_classe','dash_f_qtd'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  dashPistasSel=[]; dashPistaDirty=false; atualizaPistaBox();
   carregarDashboard();
 }
 async function carregarDashboard(){
@@ -569,6 +581,7 @@ async function carregarDashboard(){
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||10, t3=document.getElementById('dash_t3').value||14;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
   var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
+  var fQtd=document.getElementById('dash_f_qtd').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
   var qs=['t1='+t1,'t2='+t2,'t3='+t3];
   if(f)qs.push('from='+f); if(t)qs.push('to='+t);
@@ -576,20 +589,22 @@ async function carregarDashboard(){
   if(fPista)qs.push('pista='+encodeURIComponent(fPista));
   if(fCaes)qs.push('caes='+encodeURIComponent(fCaes));
   if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
+  if(fQtd)qs.push('limite='+encodeURIComponent(fQtd));
   try{
     var r=await fetch('${BASE}/config/desempenho-data?'+qs.join('&'));
     if(!r.ok) throw new Error('HTTP '+r.status);
     var d=await r.json();
     if(d.error) throw new Error(d.error);
+    dashNomes = d.nomes || {};
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
     preenchePistaPanel(d.opcoes.pistas);
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
     dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
     var rz=d.resumo;
-    var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe;
+    var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.limite;
     var recorte='';
     if(temFiltro){
-      var partes=[]; if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.replace(/,/g,', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
+      var partes=[]; if(d.filtros.limite)partes.push('últimas '+d.filtros.limite); if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';
@@ -602,7 +617,8 @@ async function carregarDashboard(){
       +dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
       +dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e')
       +'</div>';
-    var corpo = rz.total? (dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',d.porPista)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma corrida nesse recorte.</div>';
+    var pistaRows=(d.porPista||[]).map(function(x){ return {chave:nomePistaCli(x.chave), n:x.n, ac:x.ac, hr:x.hr, hrCru:x.hrCru, err:x.err, amostra:x.amostra}; });
+    var corpo = rz.total? (dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',pistaRows)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma corrida nesse recorte.</div>';
     cont.innerHTML=recorte+aviso+kpi+corpo
       +'<div style="font-size:10px;color:#666;margin-top:6px">Amostra: baixa (&lt;15) = ruído · média (15–29) · boa (≥30). Só confie em faixas com amostra boa.</div>';
   }catch(e){ cont.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
@@ -855,7 +871,8 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       turno: String(req.query.turno || '').trim(),
       pista: String(req.query.pista || '').trim(),
       caes: String(req.query.caes || '').trim(),
-      classe: String(req.query.classe || '').trim()
+      classe: String(req.query.classe || '').trim(),
+      limite: String(req.query.limite || '').trim()
     };
     const data = buildDesempenhoData(req.user.id, from || null, to || null, turnos, filtros);
     res.json(data);
