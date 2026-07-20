@@ -433,8 +433,8 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
 <div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label).<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>18h no UK aparece aqui como 14h BR</strong>. Padrão dos turnos: Manhã 6h, Tarde 10h, Noite 14h (BR).</div>
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
-  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="dash_from"></div>
-  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="dash_to"></div>
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="dash_from" onclick="try{this.showPicker()}catch(e){}"></div>
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="dash_to" onclick="try{this.showPicker()}catch(e){}"></div>
   <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Manhã (BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
   <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Tarde (BR)</label><input type="number" id="dash_t2" value="10" min="0" max="23"></div>
   <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Noite (BR)</label><input type="number" id="dash_t3" value="14" min="0" max="23"></div>
@@ -444,7 +444,10 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div style="font-size:12px;color:#22c55e;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">Cruzar filtros <span style="color:#888;font-weight:400;text-transform:none;letter-spacing:0">— deixe em "Todos" o que não quiser fixar</span></div>
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
   <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Turno</label><select id="dash_f_turno" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Pista</label><select id="dash_f_pista" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field" style="flex:1;min-width:150px;position:relative"><label style="white-space:nowrap">Pista (várias)</label>
+    <div id="dash_f_pista_box" onclick="togglePistaPanel(event)" style="padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Todas ▾</div>
+    <div id="dash_f_pista_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
+  </div>
   <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Nº de cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
   <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
@@ -523,6 +526,32 @@ function dashSecao(titulo,arr){
   if(!arr||!arr.length) return '';
   return '<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">'+titulo+'</div>'+arr.map(dashBar).join('')+'</div>';
 }
+var dashPistasSel = [];
+function togglePistaPanel(e){ if(e&&e.stopPropagation)e.stopPropagation(); var p=document.getElementById('dash_f_pista_panel'); if(p)p.style.display=(p.style.display==='block')?'none':'block'; }
+function preenchePistaPanel(pistas){
+  var pan=document.getElementById('dash_f_pista_panel'); if(!pan) return;
+  dashPistasSel = dashPistasSel.filter(function(p){ return (pistas||[]).indexOf(p)>=0; });
+  var h=(pistas||[]).map(function(p){
+    var ck = dashPistasSel.indexOf(p)>=0?'checked':'';
+    return '<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:12px;color:#ccc;cursor:pointer;white-space:nowrap"><input type="checkbox" value="'+p+'" '+ck+' onchange="onPistaCheck(this)" style="margin:0;cursor:pointer">'+p+'</label>';
+  }).join('');
+  pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem pistas no período</div>';
+  atualizaPistaBox();
+}
+function onPistaCheck(cb){
+  var v=cb.value;
+  if(cb.checked){ if(dashPistasSel.indexOf(v)<0) dashPistasSel.push(v); }
+  else { dashPistasSel = dashPistasSel.filter(function(p){return p!==v;}); }
+  atualizaPistaBox(); carregarDashboard();
+}
+function atualizaPistaBox(){
+  var box=document.getElementById('dash_f_pista_box'); if(!box) return;
+  box.textContent = !dashPistasSel.length ? 'Todas ▾' : (dashPistasSel.length<=2 ? dashPistasSel.join(', ')+' ▾' : dashPistasSel.length+' pistas ▾');
+}
+document.addEventListener('click', function(e){
+  var box=document.getElementById('dash_f_pista_box'), pan=document.getElementById('dash_f_pista_panel');
+  if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box) pan.style.display='none';
+});
 function dashPreencheSelect(id, valores, sel, prefixoTodos){
   var el=document.getElementById(id); if(!el) return;
   var opts='<option value="">'+prefixoTodos+'</option>';
@@ -530,14 +559,15 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_pista','dash_f_caes','dash_f_classe'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  ['dash_f_turno','dash_f_caes','dash_f_classe'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  dashPistasSel=[]; atualizaPistaBox();
   carregarDashboard();
 }
 async function carregarDashboard(){
   var cont=document.getElementById('dash-content'); if(!cont) return;
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||10, t3=document.getElementById('dash_t3').value||14;
-  var fTurno=document.getElementById('dash_f_turno').value, fPista=document.getElementById('dash_f_pista').value;
+  var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
   var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
   var qs=['t1='+t1,'t2='+t2,'t3='+t3];
@@ -552,14 +582,14 @@ async function carregarDashboard(){
     var d=await r.json();
     if(d.error) throw new Error(d.error);
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
-    dashPreencheSelect('dash_f_pista', d.opcoes.pistas, d.filtros.pista, 'Todas');
+    preenchePistaPanel(d.opcoes.pistas);
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
     dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
     var rz=d.resumo;
     var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe;
     var recorte='';
     if(temFiltro){
-      var partes=[]; if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
+      var partes=[]; if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.replace(/,/g,', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';

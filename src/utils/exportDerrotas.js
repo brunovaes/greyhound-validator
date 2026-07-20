@@ -342,10 +342,11 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     classes: uniq(todos.map(x => x.classe)).sort()
   };
 
-  // Aplica o cruzamento
+  // Aplica o cruzamento. Pista aceita MULTIPLA (lista separada por virgula).
+  const pistaSel = String(f.pista || '').split(',').map(s => s.trim()).filter(Boolean);
   const items = todos.filter(x =>
     (!f.turno || x.turno === f.turno) &&
-    (!f.pista || x.pista === f.pista) &&
+    (!pistaSel.length || pistaSel.includes(x.pista)) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
     (!f.classe || x.classe === f.classe)
   );
