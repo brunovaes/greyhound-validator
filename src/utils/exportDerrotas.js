@@ -310,14 +310,13 @@ function horaBr24(h) {
 }
 
 // Rotula o turno de uma corrida conforme as bordas configuraveis (horas 24h BR).
-// t1=inicio da Manha, t2=inicio da Tarde, t3=inicio da Noite (tudo em BR).
-function rotuloTurno(h, t1, t2, t3) {
+// So dois turnos: t1=inicio da Manha, t2=inicio da Tarde (tudo em BR).
+function rotuloTurno(h, t1, t2) {
   const hr = horaBr24(h);
   if (hr == null) return null;
   if (hr < t1) return `Antes das ${t1}h BR`;
   if (hr < t2) return `Manhã (${t1}-${t2}h BR)`;
-  if (hr < t3) return `Tarde (${t2}-${t3}h BR)`;
-  return `Noite (${t3}h+ BR)`;
+  return `Tarde (${t2}h+ BR)`;
 }
 
 // Converte um agrupamento {chave:{n,ac,nRaw,acRaw,err}} num array pronto pro
@@ -340,13 +339,13 @@ function grupoParaArray(grupo, ordenar) {
 // filtros = { turno, pista, caes, classe } — qualquer um pode faltar ('' = todos).
 // Cruza as dimensoes: aplica todos os filtros presentes e agrega o subconjunto.
 function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride) {
-  // bordas em horario BR (Brasilia). Padroes BR 6/10/14 = UK 10/14/18.
+  // bordas em horario BR (Brasilia). Dois turnos: Manha a partir de t1 (6h) e
+  // Tarde a partir de t2 (13h).
   const t1 = (turnos && turnos.t1) || 6;
-  const t2 = (turnos && turnos.t2) || 10;
-  const t3 = (turnos && turnos.t3) || 14;
+  const t2 = (turnos && turnos.t2) || 13;
   const f = filtros || {};
   const todos = coletarResolvidos(userId, fromISO || null, toISO || null, dbOverride)
-    .map(x => Object.assign(x, { turno: rotuloTurno(x.hora, t1, t2, t3) }));
+    .map(x => Object.assign(x, { turno: rotuloTurno(x.hora, t1, t2) }));
 
   // Opcoes dos dropdowns — sempre do conjunto do PERIODO (antes do cruzamento),
   // pra lista nao "sumir" conforme voce filtra.
@@ -387,7 +386,7 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
 
   return {
     periodo: { from: fromISO || null, to: toISO || null },
-    turnos: { t1, t2, t3 },
+    turnos: { t1, t2 },
     filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', limite: f.limite || '' },
     opcoes, nomes,
     resumo: {

@@ -431,14 +431,12 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-dash">
 <div class="section">
 <div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
-<div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label).<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>18h no UK aparece aqui como 14h BR</strong>. Padrão dos turnos: Manhã 6h, Tarde 10h, Noite 14h (BR).</div>
+<div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label).<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>17h no UK aparece aqui como 13h BR</strong>. Dois turnos: <strong>Manhã (a partir das 6h)</strong> e <strong>Tarde (a partir das 13h)</strong>, horário BR.</div>
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
   <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="dash_from" onclick="try{this.showPicker()}catch(e){}"></div>
   <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="dash_to" onclick="try{this.showPicker()}catch(e){}"></div>
-  <div class="field" style="width:120px;flex-shrink:0"><label style="white-space:nowrap">Qtd corridas</label><select id="dash_f_qtd" onchange="carregarDashboard()"><option value="">Todas</option><option value="10">0-10</option><option value="20">0-20</option><option value="30">0-30</option><option value="40">0-40</option><option value="50">0-50</option><option value="100">0-100</option><option value="150">0-150</option><option value="200">0-200</option><option value="300">0-300</option></select></div>
-  <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Manhã (BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
-  <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Tarde (BR)</label><input type="number" id="dash_t2" value="10" min="0" max="23"></div>
-  <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Noite (BR)</label><input type="number" id="dash_t3" value="14" min="0" max="23"></div>
+  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Manhã (BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
+  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Tarde (BR)</label><input type="number" id="dash_t2" value="13" min="0" max="23"></div>
   <button type="button" class="btn-save" style="padding:9px 18px;flex-shrink:0" onclick="carregarDashboard()">↻ Atualizar</button>
 </div>
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid #222">
@@ -449,8 +447,9 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <div id="dash_f_pista_box" onclick="togglePistaPanel(event)" style="padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Todas ▾</div>
     <div id="dash_f_pista_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
   </div>
-  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Nº de cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Nº cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
+  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field" style="width:118px;flex-shrink:0"><label style="white-space:nowrap">Qtd corridas</label><select id="dash_f_qtd" onchange="carregarDashboard()"><option value="">Todas</option><option value="10">0-10</option><option value="20">0-20</option><option value="30">0-30</option><option value="40">0-40</option><option value="50">0-50</option><option value="100">0-100</option><option value="150">0-150</option><option value="200">0-200</option><option value="300">0-300</option></select></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
 </div>
 </div>
@@ -543,7 +542,7 @@ function preenchePistaPanel(pistas){
   dashPistasSel = dashPistasSel.filter(function(p){ return (pistas||[]).indexOf(p)>=0; });
   var h=(pistas||[]).map(function(p){
     var ck = dashPistasSel.indexOf(p)>=0?'checked':'';
-    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:12px;color:#ccc;cursor:pointer;white-space:nowrap;text-align:left"><input type="checkbox" value="'+p+'" '+ck+' onchange="onPistaCheck(this)" style="margin:0;cursor:pointer;flex-shrink:0">'+nomePistaCli(p)+'</label>';
+    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;text-align:left;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" value="'+p+'" '+ck+' onchange="onPistaCheck(this)" style="margin:0;padding:0;width:16px;height:16px;flex-shrink:0;cursor:pointer">'+nomePistaCli(p)+'</label>';
   }).join('');
   pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem pistas no período</div>';
   atualizaPistaBox();
@@ -578,12 +577,12 @@ function limparFiltrosDash(){
 async function carregarDashboard(){
   var cont=document.getElementById('dash-content'); if(!cont) return;
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
-  var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||10, t3=document.getElementById('dash_t3').value||14;
+  var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||13;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
   var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
   var fQtd=document.getElementById('dash_f_qtd').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
-  var qs=['t1='+t1,'t2='+t2,'t3='+t3];
+  var qs=['t1='+t1,'t2='+t2];
   if(f)qs.push('from='+f); if(t)qs.push('to='+t);
   if(fTurno)qs.push('turno='+encodeURIComponent(fTurno));
   if(fPista)qs.push('pista='+encodeURIComponent(fPista));
@@ -866,7 +865,7 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       return res.status(400).json({ error: 'datas inválidas (AAAA-MM-DD)' });
     }
     const clampH = (v, d) => { const n = parseInt(v, 10); return (isNaN(n) || n < 0 || n > 23) ? d : n; };
-    const turnos = { t1: clampH(req.query.t1, 6), t2: clampH(req.query.t2, 10), t3: clampH(req.query.t3, 14) };
+    const turnos = { t1: clampH(req.query.t1, 6), t2: clampH(req.query.t2, 13) };
     const filtros = {
       turno: String(req.query.turno || '').trim(),
       pista: String(req.query.pista || '').trim(),
