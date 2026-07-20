@@ -403,8 +403,8 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="sec-title">Exportar Derrotas — Planilha de Revisão</div>
 <div class="info-box">Gera uma planilha <strong>.xlsx</strong> com todas as derrotas (AvB que não bateu) do intervalo escolhido, já ordenadas por prioridade de revisão (maior confiança + favorito que chegou mais atrás primeiro). Traz as notas 0-100 de cada critério do favorito e colunas em branco pra marcação manual: <em>resultado confere / pista limpa / análise ruim / observações</em>. Inclui aba separada com os resultados suspeitos (onde o "bateu" gravado contradiz a chegada).</div>
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-  <div class="field"><label>Data inicial</label><input type="date" id="exp_from"><span class="hint">Primeiro dia do período (inclusivo)</span></div>
-  <div class="field"><label>Data final</label><input type="date" id="exp_to"><span class="hint">Último dia do período (inclusivo)</span></div>
+  <div class="field"><label>Data inicial</label><input type="date" id="exp_from" onclick="try{this.showPicker()}catch(e){}"><span class="hint">Primeiro dia do período (inclusivo)</span></div>
+  <div class="field"><label>Data final</label><input type="date" id="exp_to" onclick="try{this.showPicker()}catch(e){}"><span class="hint">Último dia do período (inclusivo)</span></div>
 </div>
 <div style="margin-top:18px">
   <button type="button" class="btn-save" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha de derrotas</button>
