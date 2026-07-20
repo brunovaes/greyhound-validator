@@ -449,8 +449,8 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Nº cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
-  <div class="field" style="width:78px;flex-shrink:0"><label style="white-space:nowrap">Qtd mín</label><input type="number" id="dash_qtd_min" min="1" placeholder="1" onchange="carregarDashboard()"></div>
-  <div class="field" style="width:80px;flex-shrink:0"><label style="white-space:nowrap">Qtd máx</label><input type="number" id="dash_qtd_max" min="1" placeholder="todas" onchange="carregarDashboard()"></div>
+  <div class="field" style="width:78px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd mín</label><input type="number" id="dash_qtd_min" min="1" placeholder="–" title="Nº mínimo de corridas da pista/classe" onchange="carregarDashboard()"></div>
+  <div class="field" style="width:80px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd máx</label><input type="number" id="dash_qtd_max" min="1" placeholder="–" title="Nº máximo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
 </div>
 </div>
@@ -607,9 +607,9 @@ async function carregarDashboard(){
     if(temFiltro){
       var partes=[];
       var qlbl='';
-      if(d.filtros.qtdMin&&d.filtros.qtdMax) qlbl='corridas '+d.filtros.qtdMin+'–'+d.filtros.qtdMax;
-      else if(d.filtros.qtdMax) qlbl='últimas '+d.filtros.qtdMax;
-      else if(d.filtros.qtdMin) qlbl='a partir da '+d.filtros.qtdMin+'ª mais recente';
+      if(d.filtros.qtdMin&&d.filtros.qtdMax) qlbl='pistas c/ '+d.filtros.qtdMin+'–'+d.filtros.qtdMax+' corridas';
+      else if(d.filtros.qtdMax) qlbl='pistas c/ até '+d.filtros.qtdMax+' corridas';
+      else if(d.filtros.qtdMin) qlbl='pistas c/ mín. '+d.filtros.qtdMin+' corridas';
       if(qlbl)partes.push(qlbl);
       if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';

@@ -358,31 +358,25 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     classes: uniq(todos.map(x => x.classe)).sort()
   };
 
-  // Janela por QUANTIDADE de corridas — posicao na lista ordenada por recencia
-  // (mais recente = 1a). qtdMin/qtdMax opcionais. Ex.: min=51,max=100 = da 51a
-  // a 100a corrida mais recente. Aplicado ANTES de cruzar os filtros.
-  const qMin = parseInt(f.qtdMin, 10);
-  const qMax = parseInt(f.qtdMax, 10);
-  let janela = todos;
-  if ((qMin && qMin > 0) || (qMax && qMax > 0)) {
-    const ordenado = todos.slice().sort((a, b) => b.ord - a.ord);
-    const ini = (qMin && qMin > 0) ? qMin - 1 : 0;
-    const fim = (qMax && qMax > 0) ? qMax : ordenado.length;
-    janela = ordenado.slice(ini, fim);
-  }
-
   // Nomes completos das pistas disponiveis (pro filtro e o relatorio).
   const nomes = {};
   opcoes.pistas.forEach(p => { nomes[p] = nomePista(p); });
 
   // Aplica o cruzamento. Pista aceita MULTIPLA (lista separada por virgula).
   const pistaSel = String(f.pista || '').split(',').map(s => s.trim()).filter(Boolean);
-  const items = janela.filter(x =>
+  const items = todos.filter(x =>
     (!f.turno || x.turno === f.turno) &&
     (!pistaSel.length || pistaSel.includes(x.pista)) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
     (!f.classe || x.classe === f.classe)
   );
+
+  // Filtro por QUANTIDADE de corridas: mostra so os grupos (pista/classe) cujo
+  // numero de corridas (n) cai no intervalo [qtdMin, qtdMax]. Nao mexe no
+  // resumo nem em turno/nElig (esses sao poucos grupos com muitas corridas).
+  const qMin = parseInt(f.qtdMin, 10);
+  const qMax = parseInt(f.qtdMax, 10);
+  const passaQtd = n => (!(qMin > 0) || n >= qMin) && (!(qMax > 0) || n <= qMax);
 
   const total = items.length;
   const ac = items.filter(x => x.der === 'sim').length;
@@ -402,9 +396,9 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
       erros: err
     },
     porTurno: grupoParaArray(agrupaPor(items, x => x.turno), 'none'),
-    porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr'),
+    porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr').filter(r => passaQtd(r.n)),
     porCaes: grupoParaArray(agrupaPor(items, x => x.nElig), 'num'),
-    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr')
+    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr').filter(r => passaQtd(r.n))
   };
 }
 
