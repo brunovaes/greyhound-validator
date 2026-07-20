@@ -431,13 +431,13 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-dash">
 <div class="section">
 <div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
-<div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Ajuste o período e as bordas dos turnos e clique em Atualizar. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label). Para extrair, use os botões da aba "Exportar Derrotas".</div>
+<div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label).<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>18h no UK aparece aqui como 14h BR</strong>. Padrão dos turnos: Manhã 6h, Tarde 10h, Noite 14h (BR).</div>
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;align-items:end">
   <div class="field"><label>De</label><input type="date" id="dash_from"></div>
   <div class="field"><label>Até</label><input type="date" id="dash_to"></div>
-  <div class="field"><label>Manhã começa (h)</label><input type="number" id="dash_t1" value="10" min="0" max="23"></div>
-  <div class="field"><label>Tarde começa (h)</label><input type="number" id="dash_t2" value="14" min="0" max="23"></div>
-  <div class="field"><label>Noite começa (h)</label><input type="number" id="dash_t3" value="18" min="0" max="23"></div>
+  <div class="field"><label>Manhã começa (h BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
+  <div class="field"><label>Tarde começa (h BR)</label><input type="number" id="dash_t2" value="10" min="0" max="23"></div>
+  <div class="field"><label>Noite começa (h BR)</label><input type="number" id="dash_t3" value="14" min="0" max="23"></div>
   <div class="field"><button type="button" class="btn-save" style="padding:8px 16px" onclick="carregarDashboard()">↻ Atualizar</button></div>
 </div>
 <div style="margin-top:12px;padding-top:12px;border-top:1px solid #222">
@@ -536,7 +536,7 @@ function limparFiltrosDash(){
 async function carregarDashboard(){
   var cont=document.getElementById('dash-content'); if(!cont) return;
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
-  var t1=document.getElementById('dash_t1').value||10, t2=document.getElementById('dash_t2').value||14, t3=document.getElementById('dash_t3').value||18;
+  var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||10, t3=document.getElementById('dash_t3').value||14;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=document.getElementById('dash_f_pista').value;
   var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
@@ -820,7 +820,7 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       return res.status(400).json({ error: 'datas inválidas (AAAA-MM-DD)' });
     }
     const clampH = (v, d) => { const n = parseInt(v, 10); return (isNaN(n) || n < 0 || n > 23) ? d : n; };
-    const turnos = { t1: clampH(req.query.t1, 10), t2: clampH(req.query.t2, 14), t3: clampH(req.query.t3, 18) };
+    const turnos = { t1: clampH(req.query.t1, 6), t2: clampH(req.query.t2, 10), t3: clampH(req.query.t3, 14) };
     const filtros = {
       turno: String(req.query.turno || '').trim(),
       pista: String(req.query.pista || '').trim(),

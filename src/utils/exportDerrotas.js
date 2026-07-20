@@ -275,7 +275,7 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
   return out;
 }
 
-// hora_uk ("H:MM") -> hora em 24h (o sistema trata 1-9 como PM).
+// hora_uk ("H:MM") -> hora em 24h UK (o sistema trata 1-9 como PM).
 function horaUk24(h) {
   if (!h) return null;
   const p = String(h).split(':');
@@ -285,15 +285,22 @@ function horaUk24(h) {
   return hr;
 }
 
-// Rotula o turno de uma corrida conforme as bordas configuraveis (horas 24h).
-// t1=inicio da Manha, t2=inicio da Tarde, t3=inicio da Noite.
+// hora em 24h no fuso de Brasilia (BR = UK - 4h). Todo o dashboard trabalha em
+// BR pra bater com o relogio do usuario.
+function horaBr24(h) {
+  const u = horaUk24(h);
+  return u == null ? null : ((u - 4 + 24) % 24);
+}
+
+// Rotula o turno de uma corrida conforme as bordas configuraveis (horas 24h BR).
+// t1=inicio da Manha, t2=inicio da Tarde, t3=inicio da Noite (tudo em BR).
 function rotuloTurno(h, t1, t2, t3) {
-  const hr = horaUk24(h);
+  const hr = horaBr24(h);
   if (hr == null) return null;
-  if (hr < t1) return `Antes das ${t1}h`;
-  if (hr < t2) return `Manhã (${t1}-${t2}h)`;
-  if (hr < t3) return `Tarde (${t2}-${t3}h)`;
-  return `Noite (${t3}h+)`;
+  if (hr < t1) return `Antes das ${t1}h BR`;
+  if (hr < t2) return `Manhã (${t1}-${t2}h BR)`;
+  if (hr < t3) return `Tarde (${t2}-${t3}h BR)`;
+  return `Noite (${t3}h+ BR)`;
 }
 
 // Converte um agrupamento {chave:{n,ac,nRaw,acRaw,err}} num array pronto pro
@@ -316,9 +323,10 @@ function grupoParaArray(grupo, ordenar) {
 // filtros = { turno, pista, caes, classe } — qualquer um pode faltar ('' = todos).
 // Cruza as dimensoes: aplica todos os filtros presentes e agrega o subconjunto.
 function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride) {
-  const t1 = (turnos && turnos.t1) || 10;
-  const t2 = (turnos && turnos.t2) || 14;
-  const t3 = (turnos && turnos.t3) || 18;
+  // bordas em horario BR (Brasilia). Padroes BR 6/10/14 = UK 10/14/18.
+  const t1 = (turnos && turnos.t1) || 6;
+  const t2 = (turnos && turnos.t2) || 10;
+  const t3 = (turnos && turnos.t3) || 14;
   const f = filtros || {};
   const todos = coletarResolvidos(userId, fromISO || null, toISO || null, dbOverride)
     .map(x => Object.assign(x, { turno: rotuloTurno(x.hora, t1, t2, t3) }));
