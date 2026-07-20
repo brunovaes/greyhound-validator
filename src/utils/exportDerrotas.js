@@ -268,10 +268,102 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
       classe: partes[partes.length - 1] || '?',
       dist: r.dist || '?',
       nElig: scores.length || null,
+      hora: r.hora || '',
       der, raw: r.bateu
     });
   }
   return out;
+}
+
+// hora_uk ("H:MM") -> hora em 24h (o sistema trata 1-9 como PM).
+function horaUk24(h) {
+  if (!h) return null;
+  const p = String(h).split(':');
+  let hr = parseInt(p[0], 10);
+  if (isNaN(hr)) return null;
+  if (hr >= 1 && hr <= 9) hr += 12;
+  return hr;
+}
+
+// Rotula o turno de uma corrida conforme as bordas configuraveis (horas 24h).
+// t1=inicio da Manha, t2=inicio da Tarde, t3=inicio da Noite.
+function rotuloTurno(h, t1, t2, t3) {
+  const hr = horaUk24(h);
+  if (hr == null) return null;
+  if (hr < t1) return `Antes das ${t1}h`;
+  if (hr < t2) return `Manhã (${t1}-${t2}h)`;
+  if (hr < t3) return `Tarde (${t2}-${t3}h)`;
+  return `Noite (${t3}h+)`;
+}
+
+// Converte um agrupamento {chave:{n,ac,nRaw,acRaw,err}} num array pronto pro
+// front, com HR calculado e flag de amostra. ordenar: 'hr' (pior primeiro),
+// 'num' (numerico crescente) ou 'none' (ordem de insercao).
+function grupoParaArray(grupo, ordenar) {
+  let arr = Object.entries(grupo).map(([k, b]) => ({
+    chave: k, n: b.n, ac: b.ac,
+    hr: b.n ? b.ac / b.n : 0,
+    hrCru: b.nRaw ? b.acRaw / b.nRaw : null,
+    err: b.err,
+    amostra: b.n >= 30 ? 'boa' : b.n >= 15 ? 'media' : 'baixa'
+  }));
+  if (ordenar === 'hr') arr.sort((a, b) => a.hr - b.hr);
+  else if (ordenar === 'num') arr.sort((a, b) => (parseFloat(a.chave) || 0) - (parseFloat(b.chave) || 0));
+  return arr;
+}
+
+// Dados agregados pro dashboard (JSON puro, sem planilha).
+// filtros = { turno, pista, caes, classe } — qualquer um pode faltar ('' = todos).
+// Cruza as dimensoes: aplica todos os filtros presentes e agrega o subconjunto.
+function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride) {
+  const t1 = (turnos && turnos.t1) || 10;
+  const t2 = (turnos && turnos.t2) || 14;
+  const t3 = (turnos && turnos.t3) || 18;
+  const f = filtros || {};
+  const todos = coletarResolvidos(userId, fromISO || null, toISO || null, dbOverride)
+    .map(x => Object.assign(x, { turno: rotuloTurno(x.hora, t1, t2, t3) }));
+
+  // Opcoes dos dropdowns — sempre do conjunto do PERIODO (antes do cruzamento),
+  // pra lista nao "sumir" conforme voce filtra.
+  const uniq = (arr) => Array.from(new Set(arr.filter(v => v != null && v !== '')));
+  const ordTurno = tv => { const m = /\((\d+)/.exec(tv || ''); return m ? parseInt(m[1], 10) : (/(Antes)/.test(tv||'') ? -1 : 99); };
+  const opcoes = {
+    turnos: uniq(todos.map(x => x.turno)).sort((a, b) => ordTurno(a) - ordTurno(b)),
+    pistas: uniq(todos.map(x => x.pista)).sort(),
+    caes: uniq(todos.map(x => x.nElig)).sort((a, b) => a - b),
+    classes: uniq(todos.map(x => x.classe)).sort()
+  };
+
+  // Aplica o cruzamento
+  const items = todos.filter(x =>
+    (!f.turno || x.turno === f.turno) &&
+    (!f.pista || x.pista === f.pista) &&
+    (!f.caes || String(x.nElig) === String(f.caes)) &&
+    (!f.classe || x.classe === f.classe)
+  );
+
+  const total = items.length;
+  const ac = items.filter(x => x.der === 'sim').length;
+  const rawItems = items.filter(x => x.raw === 'sim' || x.raw === 'nao');
+  const acRaw = rawItems.filter(x => x.raw === 'sim').length;
+  const err = rawItems.filter(x => x.raw !== x.der).length;
+
+  return {
+    periodo: { from: fromISO || null, to: toISO || null },
+    turnos: { t1, t2, t3 },
+    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '' },
+    opcoes,
+    resumo: {
+      total, acertos: ac,
+      hr: total ? ac / total : 0,
+      hrCru: rawItems.length ? acRaw / rawItems.length : null,
+      erros: err
+    },
+    porTurno: grupoParaArray(agrupaPor(items, x => x.turno), 'none'),
+    porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr'),
+    porCaes: grupoParaArray(agrupaPor(items, x => x.nElig), 'num'),
+    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr')
+  };
 }
 
 function agrupaPor(items, keyFn) {
@@ -433,5 +525,5 @@ function buildBacktestJson(userId, fromISO, toISO, dbOverride) {
 module.exports = {
   buildDerrotasWorkbook, coletarDerrotas,
   buildDesempenhoWorkbook, coletarResolvidos,
-  buildBacktestJson
+  buildBacktestJson, buildDesempenhoData
 };

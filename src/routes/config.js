@@ -75,10 +75,6 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .field textarea{min-height:70px;resize:vertical;font-family:monospace;font-size:11px}
 .rv{font-size:11px;color:#f97316;font-weight:700;margin-top:2px}
 .hint{font-size:10px;color:#666;margin-top:2px;line-height:1.4}
-.field-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.field-head label{margin:0}
-.field-head .rv{margin-top:0}
-.hint-peso{display:block;overflow-wrap:anywhere;word-break:break-word;margin-top:6px;min-height:26px}
 .pbar{width:100%;height:4px;background:#0D1117;border-radius:2px;overflow:hidden;margin-top:4px}
 .pfill{height:100%;background:#22c55e;border-radius:2px;transition:width .3s}
 .btn-bar{display:flex;align-items:center;gap:10px;position:sticky;bottom:0;background:#0D1117;padding:14px 0;margin-top:4px;border-top:1px solid #222}
@@ -116,6 +112,7 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
   <button type="button" class="tabbtn" data-tab="t-banca" onclick="showTab('t-banca')">${icon('trophy',{size:14})} Banca</button>
   <button type="button" class="tabbtn" data-tab="t-export" onclick="showTab('t-export')">${icon('scroll',{size:14})} Exportar Derrotas</button>
+  <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
 </div>
 
 <div>
@@ -134,11 +131,10 @@ ${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_c
    ['peso_remarks','Remarks','Merito + corrida escondida (HiddenRun)',config.peso_remarks||2,1,10],
    ['peso_post_pick','Post Pick (Racing Post)','Indicacao dos 3 melhores no cabecalho do PDF',config.peso_post_pick||2,0,10],
    ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt||1,1,10]].map(([n,l,h,v,mn,mx])=>
-`<div class="field">
-<div class="field-head"><label>${l}</label><span class="rv" id="v_${n}">${v}</span></div>
+`<div class="field"><label>${l}</label>
 <input type="range" name="${n}" min="${mn}" max="${mx}" value="${v}" oninput="upR(this)">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">${h}</span><span class="rv" id="v_${n}">${v}</span></div>
 <div class="pbar"><div class="pfill" id="b_${n}" style="width:${v*10}%"></div></div>
-<span class="hint hint-peso">${h}</span>
 </div>`).join('')}
 </div>
 </div>
@@ -432,6 +428,32 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </div>
 
+<div class="tab-panel" id="t-dash">
+<div class="section">
+<div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
+<div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Ajuste o período e as bordas dos turnos e clique em Atualizar. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label). Para extrair, use os botões da aba "Exportar Derrotas".</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;align-items:end">
+  <div class="field"><label>De</label><input type="date" id="dash_from"></div>
+  <div class="field"><label>Até</label><input type="date" id="dash_to"></div>
+  <div class="field"><label>Manhã começa (h)</label><input type="number" id="dash_t1" value="10" min="0" max="23"></div>
+  <div class="field"><label>Tarde começa (h)</label><input type="number" id="dash_t2" value="14" min="0" max="23"></div>
+  <div class="field"><label>Noite começa (h)</label><input type="number" id="dash_t3" value="18" min="0" max="23"></div>
+  <div class="field"><button type="button" class="btn-save" style="padding:8px 16px" onclick="carregarDashboard()">↻ Atualizar</button></div>
+</div>
+<div style="margin-top:12px;padding-top:12px;border-top:1px solid #222">
+<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Cruzar filtros (deixe em "Todos" o que não quiser fixar)</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end">
+  <div class="field"><label>Turno</label><select id="dash_f_turno" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
+  <div class="field"><label>Pista</label><select id="dash_f_pista" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field"><label>Nº de cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
+  <div class="field"><label>Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field"><button type="button" class="btn-reset" style="padding:8px 14px" onclick="limparFiltrosDash()">Limpar filtros</button></div>
+</div>
+</div>
+<div id="dash-content" style="margin-top:18px"><div style="color:#888;font-size:13px">Carregando…</div></div>
+</div>
+</div>
+
 <div class="btn-bar">
   <button type="submit" class="btn-save">Salvar Configurações</button>
   <button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button>
@@ -478,6 +500,82 @@ function baixarDados(){
   if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
   var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
   window.location.href='${BASE}/config/export-dados'+(qs.length?'?'+qs.join('&'):'');
+}
+// ===== Dashboard de Desempenho (HR) =====
+function dashHrColor(hr){ return hr>=0.65?'#22c55e':(hr<0.5?'#ef4444':'#eab308'); }
+function dashKpi(label,val,col){
+  return '<div style="background:#0D1117;border:1px solid #222;border-radius:8px;padding:12px 16px;min-width:110px;flex:1">'
+    +'<div style="font-size:22px;font-weight:800;color:'+col+'">'+val+'</div>'
+    +'<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:2px">'+label+'</div></div>';
+}
+function dashBar(item){
+  var pct=Math.round(item.hr*100), col=dashHrColor(item.hr);
+  var amCor=item.amostra==='boa'?'#22c55e':(item.amostra==='media'?'#eab308':'#666');
+  var err=item.err>0?' <span style="color:#ef4444;font-size:10px" title="resultados suspeitos (label)">⚠'+item.err+'</span>':'';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">'
+    +'<div style="width:135px;flex-shrink:0;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+item.chave+'">'+item.chave+'</div>'
+    +'<div style="flex:1;background:#0D1117;border:1px solid #222;border-radius:4px;height:16px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div>'
+    +'<div style="width:40px;text-align:right;font-weight:700;color:'+col+'">'+pct+'%</div>'
+    +'<div style="width:78px;color:#888;font-size:10px">'+item.ac+'/'+item.n+' <span style="color:'+amCor+'">'+item.amostra+'</span>'+err+'</div>'
+    +'</div>';
+}
+function dashSecao(titulo,arr){
+  if(!arr||!arr.length) return '';
+  return '<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">'+titulo+'</div>'+arr.map(dashBar).join('')+'</div>';
+}
+function dashPreencheSelect(id, valores, sel, prefixoTodos){
+  var el=document.getElementById(id); if(!el) return;
+  var opts='<option value="">'+prefixoTodos+'</option>';
+  (valores||[]).forEach(function(v){ opts+='<option value="'+v+'"'+(String(v)===String(sel||'')?' selected':'')+'>'+v+'</option>'; });
+  el.innerHTML=opts;
+}
+function limparFiltrosDash(){
+  ['dash_f_turno','dash_f_pista','dash_f_caes','dash_f_classe'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  carregarDashboard();
+}
+async function carregarDashboard(){
+  var cont=document.getElementById('dash-content'); if(!cont) return;
+  var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
+  var t1=document.getElementById('dash_t1').value||10, t2=document.getElementById('dash_t2').value||14, t3=document.getElementById('dash_t3').value||18;
+  var fTurno=document.getElementById('dash_f_turno').value, fPista=document.getElementById('dash_f_pista').value;
+  var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
+  cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
+  var qs=['t1='+t1,'t2='+t2,'t3='+t3];
+  if(f)qs.push('from='+f); if(t)qs.push('to='+t);
+  if(fTurno)qs.push('turno='+encodeURIComponent(fTurno));
+  if(fPista)qs.push('pista='+encodeURIComponent(fPista));
+  if(fCaes)qs.push('caes='+encodeURIComponent(fCaes));
+  if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
+  try{
+    var r=await fetch('${BASE}/config/desempenho-data?'+qs.join('&'));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var d=await r.json();
+    if(d.error) throw new Error(d.error);
+    dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
+    dashPreencheSelect('dash_f_pista', d.opcoes.pistas, d.filtros.pista, 'Todas');
+    dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
+    dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
+    var rz=d.resumo;
+    var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe;
+    var recorte='';
+    if(temFiltro){
+      var partes=[]; if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
+      recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
+    }
+    var aviso='';
+    if(rz.total<15){
+      aviso='<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:14px">⚠ Amostra insuficiente ('+rz.total+' corrida'+(rz.total===1?'':'s')+') — esse HR é ruído, não conclua nada. Cruzar muitas dimensões esfarela o número; solte algum filtro ou espere volume.</div>';
+    }
+    var kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">'
+      +dashKpi('AvBs resolvidos',rz.total,'#f0f0f0')
+      +dashKpi('HR corrigido',rz.total?Math.round(rz.hr*100)+'%':'-',dashHrColor(rz.hr))
+      +dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
+      +dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e')
+      +'</div>';
+    var corpo = rz.total? (dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',d.porPista)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma corrida nesse recorte.</div>';
+    cont.innerHTML=recorte+aviso+kpi+corpo
+      +'<div style="font-size:10px;color:#666;margin-top:6px">Amostra: baixa (&lt;15) = ruído · média (15–29) · boa (≥30). Só confie em faixas com amostra boa.</div>';
+  }catch(e){ cont.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
 }
 // Mesmos 4 sons do app.js (Analisar) — pra poder testar aqui antes de salvar
 function tocarSino(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(1046.5,0,0.25);tone(1318.5,0.15,0.35);}
@@ -702,6 +800,38 @@ router.get('/export-dados', requireAdmin, (req, res) => {
   } catch (err) {
     console.error('[export-dados] erro:', err);
     res.status(500).send('Erro ao gerar JSON: ' + err.message);
+  }
+});
+
+// Dados agregados do dashboard de desempenho (JSON). Datas e bordas de turno
+// (t1/t2/t3, horas 24h) opcionais.
+router.get('/desempenho-data', requireAdmin, (req, res) => {
+  try {
+    let buildDesempenhoData;
+    try {
+      ({ buildDesempenhoData } = require('../utils/exportDerrotas'));
+    } catch (e) {
+      return res.status(500).json({ error: 'módulo indisponível: ' + e.message });
+    }
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    const from = String(req.query.from || '').trim();
+    const to = String(req.query.to || '').trim();
+    if ((from && !re.test(from)) || (to && !re.test(to))) {
+      return res.status(400).json({ error: 'datas inválidas (AAAA-MM-DD)' });
+    }
+    const clampH = (v, d) => { const n = parseInt(v, 10); return (isNaN(n) || n < 0 || n > 23) ? d : n; };
+    const turnos = { t1: clampH(req.query.t1, 10), t2: clampH(req.query.t2, 14), t3: clampH(req.query.t3, 18) };
+    const filtros = {
+      turno: String(req.query.turno || '').trim(),
+      pista: String(req.query.pista || '').trim(),
+      caes: String(req.query.caes || '').trim(),
+      classe: String(req.query.classe || '').trim()
+    };
+    const data = buildDesempenhoData(req.user.id, from || null, to || null, turnos, filtros);
+    res.json(data);
+  } catch (err) {
+    console.error('[desempenho-data] erro:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
