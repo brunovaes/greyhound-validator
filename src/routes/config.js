@@ -432,22 +432,22 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="section">
 <div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
 <div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label).<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>18h no UK aparece aqui como 14h BR</strong>. Padrão dos turnos: Manhã 6h, Tarde 10h, Noite 14h (BR).</div>
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;align-items:end">
-  <div class="field"><label>De</label><input type="date" id="dash_from"></div>
-  <div class="field"><label>Até</label><input type="date" id="dash_to"></div>
-  <div class="field"><label>Manhã começa (h BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
-  <div class="field"><label>Tarde começa (h BR)</label><input type="number" id="dash_t2" value="10" min="0" max="23"></div>
-  <div class="field"><label>Noite começa (h BR)</label><input type="number" id="dash_t3" value="14" min="0" max="23"></div>
-  <div class="field"><button type="button" class="btn-save" style="padding:8px 16px" onclick="carregarDashboard()">↻ Atualizar</button></div>
+<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="dash_from"></div>
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="dash_to"></div>
+  <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Manhã (BR)</label><input type="number" id="dash_t1" value="6" min="0" max="23"></div>
+  <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Tarde (BR)</label><input type="number" id="dash_t2" value="10" min="0" max="23"></div>
+  <div class="field" style="width:92px;flex-shrink:0"><label style="white-space:nowrap">Noite (BR)</label><input type="number" id="dash_t3" value="14" min="0" max="23"></div>
+  <button type="button" class="btn-save" style="padding:9px 18px;flex-shrink:0" onclick="carregarDashboard()">↻ Atualizar</button>
 </div>
-<div style="margin-top:12px;padding-top:12px;border-top:1px solid #222">
-<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Cruzar filtros (deixe em "Todos" o que não quiser fixar)</div>
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end">
-  <div class="field"><label>Turno</label><select id="dash_f_turno" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field"><label>Pista</label><select id="dash_f_pista" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
-  <div class="field"><label>Nº de cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field"><label>Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
-  <div class="field"><button type="button" class="btn-reset" style="padding:8px 14px" onclick="limparFiltrosDash()">Limpar filtros</button></div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid #222">
+<div style="font-size:12px;color:#22c55e;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">Cruzar filtros <span style="color:#888;font-weight:400;text-transform:none;letter-spacing:0">— deixe em "Todos" o que não quiser fixar</span></div>
+<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Turno</label><select id="dash_f_turno" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
+  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Pista</label><select id="dash_f_pista" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Nº de cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
+  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
 </div>
 </div>
 <div id="dash-content" style="margin-top:18px"><div style="color:#888;font-size:13px">Carregando…</div></div>
