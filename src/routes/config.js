@@ -449,7 +449,8 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Nº cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
-  <div class="field" style="width:118px;flex-shrink:0"><label style="white-space:nowrap">Qtd corridas</label><select id="dash_f_qtd" onchange="carregarDashboard()"><option value="">Todas</option><option value="10">0-10</option><option value="20">0-20</option><option value="30">0-30</option><option value="40">0-40</option><option value="50">0-50</option><option value="100">0-100</option><option value="150">0-150</option><option value="200">0-200</option><option value="300">0-300</option></select></div>
+  <div class="field" style="width:78px;flex-shrink:0"><label style="white-space:nowrap">Qtd mín</label><input type="number" id="dash_qtd_min" min="1" placeholder="1" onchange="carregarDashboard()"></div>
+  <div class="field" style="width:80px;flex-shrink:0"><label style="white-space:nowrap">Qtd máx</label><input type="number" id="dash_qtd_max" min="1" placeholder="todas" onchange="carregarDashboard()"></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
 </div>
 </div>
@@ -570,7 +571,7 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_caes','dash_f_classe','dash_f_qtd'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  ['dash_f_turno','dash_f_caes','dash_f_classe','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
   dashPistasSel=[]; dashPistaDirty=false; atualizaPistaBox();
   carregarDashboard();
 }
@@ -580,7 +581,7 @@ async function carregarDashboard(){
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||13;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
   var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
-  var fQtd=document.getElementById('dash_f_qtd').value;
+  var fQtdMin=document.getElementById('dash_qtd_min').value, fQtdMax=document.getElementById('dash_qtd_max').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
   var qs=['t1='+t1,'t2='+t2];
   if(f)qs.push('from='+f); if(t)qs.push('to='+t);
@@ -588,7 +589,8 @@ async function carregarDashboard(){
   if(fPista)qs.push('pista='+encodeURIComponent(fPista));
   if(fCaes)qs.push('caes='+encodeURIComponent(fCaes));
   if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
-  if(fQtd)qs.push('limite='+encodeURIComponent(fQtd));
+  if(fQtdMin)qs.push('qtdMin='+encodeURIComponent(fQtdMin));
+  if(fQtdMax)qs.push('qtdMax='+encodeURIComponent(fQtdMax));
   try{
     var r=await fetch('${BASE}/config/desempenho-data?'+qs.join('&'));
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -600,10 +602,16 @@ async function carregarDashboard(){
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
     dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
     var rz=d.resumo;
-    var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.limite;
+    var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.qtdMin||d.filtros.qtdMax;
     var recorte='';
     if(temFiltro){
-      var partes=[]; if(d.filtros.limite)partes.push('últimas '+d.filtros.limite); if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
+      var partes=[];
+      var qlbl='';
+      if(d.filtros.qtdMin&&d.filtros.qtdMax) qlbl='corridas '+d.filtros.qtdMin+'–'+d.filtros.qtdMax;
+      else if(d.filtros.qtdMax) qlbl='últimas '+d.filtros.qtdMax;
+      else if(d.filtros.qtdMin) qlbl='a partir da '+d.filtros.qtdMin+'ª mais recente';
+      if(qlbl)partes.push(qlbl);
+      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';
@@ -871,7 +879,8 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       pista: String(req.query.pista || '').trim(),
       caes: String(req.query.caes || '').trim(),
       classe: String(req.query.classe || '').trim(),
-      limite: String(req.query.limite || '').trim()
+      qtdMin: String(req.query.qtdMin || '').trim(),
+      qtdMax: String(req.query.qtdMax || '').trim()
     };
     const data = buildDesempenhoData(req.user.id, from || null, to || null, turnos, filtros);
     res.json(data);

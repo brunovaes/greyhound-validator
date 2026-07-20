@@ -358,12 +358,18 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     classes: uniq(todos.map(x => x.classe)).sort()
   };
 
-  // Janela de recencia: se "limite" foi passado, usa so as N corridas mais
-  // recentes (por data+hora) ANTES de cruzar os filtros.
-  const limite = parseInt(f.limite, 10);
-  const janela = (limite && limite > 0)
-    ? todos.slice().sort((a, b) => b.ord - a.ord).slice(0, limite)
-    : todos;
+  // Janela por QUANTIDADE de corridas — posicao na lista ordenada por recencia
+  // (mais recente = 1a). qtdMin/qtdMax opcionais. Ex.: min=51,max=100 = da 51a
+  // a 100a corrida mais recente. Aplicado ANTES de cruzar os filtros.
+  const qMin = parseInt(f.qtdMin, 10);
+  const qMax = parseInt(f.qtdMax, 10);
+  let janela = todos;
+  if ((qMin && qMin > 0) || (qMax && qMax > 0)) {
+    const ordenado = todos.slice().sort((a, b) => b.ord - a.ord);
+    const ini = (qMin && qMin > 0) ? qMin - 1 : 0;
+    const fim = (qMax && qMax > 0) ? qMax : ordenado.length;
+    janela = ordenado.slice(ini, fim);
+  }
 
   // Nomes completos das pistas disponiveis (pro filtro e o relatorio).
   const nomes = {};
@@ -387,7 +393,7 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   return {
     periodo: { from: fromISO || null, to: toISO || null },
     turnos: { t1, t2 },
-    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', limite: f.limite || '' },
+    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', qtdMin: f.qtdMin || '', qtdMax: f.qtdMax || '' },
     opcoes, nomes,
     resumo: {
       total, acertos: ac,
