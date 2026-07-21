@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { requireAdmin } = require('../middleware/auth');
 const { designTokensCSS } = require('../utils/designTokens');
+const { nomeCorridaCompleto } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 
@@ -1125,7 +1126,7 @@ ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var horaUk=r.hora||'';
   return`<tr${r.flag_atrasada?' class="row-atrasada"':''}>
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
-<td style="text-align:center"><div style="font-weight:700;font-size:12px">${r.corrida||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
+<td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 <td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:12px">
 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">
 <div class="trap-badge t${r.trap_fav}">${r.trap_fav}</div>
@@ -1221,7 +1222,7 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="11" 
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script>
-var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0)).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
+var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida)}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
 // pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
@@ -1360,7 +1361,7 @@ function closeReplayModal(){
 function openReplay(id){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r||!r.video_url)return;
-  document.getElementById('rv-title').textContent='\u25B6 '+(r.corrida||'Replay');
+  document.getElementById('rv-title').textContent='\u25B6 '+(r.corridaNome||r.corrida||'Replay');
   document.getElementById('rv-newtab').href=r.video_url;
   document.getElementById('rv-frame').src=r.video_url;
   document.getElementById('rv-modal').classList.add('open');
