@@ -279,18 +279,9 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
   return out;
 }
 
-// Nomes completos das pistas (codigo do Racing Post -> nome). AJUSTE aqui se
-// algum estiver errado — os incertos estao marcados. Usado no filtro e no
-// relatorio; o filtro/agrupamento continua usando o codigo por baixo.
-const NOMES_PISTAS = {
-  CPark: 'Central Park', Clnml: 'Clonmel', Cork: 'Cork', Donc: 'Doncaster',
-  DunPk: 'Dunstall Park', Harlow: 'Harlow', Hove: 'Hove', Kilky: 'Kilkenny',
-  Kinsly: 'Kinsley', Lffrd: 'Lifford', Limrk: 'Limerick', Monmr: 'Monmore',
-  Mulgr: 'Mullingar', Newc: 'Newcastle', Notts: 'Nottingham', Pelaw: 'Pelaw Grange',
-  Romfd: 'Romford', Sheff: 'Sheffield', Sland: 'Sunderland', Towc: 'Towcester',
-  Trlee: 'Tralee', Vlley: 'Valley', Yrmth: 'Yarmouth', Youghl: 'Youghal'
-};
-function nomePista(code) { return NOMES_PISTAS[code] || code; }
+// Nomes completos das pistas — fonte UNICA em ./nomesPistas.js (compartilhada
+// com historico/replay). Ajuste os nomes la, vale pra todas as telas.
+const { nomePista } = require('./nomesPistas');
 
 // hora_uk ("H:MM") -> hora em 24h UK (o sistema trata 1-9 como PM).
 function horaUk24(h) {
