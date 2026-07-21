@@ -12,7 +12,7 @@ const NOMES_PISTAS = {
   CPark: 'Central Park', Clnml: 'Clonmel', Cork: 'Cork', Donc: 'Doncaster',
   DunPk: 'Dunstall Park', Harlow: 'Harlow', Hove: 'Hove', Kilky: 'Kilkenny',
   Kinsly: 'Kinsley', Lffrd: 'Lifford', Limrk: 'Limerick', Monmr: 'Monmore',
-  Mulgr: 'Mullingar', Newc: 'Newcastle', Notts: 'Nottingham', Pelaw: 'Pelaw Grange',
+  Mulgr: 'Mullingar', Newc: 'Newcastle', Notts: 'Nottingham', Pelaw: 'Star Pelaw',
   Romfd: 'Romford', Sheff: 'Sheffield', ShelPk: 'Shelbourne Park', Sland: 'Sunderland',
   Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley', Yrmth: 'Yarmouth',
   Youghl: 'Youghal'
