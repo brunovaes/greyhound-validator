@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { requireAdmin } = require('../middleware/auth');
 const { designTokensCSS } = require('../utils/designTokens');
-const { nomeCorridaCompleto } = require('../utils/nomesPistas');
+const { nomeCorridaCompleto, nomePista } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 
@@ -1096,6 +1096,7 @@ router.get('/sessao/:id', (req, res) => {
   const green = apostadas.filter(r=>r.bateu==='sim').length;
   const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
   const logoB64 = getLogo();
+  const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
@@ -1119,12 +1120,12 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:65px">Hora BR</th><th style="width:140px">Corrida</th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:50px">Bateu</th><th style="width:60px">🚩</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:92px">Hora BR<br><input id="fh-hora" oninput="aplicarFiltroHist()" placeholder="filtrar" style="width:100%;margin-top:4px;padding:3px 4px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"></th><th style="width:150px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:60px">🚩</th><th>Obs</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''}>
+  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-hora="${(r.hora_br||'')} ${(r.hora||'')}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 <td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:12px">
@@ -1365,6 +1366,33 @@ function openReplay(id){
   document.getElementById('rv-newtab').href=r.video_url;
   document.getElementById('rv-frame').src=r.video_url;
   document.getElementById('rv-modal').classList.add('open');
+}
+// ===== Filtros do cabecalho do historico (Hora BR / Corrida / Bateu) =====
+function _histSet(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+function recalcKpisHist(){
+  var vis=Array.prototype.filter.call(document.querySelectorAll('tr[data-race]'),function(tr){return tr.style.display!=='none';});
+  var resolv=vis.filter(function(tr){return tr.getAttribute('data-bateu');});
+  var ac=vis.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
+  var apost=vis.filter(function(tr){return (tr.getAttribute('data-odd')||'')!=='';});
+  var green=apost.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
+  _histSet('kpi-corridas',vis.length);
+  _histSet('kpi-acertos',ac);
+  _histSet('kpi-taxa',(resolv.length?Math.round(ac/resolv.length*100):0)+'%');
+  _histSet('kpi-apostas',apost.length);
+  _histSet('kpi-green',green);
+  _histSet('kpi-pctgreen',(apost.length?Math.round(green/apost.length*100):0)+'%');
+}
+function aplicarFiltroHist(){
+  var eh=document.getElementById('fh-hora'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
+  var fh=(eh?eh.value:'').toLowerCase().trim(), fc=ec?ec.value:'', fb=eb?eb.value:'';
+  document.querySelectorAll('tr[data-race]').forEach(function(tr){
+    var h=(tr.getAttribute('data-hora')||'').toLowerCase();
+    var p=tr.getAttribute('data-pista')||'';
+    var b=tr.getAttribute('data-bateu')||'';
+    var ok=(!fh||h.indexOf(fh)>=0)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
+    tr.style.display=ok?'':'none';
+  });
+  recalcKpisHist();
 }
 </script>
 </div></body></html>`);
