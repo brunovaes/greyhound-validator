@@ -283,12 +283,12 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
 // algum estiver errado — os incertos estao marcados. Usado no filtro e no
 // relatorio; o filtro/agrupamento continua usando o codigo por baixo.
 const NOMES_PISTAS = {
-  CPark: 'Central Park', Cork: 'Cork', Donc: 'Doncaster', DunPk: 'Dundalk',
-  Harlow: 'Harlow', Hove: 'Hove', Kilky: 'Kilkenny', Kinsly: 'Kinsley',
-  Limrk: 'Limerick', Monmr: 'Monmore', Mulgr: 'Mullingar', Newc: 'Newcastle',
-  Notts: 'Nottingham', Pelaw: 'Pelaw Grange', Romfd: 'Romford', Sheff: 'Sheffield',
-  Sland: 'Sunderland', Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley',
-  Yrmth: 'Yarmouth', Youghl: 'Youghal'
+  CPark: 'Central Park', Clnml: 'Clonmel', Cork: 'Cork', Donc: 'Doncaster',
+  DunPk: 'Dunstall Park', Harlow: 'Harlow', Hove: 'Hove', Kilky: 'Kilkenny',
+  Kinsly: 'Kinsley', Lffrd: 'Lifford', Limrk: 'Limerick', Monmr: 'Monmore',
+  Mulgr: 'Mullingar', Newc: 'Newcastle', Notts: 'Nottingham', Pelaw: 'Pelaw Grange',
+  Romfd: 'Romford', Sheff: 'Sheffield', Sland: 'Sunderland', Towc: 'Towcester',
+  Trlee: 'Tralee', Vlley: 'Valley', Yrmth: 'Yarmouth', Youghl: 'Youghal'
 };
 function nomePista(code) { return NOMES_PISTAS[code] || code; }
 
