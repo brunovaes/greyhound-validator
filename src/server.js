@@ -30,7 +30,8 @@ app.use(BASE + '/robot', requireLogin, require('./routes/robot'));
 app.use(BASE + '/banca', requireLogin, require('./routes/banca'));
 app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__dirname, '../public/pdfs')));
 
-app.get('/', (req, res) => res.redirect(BASE));
+// Landing pública na raiz (fora do BASE, sem login)
+app.use('/', require('./routes/landing'));
 
 app.listen(PORT, () => {
   console.log(`Greyhound Validator em http://localhost:${PORT}${BASE}`);
