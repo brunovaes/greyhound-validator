@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palpites do dia, Greyhound Factory</title>
+<style>
+  :root{--bg:#0D1117;--panel:#161B27;--panel2:#1b2130;--line:#232a38;--green:#22c55e;--green-d:#16a34a;--green-l:#9be86a;--orange:#f97316;--red:#ef4444;--txt:#e9edf2;--muted:#8b97a7;--muted2:#66717f}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  img{display:block}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;border-radius:10px;padding:12px 22px;font-size:15px;cursor:pointer;border:1px solid transparent;transition:.15s;white-space:nowrap}
+  .btn-primary{background:var(--green);color:#04140a}.btn-primary:hover{background:var(--green-d)}
+  .btn-ghost{background:rgba(255,255,255,.04);color:var(--txt);border-color:var(--line)}.btn-ghost:hover{border-color:var(--green);color:var(--green)}
+  .btn-lg{padding:15px 32px;font-size:16px}
+
+  header.nav{border-bottom:1px solid var(--line);background:rgba(13,17,23,.9);position:sticky;top:0;z-index:40;backdrop-filter:blur(8px)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:70px}
+  .navlogo{height:40px;width:auto}
+  .nav-cta{display:flex;gap:10px}.nav-cta .btn{padding:9px 18px;font-size:14px}
+
+  .intro{text-align:center;padding:50px 0 30px}
+  .intro .eyebrow{color:var(--green);font-weight:800;font-size:12.5px;letter-spacing:1.5px;text-transform:uppercase}
+  .intro h1{font-size:34px;font-weight:800;letter-spacing:-.6px;margin:12px 0 12px}
+  .intro p{color:var(--muted);font-size:16px;max-width:620px;margin:0 auto}
+  .how{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+  .how .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--muted)}
+  .how .step b{color:var(--txt)}
+
+  section{padding:34px 0}
+  .sec-title{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .sec-title h2{font-size:20px;font-weight:800;letter-spacing:-.3px}
+  .sec-title .chip{font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px}
+  .chip-green{background:rgba(34,197,94,.14);color:var(--green)}
+  .chip-lock{background:rgba(249,115,22,.14);color:var(--orange)}
+  .sec-sub{color:var(--muted);font-size:13.5px;margin-bottom:16px}
+
+  /* resultados de ontem (abertos) */
+  .stat-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 20px;flex:1;min-width:150px}
+  .stat b{display:block;font-size:26px;font-weight:800;color:var(--green)}
+  .stat span{font-size:12px;color:var(--muted)}
+  .results{display:flex;flex-direction:column;gap:9px}
+  .res{display:grid;grid-template-columns:150px 1fr auto auto;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--green);border-radius:10px;padding:12px 16px}
+  .res .pista{font-weight:700}.res .pista small{display:block;color:var(--muted2);font-size:11px;font-weight:500}
+  .res .avb{font-size:13px;color:var(--muted)}.res .avb b{color:var(--txt)}
+  .res .conf{font-size:12px;font-weight:700;color:var(--muted);text-align:right}
+  .res .hit{font-size:12px;font-weight:800;color:var(--green);white-space:nowrap}
+
+  /* preview borrado */
+  .preview{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+  .preview .fake{padding:18px;filter:blur(6px);user-select:none;pointer-events:none}
+  .fake .frow{display:grid;grid-template-columns:120px 1fr 90px 70px;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);align-items:center}
+  .fake .frow:last-child{border:none}
+  .fake .bar{height:12px;border-radius:4px;background:linear-gradient(90deg,#2b3444,#1c2330)}
+  .fake .dot{width:26px;height:26px;border-radius:7px;background:#22c55e33;display:inline-block}
+  .preview .lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(9,12,17,.55);text-align:center;padding:20px}
+  .lock .ic{font-size:30px}
+  .lock h3{font-size:17px;font-weight:800}
+  .lock p{color:var(--muted);font-size:13px;max-width:360px}
+
+  /* 3 de hoje borrados */
+  .today{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .pick{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;overflow:hidden}
+  .pick .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .pick .pista{font-weight:700;font-size:14px}
+  .pick .hora{font-size:12px;color:var(--muted)}
+  .pick .conf{font-size:12px;font-weight:800;color:var(--green);background:rgba(34,197,94,.12);padding:3px 9px;border-radius:999px}
+  .pick .dogs{filter:blur(7px);user-select:none;pointer-events:none;margin:6px 0}
+  .pick .dogs .d{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:700}
+  .pick .dogs .t{width:24px;height:24px;border-radius:6px;background:#22c55e33;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+  .pick .lockbadge{position:absolute;top:12px;right:12px;font-size:11px;font-weight:800;color:var(--orange);background:rgba(249,115,22,.14);padding:3px 9px;border-radius:999px}
+  .pick .cover{margin-top:10px;text-align:center;border-top:1px dashed var(--line);padding-top:12px}
+  .pick .cover span{font-size:12px;color:var(--muted)}
+
+  /* CTA */
+  .cta{position:relative;overflow:hidden;text-align:center;border:1px solid rgba(34,197,94,.25);border-radius:18px;padding:48px 24px;background:linear-gradient(150deg,rgba(34,197,94,.12),rgba(34,197,94,.03))}
+  .cta h2{font-size:28px;font-weight:800;letter-spacing:-.4px;margin-bottom:10px}
+  .cta p{color:var(--muted);font-size:16px;max-width:520px;margin:0 auto 24px}
+
+  footer{border-top:1px solid var(--line);margin-top:50px;padding:28px 0}
+  .disc{color:var(--muted2);font-size:11.5px;line-height:1.7;max-width:760px}
+  .note{text-align:center;color:var(--muted2);font-size:11px;margin-top:8px}
+
+  @media(max-width:800px){
+    .today{grid-template-columns:1fr}
+    .res{grid-template-columns:1fr auto;grid-template-areas:"pista hit" "avb avb" "conf conf";gap:6px}
+    .res .pista{grid-area:pista}.res .hit{grid-area:hit}.res .avb{grid-area:avb}.res .conf{grid-area:conf;text-align:left}
+    .intro h1{font-size:26px}.cta h2{font-size:22px}
+  }
+.showcase{display:flex;flex-direction:column;gap:20px}
+.shot{background:#0b0e14;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 22px 55px -34px rgba(0,0,0,.85)}
+.shot .topbar{display:flex;align-items:center;gap:7px;padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.shot .topbar i{width:10px;height:10px;border-radius:50%;background:#2c3442;display:inline-block}
+.shot .topbar .cap{margin-left:10px;font-size:12px;color:var(--muted);font-weight:600}
+.shot img{width:100%;display:block}
+.shot.narrow{max-width:660px;margin:0 auto}
+.videobox{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0e14;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+.videobox:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at center,rgba(34,197,94,.10),transparent 62%)}
+.playwrap{position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+.play{width:72px;height:72px;border-radius:50%;background:var(--green);color:#04140a;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 34px rgba(34,197,94,.4)}
+.playwrap span{color:var(--muted);font-size:13px}
+.tablewrap{overflow-x:auto}
+table.cmp{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:660px}
+table.cmp th,table.cmp td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:center;font-size:13.5px}
+table.cmp thead th{background:var(--panel2);font-weight:800;font-size:14px}
+table.cmp thead th small{display:block;font-weight:600;color:var(--muted);font-size:11px;margin-top:3px}
+table.cmp thead th.best{color:var(--green)}
+table.cmp td:first-child,table.cmp th:first-child{text-align:left;font-weight:600}
+table.cmp tbody td:first-child{color:var(--muted);font-weight:600}
+table.cmp .yes{color:var(--green);font-weight:800}
+table.cmp .no{color:#4b535e}
+table.cmp .col-best{background:rgba(34,197,94,.05)}
+table.cmp tfoot td{padding:14px;border-bottom:none}
+table.cmp tfoot .btn{width:100%;padding:9px 10px;font-size:13px}
+.videobox{display:block;aspect-ratio:auto}
+.videobox:before{display:none}
+.videobox video{width:100%;height:auto;display:block}
+.gh-mbg{position:fixed;inset:0;background:rgba(6,9,13,.78);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px}
+.gh-mbg.open{display:flex}
+.gh-modal{position:relative;background:#161B27;border:1px solid rgba(34,197,94,.35);border-radius:16px;max-width:430px;width:100%;padding:38px 30px 30px;text-align:center;box-shadow:0 30px 80px -28px rgba(0,0,0,.85);animation:ghpop .25s ease}
+@keyframes ghpop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+.gh-modal .ghic{width:66px;height:66px;border-radius:16px;background:rgba(34,197,94,.12);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.gh-modal h3{font-size:20px;font-weight:800;margin-bottom:10px;color:#e9edf2}
+.gh-modal p{color:#8b97a7;font-size:14.5px;line-height:1.65;margin-bottom:24px}
+.gh-modal .gh-close{background:#22c55e;color:#04140a;font-weight:700;border:none;border-radius:10px;padding:12px 28px;font-size:15px;cursor:pointer}
+.gh-modal .gh-close:hover{background:#16a34a}
+.gh-modal .gh-x{position:absolute;top:10px;right:14px;background:none;border:none;color:#66717f;font-size:22px;cursor:pointer;line-height:1}
+[data-assinar]{cursor:pointer}
+.cta-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.16;z-index:0;pointer-events:none}
+.cta:after{content:"";position:absolute;inset:0;z-index:0;background:radial-gradient(circle at center,rgba(9,12,17,.40),rgba(9,12,17,.78))}
+.cta h2,.cta p,.cta .btn{position:relative;z-index:1}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a href="#"><img src="{{BASE}}/static/landing/logo.png" class="navlogo" alt="Greyhound Factory"></a>
+    <div class="nav-cta">
+      <a href="{{BASE}}/login" class="btn btn-ghost">Entrar</a>
+      <a href="#" data-assinar class="btn btn-primary">Assinar</a>
+    </div>
+  </div>
+</header>
+
+<!-- INTRO -->
+<div class="intro">
+  <div class="wrap">
+    <div class="eyebrow">Palpites do dia · aberto e de graça</div>
+    <h1>Veja o método funcionando, todo dia</h1>
+    <p>A gente analisa as corridas de galgo com um motor de pontuação consistente e mostra o confronto entre os galgos de cada uma. Abaixo, os resultados de ontem e uma prévia dos palpites de hoje, de graça e sem precisar de cadastro.</p>
+    <div class="how">
+      <div class="step"><b>1.</b> O motor lê os cards e pontua cada galgo</div>
+      <div class="step"><b>2.</b> Define o favorito com nível de confiança</div>
+      <div class="step"><b>3.</b> Você confere o resultado no dia seguinte</div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTADOS DE ONTEM (ABERTO) -->
+<section>
+  <div class="wrap">
+    <div class="sec-title"><h2>Resultados de ontem</h2><span class="chip chip-green">21/07/2026 · aberto</span></div>
+    <p class="sec-sub">Os destaques de confiança alta de ontem, e como terminaram. Transparência total: mostramos os que bateram e a taxa real.</p>
+    <div class="stat-row">
+      <div class="stat"><b>+80</b><span>corridas analisadas por dia</span></div>
+      <div class="stat"><b>78%</b><span>taxa média de acerto do último bimestre</span></div>
+      <div class="stat"><b>Todos os dias</b><span>atualizações sistêmicas e ajustes nos robôs</span></div>
+    </div>
+    <div class="results">
+      <div class="res"><div class="pista">Sheffield <small>19:04 · 480m</small></div><div class="avb"><b>T3 Swift Arrow</b> venceu vs T5 Night Fox</div><div class="conf">Alta · 76%</div><div class="hit">✓ Bateu</div></div>
+      <div class="res"><div class="pista">Romford <small>20:12 · 400m</small></div><div class="avb"><b>T1 Blue Storm</b> chegou na frente de T4 Red King</div><div class="conf">Alta · 74%</div><div class="hit">✓ Bateu</div></div>
+      <div class="res"><div class="pista">Hove <small>20:33 · 515m</small></div><div class="avb"><b>T2 Fast Lane</b> bateu T6 Dark Runner</div><div class="conf">Alta · 72%</div><div class="hit">✓ Bateu</div></div>
+      <div class="res"><div class="pista">Nottingham <small>18:47 · 500m</small></div><div class="avb"><b>T4 Silver Bolt</b> venceu vs T2 Ghost</div><div class="conf">Alta · 71%</div><div class="hit">✓ Bateu</div></div>
+      <div class="res"><div class="pista">Central Park <small>19:58 · 380m</small></div><div class="avb"><b>T6 Iron Paw</b> chegou na frente de T3 Comet</div><div class="conf">Média-alta · 68%</div><div class="hit">✓ Bateu</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMO FUNCIONA (SHOWCASE TELAS REAIS) -->
+<section>
+  <div class="wrap">
+    <div class="sec-title"><h2>Como é o dia a dia por dentro</h2><span class="chip chip-green">telas reais</span></div>
+    <p class="sec-sub">Assinando, você tem o painel completo: análise de cada corrida, histórico com sua taxa de acerto e controle de banca. Veja como é por dentro:</p>
+    <div class="showcase">
+      <div class="shot">
+        <div class="topbar"><i></i><i></i><i></i><span class="cap">Painel completo: análise, histórico e banca em uma tela só</span></div>
+        <img src="{{BASE}}/static/landing/foto_analise.jpg" alt="Painel completo da Greyhound Factory">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VIDEO EXPLICATIVO -->
+<section>
+  <div class="wrap">
+    <div class="sec-title"><h2>Veja em 2 minutos como funciona</h2><span class="chip chip-green">vídeo</span></div>
+    <p class="sec-sub">Um resumo rápido de como a Greyhound Factory analisa as corridas e como você usa no dia a dia.</p>
+    <div class="videobox"><video controls preload="metadata" poster="{{BASE}}/static/landing/conheca_poster.jpg" playsinline><source src="{{BASE}}/static/landing/conheca_video.mp4" type="video/mp4"></video></div>
+  </div>
+</section>
+
+<!-- 3 DE HOJE (BORRADO) -->
+<section>
+  <div class="wrap">
+    <div class="sec-title"><h2>Os 3 palpites de hoje</h2><span class="chip chip-lock">🔒 bloqueado</span></div>
+    <p class="sec-sub">Hoje temos 3 corridas de alta confiança. O nível já está aqui, o galgo, só pra quem assina.</p>
+    <div class="today">
+      <div class="pick" data-assinar>
+        <span class="lockbadge">🔒</span>
+        <div class="top"><div><div class="pista">Sheffield</div><div class="hora">hoje · 19:04 · 480m</div></div></div>
+        <div class="dogs"><div class="d"><span class="t">T?</span> Nome do favorito</div><div class="d"><span class="t">T?</span> Nome do underdog</div></div>
+        <div style="text-align:center"><span class="conf">Confiança ALTA · 77%</span></div>
+        <div class="cover"><span>Assine para ver o confronto</span></div>
+      </div>
+      <div class="pick" data-assinar>
+        <span class="lockbadge">🔒</span>
+        <div class="top"><div><div class="pista">Romford</div><div class="hora">hoje · 20:12 · 400m</div></div></div>
+        <div class="dogs"><div class="d"><span class="t">T?</span> Nome do favorito</div><div class="d"><span class="t">T?</span> Nome do underdog</div></div>
+        <div style="text-align:center"><span class="conf">Confiança ALTA · 75%</span></div>
+        <div class="cover"><span>Assine para ver o confronto</span></div>
+      </div>
+      <div class="pick" data-assinar>
+        <span class="lockbadge">🔒</span>
+        <div class="top"><div><div class="pista">Hove</div><div class="hora">hoje · 20:33 · 515m</div></div></div>
+        <div class="dogs"><div class="d"><span class="t">T?</span> Nome do favorito</div><div class="d"><span class="t">T?</span> Nome do underdog</div></div>
+        <div style="text-align:center"><span class="conf">Confiança MÉDIA-ALTA · 69%</span></div>
+        <div class="cover"><span>Assine para ver o confronto</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLANOS x ACESSOS -->
+<section id="planos">
+  <div class="wrap">
+    <div class="sec-title"><h2>Escolha seu plano</h2></div>
+    <p class="sec-sub">Todos os planos incluem a análise completa do dia. O que muda é o quanto você leva de banca, configuração e suporte.</p>
+    <div class="tablewrap"><table class="cmp">
+      <thead><tr>
+        <th>O que você tem</th>
+        <th>Semanal<small>R$ 99,90 / semana</small></th>
+        <th class="best">Mensal<small>R$ 199,90 / mês</small></th>
+        <th>Trimestral<small>R$ 349,90 / 3 meses</small></th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Análise de todas as corridas do dia</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Confronto entre os galgos + nível de confiança</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Alertas de corrida</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Histórico e taxa de acerto</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Dashboard de desempenho (HR)</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Controle de banca pessoal</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Configurações de análise</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="no">&#215;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Suporte</td><td>Padrão</td><td class="col-best">Diário</td><td>Individualizado</td></tr>
+        <tr><td>Grupo VIP</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="no">&#215;</span></td><td><span class="yes">&#10003;</span></td></tr>
+      </tbody>
+      <tfoot><tr>
+        <td></td>
+        <td><a href="#" data-assinar class="btn btn-ghost">Assinar</a></td>
+        <td class="col-best"><a href="#" data-assinar class="btn btn-primary">Assinar</a></td>
+        <td><a href="#" data-assinar class="btn btn-ghost">Assinar</a></td>
+      </tr></tfoot>
+    </table></div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section>
+  <div class="wrap">
+    <div class="cta">
+      <img src="{{BASE}}/static/landing/conheca_cta.jpg" class="cta-bg" alt="">
+      <h2>Venha fazer parte do grupo de análise</h2>
+      <p>Chega de decidir no achismo. Entre em um plano e tenha todos os palpites do dia, na hora certa, com o histórico e a banca do seu lado.</p>
+      <a href="#" data-assinar class="btn btn-primary btn-lg">Quero fazer parte</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">A Greyhound Factory é uma ferramenta de análise e apoio à decisão. Não vendemos apostas e não garantimos resultados ou lucro, desempenho passado não assegura desempenho futuro. Aposte com responsabilidade, apenas o que você pode perder, e somente se tiver 18 anos ou mais.</p>
+    <p class="note">Prévia com dados de exemplo, na versão real, os números vêm da análise do dia.</p>
+  </div>
+</footer>
+
+<div class="gh-mbg" id="ghModal" onclick="if(event.target===this)ghClose()">
+  <div class="gh-modal" role="dialog" aria-modal="true">
+    <button class="gh-x" onclick="ghClose()" aria-label="Fechar">&times;</button>
+    <div class="ghic"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="30" height="30"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+    <h3>Assinatura em construção</h3>
+    <p>Estamos finalizando a parte de pagamento e liberação dos planos. Muito em breve você vai poder assinar e começar a usar. Fica de olho!</p>
+    <button class="gh-close" onclick="ghClose()">Entendi</button>
+  </div>
+</div>
+<script>
+function ghClose(){var m=document.getElementById('ghModal');if(m)m.classList.remove('open');}
+document.addEventListener('DOMContentLoaded',function(){
+  var m=document.getElementById('ghModal');
+  document.querySelectorAll('[data-assinar]').forEach(function(el){el.addEventListener('click',function(e){e.preventDefault();m.classList.add('open');});});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')ghClose();});
+});
+</script>
+</body>
+</html>

@@ -1,27 +1,27 @@
 'use strict';
 // src/routes/landing.js
-// Landing pública servida na raiz "/" (fora do BASE, sem exigir login).
-// O HTML fica em public/landing/index.html com o token {{BASE}}, trocado
-// aqui pelo BASE_PATH real (ex.: /greyhound) — assim os assets e o link de
-// login continuam corretos mesmo se o BASE mudar.
+// Serve a landing pública em "/" e a vitrine em "/conheca" (ambas fora do
+// BASE, sem login). O HTML fica em public/landing/*.html com o token {{BASE}},
+// trocado aqui pelo BASE_PATH real. Assets em public/landing/ via /static.
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
 
-const HTML_PATH = path.join(__dirname, '../../public/landing/index.html');
-// Lê uma vez no boot e injeta o BASE (arquivo estático, não muda em runtime).
-let HTML = '';
-try {
-  HTML = fs.readFileSync(HTML_PATH, 'utf8').split('{{BASE}}').join(BASE);
-} catch (e) {
-  console.error('[landing] não consegui ler index.html:', e.message);
+function load(name) {
+  try {
+    return fs.readFileSync(path.join(__dirname, '../../public/landing/' + name), 'utf8')
+             .split('{{BASE}}').join(BASE);
+  } catch (e) {
+    console.error('[landing] erro lendo ' + name + ':', e.message);
+    return '';
+  }
 }
+const INDEX = load('index.html');
+const CONHECA = load('conheca.html');
 
-router.get('/', (req, res) => {
-  if (!HTML) return res.redirect(BASE); // fallback: se faltar o arquivo, vai pro app
-  res.type('html').send(HTML);
-});
+router.get('/', (req, res) => INDEX ? res.type('html').send(INDEX) : res.redirect(BASE));
+router.get('/conheca', (req, res) => CONHECA ? res.type('html').send(CONHECA) : res.redirect(BASE));
 
 module.exports = router;

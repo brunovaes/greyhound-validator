@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Greyhound Factory — Professional Greyhound Analytics</title>
+<title>Greyhound Factory, Professional Greyhound Analytics</title>
 <style>
   :root{
     --bg:#0D1117; --panel:#161B27; --panel2:#1b2130; --line:#232a38;
@@ -151,6 +151,17 @@
 .band-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.18;z-index:0;pointer-events:none}
 .band:after{content:"";position:absolute;inset:0;z-index:0;background:radial-gradient(circle at center,rgba(9,12,17,.35),rgba(9,12,17,.75))}
 .band h2,.band p,.band .btn{position:relative;z-index:1}
+.gh-mbg{position:fixed;inset:0;background:rgba(6,9,13,.78);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px}
+.gh-mbg.open{display:flex}
+.gh-modal{position:relative;background:#161B27;border:1px solid rgba(34,197,94,.35);border-radius:16px;max-width:430px;width:100%;padding:38px 30px 30px;text-align:center;box-shadow:0 30px 80px -28px rgba(0,0,0,.85);animation:ghpop .25s ease}
+@keyframes ghpop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+.gh-modal .ghic{width:66px;height:66px;border-radius:16px;background:rgba(34,197,94,.12);display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.gh-modal h3{font-size:20px;font-weight:800;margin-bottom:10px;color:#e9edf2}
+.gh-modal p{color:#8b97a7;font-size:14.5px;line-height:1.65;margin-bottom:24px}
+.gh-modal .gh-close{background:#22c55e;color:#04140a;font-weight:700;border:none;border-radius:10px;padding:12px 28px;font-size:15px;cursor:pointer}
+.gh-modal .gh-close:hover{background:#16a34a}
+.gh-modal .gh-x{position:absolute;top:10px;right:14px;background:none;border:none;color:#66717f;font-size:22px;cursor:pointer;line-height:1}
+[data-assinar]{cursor:pointer}
 </style>
 </head>
 <body>
@@ -159,7 +170,7 @@
 <!-- NAV -->
 <header class="nav">
   <div class="wrap nav-in">
-    <a href="#top"><img src="{{BASE}}/static/landing/logo.png" class="navlogo" alt="Greyhound Factory — Professional Greyhound Analytics"></a>
+    <a href="#top"><img src="{{BASE}}/static/landing/logo.png" class="navlogo" alt="Greyhound Factory, Professional Greyhound Analytics"></a>
     <nav class="nav-links">
       <a href="#recursos" class="lnk">Recursos</a>
       <a href="#como" class="lnk">Como funciona</a>
@@ -167,7 +178,7 @@
     </nav>
     <div class="nav-cta">
       <a href="{{BASE}}/login" class="btn btn-ghost hide-sm">Entrar</a>
-      <a href="#planos" class="btn btn-primary">Criar conta</a>
+      <a href="#" data-assinar class="btn btn-primary">Criar conta</a>
       <button class="menu-btn" aria-label="menu" onclick="document.querySelector('.nav-links').style.display='flex'">☰</button>
     </div>
   </div>
@@ -181,18 +192,18 @@
     <div class="hero-copy">
       <span class="pill">● Professional Greyhound Analytics · ao vivo todo dia</span>
       <h1>Pare de decidir no achismo. <span class="green">Análise objetiva</span> de cada corrida.</h1>
-      <p class="sub">Lemos os cards, aplicamos um motor de pontuação consistente e entregamos a decisão pronta — o confronto A vs B, o nível de confiança e o histórico que sustenta cada escolha. Sem emoção, sem viés.</p>
+      <p class="sub">Lemos os cards, aplicamos um motor de pontuação consistente e entregamos a decisão pronta, o confronto entre os galgos, o nível de confiança e o histórico que sustenta cada escolha. Sem emoção, sem viés.</p>
       <div class="hero-cta">
-        <a href="#planos" class="btn btn-primary btn-lg">Começar demo grátis de 1 dia</a>
+        <a href="/conheca" class="btn btn-primary btn-lg">Entenda como funciona</a>
         <a href="{{BASE}}/login" class="btn btn-ghost btn-lg">Já tenho conta</a>
       </div>
-      <p class="hero-note">1 dia gratuito ao criar a conta · sem precisar de cartão pra testar</p>
+      <p class="hero-note">Veja por dentro como a análise funciona antes de escolher um plano.</p>
     </div>
   </div>
   <div class="strip"><div class="wrap strip-in">
     <div class="stat"><b>Automático</b><span>análise sem apertar botão</span></div>
     <div class="stat"><b>24/7</b><span>robôs vigiando o dia inteiro</span></div>
-    <div class="stat"><b>A vs B</b><span>decisão com nível de confiança</span></div>
+    <div class="stat"><b>Confronto</b><span>entre os galgos, com confiança</span></div>
     <div class="stat"><b>HR ao vivo</b><span>desempenho por contexto</span></div>
   </div></div>
 </section>
@@ -200,7 +211,7 @@
 <!-- RECURSOS -->
 <section id="recursos" class="blk">
   <div class="wrap">
-    <div class="sec-head"><div class="eyebrow">Recursos</div><h2>Tudo que você precisa pra decidir com método</h2><p>Da leitura do card ao resultado confirmado — o sistema trabalha sozinho e você só olha a decisão.</p></div>
+    <div class="sec-head"><div class="eyebrow">Recursos</div><h2>Tudo que você precisa pra decidir com método</h2><p>Da leitura do card ao resultado confirmado, o sistema trabalha sozinho e você só olha a decisão.</p></div>
     <div class="feat-grid">
       <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 4h16v5H4zM4 13h10v7H4zM17 13h3v7h-3z"/></svg></div><h3>Análise 100% automática</h3><p>Os cards são coletados e analisados sozinhos, todo dia. Você abre o painel e as corridas já estão prontas.</p></div>
       <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Robôs 24/7</h3><p>Robôs vigiam mudanças de card, retiradas de galgo e resultados o dia inteiro, refazendo a análise quando algo muda perto da corrida.</p></div>
@@ -219,10 +230,10 @@
     <div class="txt">
       <div class="eyebrow">Feita pra quem leva a sério</div>
       <h2>Cada milésimo conta. Sua leitura também.</h2>
-      <p>A corrida acontece em segundos — a decisão não pode depender de palpite. A Greyhound Factory transforma o histórico e os dados de cada galgo em uma leitura objetiva, do mesmo jeito, todo dia.</p>
+      <p>A corrida acontece em segundos, a decisão não pode depender de palpite. A Greyhound Factory transforma o histórico e os dados de cada galgo em uma leitura objetiva, do mesmo jeito, todo dia.</p>
       <ul>
         <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Critério consistente, sem viés de humor ou torcida</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Confronto A vs B com nível de confiança claro</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> O confronto entre os galgos com nível de confiança claro</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Histórico que sustenta cada escolha, pra você conferir</li>
       </ul>
     </div>
@@ -235,7 +246,7 @@
     <div class="sec-head"><div class="eyebrow">Como funciona</div><h2>Do card à decisão em 3 passos</h2></div>
     <div class="step-grid">
       <div class="step"><h3>Coleta</h3><p>O sistema baixa os cards do dia automaticamente e organiza cada corrida por pista e horário.</p></div>
-      <div class="step"><h3>Análise</h3><p>O motor pontua cada galgo com critérios consistentes e define o confronto A vs B com nível de confiança.</p></div>
+      <div class="step"><h3>Análise</h3><p>O motor pontua cada galgo com critérios consistentes e define o confronto entre os galgos com nível de confiança.</p></div>
       <div class="step"><h3>Decisão</h3><p>Você recebe a corrida pronta, com alerta na hora certa, e acompanha o acerto no histórico.</p></div>
     </div>
   </div>
@@ -254,7 +265,7 @@
           <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Dashboard de desempenho</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Renovação semanal</li>
         </ul>
-        <a href="{{BASE}}/login" class="btn btn-ghost">Assinar semanal</a>
+        <a href="#" data-assinar class="btn btn-ghost">Assinar semanal</a>
       </div>
       <div class="plan best">
         <div class="badge">MAIS POPULAR</div>
@@ -267,7 +278,7 @@
           <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Controle de banca pessoal</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Suporte diário</li>
         </ul>
-        <a href="{{BASE}}/login" class="btn btn-primary">Assinar mensal</a>
+        <a href="#" data-assinar class="btn btn-primary">Assinar mensal</a>
       </div>
       <div class="plan">
         <div class="name">Trimestral</div><div class="price">R$ 349,90 <small>/ 3 meses</small></div><div class="permo">≈ R$ 116/mês · melhor custo</div>
@@ -280,7 +291,7 @@
           <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Suporte individualizado</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Grupo VIP</li>
         </ul>
-        <a href="{{BASE}}/login" class="btn btn-ghost">Assinar trimestral</a>
+        <a href="#" data-assinar class="btn btn-ghost">Assinar trimestral</a>
       </div>
     </div>
     <p class="plans-note">Pagamento via Pix, Pix Automático e cartão de crédito. Cancele quando quiser.</p>
@@ -290,9 +301,9 @@
 <!-- BAND -->
 <section class="blk" style="padding-top:6px"><div class="wrap"><div class="band">
   <img src="{{BASE}}/static/landing/cta_galgos.jpg" class="band-bg" alt="">
-  <h2>Teste hoje, sem compromisso</h2>
-  <p>Crie sua conta, confirme o e-mail e use a Greyhound Factory por 1 dia inteiro, de graça.</p>
-  <a href="#planos" class="btn btn-primary btn-lg">Criar minha conta grátis</a>
+  <h2>Veja funcionando antes de decidir</h2>
+  <p>Antes de escolher um plano, veja por dentro como a gente analisa cada corrida e chega em cada palpite. Em poucos minutos você entende o método e decide com segurança.</p>
+  <a href="/conheca" class="btn btn-primary btn-lg">Entenda como funciona</a>
 </div></div></section>
 
 <!-- FOOTER -->
@@ -303,9 +314,26 @@
       <a href="#recursos">Recursos</a><a href="#como">Como funciona</a><a href="#planos">Planos</a><a href="{{BASE}}/login">Entrar</a>
     </div>
   </div>
-  <p class="disclaimer">A Greyhound Factory é uma ferramenta de análise e apoio à decisão. Não vendemos apostas e não garantimos resultados ou lucro — desempenho passado não assegura desempenho futuro. Aposte com responsabilidade, apenas o que você pode perder, e somente se tiver 18 anos ou mais. Se as apostas deixarem de ser diversão, procure ajuda.</p>
+  <p class="disclaimer">A Greyhound Factory é uma ferramenta de análise e apoio à decisão. Não vendemos apostas e não garantimos resultados ou lucro, desempenho passado não assegura desempenho futuro. Aposte com responsabilidade, apenas o que você pode perder, e somente se tiver 18 anos ou mais. Se as apostas deixarem de ser diversão, procure ajuda.</p>
   <p class="copyr">© 2026 Greyhound Factory. Todos os direitos reservados.</p>
 </div></footer>
 
+<div class="gh-mbg" id="ghModal" onclick="if(event.target===this)ghClose()">
+  <div class="gh-modal" role="dialog" aria-modal="true">
+    <button class="gh-x" onclick="ghClose()" aria-label="Fechar">&times;</button>
+    <div class="ghic"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="30" height="30"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+    <h3>Assinatura em construção</h3>
+    <p>Estamos finalizando a parte de pagamento e liberação dos planos. Muito em breve você vai poder assinar e começar a usar. Fica de olho!</p>
+    <button class="gh-close" onclick="ghClose()">Entendi</button>
+  </div>
+</div>
+<script>
+function ghClose(){var m=document.getElementById('ghModal');if(m)m.classList.remove('open');}
+document.addEventListener('DOMContentLoaded',function(){
+  var m=document.getElementById('ghModal');
+  document.querySelectorAll('[data-assinar]').forEach(function(el){el.addEventListener('click',function(e){e.preventDefault();m.classList.add('open');});});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')ghClose();});
+});
+</script>
 </body>
 </html>
