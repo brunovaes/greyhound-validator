@@ -5,6 +5,7 @@ const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
+const { NOMES_PISTAS } = require('../utils/nomesPistas');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -19,6 +20,12 @@ function getLogo() {
 router.get('/', requireAdmin, (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id, false);
+  const CORES_HEX_CFG = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
+  const alarmeCorHex = CORES_HEX_CFG[config.alarme_filtro_cor] || '#3b82f6';
+  const pistasAlarme = Object.keys(NOMES_PISTAS).map(function(k){return [k, NOMES_PISTAS[k]];}).sort(function(a,b){return a[1].localeCompare(b[1]);});
+  const classesAlarme = ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10','A11','A12'];
+  const alarmePistasSel = String(config.alarme_filtro_pistas||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  const alarmeClassesSel = String(config.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
   const logoB64 = getLogo();
 
   // Gera o switch liga/desliga de um bloco de configuracao. O input hidden
@@ -368,6 +375,65 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
 </div>
 </div>
+
+<div class="section">
+<div class="sec-title">Alarme para filtro selecionado</div>
+<div class="bloco-toggle">
+  <input type="hidden" name="alarme_filtro_ativo" value="0">
+  <label class="bloco-switch">
+    <input type="checkbox" name="alarme_filtro_ativo" value="1" ${config.alarme_filtro_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label');l.style.color=this.checked?'#22c55e':'#888';l.textContent=this.checked?'Alarme ativo':'Alarme desligado';">
+    <span class="slider"></span>
+  </label>
+  <span class="bloco-toggle-label" style="color:${config.alarme_filtro_ativo?'#22c55e':'#888'}">${config.alarme_filtro_ativo?'Alarme ativo':'Alarme desligado'}</span>
+</div>
+<div class="info-box">Quando ligado, as corridas que casam com o filtro (turno E pista E classe) piscam na cor escolhida e tocam o som escolhido no tempo do alerta. As demais seguem o alerta normal.</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+  <div class="field"><label>Turno</label>
+    <select name="alarme_filtro_turno">
+      <option value="" ${!config.alarme_filtro_turno?'selected':''}>Todos</option>
+      <option value="manha" ${config.alarme_filtro_turno==='manha'?'selected':''}>Manhã</option>
+      <option value="tarde" ${config.alarme_filtro_turno==='tarde'?'selected':''}>Tarde</option>
+    </select>
+  </div>
+  <div class="field"><label>Som de Alerta</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select name="alarme_filtro_som" id="alarme_filtro_som" style="flex:1">
+        <option value="sino" ${config.alarme_filtro_som==='sino'?'selected':''}>Sino</option>
+        <option value="beep" ${config.alarme_filtro_som==='beep'||!config.alarme_filtro_som?'selected':''}>Beep</option>
+        <option value="alarme" ${config.alarme_filtro_som==='alarme'?'selected':''}>Alarme</option>
+        <option value="suave" ${config.alarme_filtro_som==='suave'?'selected':''}>Suave</option>
+      </select>
+      <button type="button" onclick="testarSomAlarme()" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
+    </div>
+  </div>
+  <div class="field"><label>Cor de Alerta</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select name="alarme_filtro_cor" id="alarme_filtro_cor" style="flex:1" onchange="previewCorAlarme()">
+        <option value="azul" ${config.alarme_filtro_cor==='azul'||!config.alarme_filtro_cor?'selected':''}>Azul</option>
+        <option value="roxo" ${config.alarme_filtro_cor==='roxo'?'selected':''}>Roxo</option>
+        <option value="laranja" ${config.alarme_filtro_cor==='laranja'?'selected':''}>Laranja</option>
+        <option value="rosa" ${config.alarme_filtro_cor==='rosa'?'selected':''}>Rosa</option>
+      </select>
+      <span id="alarme_cor_preview" style="display:inline-block;width:34px;height:22px;border-radius:5px;flex-shrink:0;background:${alarmeCorHex}"></span>
+    </div>
+  </div>
+</div>
+<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+  <div class="field"><label>Pista (várias)</label>
+    <div style="max-height:170px;overflow:auto;background:#0D1117;border:1px solid #222;border-radius:6px;padding:8px">
+      ${pistasAlarme.map(function(p){return `<label style="display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" class="alarme-pista-cb" value="${p[0]}" ${alarmePistasSel.indexOf(p[0])>=0?'checked':''} onchange="coletaAlarme('pista')" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">${p[1]}</label>`;}).join('')}
+    </div>
+    <input type="hidden" name="alarme_filtro_pistas" id="alarme_pistas_val" value="${config.alarme_filtro_pistas||''}">
+    <div class="hint">Nada marcado = qualquer pista.</div>
+  </div>
+  <div class="field"><label>Classe (várias)</label>
+    <div style="max-height:170px;overflow:auto;background:#0D1117;border:1px solid #222;border-radius:6px;padding:8px">
+      ${classesAlarme.map(function(cl){return `<label style="display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" class="alarme-classe-cb" value="${cl}" ${alarmeClassesSel.indexOf(cl)>=0?'checked':''} onchange="coletaAlarme('classe')" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">${cl}</label>`;}).join('')}
+    </div>
+    <input type="hidden" name="alarme_filtro_classes" id="alarme_classes_val" value="${config.alarme_filtro_classes||''}">
+    <div class="hint">Nada marcado = qualquer classe.</div>
+  </div>
+</div>
 </div>
 
 <div class="tab-panel" id="t-banca">
@@ -448,10 +514,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <div id="dash_f_pista_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
   </div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Nº cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field" style="flex:1;min-width:150px;position:relative"><label style="white-space:nowrap">Classe (várias)</label>
-    <div id="dash_f_classe_box" onclick="toggleClassePanel(event)" style="padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Todas ▾</div>
-    <div id="dash_f_classe_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
-  </div>
+  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
   <div class="field" style="width:78px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd mín</label><input type="number" id="dash_qtd_min" min="1" placeholder="–" title="Nº mínimo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <div class="field" style="width:80px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd máx</label><input type="number" id="dash_qtd_max" min="1" placeholder="–" title="Nº máximo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
@@ -563,43 +626,9 @@ function atualizaPistaBox(){
   else if(dashPistasSel.length<=2) box.textContent=dashPistasSel.map(nomePistaCli).join(', ')+' ▾';
   else box.textContent=dashPistasSel.length+' pistas ▾';
 }
-var dashClassesSel = [], dashClasseDirty = false;
-function fecharClasseEComitar(){
-  var p=document.getElementById('dash_f_classe_panel'); if(p) p.style.display='none';
-  if(dashClasseDirty){ dashClasseDirty=false; carregarDashboard(); }
-}
-function toggleClassePanel(e){
-  if(e&&e.stopPropagation)e.stopPropagation();
-  var p=document.getElementById('dash_f_classe_panel'); if(!p) return;
-  if(p.style.display==='block'){ fecharClasseEComitar(); } else { p.style.display='block'; }
-}
-function preencheClassePanel(classes){
-  var pan=document.getElementById('dash_f_classe_panel'); if(!pan) return;
-  dashClassesSel = dashClassesSel.filter(function(c){ return (classes||[]).indexOf(c)>=0; });
-  var h=(classes||[]).map(function(c){
-    var ck = dashClassesSel.indexOf(c)>=0?'checked':'';
-    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;text-align:left;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" value="'+c+'" '+ck+' onchange="onClasseCheck(this)" style="margin:0;padding:0;width:16px;height:16px;flex-shrink:0;cursor:pointer">'+c+'</label>';
-  }).join('');
-  pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem classes no período</div>';
-  atualizaClasseBox();
-}
-function onClasseCheck(cb){
-  var v=cb.value;
-  if(cb.checked){ if(dashClassesSel.indexOf(v)<0) dashClassesSel.push(v); }
-  else { dashClassesSel = dashClassesSel.filter(function(c){return c!==v;}); }
-  dashClasseDirty=true; atualizaClasseBox();
-}
-function atualizaClasseBox(){
-  var box=document.getElementById('dash_f_classe_box'); if(!box) return;
-  if(!dashClassesSel.length) box.textContent='Todas ▾';
-  else if(dashClassesSel.length<=3) box.textContent=dashClassesSel.join(', ')+' ▾';
-  else box.textContent=dashClassesSel.length+' classes ▾';
-}
 document.addEventListener('click', function(e){
   var box=document.getElementById('dash_f_pista_box'), pan=document.getElementById('dash_f_pista_panel');
   if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box){ fecharPistaEComitar(); }
-  var cbox=document.getElementById('dash_f_classe_box'), cpan=document.getElementById('dash_f_classe_panel');
-  if(cpan && cpan.style.display==='block' && !cpan.contains(e.target) && e.target!==cbox){ fecharClasseEComitar(); }
 });
 function dashPreencheSelect(id, valores, sel, prefixoTodos){
   var el=document.getElementById(id); if(!el) return;
@@ -608,9 +637,8 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_caes','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  ['dash_f_turno','dash_f_caes','dash_f_classe','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
   dashPistasSel=[]; dashPistaDirty=false; atualizaPistaBox();
-  dashClassesSel=[]; dashClasseDirty=false; atualizaClasseBox();
   carregarDashboard();
 }
 async function carregarDashboard(){
@@ -618,7 +646,7 @@ async function carregarDashboard(){
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||13;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
-  var fCaes=document.getElementById('dash_f_caes').value, fClasse=dashClassesSel.join(',');
+  var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
   var fQtdMin=document.getElementById('dash_qtd_min').value, fQtdMax=document.getElementById('dash_qtd_max').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
   var qs=['t1='+t1,'t2='+t2];
@@ -638,7 +666,7 @@ async function carregarDashboard(){
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
     preenchePistaPanel(d.opcoes.pistas);
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
-    preencheClassePanel(d.opcoes.classes);
+    dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
     var rz=d.resumo;
     var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.qtdMin||d.filtros.qtdMax;
     var recorte='';
@@ -649,7 +677,7 @@ async function carregarDashboard(){
       else if(d.filtros.qtdMax) qlbl='pistas c/ até '+d.filtros.qtdMax+' corridas';
       else if(d.filtros.qtdMin) qlbl='pistas c/ mín. '+d.filtros.qtdMin+' corridas';
       if(qlbl)partes.push(qlbl);
-      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push('Classe '+d.filtros.classe.split(',').join(', '));
+      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';
@@ -674,6 +702,10 @@ function tocarBeep(ctx){function tone(freq,start,dur){var o=ctx.createOscillator
 function tocarAlarme(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sawtooth';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(880,0,0.15);tone(660,0.15,0.15);tone(880,0.30,0.15);tone(660,0.45,0.15);}
 function tocarSuave(ctx){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
 var SONS_TESTE = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
+function testarSomAlarme(){ try{ var e=document.getElementById('alarme_filtro_som').value; var ctx=new (window.AudioContext||window.webkitAudioContext)(); (SONS_TESTE[e]||tocarSino)(ctx); }catch(err){console.error('[testarSomAlarme]',err);} }
+var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'};
+function previewCorAlarme(){ var s=document.getElementById('alarme_filtro_cor'), pv=document.getElementById('alarme_cor_preview'); if(s&&pv)pv.style.background=CORES_ALARME_CFG[s.value]||'#3b82f6'; }
+function coletaAlarme(tipo){ var cls=tipo==='pista'?'alarme-pista-cb':'alarme-classe-cb'; var hid=tipo==='pista'?'alarme_pistas_val':'alarme_classes_val'; var vals=[]; document.querySelectorAll('.'+cls).forEach(function(cb){ if(cb.checked)vals.push(cb.value); }); var h=document.getElementById(hid); if(h)h.value=vals.join(','); }
 function testarSom(){
   try {
     var escolha = document.getElementById('som_alerta').value;
@@ -754,7 +786,13 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alerta_min_antes INTEGER DEFAULT 3").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN tela_grace_min INTEGER DEFAULT 0").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN som_alerta TEXT DEFAULT 'sino'").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,som_alerta=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_ativo INTEGER DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_turno TEXT DEFAULT ''").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_pistas TEXT DEFAULT ''").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,som_alerta=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -787,6 +825,12 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.bloco_filtros_ativo==='1'||d.bloco_filtros_ativo===1?1:0,
       d.bloco_confianca_ativo==='1'||d.bloco_confianca_ativo===1?1:0,
       d.bloco_motor_ativo==='1'||d.bloco_motor_ativo===1?1:0,
+      (d.alarme_filtro_ativo==='1'||d.alarme_filtro_ativo===1)?1:0,
+      d.alarme_filtro_turno||'',
+      d.alarme_filtro_pistas||'',
+      d.alarme_filtro_classes||'',
+      d.alarme_filtro_som||'beep',
+      d.alarme_filtro_cor||'azul',
       user.id
     );
     res.json({ ok: true });

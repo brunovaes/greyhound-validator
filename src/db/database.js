@@ -171,6 +171,12 @@ db.exec(`
 
 // Migracoes seguras para banco existente
 const migrations = [
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_ativo INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_turno TEXT DEFAULT ''",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_pistas TEXT DEFAULT ''",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'",
   'ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0',
   'ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1',
   'ALTER TABLE analysis_config ADD COLUMN ajuste_classe_segundos REAL DEFAULT 0.20',

@@ -89,6 +89,8 @@ function injectStyles(){
     '.ps-btn-warn:hover{opacity:.88;}',
     '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
+    '.rc-alert-custom{animation:rcAlertBlinkCustom 1s ease-in-out infinite;border-left:3px solid var(--alert-col,#3b82f6);}',
+    '@keyframes rcAlertBlinkCustom{0%,100%{background:transparent;}50%{background:var(--alert-col,#3b82f6);}}',
     '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
     '.rc-reanalise-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:8px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-bottom:3px}',
     '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
@@ -108,6 +110,8 @@ var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
 var TELA_GRACE_MIN = 0;
 var SOM_ALERTA = 'sino';
+var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], som:'beep', cor:'azul' };
+var CORES_ALARME = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
 
 async function loadAcertosResumo() {
   try {
@@ -135,6 +139,12 @@ async function loadSystemConfig() {
     if (c.alerta_min_antes != null) ALERTA_MIN_ANTES = parseInt(c.alerta_min_antes);
     if (c.tela_grace_min != null) TELA_GRACE_MIN = parseInt(c.tela_grace_min);
     if (c.som_alerta) SOM_ALERTA = c.som_alerta;
+    ALARME_FILTRO.ativo = c.alarme_filtro_ativo ? 1 : 0;
+    ALARME_FILTRO.turno = c.alarme_filtro_turno || '';
+    ALARME_FILTRO.pistas = (c.alarme_filtro_pistas||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    ALARME_FILTRO.classes = (c.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
+    ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
   } catch(e) {}
 }
 
@@ -524,18 +534,24 @@ function checkRaceAlerts() {
     if (isNaN(idx) || !results[idx]) return;
     var r = results[idx];
     el.classList.toggle('rc-old', isOldRaceCard(r));
-    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); return; } // corrida antiga nunca pisca/soa
+    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom'); return; } // corrida antiga nunca pisca/soa
     var mins = minutesToRace(r);
     var shouldAlert = mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     if (shouldAlert) {
-      el.classList.add('rc-alert');
+      var custom = matchAlarmeFiltro(r);
+      if (custom) {
+        el.classList.remove('rc-alert'); el.classList.add('rc-alert-custom');
+        el.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6');
+      } else {
+        el.classList.remove('rc-alert-custom'); el.classList.add('rc-alert');
+      }
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
         alertedRaces[key] = true;
-        playBellSound();
+        playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
       }
     } else {
-      el.classList.remove('rc-alert');
+      el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom');
     }
   });
 }
@@ -830,6 +846,30 @@ function playBellSound() {
 function raceAlertKey(r) {
   return (r.hora||'') + '|' + (r.corrida||'');
 }
+// Alarme para filtro selecionado (Configuracoes > Automacao): cor + som proprios
+function alarmeTurnoDaCorrida(r){
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  var h = parseInt((hbr||'').split(':')[0], 10);
+  if (isNaN(h)) return '';
+  return h < 13 ? 'manha' : 'tarde';
+}
+function matchAlarmeFiltro(r){
+  if (!ALARME_FILTRO.ativo) return false;
+  if (ALARME_FILTRO.turno && alarmeTurnoDaCorrida(r) !== ALARME_FILTRO.turno) return false;
+  // pista = codigo do Racing Post = 1a palavra de corrida (mesma convencao do motor/HR)
+  var pista = (r.corrida||'').trim().split(' ')[0];
+  var classe = (getRaceClass(r.corrida||'') || '').toUpperCase();
+  if (ALARME_FILTRO.pistas.length && ALARME_FILTRO.pistas.indexOf(pista) < 0) return false;
+  if (ALARME_FILTRO.classes.length && ALARME_FILTRO.classes.map(function(c){return c.toUpperCase();}).indexOf(classe) < 0) return false;
+  return true;
+}
+function playSom(nome){
+  try {
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var fn = SONS_DISPONIVEIS[nome] || tocarSino;
+    fn(ctx);
+  } catch(e) { console.error('[playSom] erro', e); }
+}
 
 function renderRaceListPanel(avbs) {
   var col = document.getElementById('race-list-col');
@@ -847,12 +887,14 @@ function renderRaceListPanel(avbs) {
     var isOld = isOldRaceCard(r);
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
+    var alertCustom = isAlerting && matchAlarmeFiltro(r);
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
+    if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
     if (isAlerting) {
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
         alertedRaces[key] = true;
-        playBellSound();
+        playSom(alertCustom ? ALARME_FILTRO.som : SOM_ALERTA);
       }
     }
     div.setAttribute('data-idx', rIdx);
