@@ -636,7 +636,7 @@ document.addEventListener('click', function(e){
 });
 // ===== Classe (multipla) — mesmo padrao da Pista =====
 var dashClassesSel = [], dashClasseDirty = false;
-function cmpClasseCli(a,b){ var na=parseInt(String(a).replace(/\D/g,''),10), nb=parseInt(String(b).replace(/\D/g,''),10); if(!isNaN(na)&&!isNaN(nb)&&na!==nb)return na-nb; return String(a).localeCompare(String(b)); }
+function cmpClasseCli(a,b){ a=String(a); b=String(b); var pa=(a.match(/[A-Za-z]+/)||[''])[0], pb=(b.match(/[A-Za-z]+/)||[''])[0]; if(pa!==pb) return pa.localeCompare(pb); var na=parseInt((a.match(/\d+/)||['0'])[0],10), nb=parseInt((b.match(/\d+/)||['0'])[0],10); if(na!==nb) return na-nb; return a.localeCompare(b); }
 function fecharClasseEComitar(){
   var p=document.getElementById('dash_f_classe_panel'); if(p) p.style.display='none';
   if(dashClasseDirty){ dashClasseDirty=false; carregarDashboard(); }

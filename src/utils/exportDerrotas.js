@@ -326,12 +326,17 @@ function grupoParaArray(grupo, ordenar) {
   return arr;
 }
 
-// Ordena classes na ordem natural A1, A2, ... A10, A11, A12 (nao alfabetica).
+// Ordena classes agrupando pelo prefixo de letra e depois pelo numero:
+// A1, A2, ... A9, A10, A11, A12, depois D..., HP, OR, S1... (nao alfabetica pura).
 function cmpClasse(a, b) {
-  const na = parseInt(String(a).replace(/\D/g, ''), 10);
-  const nb = parseInt(String(b).replace(/\D/g, ''), 10);
-  if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
-  return String(a).localeCompare(String(b));
+  a = String(a); b = String(b);
+  const pa = (a.match(/[A-Za-z]+/) || [''])[0];
+  const pb = (b.match(/[A-Za-z]+/) || [''])[0];
+  if (pa !== pb) return pa.localeCompare(pb);
+  const na = parseInt((a.match(/\d+/) || ['0'])[0], 10);
+  const nb = parseInt((b.match(/\d+/) || ['0'])[0], 10);
+  if (na !== nb) return na - nb;
+  return a.localeCompare(b);
 }
 
 // Dados agregados pro dashboard (JSON puro, sem planilha).
