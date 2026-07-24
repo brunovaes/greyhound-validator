@@ -326,18 +326,18 @@ function grupoParaArray(grupo, ordenar) {
   return arr;
 }
 
-// Dados agregados pro dashboard (JSON puro, sem planilha).
-// filtros = { turno, pista, caes, classe } — qualquer um pode faltar ('' = todos).
-// Cruza as dimensoes: aplica todos os filtros presentes e agrega o subconjunto.
-// Ordena classes em ordem natural (A1, A2, ... A10, A11, A12) em vez de
-// alfabetica (que colocaria A10/A11/A12 antes de A2).
+// Ordena classes na ordem natural A1, A2, ... A10, A11, A12 (nao alfabetica).
 function cmpClasse(a, b) {
-  const ma = /^([A-Za-z]*)(\d*)/.exec(String(a || ''));
-  const mb = /^([A-Za-z]*)(\d*)/.exec(String(b || ''));
-  if (ma[1] !== mb[1]) return ma[1] < mb[1] ? -1 : 1;
-  return (parseInt(ma[2] || '0', 10)) - (parseInt(mb[2] || '0', 10));
+  const na = parseInt(String(a).replace(/\D/g, ''), 10);
+  const nb = parseInt(String(b).replace(/\D/g, ''), 10);
+  if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+  return String(a).localeCompare(String(b));
 }
 
+// Dados agregados pro dashboard (JSON puro, sem planilha).
+// filtros = { turno, pista, caes, classe } — qualquer um pode faltar ('' = todos).
+// pista e classe aceitam MULTIPLOS valores (lista separada por virgula).
+// Cruza as dimensoes: aplica todos os filtros presentes e agrega o subconjunto.
 function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride) {
   // bordas em horario BR (Brasilia). Dois turnos: Manha a partir de t1 (6h) e
   // Tarde a partir de t2 (13h).
@@ -362,7 +362,7 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   const nomes = {};
   opcoes.pistas.forEach(p => { nomes[p] = nomePista(p); });
 
-  // Aplica o cruzamento. Pista aceita MULTIPLA (lista separada por virgula).
+  // Aplica o cruzamento. Pista e classe aceitam MULTIPLA (lista separada por virgula).
   const pistaSel = String(f.pista || '').split(',').map(s => s.trim()).filter(Boolean);
   const classeSel = String(f.classe || '').split(',').map(s => s.trim()).filter(Boolean);
   const items = todos.filter(x =>

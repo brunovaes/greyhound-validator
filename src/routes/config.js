@@ -515,7 +515,10 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <div id="dash_f_pista_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
   </div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Nº cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
+  <div class="field" style="width:140px;flex-shrink:0;position:relative"><label style="white-space:nowrap">Classe (várias)</label>
+    <div id="dash_f_classe_box" onclick="toggleClassePanel(event)" style="padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Todas ▾</div>
+    <div id="dash_f_classe_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
+  </div>
   <div class="field" style="width:78px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd mín</label><input type="number" id="dash_qtd_min" min="1" placeholder="–" title="Nº mínimo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <div class="field" style="width:80px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd máx</label><input type="number" id="dash_qtd_max" min="1" placeholder="–" title="Nº máximo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
@@ -631,6 +634,46 @@ document.addEventListener('click', function(e){
   var box=document.getElementById('dash_f_pista_box'), pan=document.getElementById('dash_f_pista_panel');
   if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box){ fecharPistaEComitar(); }
 });
+// ===== Classe (multipla) — mesmo padrao da Pista =====
+var dashClassesSel = [], dashClasseDirty = false;
+function cmpClasseCli(a,b){ var na=parseInt(String(a).replace(/\D/g,''),10), nb=parseInt(String(b).replace(/\D/g,''),10); if(!isNaN(na)&&!isNaN(nb)&&na!==nb)return na-nb; return String(a).localeCompare(String(b)); }
+function fecharClasseEComitar(){
+  var p=document.getElementById('dash_f_classe_panel'); if(p) p.style.display='none';
+  if(dashClasseDirty){ dashClasseDirty=false; carregarDashboard(); }
+}
+function toggleClassePanel(e){
+  if(e&&e.stopPropagation)e.stopPropagation();
+  var p=document.getElementById('dash_f_classe_panel'); if(!p) return;
+  if(p.style.display==='block'){ fecharClasseEComitar(); } else { p.style.display='block'; }
+}
+function preencheClassePanel(classes){
+  var pan=document.getElementById('dash_f_classe_panel'); if(!pan) return;
+  var lista=(classes||[]).slice().sort(cmpClasseCli);
+  dashClassesSel = dashClassesSel.filter(function(c){ return lista.indexOf(c)>=0; });
+  var h=lista.map(function(c){
+    var ck = dashClassesSel.indexOf(c)>=0?'checked':'';
+    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;text-align:left;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" value="'+c+'" '+ck+' onchange="onClasseCheck(this)" style="margin:0;padding:0;width:16px;height:16px;flex-shrink:0;cursor:pointer">'+c+'</label>';
+  }).join('');
+  pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem classes no período</div>';
+  atualizaClasseBox();
+}
+function onClasseCheck(cb){
+  var v=cb.value;
+  if(cb.checked){ if(dashClassesSel.indexOf(v)<0) dashClassesSel.push(v); }
+  else { dashClassesSel = dashClassesSel.filter(function(c){return c!==v;}); }
+  dashClasseDirty=true; atualizaClasseBox();  // NAO recarrega aqui — so ao sair do campo
+}
+function atualizaClasseBox(){
+  var box=document.getElementById('dash_f_classe_box'); if(!box) return;
+  var sel=dashClassesSel.slice().sort(cmpClasseCli);
+  if(!sel.length) box.textContent='Todas ▾';
+  else if(sel.length<=3) box.textContent=sel.join(', ')+' ▾';
+  else box.textContent=sel.length+' classes ▾';
+}
+document.addEventListener('click', function(e){
+  var box=document.getElementById('dash_f_classe_box'), pan=document.getElementById('dash_f_classe_panel');
+  if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box){ fecharClasseEComitar(); }
+});
 function dashPreencheSelect(id, valores, sel, prefixoTodos){
   var el=document.getElementById(id); if(!el) return;
   var opts='<option value="">'+prefixoTodos+'</option>';
@@ -638,8 +681,9 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_caes','dash_f_classe','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  ['dash_f_turno','dash_f_caes','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
   dashPistasSel=[]; dashPistaDirty=false; atualizaPistaBox();
+  dashClassesSel=[]; dashClasseDirty=false; atualizaClasseBox();
   carregarDashboard();
 }
 async function carregarDashboard(){
@@ -647,7 +691,7 @@ async function carregarDashboard(){
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||13;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
-  var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
+  var fCaes=document.getElementById('dash_f_caes').value, fClasse=dashClassesSel.join(',');
   var fQtdMin=document.getElementById('dash_qtd_min').value, fQtdMax=document.getElementById('dash_qtd_max').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
   var qs=['t1='+t1,'t2='+t2];
@@ -667,7 +711,7 @@ async function carregarDashboard(){
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
     preenchePistaPanel(d.opcoes.pistas);
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
-    dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
+    preencheClassePanel(d.opcoes.classes);
     var rz=d.resumo;
     var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.qtdMin||d.filtros.qtdMax;
     var recorte='';
@@ -678,7 +722,7 @@ async function carregarDashboard(){
       else if(d.filtros.qtdMax) qlbl='pistas c/ até '+d.filtros.qtdMax+' corridas';
       else if(d.filtros.qtdMin) qlbl='pistas c/ mín. '+d.filtros.qtdMin+' corridas';
       if(qlbl)partes.push(qlbl);
-      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
+      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push('Classe '+d.filtros.classe.split(',').join(', '));
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';
