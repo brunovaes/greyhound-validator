@@ -435,6 +435,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
 </div>
 </div>
+</div>
 
 <div class="tab-panel" id="t-banca">
 <div class="section">
