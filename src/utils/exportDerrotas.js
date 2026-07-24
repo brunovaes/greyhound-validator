@@ -329,6 +329,15 @@ function grupoParaArray(grupo, ordenar) {
 // Dados agregados pro dashboard (JSON puro, sem planilha).
 // filtros = { turno, pista, caes, classe } — qualquer um pode faltar ('' = todos).
 // Cruza as dimensoes: aplica todos os filtros presentes e agrega o subconjunto.
+// Ordena classes em ordem natural (A1, A2, ... A10, A11, A12) em vez de
+// alfabetica (que colocaria A10/A11/A12 antes de A2).
+function cmpClasse(a, b) {
+  const ma = /^([A-Za-z]*)(\d*)/.exec(String(a || ''));
+  const mb = /^([A-Za-z]*)(\d*)/.exec(String(b || ''));
+  if (ma[1] !== mb[1]) return ma[1] < mb[1] ? -1 : 1;
+  return (parseInt(ma[2] || '0', 10)) - (parseInt(mb[2] || '0', 10));
+}
+
 function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride) {
   // bordas em horario BR (Brasilia). Dois turnos: Manha a partir de t1 (6h) e
   // Tarde a partir de t2 (13h).
@@ -346,7 +355,7 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     turnos: uniq(todos.map(x => x.turno)).sort((a, b) => ordTurno(a) - ordTurno(b)),
     pistas: uniq(todos.map(x => x.pista)).sort(),
     caes: uniq(todos.map(x => x.nElig)).sort((a, b) => a - b),
-    classes: uniq(todos.map(x => x.classe)).sort()
+    classes: uniq(todos.map(x => x.classe)).sort(cmpClasse)
   };
 
   // Nomes completos das pistas disponiveis (pro filtro e o relatorio).
@@ -355,11 +364,12 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
 
   // Aplica o cruzamento. Pista aceita MULTIPLA (lista separada por virgula).
   const pistaSel = String(f.pista || '').split(',').map(s => s.trim()).filter(Boolean);
+  const classeSel = String(f.classe || '').split(',').map(s => s.trim()).filter(Boolean);
   const items = todos.filter(x =>
     (!f.turno || x.turno === f.turno) &&
     (!pistaSel.length || pistaSel.includes(x.pista)) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
-    (!f.classe || x.classe === f.classe)
+    (!classeSel.length || classeSel.includes(x.classe))
   );
 
   // Filtro por QUANTIDADE de corridas: mostra so os grupos (pista/classe) cujo
