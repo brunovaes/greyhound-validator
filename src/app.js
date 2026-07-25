@@ -863,6 +863,7 @@ var _alertInit = false;
 function initAlertaUserGesto(){
   if (_alertInit) return; _alertInit = true;
   getAudioCtx();
+  prepararSonsAudio(); // gera os sons como <audio> (tocam em background) e destrava no gesto
   try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch(e){}
 }
 // Notificacao de desktop — aparece mesmo com a aba minimizada / voce em outra
@@ -875,7 +876,9 @@ function notificarCorrida(r, custom){
     var hbr = r.hora_br || convertHora(r.hora||'');
     var titulo = custom ? 'Alarme — corrida chegando' : 'Corrida chegando';
     var corpo = (r.corrida||'') + (hbr ? (' · ' + hbr) : '');
-    var n = new Notification(titulo, { body: corpo, tag: raceAlertKey(r) });
+    // silent:true tira o "ding" padrao do Windows — quem toca e' o SOM ESCOLHIDO
+    // (via <audio>), pra voce ouvir o som configurado e nao o do sistema.
+    var n = new Notification(titulo, { body: corpo, tag: raceAlertKey(r), silent: true });
     n.onclick = function(){ try { window.focus(); n.close(); } catch(e){} };
     setTimeout(function(){ try { n.close(); } catch(e){} }, 20000);
   } catch(e){}
@@ -897,6 +900,47 @@ function flashTituloAlerta(){
 function pararFlashTitulo(){
   if (_tituloFlashTimer){ clearInterval(_tituloFlashTimer); _tituloFlashTimer = null; }
   if (_tituloOrig !== null){ document.title = _tituloOrig; _tituloOrig = null; }
+}
+// ==== Sons como <audio> (data URI WAV) ====================================
+// Web Audio puro pode ser estrangulado/suspenso com a aba em segundo plano, e
+// aí o unico som que sobra é o "ding" do sistema. Renderizamos os 4 sons uma
+// vez (com os MESMOS timbres do Web Audio) para WAV e tocamos via <audio>, que
+// roda de forma confiavel em background — assim voce ouve o SOM ESCOLHIDO.
+var SOM_AUDIO = {}, _somAudioProntos = false;
+function _bufToWavDataURI(buffer){
+  var ch = buffer.getChannelData(0), sr = buffer.sampleRate, len = ch.length;
+  var ab = new ArrayBuffer(44 + len*2), view = new DataView(ab);
+  function ws(o,s){ for (var i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); }
+  ws(0,'RIFF'); view.setUint32(4, 36+len*2, true); ws(8,'WAVE'); ws(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+  view.setUint32(24,sr,true); view.setUint32(28,sr*2,true); view.setUint16(32,2,true);
+  view.setUint16(34,16,true); ws(36,'data'); view.setUint32(40,len*2,true);
+  var off = 44;
+  for (var i=0;i<len;i++,off+=2){ var s=Math.max(-1,Math.min(1,ch[i])); view.setInt16(off, s<0?s*0x8000:s*0x7FFF, true); }
+  var bytes = new Uint8Array(ab), bin=''; for (var j=0;j<bytes.length;j++) bin += String.fromCharCode(bytes[j]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+function _renderSom(fn, dur){
+  return new Promise(function(resolve, reject){
+    try {
+      var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OAC) return reject('no-oac');
+      var sr = 44100, oac = new OAC(1, Math.ceil(sr*dur), sr);
+      fn(oac);
+      oac.startRendering().then(function(buf){ resolve(_bufToWavDataURI(buf)); }).catch(reject);
+    } catch(e){ reject(e); }
+  });
+}
+function prepararSonsAudio(){
+  if (_somAudioProntos) return; _somAudioProntos = true;
+  var specs = [['sino',tocarSino,0.7],['beep',tocarBeep,0.35],['alarme',tocarAlarme,0.75],['suave',tocarSuave,0.75]];
+  specs.forEach(function(s){
+    _renderSom(s[1], s[2]).then(function(uri){
+      var a = new Audio(uri); a.preload = 'auto'; SOM_AUDIO[s[0]] = a;
+      // destrava o autoplay tocando mudo uma vez, dentro do gesto do usuario
+      try { a.muted = true; var p = a.play(); if (p && p.then) p.then(function(){ a.pause(); a.currentTime=0; a.muted=false; }).catch(function(){ a.muted=false; }); else { a.pause(); a.muted=false; } } catch(e){ a.muted=false; }
+    }).catch(function(){});
+  });
 }
 // Dispara todos os avisos de uma corrida que entrou na janela de alerta.
 function avisarCorrida(r, custom){
@@ -935,10 +979,16 @@ function matchAlarmeFiltro(r){
 }
 function playSom(nome){
   try {
-    var ctx = getAudioCtx(); if (!ctx) return;
-    var fn = SONS_DISPONIVEIS[nome] || tocarSino;
-    fn(ctx);
+    // Preferimos o <audio> (toca em background); Web Audio e' o fallback.
+    var a = SOM_AUDIO[nome];
+    if (a) {
+      try { a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function(){ _playSomWebAudio(nome); }); return; } catch(e){}
+    }
+    _playSomWebAudio(nome);
   } catch(e) { console.error('[playSom] erro', e); }
+}
+function _playSomWebAudio(nome){
+  try { var ctx = getAudioCtx(); if (!ctx) return; (SONS_DISPONIVEIS[nome] || tocarSino)(ctx); } catch(e){}
 }
 
 function renderRaceListPanel(avbs) {
