@@ -505,7 +505,7 @@ router.get('/', requireAdmin, (req, res) => {
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Robo - Greyhound Validator</title>
+<title>Painel Admin - Greyhound Validator</title>
 <style>
 ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -583,7 +583,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:6px}
 ${navBar(req.user, 'robot')}
 <div class="layout">
 <div class="robot-sidebar">
-  <h3>Robôs</h3>
+  <h3>Painel Admin</h3>
   <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
   <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
