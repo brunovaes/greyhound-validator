@@ -113,6 +113,19 @@ var SOM_ALERTA = 'sino';
 var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], som:'beep', cor:'azul' };
 var CORES_ALARME = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
 var _sysCfgSig = ''; // assinatura da ultima config carregada (detecta mudanca p/ reaplicar o alarme)
+// Sinaliza que ESTA tela (analise) ja cuida do alarme — o alertaGlobal.js
+// (incluido em todas as paginas) fica passivo aqui pra nao duplicar aviso.
+window.__ghAlarmeApp = true;
+// Registra o aviso num store compartilhado (localStorage) pra que, ao navegar
+// pra outra tela, o alertaGlobal.js nao repita o mesmo aviso.
+function registrarAvisoGlobal(key){
+  try {
+    var now = Date.now(), TTL = 10*60*1000;
+    var raw = localStorage.getItem('ghAlerted'); var o = raw ? JSON.parse(raw) : {};
+    for (var k in o) { if (o[k] < now) delete o[k]; }
+    o[key] = now + TTL; localStorage.setItem('ghAlerted', JSON.stringify(o));
+  } catch(e){}
+}
 
 async function loadAcertosResumo() {
   try {
@@ -947,6 +960,7 @@ function avisarCorrida(r, custom){
   playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
   notificarCorrida(r, custom);
   flashTituloAlerta();
+  registrarAvisoGlobal(raceAlertKey(r));
 }
 
 function playBellSound() {

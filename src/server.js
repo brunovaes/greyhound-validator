@@ -21,6 +21,23 @@ app.use(BASE + '/static', express.static(path.join(__dirname, '../public')));
 // Auth routes (sem login necessario)
 app.use(BASE, require('./routes/auth'));
 
+// Injeta o alerta global (alarme de corridas) em TODAS as paginas HTML
+// autenticadas, pra o alarme tocar em qualquer tela (robo, historico, banca,
+// configuracoes...). Na tela de analise o script fica passivo (o app.js ja
+// cuida do alarme la). Nao afeta login (montado antes) nem respostas JSON.
+app.use((req, res, next) => {
+  const origSend = res.send.bind(res);
+  res.send = function (body) {
+    try {
+      if (typeof body === 'string' && body.indexOf('<!DOCTYPE') !== -1 && body.indexOf('</body>') !== -1 && body.indexOf('alertaGlobal.js') === -1) {
+        body = body.replace('</body>', `<script src="${BASE}/static/js/alertaGlobal.js"></script></body>`);
+      }
+    } catch (e) {}
+    return origSend(body);
+  };
+  next();
+});
+
 // Rotas protegidas
 const { requireLogin } = require('./middleware/auth');
 app.use(BASE, requireLogin, require('./routes/main'));
@@ -30,8 +47,7 @@ app.use(BASE + '/robot', requireLogin, require('./routes/robot'));
 app.use(BASE + '/banca', requireLogin, require('./routes/banca'));
 app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__dirname, '../public/pdfs')));
 
-// Landing pública na raiz (fora do BASE, sem login)
-app.use('/', require('./routes/landing'));
+app.get('/', (req, res) => res.redirect(BASE));
 
 app.listen(PORT, () => {
   console.log(`Greyhound Validator em http://localhost:${PORT}${BASE}`);
