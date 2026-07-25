@@ -92,6 +92,8 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .alert.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.2)}
 .alert.er{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
 .info-box{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#f97316;line-height:1.6}
+.graf-card{background:#0D1117;border:1px solid #222;border-radius:10px;padding:16px;margin-bottom:16px}
+.graf-title{font-size:12px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
 .toast-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
 .toast-bg.open{display:flex}
 .toast-box{background:#161B27;border:1px solid #22c55e;border-radius:14px;padding:32px 40px;text-align:center;animation:popIn .3s ease}
@@ -118,6 +120,7 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Alarme</button>
   <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
+  <button type="button" class="tabbtn" data-tab="t-graf" onclick="showTab('t-graf');carregarGraf()">${icon('layers',{size:14})} Dashboard</button>
 </div>
 
 <div>
@@ -394,6 +397,41 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </div>
 
+<div class="tab-panel" id="t-graf">
+<div class="section">
+<div class="sec-title">Dashboard — Visão Geral</div>
+<div class="info-box">Vários gráficos numa tela só, com os mesmos filtros. Curva S acumulando os AvBs do período (abertos, acertados, errados), pizza por pista e desempenho por classe, turno e nº de cães. Tudo por login, com o "bateu" corrigido pela chegada real.</div>
+<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:8px">
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="g_from" onclick="try{this.showPicker()}catch(e){}" onchange="carregarGraf()"></div>
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="g_to" onclick="try{this.showPicker()}catch(e){}" onchange="carregarGraf()"></div>
+  <div class="field" style="flex:1;min-width:130px"><label style="white-space:nowrap">Turno</label><select id="g_turno" onchange="carregarGraf()"><option value="">Todos</option></select></div>
+  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Pista</label><select id="g_pista" onchange="carregarGraf()"><option value="">Todas</option></select></div>
+  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Classe</label><select id="g_classe" onchange="carregarGraf()"><option value="">Todas</option></select></div>
+  <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparGraf()">✕ Limpar</button>
+</div>
+<div id="graf-kpis" style="display:flex;gap:12px;flex-wrap:wrap;margin:14px 0"></div>
+<div class="graf-card">
+  <div class="graf-title">Curva S — AvBs acumulados no período</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;font-size:11px">
+    <span style="display:flex;align-items:center;gap:6px;color:#ccc"><span style="width:16px;height:0;border-top:2px solid #9aa4b2;display:inline-block"></span> Abertos</span>
+    <span style="display:flex;align-items:center;gap:6px;color:#ccc"><span style="width:16px;height:0;border-top:2px solid #22c55e;display:inline-block"></span> Acertados</span>
+    <span style="display:flex;align-items:center;gap:6px;color:#ccc"><span style="width:16px;height:0;border-top:2px dashed #ef4444;display:inline-block"></span> Errados</span>
+  </div>
+  <div id="graf-curvas"></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+  <div class="graf-card">
+    <div class="graf-title">Distribuição por Pista (volume de AvBs)</div>
+    <div id="graf-pizza"></div>
+  </div>
+  <div class="graf-card">
+    <div class="graf-title">Desempenho por Classe / Turno / Nº de cães</div>
+    <div id="graf-bars"></div>
+  </div>
+</div>
+</div>
+</div>
+
 <div class="btn-bar">
   <button type="submit" class="btn-save">Salvar Configurações</button>
   <button type="button" class="btn-reset" onclick="if(confirm('Restaurar padrao?'))location.href='${BASE}/config/reset'">Restaurar Padrao</button>
@@ -634,6 +672,83 @@ document.getElementById('cf').addEventListener('submit',async function(e){
     else throw new Error('Erro ao salvar');
   }catch(err){al.className='alert er';al.textContent='Erro: '+err.message;al.style.display='block';}
 });
+
+// ===== Dashboard (aba "Dashboard"): Curva S + pizza + barras, mesmos filtros =====
+var grafNomes = {};
+function nomePistaGraf(code){ return (grafNomes && grafNomes[code]) || code; }
+function limparGraf(){
+  ['g_from','g_to','g_turno','g_pista','g_classe'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  carregarGraf();
+}
+async function carregarGraf(){
+  var host=document.getElementById('graf-kpis'); if(!host) return;
+  var f=document.getElementById('g_from').value, t=document.getElementById('g_to').value;
+  var fTurno=document.getElementById('g_turno').value, fPista=document.getElementById('g_pista').value, fClasse=document.getElementById('g_classe').value;
+  var qs=['t1=6','t2=13'];
+  if(f)qs.push('from='+f); if(t)qs.push('to='+t);
+  if(fTurno)qs.push('turno='+encodeURIComponent(fTurno));
+  if(fPista)qs.push('pista='+encodeURIComponent(fPista));
+  if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
+  host.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
+  try{
+    var r=await fetch('${BASE}/config/desempenho-data?'+qs.join('&'));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var d=await r.json();
+    if(d.error) throw new Error(d.error);
+    grafNomes=d.nomes||{};
+    // popular selects (mantendo a selecao atual)
+    dashPreencheSelect('g_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
+    dashPreencheSelect('g_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
+    (function(){ var el=document.getElementById('g_pista'); if(!el)return; var sel=d.filtros.pista||''; var opts='<option value="">Todas</option>'; (d.opcoes.pistas||[]).forEach(function(p){ opts+='<option value="'+p+'"'+(p===sel?' selected':'')+'>'+nomePistaGraf(p)+'</option>'; }); el.innerHTML=opts; })();
+    // KPIs
+    var rz=d.resumo;
+    host.innerHTML = dashKpi('AvBs resolvidos',rz.total,'#f0f0f0')
+      + dashKpi('HR corrigido',rz.total?Math.round(rz.hr*100)+'%':'-',dashHrColor(rz.hr))
+      + dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
+      + dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e');
+    desenharCurvaS(d.serieDiaria);
+    desenharPizza(d.porPista);
+    var bars=document.getElementById('graf-bars');
+    if(bars){ bars.innerHTML = dashSecao('Por Classe',d.porClasse)+dashSecao('Por Turno',d.porTurno)+dashSecao('Por Nº de Cães',d.porCaes) || '<div style="color:#888;font-size:13px">Sem dados.</div>'; if(!bars.innerHTML.trim()) bars.innerHTML='<div style="color:#888;font-size:13px">Sem dados no período.</div>'; }
+  }catch(e){ host.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
+}
+function desenharCurvaS(serie){
+  var host=document.getElementById('graf-curvas'); if(!host) return;
+  if(!serie||!serie.length){ host.innerHTML='<div style="color:#888;font-size:13px;padding:20px">Sem dados no período.</div>'; return; }
+  var ab=0,ac=0,er=0, pts=serie.map(function(x){ ab+=x.abertos; ac+=x.acertados; er+=x.errados; return {dia:x.dia,ab:ab,ac:ac,er:er}; });
+  var W=720,H=260,pl=40,pr=16,ptop=14,pb=32, n=pts.length, maxY=Math.max(1,pts[n-1].ab);
+  function X(i){ return pl + (n<=1?(W-pl-pr)/2:(i*(W-pl-pr)/(n-1))); }
+  function Y(v){ return ptop + (H-ptop-pb)*(1 - v/maxY); }
+  function pathOf(k){ return pts.map(function(p,i){ return (i?'L':'M')+X(i).toFixed(1)+' '+Y(p[k]).toFixed(1); }).join(' '); }
+  var grid=''; for(var g=0;g<=4;g++){ var val=Math.round(maxY*g/4), yy=Y(val); grid+='<line x1="'+pl+'" y1="'+yy.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+yy.toFixed(1)+'" stroke="#222" stroke-width="1"/><text x="'+(pl-6)+'" y="'+(yy+3).toFixed(1)+'" fill="#666" font-size="9" text-anchor="end">'+val+'</text>'; }
+  function dl(iso){ var p=(iso||'').split('-'); return p.length===3?(p[2]+'/'+p[1]):iso; }
+  var idxs=[0,Math.floor((n-1)/2),n-1].filter(function(v,i,a){return a.indexOf(v)===i;});
+  var xl=idxs.map(function(i){ return '<text x="'+X(i).toFixed(1)+'" y="'+(H-pb+16)+'" fill="#666" font-size="9" text-anchor="middle">'+dl(pts[i].dia)+'</text>'; }).join('');
+  function dots(k,c){ return pts.map(function(p,i){ return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(p[k]).toFixed(1)+'" r="2.5" fill="'+c+'"><title>'+p.dia+' — abertos '+p.ab+' · acertos '+p.ac+' · erros '+p.er+'</title></circle>'; }).join(''); }
+  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">'
+    + grid
+    + '<path d="'+pathOf('ab')+'" fill="none" stroke="#9aa4b2" stroke-width="2"/>'
+    + '<path d="'+pathOf('ac')+'" fill="none" stroke="#22c55e" stroke-width="2"/>'
+    + '<path d="'+pathOf('er')+'" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>'
+    + dots('ab','#9aa4b2') + dots('ac','#22c55e') + dots('er','#ef4444') + xl + '</svg>';
+}
+function desenharPizza(porPista){
+  var host=document.getElementById('graf-pizza'); if(!host) return;
+  var arr=(porPista||[]).slice().filter(function(x){return x.n>0;}).sort(function(a,b){return b.n-a.n;});
+  if(!arr.length){ host.innerHTML='<div style="color:#888;font-size:13px;padding:20px">Sem dados no período.</div>'; return; }
+  var TOP=7, top=arr.slice(0,TOP), resto=arr.slice(TOP);
+  var slices=top.map(function(x){return {label:nomePistaGraf(x.chave),val:x.n};});
+  if(resto.length){ slices.push({label:'Outras ('+resto.length+')',val:resto.reduce(function(s,x){return s+x.n;},0)}); }
+  var CORES=['#56B4E9','#E69F00','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#888888'];
+  var total=slices.reduce(function(s,x){return s+x.val;},0), cx=90,cy=90,r=80, ang=-Math.PI/2, paths='';
+  slices.forEach(function(s,i){ var frac=s.val/total, a2=ang+frac*2*Math.PI, col=CORES[i%CORES.length];
+    if(frac>=0.999){ paths+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+col+'"><title>'+s.label+': '+s.val+' (100%)</title></circle>'; }
+    else { var x1=cx+r*Math.cos(ang),y1=cy+r*Math.sin(ang),x2=cx+r*Math.cos(a2),y2=cy+r*Math.sin(a2),large=frac>0.5?1:0;
+      paths+='<path d="M'+cx+' '+cy+' L'+x1.toFixed(1)+' '+y1.toFixed(1)+' A'+r+' '+r+' 0 '+large+' 1 '+x2.toFixed(1)+' '+y2.toFixed(1)+' Z" fill="'+col+'" stroke="#0D1117" stroke-width="2"><title>'+s.label+': '+s.val+' ('+Math.round(frac*100)+'%)</title></path>'; }
+    ang=a2; });
+  var legend=slices.map(function(s,i){ var col=CORES[i%CORES.length]; return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;margin-bottom:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+col+';flex-shrink:0"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.label+'</span><span style="color:#666">'+Math.round(s.val/total*100)+'%</span></div>'; }).join('');
+  host.innerHTML='<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="170" height="170" style="flex-shrink:0">'+paths+'</svg><div style="flex:1;min-width:130px">'+legend+'</div></div>';
+}
 </script></body></html>`);
 });
 

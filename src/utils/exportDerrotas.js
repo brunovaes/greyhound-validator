@@ -266,12 +266,15 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
     // timestamp (ord) pra ordenar por recencia — data da sessao + hora da corrida
     let hhmin = 0;
     { const pp = String(r.hora || '').split(':'); let H = parseInt(pp[0], 10); if (!isNaN(H)) { if (H >= 1 && H <= 9) H += 12; hhmin = H * 60 + (parseInt(pp[1], 10) || 0); } }
+    const _p2 = n => String(n).padStart(2, '0');
+    const dia = dt ? (dt.getFullYear() + '-' + _p2(dt.getMonth() + 1) + '-' + _p2(dt.getDate())) : '';
     out.push({
       pista: partes[0] || '?',
       classe: partes[partes.length - 1] || '?',
       dist: r.dist || '?',
       nElig: scores.length || null,
       hora: r.hora || '',
+      dia,
       ord: (dt ? dt.getTime() : 0) + hhmin * 60000,
       der, raw: r.bateu
     });
@@ -404,7 +407,20 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     porTurno: grupoParaArray(agrupaPor(items, x => x.turno), 'none'),
     porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr').filter(r => passaQtd(r.n)),
     porCaes: grupoParaArray(agrupaPor(items, x => x.nElig), 'num'),
-    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr').filter(r => passaQtd(r.n))
+    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr').filter(r => passaQtd(r.n)),
+    // Serie diaria pra Curva S (acumulado no cliente): abertos/acertados/errados por dia.
+    serieDiaria: (function () {
+      const m = {};
+      for (const x of items) {
+        const d = x.dia || '';
+        if (!d) continue;
+        if (!m[d]) m[d] = { dia: d, abertos: 0, acertados: 0, errados: 0 };
+        m[d].abertos++;
+        if (x.der === 'sim') m[d].acertados++;
+        else if (x.der === 'nao') m[d].errados++;
+      }
+      return Object.values(m).sort((a, b) => a.dia < b.dia ? -1 : (a.dia > b.dia ? 1 : 0));
+    })()
   };
 }
 
