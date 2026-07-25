@@ -559,7 +559,7 @@ function checkRaceAlerts() {
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
         alertedRaces[key] = true;
-        playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
+        avisarCorrida(r, custom);
       }
     } else {
       el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom');
@@ -846,9 +846,68 @@ function tocarSuave(ctx) {
 }
 var SONS_DISPONIVEIS = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
 
+// AudioContext unico e reaproveitado. Criado/retomado num gesto do usuario, o
+// som continua tocando mesmo com a aba em segundo plano — um AudioContext novo
+// criado com a aba escondida nasce suspenso e nao toca.
+var _audioCtx = null;
+function getAudioCtx(){
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+  } catch(e) { return null; }
+}
+// Retoma o audio e pede permissao de notificacao no primeiro gesto do usuario
+// (navegadores exigem gesto). Roda uma vez.
+var _alertInit = false;
+function initAlertaUserGesto(){
+  if (_alertInit) return; _alertInit = true;
+  getAudioCtx();
+  try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch(e){}
+}
+// Notificacao de desktop — aparece mesmo com a aba minimizada / voce em outra
+// tela. So dispara quando a aba NAO esta visivel, pra nao duplicar aviso quando
+// voce ja esta olhando o sistema.
+function notificarCorrida(r, custom){
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!document.hidden) return;
+    var hbr = r.hora_br || convertHora(r.hora||'');
+    var titulo = custom ? 'Alarme — corrida chegando' : 'Corrida chegando';
+    var corpo = (r.corrida||'') + (hbr ? (' · ' + hbr) : '');
+    var n = new Notification(titulo, { body: corpo, tag: raceAlertKey(r) });
+    n.onclick = function(){ try { window.focus(); n.close(); } catch(e){} };
+    setTimeout(function(){ try { n.close(); } catch(e){} }, 20000);
+  } catch(e){}
+}
+// Fallback universal (mesmo sem permissao de notificacao): pisca o titulo da
+// aba enquanto a aba esta em segundo plano, pra chamar atencao na barra.
+var _tituloOrig = null, _tituloFlashTimer = null;
+function flashTituloAlerta(){
+  try {
+    if (!document.hidden || _tituloFlashTimer) return;
+    if (_tituloOrig === null) _tituloOrig = document.title;
+    var on = true;
+    _tituloFlashTimer = setInterval(function(){
+      document.title = on ? '🔔 Corrida chegando!' : (_tituloOrig || 'Greyhound Factory');
+      on = !on;
+    }, 1000);
+  } catch(e){}
+}
+function pararFlashTitulo(){
+  if (_tituloFlashTimer){ clearInterval(_tituloFlashTimer); _tituloFlashTimer = null; }
+  if (_tituloOrig !== null){ document.title = _tituloOrig; _tituloOrig = null; }
+}
+// Dispara todos os avisos de uma corrida que entrou na janela de alerta.
+function avisarCorrida(r, custom){
+  playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
+  notificarCorrida(r, custom);
+  flashTituloAlerta();
+}
+
 function playBellSound() {
   try {
-    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var ctx = getAudioCtx(); if (!ctx) return;
     var fn = SONS_DISPONIVEIS[SOM_ALERTA] || tocarSino;
     fn(ctx);
   } catch(e) { console.error('[playBellSound] erro', e); }
@@ -876,7 +935,7 @@ function matchAlarmeFiltro(r){
 }
 function playSom(nome){
   try {
-    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var ctx = getAudioCtx(); if (!ctx) return;
     var fn = SONS_DISPONIVEIS[nome] || tocarSino;
     fn(ctx);
   } catch(e) { console.error('[playSom] erro', e); }
@@ -905,7 +964,7 @@ function renderRaceListPanel(avbs) {
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
         alertedRaces[key] = true;
-        playSom(alertCustom ? ALARME_FILTRO.som : SOM_ALERTA);
+        avisarCorrida(r, alertCustom);
       }
     }
     div.setAttribute('data-idx', rIdx);
@@ -1717,6 +1776,12 @@ document.addEventListener('DOMContentLoaded',async function(){
   injectSaveModal();
   injectValModal();
   injectFilterPanel();
+
+  // Alerta em segundo plano: retoma o audio e pede permissao de notificacao no
+  // primeiro gesto (exigencia dos navegadores). E para de piscar o titulo assim
+  // que voce volta pra aba.
+  ['click','keydown','touchstart'].forEach(function(ev){ document.addEventListener(ev, initAlertaUserGesto); });
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) pararFlashTitulo(); });
 
   // Entra imediatamente no foco com loading — ANTES de qualquer await
   var mainEl = document.getElementById('main-layout');
