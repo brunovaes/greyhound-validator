@@ -112,6 +112,7 @@ var TELA_GRACE_MIN = 0;
 var SOM_ALERTA = 'sino';
 var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], som:'beep', cor:'azul' };
 var CORES_ALARME = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
+var _sysCfgSig = ''; // assinatura da ultima config carregada (detecta mudanca p/ reaplicar o alarme)
 
 async function loadAcertosResumo() {
   try {
@@ -145,6 +146,16 @@ async function loadSystemConfig() {
     ALARME_FILTRO.classes = (c.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
     ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
+    // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
+    // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
+    // descarta o estado de alerta atual (o aviso padrao e' descartado) e
+    // reavalia tudo com as novas regras, sem precisar recarregar a tela.
+    var _sig = JSON.stringify(ALARME_FILTRO) + '|' + SOM_ALERTA + '|' + ALERTA_MIN_ANTES;
+    if (_sysCfgSig !== '' && _sig !== _sysCfgSig) {
+      alertedRaces = {};
+      if (typeof checkRaceAlerts === 'function') checkRaceAlerts();
+    }
+    _sysCfgSig = _sig;
   } catch(e) {}
 }
 
@@ -1769,4 +1780,9 @@ document.addEventListener('DOMContentLoaded',async function(){
   // se a aba ficar aberta e o robo salvar a sessao de hoje so depois
   refreshSidebarSessions();
   setInterval(refreshSidebarSessions, 90000);
+
+  // Re-le a config do sistema periodicamente pra que mudancas salvas em
+  // Configuracoes (ex: "Alarme para filtro selecionado", som/tempo de alerta)
+  // passem a valer nesta tela sem precisar recarregar a pagina.
+  setInterval(loadSystemConfig, 30000);
 });
