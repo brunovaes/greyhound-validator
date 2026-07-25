@@ -185,6 +185,28 @@ router.post('/month-init', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// Salva SO a config de banca (movida da tela de Configuracoes). Cada usuario
+// configura a propria banca. Nao toca em nenhum outro campo do analysis_config.
+router.post('/save-config', express.json(), (req, res) => {
+  try {
+    const userId = req.user.id;
+    const d = req.body || {};
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_unidade_padrao REAL DEFAULT 2.5").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT").run(); } catch(e) {}
+    getUserConfig(userId); // garante que a linha de config do usuario existe
+    db.prepare(`UPDATE analysis_config SET banca_unidade_padrao=?, banca_valor_inicial=?, banca_pct_stop=?, banca_aviso_stop=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+      parseFloat(d.banca_unidade_padrao) || 2.5,
+      parseFloat(d.banca_valor_inicial) || 1000,
+      (d.banca_pct_stop != null && d.banca_pct_stop !== '') ? parseFloat(d.banca_pct_stop) : 20,
+      d.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
+      userId
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Pagina HTML ──────────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
   const logoB64 = getLogo();
@@ -192,6 +214,7 @@ router.get('/', (req, res) => {
   const hojeStr = hoje.toISOString().slice(0, 10);
   const mesAtual = hojeStr.slice(0, 7);
   const anoAtual = hojeStr.slice(0, 4);
+  const cfg = getUserConfig(req.user.id); // valores de config de banca (movidos de Configuracoes)
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -272,6 +295,35 @@ ${navBar(req.user, 'banca')}
   <div class="section">
     <div class="section-title" id="table-title">Apostas do dia</div>
     <div id="banca-table"></div>
+  </div>
+
+  <div class="section" id="banca-config">
+    <div class="section-title">${icon('gear',{size:14,color:'#22c55e'})} Configurações da Banca</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div>
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Valor da unidade (padrão por aposta)</label>
+        <input id="cfg_unidade" type="number" step="0.5" min="0" value="${cfg.banca_unidade_padrao||2.5}" style="width:100%;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">
+        <div style="font-size:11px;color:#666;margin-top:4px">1 unidade entra automaticamente quando você marca "Apostei" (1 unidade = 1% da banca do mês).</div>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Valor da banca inicial (R$)</label>
+        <input id="cfg_inicial" type="number" step="1" min="0" value="${cfg.banca_valor_inicial||1000}" style="width:100%;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">
+        <div style="font-size:11px;color:#666;margin-top:4px">Padrão do primeiro mês (ou enquanto você não iniciar um mês na aba Mês).</div>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Percentual de stop do dia (%)</label>
+        <input id="cfg_pctstop" type="number" step="1" min="0" max="100" value="${cfg.banca_pct_stop!=null?cfg.banca_pct_stop:20}" style="width:100%;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">
+        <div style="font-size:11px;color:#666;margin-top:4px">Se o prejuízo do dia atingir esse percentual, mostra um aviso (não bloqueia). Reinicia todo dia.</div>
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Mensagem do aviso de stop</label>
+        <textarea id="cfg_aviso" rows="2" style="width:100%;resize:vertical;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">${cfg.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'}</textarea>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+      <button class="btn-mini" onclick="salvarConfigBanca()">Salvar configurações</button>
+      <span id="cfg-msg" style="font-size:12px;color:#22c55e;display:none">Configurações salvas!</span>
+    </div>
   </div>
 </div>
 
@@ -536,6 +588,19 @@ async function salvarBancaInicial(yearMonth) {
 }
 
 carregarDados();
+async function salvarConfigBanca(){
+  var body = {
+    banca_unidade_padrao: document.getElementById('cfg_unidade').value,
+    banca_valor_inicial: document.getElementById('cfg_inicial').value,
+    banca_pct_stop: document.getElementById('cfg_pctstop').value,
+    banca_aviso_stop: document.getElementById('cfg_aviso').value
+  };
+  try {
+    var r = await fetch(BASE+'/banca/save-config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var m=document.getElementById('cfg-msg'); if(m){ m.style.display='inline'; setTimeout(function(){m.style.display='none';},2200); }
+  } catch(e){ alert('Erro ao salvar: '+e.message); }
+}
 </script>
 </body></html>`);
 });

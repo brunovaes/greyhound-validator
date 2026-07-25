@@ -117,7 +117,6 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
-  <button type="button" class="tabbtn" data-tab="t-banca" onclick="showTab('t-banca')">${icon('trophy',{size:14})} Banca</button>
   <button type="button" class="tabbtn" data-tab="t-export" onclick="showTab('t-export')">${icon('scroll',{size:14})} Exportar Derrotas</button>
   <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
 </div>
@@ -381,12 +380,13 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="bloco-toggle">
   <input type="hidden" name="alarme_filtro_ativo" value="0">
   <label class="bloco-switch">
-    <input type="checkbox" name="alarme_filtro_ativo" value="1" ${config.alarme_filtro_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label');l.style.color=this.checked?'#22c55e':'#888';l.textContent=this.checked?'Alarme ativo':'Alarme desligado';">
+    <input type="checkbox" name="alarme_filtro_ativo" value="1" ${config.alarme_filtro_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label');l.style.color=this.checked?'#22c55e':'#888';l.textContent=this.checked?'Alarme ativo':'Alarme desligado';var ff=document.getElementById('alarme_filtro_fields');if(ff)ff.setAttribute('data-ativo',this.checked?'1':'0');">
     <span class="slider"></span>
   </label>
   <span class="bloco-toggle-label" style="color:${config.alarme_filtro_ativo?'#22c55e':'#888'}">${config.alarme_filtro_ativo?'Alarme ativo':'Alarme desligado'}</span>
 </div>
 <div class="info-box">Quando ligado, as corridas que casam com o filtro (turno E pista E classe) piscam na cor escolhida e tocam o som escolhido no tempo do alerta. As demais seguem o alerta normal.</div>
+<div class="bloco-fields" id="alarme_filtro_fields" data-ativo="${config.alarme_filtro_ativo?'1':'0'}">
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
   <div class="field"><label>Turno</label>
     <select name="alarme_filtro_turno">
@@ -436,34 +436,8 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </div>
 </div>
+</div>
 
-<div class="tab-panel" id="t-banca">
-<div class="section">
-<div class="sec-title">Banca — Unidade Padrão e Controle de Risco</div>
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-  <div class="field">
-    <label>Valor da unidade (padrão por aposta)</label>
-    <input type="number" step="0.5" min="0" name="banca_unidade_padrao" value="${config.banca_unidade_padrao||2.5}">
-    <div class="hint">Quantas unidades entram automaticamente quando você marca "Apostei" (1 unidade = 1% da banca do mês)</div>
-  </div>
-  <div class="field">
-    <label>Valor da banca inicial (R$)</label>
-    <input type="number" step="1" min="0" name="banca_valor_inicial" value="${config.banca_valor_inicial||1000}">
-    <div class="hint">Usado como padrão no primeiro mês (ou se você ainda não configurou nada na aba Banca)</div>
-  </div>
-  <div class="field">
-    <label>Percentual de stop do dia (%)</label>
-    <input type="number" step="1" min="0" max="100" name="banca_pct_stop" value="${config.banca_pct_stop!=null?config.banca_pct_stop:20}">
-    <div class="hint">Se o prejuízo do dia atingir esse percentual da banca, mostra um aviso (não bloqueia apostas, só avisa). Reinicia todo dia.</div>
-  </div>
-  <div class="field" style="grid-column:1/-1">
-    <label>Mensagem do aviso de stop</label>
-    <textarea name="banca_aviso_stop" rows="2" style="width:100%;resize:vertical">${config.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'}</textarea>
-    <div class="hint">Texto exibido no banner de aviso quando o percentual de stop do dia é atingido</div>
-  </div>
-</div>
-</div>
-</div>
 
 <div class="tab-panel" id="t-export">
 <div class="section">
@@ -837,7 +811,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,som_alerta=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,som_alerta=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -861,10 +835,6 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.alerta_min_antes!=null?d.alerta_min_antes:3,
       d.tela_grace_min!=null?d.tela_grace_min:0,
       d.som_alerta||'sino',
-      d.banca_unidade_padrao||2.5,
-      d.banca_valor_inicial||1000,
-      d.banca_pct_stop!=null&&d.banca_pct_stop!==''?d.banca_pct_stop:20,
-      d.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
       d.bloco_pesos_ativo==='1'||d.bloco_pesos_ativo===1?1:0,
       d.bloco_categoria_ativo==='1'||d.bloco_categoria_ativo===1?1:0,
       d.bloco_filtros_ativo==='1'||d.bloco_filtros_ativo===1?1:0,
