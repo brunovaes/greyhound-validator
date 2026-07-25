@@ -21,6 +21,11 @@ app.use(BASE + '/static', express.static(path.join(__dirname, '../public')));
 // Auth routes (sem login necessario)
 app.use(BASE, require('./routes/auth'));
 
+// Landing publica: "/" (institucional) e "/conheca" (vitrine), sem login.
+// Montada ANTES do injetor do alarme (paginas publicas nao levam o script) e
+// substitui o antigo redirect de "/" -> login, que "pulava" a landing.
+app.use('/', require('./routes/landing'));
+
 // Injeta o alerta global (alarme de corridas) em TODAS as paginas HTML
 // autenticadas, pra o alarme tocar em qualquer tela (robo, historico, banca,
 // configuracoes...). Na tela de analise o script fica passivo (o app.js ja
@@ -47,7 +52,8 @@ app.use(BASE + '/robot', requireLogin, require('./routes/robot'));
 app.use(BASE + '/banca', requireLogin, require('./routes/banca'));
 app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__dirname, '../public/pdfs')));
 
-app.get('/', (req, res) => res.redirect(BASE));
+// "/" agora e' servido pela landing (acima). Se a landing falhar ao carregar,
+// o proprio landing.js ja faz fallback redirecionando pro BASE.
 
 app.listen(PORT, () => {
   console.log(`Greyhound Validator em http://localhost:${PORT}${BASE}`);
