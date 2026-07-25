@@ -590,6 +590,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
   <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Automação</button>
+  <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
   <a class="robot-menu-item" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
   <a class="robot-menu-item" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
@@ -780,6 +781,33 @@ ${navBar(req.user, 'robot')}
     </div>
   </div>
 </div><!-- fim panel-automacao -->
+
+<div class="robot-panel" id="panel-export">
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('scroll',{size:20})} Exportar Derrotas</h1>
+  <p class="sub">Planilhas de revisão e dados brutos para afinar o motor. A planilha de derrotas exige o intervalo; nas demais, datas em branco = todo o histórico.</p>
+  <div class="card">
+    <div class="card-title">Intervalo</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+      <div class="field"><label>Data inicial</label><input type="date" id="exp_from"></div>
+      <div class="field"><label>Data final</label><input type="date" id="exp_to"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Planilha de Derrotas (revisão)</div>
+    <p style="color:#888;font-size:12px;line-height:1.5;margin-bottom:14px">.xlsx com as derrotas (AvB que não bateu) do período, ordenadas por prioridade de revisão, notas 0-100 por critério do favorito e colunas em branco pra marcação manual (resultado confere / pista limpa / análise ruim). Inclui aba de resultados suspeitos. <strong>Exige data inicial e final.</strong></p>
+    <button class="btn" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha de derrotas</button>
+  </div>
+  <div class="card">
+    <div class="card-title">HR por Contexto (.xlsx)</div>
+    <p style="color:#888;font-size:12px;line-height:1.5;margin-bottom:14px">Taxa de acerto dos AvBs por pista, nº de cães e classe, com o "bateu" corrigido pela chegada real e o "cru" lado a lado (coluna de erros de label). Datas opcionais.</p>
+    <button class="btn" onclick="baixarDesempenho()">${icon('trophy',{size:14})} Baixar HR por contexto</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Dados Brutos (JSON)</div>
+    <p style="color:#888;font-size:12px;line-height:1.5;margin-bottom:14px">.json completo do backtest direto do banco (previsão, scores por critério, histórico, resultado real, race_card). Usado pra afinar o motor. Datas opcionais.</p>
+    <button class="btn" onclick="baixarDados()">${icon('gear',{size:14})} Baixar dados brutos (JSON)</button>
+  </div>
+</div><!-- fim panel-export -->
 
 </div><!-- fim robot-content -->
 </div><!-- fim layout -->
@@ -1226,6 +1254,25 @@ function _tBeep(ctx){function t(f,s,d){var o=ctx.createOscillator(),g=ctx.create
 function _tAlarme(ctx){function t(f,s,d){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sawtooth';o.frequency.value=f;g.gain.setValueAtTime(0.0001,ctx.currentTime+s);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+s+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+s+d);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d+0.05);}t(880,0,0.15);t(660,0.15,0.15);t(880,0.30,0.15);t(660,0.45,0.15);}
 function _tSuave(ctx){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
 var _SONS_AUTO={sino:_tSino,beep:_tBeep,alarme:_tAlarme,suave:_tSuave};
+// Exportar Derrotas (movido de Configuracoes; as rotas /config/export-* seguem la, admin-only)
+function baixarDerrotas(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(!f||!t){alert('Escolha a data inicial e a final.');return;}
+  if(f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  window.location.href='${BASE}/config/export-derrotas?from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t);
+}
+function baixarDesempenho(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
+  window.location.href='${BASE}/config/export-desempenho'+(qs.length?'?'+qs.join('&'):'');
+}
+function baixarDados(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
+  window.location.href='${BASE}/config/export-dados'+(qs.length?'?'+qs.join('&'):'');
+}
 function testarSomAuto(){ try{ var e=document.getElementById('au_som_alerta').value; var ctx=new (window.AudioContext||window.webkitAudioContext)(); (_SONS_AUTO[e]||_tSino)(ctx); }catch(err){console.error('[testarSomAuto]',err);} }
 async function salvarAutomacao(){
   var g=function(id){var el=document.getElementById(id);return el?el.value:'';};

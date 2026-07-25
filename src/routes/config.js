@@ -117,7 +117,6 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Alarme</button>
-  <button type="button" class="tabbtn" data-tab="t-export" onclick="showTab('t-export')">${icon('scroll',{size:14})} Exportar Derrotas</button>
   <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
 </div>
 
@@ -362,36 +361,6 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 
-<div class="tab-panel" id="t-export">
-<div class="section">
-<div class="sec-title">Exportar Derrotas — Planilha de Revisão</div>
-<div class="info-box">Gera uma planilha <strong>.xlsx</strong> com todas as derrotas (AvB que não bateu) do intervalo escolhido, já ordenadas por prioridade de revisão (maior confiança + favorito que chegou mais atrás primeiro). Traz as notas 0-100 de cada critério do favorito e colunas em branco pra marcação manual: <em>resultado confere / pista limpa / análise ruim / observações</em>. Inclui aba separada com os resultados suspeitos (onde o "bateu" gravado contradiz a chegada).</div>
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-  <div class="field"><label>Data inicial</label><input type="date" id="exp_from" onclick="try{this.showPicker()}catch(e){}"><span class="hint">Primeiro dia do período (inclusivo)</span></div>
-  <div class="field"><label>Data final</label><input type="date" id="exp_to" onclick="try{this.showPicker()}catch(e){}"><span class="hint">Último dia do período (inclusivo)</span></div>
-</div>
-<div style="margin-top:18px">
-  <button type="button" class="btn-save" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha de derrotas</button>
-</div>
-</div>
-
-<div class="section">
-<div class="sec-title">Desempenho por Contexto — HR (Taxa de Acerto)</div>
-<div class="info-box">Gera um <strong>.xlsx</strong> com a taxa de acerto dos AvBs quebrada por <strong>pista</strong>, por <strong>nº de cães elegíveis</strong> e por <strong>classe</strong> — sempre com o "bateu" <strong>corrigido pela chegada real</strong> e o "cru" do banco lado a lado (a coluna de Erros de label mostra onde discordam = provável resultado digitado errado). É o instrumento pra decidir onde o motor é confiável e onde vale dar skip por contexto. Deixe as datas em branco para usar todo o histórico.</div>
-<div style="margin-top:6px">
-  <button type="button" class="btn-save" onclick="baixarDesempenho()">${icon('trophy',{size:14})} Baixar HR por contexto</button>
-</div>
-</div>
-
-<div class="section">
-<div class="sec-title">Exportar Dados Brutos (JSON) — para análise do motor</div>
-<div class="info-box">Gera o <strong>.json</strong> completo do backtest direto do banco (previsão, scores por critério, histórico, resultado real) — o arquivo usado pra afinar o motor. Agora já inclui automaticamente o <strong>race_card / trapsCard</strong> (composição do páreo e traps vazias) e o estilo <code>(W)/(M)</code> no nome de cada galgo. Nenhum preenchimento manual. Deixe as datas em branco para todo o histórico.</div>
-<div style="margin-top:6px">
-  <button type="button" class="btn-save" onclick="baixarDados()">${icon('gear',{size:14})} Baixar dados brutos (JSON)</button>
-</div>
-</div>
-</div>
-
 <div class="tab-panel" id="t-dash">
 <div class="section">
 <div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
@@ -449,28 +418,6 @@ function showTab(id){
   document.querySelectorAll('.tabbtn').forEach(function(b){b.classList.remove('active');});
   document.getElementById(id).classList.add('active');
   document.querySelector('.tabbtn[data-tab="'+id+'"]').classList.add('active');
-}
-// Exportar Derrotas: monta a URL com o intervalo e dispara o download (a rota
-// responde com Content-Disposition attachment, entao window.location baixa).
-function baixarDerrotas(){
-  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
-  if(!f||!t){alert('Escolha a data inicial e a final.');return;}
-  if(f>t){alert('A data inicial não pode ser maior que a final.');return;}
-  window.location.href='${BASE}/config/export-derrotas?from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t);
-}
-// HR por contexto: datas opcionais (em branco = todo o historico).
-function baixarDesempenho(){
-  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
-  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
-  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
-  window.location.href='${BASE}/config/export-desempenho'+(qs.length?'?'+qs.join('&'):'');
-}
-// Dados brutos (JSON) pra analise: datas opcionais (em branco = tudo).
-function baixarDados(){
-  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
-  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
-  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
-  window.location.href='${BASE}/config/export-dados'+(qs.length?'?'+qs.join('&'):'');
 }
 // ===== Dashboard de Desempenho (HR) =====
 function dashHrColor(hr){ return hr>=0.65?'#22c55e':(hr<0.5?'#ef4444':'#eab308'); }
