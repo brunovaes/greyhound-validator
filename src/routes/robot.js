@@ -501,7 +501,8 @@ router.get('/', requireAdmin, (req, res) => {
   let logoB64 = '';
   if (fs.existsSync(logoPath)) logoB64 = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
   let pastaDownload = 'Racingpost';
-  try { const cfg = getUserConfig(req.user.id); pastaDownload = cfg.pasta_download || 'Racingpost'; } catch(e) {}
+  let cfgAuto = {};
+  try { cfgAuto = getUserConfig(req.user.id); pastaDownload = cfgAuto.pasta_download || 'Racingpost'; } catch(e) {}
 
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -588,6 +589,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
+  <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Automação</button>
   <a class="robot-menu-item" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
   <a class="robot-menu-item" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
@@ -741,6 +743,43 @@ ${navBar(req.user, 'robot')}
     </div>
   </div>
 </div><!-- fim panel-audit -->
+
+<div class="robot-panel" id="panel-automacao">
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('clock',{size:20})} Automação — Robôs e Visibilidade</h1>
+  <p class="sub">Agenda dos robôs, janelas de execução e o alerta sonoro padrão das corridas. Vale para todos (config global do sistema).</p>
+  <div class="card">
+    <div class="card-title">Robôs e Visibilidade</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+      <div class="field"><label>Refresh automático da tela (min)</label><input type="number" id="au_auto_refresh_min" value="${cfgAuto.auto_refresh_min||1}" min="1" max="60"></div>
+      <div class="field"><label>Corridas exibidas em tela</label><input type="number" id="au_racas_em_tela" value="${cfgAuto.racas_em_tela||6}" min="1" max="20"></div>
+      <div class="field"><label>Intervalo Robô de Resultados (min)</label><input type="number" id="au_results_interval_min" value="${cfgAuto.results_interval_min||30}" min="10" max="120"></div>
+      <div class="field"><label>Início janela de resultados (BRT)</label><input type="time" id="au_results_window_start" value="${cfgAuto.results_window_start||'07:30'}"></div>
+      <div class="field"><label>Fim janela de resultados (BRT)</label><input type="time" id="au_results_window_end" value="${cfgAuto.results_window_end||'19:30'}"></div>
+      <div class="field"><label>Hora do Robô de PDFs (BRT)</label><input type="time" id="au_pdf_cron_time" value="${cfgAuto.pdf_cron_time||'13:30'}"></div>
+      <div class="field"><label>Intervalo Robô de Monitoramento (min)</label><input type="number" id="au_monitor_interval_min" value="${cfgAuto.monitor_interval_min||60}" min="15" max="240"></div>
+      <div class="field"><label>Início janela de monitoramento (BRT)</label><input type="time" id="au_monitor_window_start" value="${cfgAuto.monitor_window_start||'07:00'}"></div>
+      <div class="field"><label>Fim janela de monitoramento (BRT)</label><input type="time" id="au_monitor_window_end" value="${cfgAuto.monitor_window_end||'20:00'}"></div>
+      <div class="field"><label>Checagem final — min antes da corrida</label><input type="number" id="au_final_check_min_antes" value="${cfgAuto.final_check_min_antes||15}" min="5" max="60"></div>
+      <div class="field"><label>Alerta sonoro — min antes da corrida</label><input type="number" id="au_alerta_min_antes" value="${cfgAuto.alerta_min_antes||3}" min="0" max="15"></div>
+      <div class="field"><label>Corrida fica em tela após rodar (min)</label><input type="number" id="au_tela_grace_min" value="${cfgAuto.tela_grace_min!=null?cfgAuto.tela_grace_min:0}" min="0" max="30"></div>
+      <div class="field"><label>Som do alerta padrão</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="au_som_alerta" style="flex:1;padding:9px 12px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:14px">
+            <option value="sino" ${cfgAuto.som_alerta==='sino'||!cfgAuto.som_alerta?'selected':''}>Sino</option>
+            <option value="beep" ${cfgAuto.som_alerta==='beep'?'selected':''}>Beep</option>
+            <option value="alarme" ${cfgAuto.som_alerta==='alarme'?'selected':''}>Alarme</option>
+            <option value="suave" ${cfgAuto.som_alerta==='suave'?'selected':''}>Suave</option>
+          </select>
+          <button type="button" onclick="testarSomAuto()" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:9px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+      <button class="btn" onclick="salvarAutomacao()">Salvar automação</button>
+      <span id="au-msg" style="font-size:12px;color:#22c55e;display:none">Automação salva!</span>
+    </div>
+  </div>
+</div><!-- fim panel-automacao -->
 
 </div><!-- fim robot-content -->
 </div><!-- fim layout -->
@@ -1181,7 +1220,59 @@ async function loadAuditLog() {
 }
 loadMonitorImportantOnce();
 loadAuditLog();
+// ── Automação: testar som + salvar (config global do sistema) ────────────────
+function _tSino(ctx){function t(f,s,d){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.0001,ctx.currentTime+s);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+s+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+s+d);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d+0.05);}t(1046.5,0,0.25);t(1318.5,0.15,0.35);}
+function _tBeep(ctx){function t(f,s,d){var o=ctx.createOscillator(),g=ctx.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(0.0001,ctx.currentTime+s);g.gain.exponentialRampToValueAtTime(0.2,ctx.currentTime+s+0.01);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+s+d);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d+0.03);}t(1500,0,0.08);t(1500,0.14,0.08);}
+function _tAlarme(ctx){function t(f,s,d){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sawtooth';o.frequency.value=f;g.gain.setValueAtTime(0.0001,ctx.currentTime+s);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+s+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+s+d);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d+0.05);}t(880,0,0.15);t(660,0.15,0.15);t(880,0.30,0.15);t(660,0.45,0.15);}
+function _tSuave(ctx){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
+var _SONS_AUTO={sino:_tSino,beep:_tBeep,alarme:_tAlarme,suave:_tSuave};
+function testarSomAuto(){ try{ var e=document.getElementById('au_som_alerta').value; var ctx=new (window.AudioContext||window.webkitAudioContext)(); (_SONS_AUTO[e]||_tSino)(ctx); }catch(err){console.error('[testarSomAuto]',err);} }
+async function salvarAutomacao(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var body={
+    auto_refresh_min:g('au_auto_refresh_min'), racas_em_tela:g('au_racas_em_tela'),
+    results_interval_min:g('au_results_interval_min'), results_window_start:g('au_results_window_start'), results_window_end:g('au_results_window_end'),
+    pdf_cron_time:g('au_pdf_cron_time'), monitor_interval_min:g('au_monitor_interval_min'),
+    monitor_window_start:g('au_monitor_window_start'), monitor_window_end:g('au_monitor_window_end'),
+    final_check_min_antes:g('au_final_check_min_antes'), alerta_min_antes:g('au_alerta_min_antes'),
+    tela_grace_min:g('au_tela_grace_min'), som_alerta:g('au_som_alerta')
+  };
+  try{
+    var r=await fetch(BASE+'/robot/save-automacao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var m=document.getElementById('au-msg'); if(m){ m.style.display='inline'; setTimeout(function(){m.style.display='none';},2200); }
+  }catch(e){ alert('Erro ao salvar automação: '+e.message); }
+}
 </script></body></html>`);
+});
+
+// Salva SO os campos de "Automação — Robôs e Visibilidade" (movidos de
+// Configuracoes). Config global do sistema (user_id=1 / admin). Nao toca em
+// nenhum outro campo do analysis_config (motor, alarme de filtro, banca).
+router.post('/save-automacao', requireAdmin, express.json(), (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const d = req.body || {};
+    const userId = req.user.id;
+    getUserConfig(userId); // garante a linha de config
+    db.prepare(`UPDATE analysis_config SET auto_refresh_min=?, racas_em_tela=?, results_interval_min=?, results_window_start=?, results_window_end=?, pdf_cron_time=?, monitor_interval_min=?, monitor_window_start=?, monitor_window_end=?, final_check_min_antes=?, alerta_min_antes=?, tela_grace_min=?, som_alerta=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+      parseInt(d.auto_refresh_min) || 1,
+      parseInt(d.racas_em_tela) || 6,
+      parseInt(d.results_interval_min) || 30,
+      d.results_window_start || '07:30',
+      d.results_window_end || '19:30',
+      d.pdf_cron_time || '13:30',
+      parseInt(d.monitor_interval_min) || 60,
+      d.monitor_window_start || '07:00',
+      d.monitor_window_end || '20:00',
+      parseInt(d.final_check_min_antes) || 15,
+      (d.alerta_min_antes != null && d.alerta_min_antes !== '') ? parseInt(d.alerta_min_antes) : 3,
+      (d.tela_grace_min != null && d.tela_grace_min !== '') ? parseInt(d.tela_grace_min) : 0,
+      d.som_alerta || 'sino',
+      userId
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── STATUS ───

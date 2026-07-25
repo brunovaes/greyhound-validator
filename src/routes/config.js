@@ -116,7 +116,7 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">${icon('filter',{size:14})} Filtros de Corrida</button>
   <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
-  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
+  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Alarme</button>
   <button type="button" class="tabbtn" data-tab="t-export" onclick="showTab('t-export')">${icon('scroll',{size:14})} Exportar Derrotas</button>
   <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
 </div>
@@ -297,83 +297,6 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 <div class="tab-panel" id="t-automacao">
-<div class="section">
-<div class="sec-title">Automação — Robôs e Visibilidade</div>
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-  <div class="field">
-    <label>Refresh automático da tela (min)</label>
-    <input type="number" name="auto_refresh_min" value="${config.auto_refresh_min||1}" min="1" max="60">
-    <div class="hint">A cada quantos minutos atualiza o painel de corridas automaticamente</div>
-  </div>
-  <div class="field">
-    <label>Corridas exibidas em tela</label>
-    <input type="number" name="racas_em_tela" value="${config.racas_em_tela||6}" min="1" max="20">
-    <div class="hint">Quantidade fixa de proximas corridas mostradas na lista da aba Analisar (as que ja passaram saem da lista automaticamente)</div>
-  </div>
-  <div class="field">
-    <label>Intervalo do Robô de Resultados (min)</label>
-    <input type="number" name="results_interval_min" value="${config.results_interval_min||30}" min="10" max="120">
-    <div class="hint">A cada quantos minutos o robô atualiza os resultados</div>
-  </div>
-  <div class="field">
-    <label>Início da janela de resultados (BRT)</label>
-    <input type="time" name="results_window_start" value="${config.results_window_start||'07:30'}">
-    <div class="hint">Horário BRT de início das atualizações automáticas</div>
-  </div>
-  <div class="field">
-    <label>Fim da janela de resultados (BRT)</label>
-    <input type="time" name="results_window_end" value="${config.results_window_end||'19:30'}">
-    <div class="hint">Horário BRT de encerramento das atualizações automáticas</div>
-  </div>
-  <div class="field">
-    <label>Hora de execução do Robô de PDFs (BRT)</label>
-    <input type="time" name="pdf_cron_time" value="${config.pdf_cron_time||'13:30'}">
-    <div class="hint">Horário BRT em que o robô baixa os PDFs do dia seguinte</div>
-  </div>
-  <div class="field">
-    <label>Intervalo do Robô de Monitoramento (min)</label>
-    <input type="number" name="monitor_interval_min" value="${config.monitor_interval_min||60}" min="15" max="240">
-    <div class="hint">A cada quantos minutos o robô revisita os cards pra checar retirada/troca de galgo</div>
-  </div>
-  <div class="field">
-    <label>Início da janela de monitoramento (BRT)</label>
-    <input type="time" name="monitor_window_start" value="${config.monitor_window_start||'07:00'}">
-    <div class="hint">Horário BRT de início da checagem automática de cards</div>
-  </div>
-  <div class="field">
-    <label>Fim da janela de monitoramento (BRT)</label>
-    <input type="time" name="monitor_window_end" value="${config.monitor_window_end||'20:00'}">
-    <div class="hint">Horário BRT de encerramento da checagem automática de cards</div>
-  </div>
-  <div class="field">
-    <label>Checagem final — minutos antes da corrida</label>
-    <input type="number" name="final_check_min_antes" value="${config.final_check_min_antes||15}" min="5" max="60">
-    <div class="hint">Quanto tempo antes do horário da corrida o robô faz a validação final do card — se mudou algo, refaz a análise do zero (PDF novo + reprocessamento)</div>
-  </div>
-  <div class="field">
-    <label>Alerta sonoro — minutos antes da corrida</label>
-    <input type="number" name="alerta_min_antes" value="${config.alerta_min_antes||3}" min="0" max="15">
-    <div class="hint">Quantos minutos antes do horário a tela pisca e toca o sininho (padrão: 3)</div>
-  </div>
-  <div class="field">
-    <label>Som do alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="som_alerta" id="som_alerta" style="flex:1">
-        <option value="sino" ${config.som_alerta==='sino'||!config.som_alerta?'selected':''}>Sino</option>
-        <option value="beep" ${config.som_alerta==='beep'?'selected':''}>Beep</option>
-        <option value="alarme" ${config.som_alerta==='alarme'?'selected':''}>Alarme</option>
-        <option value="suave" ${config.som_alerta==='suave'?'selected':''}>Suave</option>
-      </select>
-      <button type="button" onclick="testarSom()" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
-    </div>
-  </div>
-  <div class="field">
-    <label>Corrida fica em tela após rodar (minutos)</label>
-    <input type="number" name="tela_grace_min" value="${config.tela_grace_min!=null?config.tela_grace_min:0}" min="0" max="30">
-    <div class="hint">Quanto tempo depois do horário da corrida ela ainda aparece como "próxima" antes de sumir da lista (padrão: 0, some na hora exata)</div>
-  </div>
-</div>
-</div>
 
 <div class="section">
 <div class="sec-title">Alarme para filtro selecionado</div>
@@ -811,7 +734,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,som_alerta=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -822,19 +745,6 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.max_niveis_pool||2,
       d.max_linhas_cat_inferior||3,
       d.max_dias_gap_nova_cat||14,
-      d.auto_refresh_min||1,
-      d.racas_em_tela||6,
-      d.results_interval_min||30,
-      d.results_window_start||'07:30',
-      d.results_window_end||'19:30',
-      d.pdf_cron_time||'13:30',
-      d.monitor_interval_min||60,
-      d.monitor_window_start||'07:00',
-      d.monitor_window_end||'20:00',
-      d.final_check_min_antes||15,
-      d.alerta_min_antes!=null?d.alerta_min_antes:3,
-      d.tela_grace_min!=null?d.tela_grace_min:0,
-      d.som_alerta||'sino',
       d.bloco_pesos_ativo==='1'||d.bloco_pesos_ativo===1?1:0,
       d.bloco_categoria_ativo==='1'||d.bloco_categoria_ativo===1?1:0,
       d.bloco_filtros_ativo==='1'||d.bloco_filtros_ativo===1?1:0,
