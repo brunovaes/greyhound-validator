@@ -420,7 +420,7 @@ async function refreshSidebarSessions() {
     if (sessSlot && d.sessions) {
       sessSlot.innerHTML = d.sessions.length
         ? d.sessions.map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
-        : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessão hoje ainda</span>';
+        : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>';
     }
   } catch(e) { /* falha silenciosa - nao atrapalha o resto da tela */ }
 }
@@ -557,6 +557,21 @@ function showAllExpiredMsg() {
   if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
 }
 
+// Botao "Atualizar" ao lado de PROXIMAS. Se a tela esta mostrando corridas
+// ANTIGAS (carreguei PDFs de data anterior pra estudo), volta pras corridas do
+// DIA — limpa e recarrega o fluxo automatico. Caso normal (corridas de hoje),
+// so atualiza a lista como antes.
+function atualizarProximas() {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  var soAntigas = avbs.length > 0 && avbs.every(isOldRaceCard);
+  if (soAntigas) {
+    results = []; focusRaceIdx = -1; raceFiles = [];
+    clearSessionState();
+    autoCheckAndAnalyze();
+  } else {
+    refreshFocusMode();
+  }
+}
 function refreshFocusMode() {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
@@ -830,7 +845,7 @@ function renderRaceListPanel(avbs) {
   if (!col) return;
   col.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)">'
     + '<span style="font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Próximas</span>'
-    + '<button onclick="refreshFocusMode()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
+    + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
   var first = true;
   var tc = ['','t1','t2','t3','t4','t5','t6'];

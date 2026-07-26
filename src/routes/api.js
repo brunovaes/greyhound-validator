@@ -1287,10 +1287,8 @@ router.get('/sidebar-sessions', (req, res) => {
     const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(req.user.id);
     const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
     const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
-    // "Sessão de hoje" na barra lateral mostra SOMENTE a sessão automática do dia
-    // (Races <hoje>). Sessões de outros dias e as salvas avulsas ficam só em Históricos.
     res.json({
-      sessions: sessaoHoje ? [{ id: sessaoHoje.id, name: sessaoHoje.name, total_avbs: sessaoHoje.total_avbs }] : [],
+      sessions: sessions.map(s => ({ id: s.id, name: s.name, total_avbs: s.total_avbs })),
       sessaoHojeId: sessaoHoje ? sessaoHoje.id : null
     });
   } catch(err) { res.status(500).json({ error:err.message }); }

@@ -482,8 +482,8 @@ ${navBar(user, 'analisar')}
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
     <div>
-      <h2 style="margin-bottom:6px">Sessão de hoje</h2>
-      <div id="sessoes-recentes-slot"><span style="font-size:11px;color:var(--mut)">Carregando...</span></div>
+      <h2 style="margin-bottom:6px">Sessoes recentes</h2>
+      <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
     </div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
