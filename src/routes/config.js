@@ -755,7 +755,7 @@ function desenharPizza(porPista, hostId, valKey){
       paths+='<path d="M'+cx+' '+cy+' L'+x1.toFixed(1)+' '+y1.toFixed(1)+' A'+r+' '+r+' 0 '+large+' 1 '+x2.toFixed(1)+' '+y2.toFixed(1)+' Z" fill="'+col+'" stroke="#0D1117" stroke-width="2"><title>'+s.label+': '+s.val+' ('+Math.round(frac*100)+'%)</title></path>'; }
     ang=a2; });
   var legend=slices.map(function(s,i){ var col=CORES[i%CORES.length]; return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;margin-bottom:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+col+';flex-shrink:0"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.label+'</span><span style="color:#666">'+Math.round(s.val/total*100)+'%</span></div>'; }).join('');
-  host.innerHTML='<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="170" height="170" style="flex-shrink:0">'+paths+'</svg><div style="flex:1;min-width:130px">'+legend+'</div></div>';
+  host.innerHTML='<div style="display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="170" height="170" style="flex-shrink:0">'+paths+'</svg><div style="flex:1;min-width:130px">'+legend+'</div></div>';
 }
 </script></body></html>`);
 });

@@ -90,6 +90,16 @@
     .res{grid-template-columns:1fr auto;grid-template-areas:"pista hit" "avb avb" "conf conf";gap:6px}
     .res .pista{grid-area:pista}.res .hit{grid-area:hit}.res .avb{grid-area:avb}.res .conf{grid-area:conf;text-align:left}
     .intro h1{font-size:26px}.cta h2{font-size:22px}
+    /* nav cabe no retrato: logo menor + botoes compactos */
+    .nav-in{gap:8px}
+    .navlogo{height:30px}
+    .nav-cta{gap:6px}
+    .nav-cta .btn{padding:7px 11px;font-size:12px}
+    /* tabela de planos inteira na vertical, sem rolagem lateral */
+    table.cmp{min-width:0}
+    table.cmp th,table.cmp td{padding:8px 5px;font-size:11px}
+    table.cmp thead th{font-size:11.5px}
+    table.cmp thead th small{font-size:9px;margin-top:2px}
   }
 .showcase{display:flex;flex-direction:column;gap:20px}
 .shot{background:#0b0e14;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 22px 55px -34px rgba(0,0,0,.85)}

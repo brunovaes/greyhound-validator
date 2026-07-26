@@ -407,7 +407,7 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     porTurno: grupoParaArray(agrupaPor(items, x => x.turno), 'none'),
     porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr').filter(r => passaQtd(r.n)),
     porCaes: grupoParaArray(agrupaPor(items, x => x.nElig), 'num'),
-    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr').filter(r => passaQtd(r.n)),
+    porClasse: grupoParaArray(agrupaPor(items, x => x.classe), 'hr').filter(r => passaQtd(r.n)).sort((a, b) => cmpClasse(a.chave, b.chave)),
     // Serie diaria pra Curva S (acumulado no cliente): abertos/acertados/errados por dia.
     serieDiaria: (function () {
       const m = {};
