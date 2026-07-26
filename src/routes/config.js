@@ -420,9 +420,15 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   <div id="graf-curvas"></div>
 </div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
-  <div class="graf-card">
-    <div class="graf-title">Distribuição por Pista (volume de AvBs)</div>
-    <div id="graf-pizza"></div>
+  <div>
+    <div class="graf-card">
+      <div class="graf-title">Distribuição por Pista (volume de AvBs)</div>
+      <div id="graf-pizza"></div>
+    </div>
+    <div class="graf-card">
+      <div class="graf-title">Pistas com mais vitórias (acertos)</div>
+      <div id="graf-pizza-vit"></div>
+    </div>
   </div>
   <div class="graf-card">
     <div class="graf-title">Desempenho por Classe / Turno / Nº de cães</div>
@@ -707,7 +713,8 @@ async function carregarGraf(){
       + dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
       + dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e');
     desenharCurvaS(d.serieDiaria);
-    desenharPizza(d.porPista);
+    desenharPizza(d.porPista, 'graf-pizza', 'n');
+    desenharPizza(d.porPista, 'graf-pizza-vit', 'ac');
     var bars=document.getElementById('graf-bars');
     if(bars){ bars.innerHTML = dashSecao('Por Classe',d.porClasse)+dashSecao('Por Turno',d.porTurno)+dashSecao('Por Nº de Cães',d.porCaes) || '<div style="color:#888;font-size:13px">Sem dados.</div>'; if(!bars.innerHTML.trim()) bars.innerHTML='<div style="color:#888;font-size:13px">Sem dados no período.</div>'; }
   }catch(e){ host.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
@@ -732,13 +739,14 @@ function desenharCurvaS(serie){
     + '<path d="'+pathOf('er')+'" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>'
     + dots('ab','#9aa4b2') + dots('ac','#22c55e') + dots('er','#ef4444') + xl + '</svg>';
 }
-function desenharPizza(porPista){
-  var host=document.getElementById('graf-pizza'); if(!host) return;
-  var arr=(porPista||[]).slice().filter(function(x){return x.n>0;}).sort(function(a,b){return b.n-a.n;});
+function desenharPizza(porPista, hostId, valKey){
+  var host=document.getElementById(hostId||'graf-pizza'); if(!host) return;
+  valKey = valKey || 'n';
+  var arr=(porPista||[]).slice().filter(function(x){return (x[valKey]||0)>0;}).sort(function(a,b){return (b[valKey]||0)-(a[valKey]||0);});
   if(!arr.length){ host.innerHTML='<div style="color:#888;font-size:13px;padding:20px">Sem dados no período.</div>'; return; }
   var TOP=7, top=arr.slice(0,TOP), resto=arr.slice(TOP);
-  var slices=top.map(function(x){return {label:nomePistaGraf(x.chave),val:x.n};});
-  if(resto.length){ slices.push({label:'Outras ('+resto.length+')',val:resto.reduce(function(s,x){return s+x.n;},0)}); }
+  var slices=top.map(function(x){return {label:nomePistaGraf(x.chave),val:x[valKey]||0};});
+  if(resto.length){ slices.push({label:'Outras ('+resto.length+')',val:resto.reduce(function(s,x){return s+(x[valKey]||0);},0)}); }
   var CORES=['#56B4E9','#E69F00','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#888888'];
   var total=slices.reduce(function(s,x){return s+x.val;},0), cx=90,cy=90,r=80, ang=-Math.PI/2, paths='';
   slices.forEach(function(s,i){ var frac=s.val/total, a2=ang+frac*2*Math.PI, col=CORES[i%CORES.length];
