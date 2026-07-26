@@ -525,7 +525,16 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 .robot-menu-item .icon{font-size:16px}
 .robot-content{flex:1;padding:24px 0;overflow-y:auto;min-width:0}
 .robot-panel{display:none}.robot-panel.active{display:block}
-@media(max-width:800px){.layout{flex-direction:column;padding:0 16px}.robot-sidebar{width:100%;position:static;flex-direction:row;overflow-x:auto}}
+@media(max-width:800px){
+  .layout{flex-direction:column;padding:0 12px;gap:12px}
+  .robot-sidebar{width:100%;position:static;flex-direction:row;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch}
+  .robot-sidebar h3{display:none}
+  .robot-menu-item{width:auto;white-space:nowrap;flex-shrink:0}
+  .robot-content{padding:12px 0}
+  .card{padding:14px}
+  .log-box{height:220px}
+  table{display:block;overflow-x:auto;max-width:100%}
+}
 .content{padding:24px;max-width:920px;margin:0 auto}
 h1{font-size:20px;font-weight:700;margin-bottom:6px}
 .sub{font-size:13px;color:#888;margin-bottom:24px}

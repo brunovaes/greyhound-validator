@@ -613,9 +613,7 @@ h1{font-size:18px;font-weight:700;margin-bottom:12px}
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'live')}
 <div class="content">
-<h1 style="display:flex;align-items:center;justify-content:space-between">Live — Acompanhamento Simultaneo
-  <a href="${BASE}/live/popup" target="_blank" rel="noopener" style="font-size:12px;background:#22c55e;color:#000;font-weight:700;padding:7px 14px;border-radius:6px;text-decoration:none">&#8599; Abrir em nova aba</a>
-</h1>
+<h1>Live — Acompanhamento Simultaneo</h1>
 <div class="live-grid">
   <div class="live-panel">
     <h3>SIS Racing</h3>
@@ -1021,7 +1019,7 @@ router.get('/historico', (req, res) => {
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(user.id);
   const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
   const logoB64 = getLogo();
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Histórico - Greyhound Validator</title>
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Histórico - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
@@ -1107,7 +1105,7 @@ router.get('/sessao/:id', (req, res) => {
   const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
   const logoB64 = getLogo();
   const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${sess.name} - Greyhound</title>
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
