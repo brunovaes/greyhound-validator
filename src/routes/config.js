@@ -101,7 +101,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .toast-icon{font-size:52px;margin-bottom:12px}
 .toast-box h3{font-size:17px;color:#f0f0f0;margin-bottom:6px}
 .toast-box p{font-size:12px;color:#888}
-@media(max-width:800px){.layout{grid-template-columns:1fr}.tabnav{position:static;flex-direction:row;overflow-x:auto}}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.tabnav{position:static;flex-direction:row;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch}.tabnav .tabbtn{width:auto;white-space:nowrap;flex-shrink:0}.content{padding:14px 12px}}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
 ${navBar(user, 'config')}

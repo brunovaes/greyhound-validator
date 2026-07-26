@@ -17,8 +17,9 @@ function getLogo() {
 
 function navBar(user, active) {
   const isAdmin = user.role === 'admin';
-  return `<nav style="background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex">
+  return `<nav id="topnav" style="position:relative;background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
+    <button id="nav-burger" onclick="toggleNav()" aria-label="Menu" style="display:none;background:none;border:none;color:#e9edf2;font-size:22px;cursor:pointer;padding:10px 8px;line-height:1">&#9776;</button>
+    <div id="nav-links" style="display:flex">
       <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
       <a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
@@ -39,7 +40,7 @@ function navBar(user, active) {
         <span style="display:inline-block;width:7px;height:7px;background:#60a5fa;border-radius:50%"></span>
         <span id="robot-badge-txt">Robô rodando...</span>
       </a>
-      <span style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${user.plan}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
+      <span id="nav-userinfo" style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${user.plan}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
       <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
     </div>
   </nav>
@@ -75,8 +76,21 @@ function navBar(user, active) {
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+    /* ===== Mobile: menu vira hamburguer e os avisos de robo somem ===== */
+    @media(max-width:768px){
+      #nav-burger{display:block!important}
+      #topnav{padding:0 10px}
+      #nav-links{display:none!important;position:absolute;top:100%;left:0;right:0;flex-direction:column;background:#111;border-bottom:1px solid #333;box-shadow:0 10px 26px rgba(0,0,0,.55);z-index:60}
+      #nav-links.open{display:flex!important}
+      #nav-links .nl{padding:13px 18px;border-bottom:1px solid #222!important;border-left:2px solid transparent}
+      #nav-links .nl.na{border-left-color:#22c55e!important}
+      #nav-userinfo{display:none!important}
+      #race-alert-badge,#results-badge,#robot-badge{display:none!important}
+      #res-banner,#mon-banner,#suspicious-banner,#stop-banner{display:none!important}
+    }
   </style>
   <script>
+  function toggleNav(){var m=document.getElementById('nav-links'); if(m) m.classList.toggle('open');}
   (function() {
     var BASE = '${BASE}';
     var badge = document.getElementById('robot-badge');
@@ -1101,6 +1115,12 @@ ${designTokensCSS()}
 .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
 .tw{overflow-x:auto;border:1px solid var(--bdr);border-radius:8px}
 table{width:100%;border-collapse:collapse;background:#111;min-width:900px}
+@media(max-width:768px){
+  .content{padding:12px 10px}
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  table{min-width:660px}
+  .tw table th:nth-child(8), .tw table td:nth-child(8){display:none} /* Observacoes some no mobile */
+}
 th{padding:10px 8px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#888;background:#1a1a1a;border-bottom:1px solid #333;vertical-align:top}
 td{padding:10px 8px;border-bottom:1px solid var(--sur2);font-size:12px;vertical-align:middle;text-align:center}
 tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
