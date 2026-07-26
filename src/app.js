@@ -89,8 +89,6 @@ function injectStyles(){
     '.ps-btn-warn:hover{opacity:.88;}',
     '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
-    '.rc-alert-custom{animation:rcAlertBlinkCustom 1s ease-in-out infinite;border-left:3px solid var(--alert-col,#3b82f6);}',
-    '@keyframes rcAlertBlinkCustom{0%,100%{background:transparent;}50%{background:var(--alert-col,#3b82f6);}}',
     '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
     '.rc-reanalise-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:8px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-bottom:3px}',
     '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
@@ -110,22 +108,6 @@ var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
 var TELA_GRACE_MIN = 0;
 var SOM_ALERTA = 'sino';
-var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], som:'beep', cor:'azul' };
-var CORES_ALARME = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
-var _sysCfgSig = ''; // assinatura da ultima config carregada (detecta mudanca p/ reaplicar o alarme)
-// Sinaliza que ESTA tela (analise) ja cuida do alarme — o alertaGlobal.js
-// (incluido em todas as paginas) fica passivo aqui pra nao duplicar aviso.
-window.__ghAlarmeApp = true;
-// Registra o aviso num store compartilhado (localStorage) pra que, ao navegar
-// pra outra tela, o alertaGlobal.js nao repita o mesmo aviso.
-function registrarAvisoGlobal(key){
-  try {
-    var now = Date.now(), TTL = 10*60*1000;
-    var raw = localStorage.getItem('ghAlerted'); var o = raw ? JSON.parse(raw) : {};
-    for (var k in o) { if (o[k] < now) delete o[k]; }
-    o[key] = now + TTL; localStorage.setItem('ghAlerted', JSON.stringify(o));
-  } catch(e){}
-}
 
 async function loadAcertosResumo() {
   try {
@@ -153,22 +135,6 @@ async function loadSystemConfig() {
     if (c.alerta_min_antes != null) ALERTA_MIN_ANTES = parseInt(c.alerta_min_antes);
     if (c.tela_grace_min != null) TELA_GRACE_MIN = parseInt(c.tela_grace_min);
     if (c.som_alerta) SOM_ALERTA = c.som_alerta;
-    ALARME_FILTRO.ativo = c.alarme_filtro_ativo ? 1 : 0;
-    ALARME_FILTRO.turno = c.alarme_filtro_turno || '';
-    ALARME_FILTRO.pistas = (c.alarme_filtro_pistas||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
-    ALARME_FILTRO.classes = (c.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
-    ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
-    ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
-    // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
-    // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
-    // descarta o estado de alerta atual (o aviso padrao e' descartado) e
-    // reavalia tudo com as novas regras, sem precisar recarregar a tela.
-    var _sig = JSON.stringify(ALARME_FILTRO) + '|' + SOM_ALERTA + '|' + ALERTA_MIN_ANTES;
-    if (_sysCfgSig !== '' && _sig !== _sysCfgSig) {
-      alertedRaces = {};
-      if (typeof checkRaceAlerts === 'function') checkRaceAlerts();
-    }
-    _sysCfgSig = _sig;
   } catch(e) {}
 }
 
@@ -450,17 +416,11 @@ async function refreshSidebarSessions() {
   try {
     var r = await fetch(BASE + '/api/sidebar-sessions');
     var d = await r.json();
-    var histSlot = document.getElementById('hist-do-dia-slot');
-    if (histSlot) {
-      histSlot.innerHTML = d.sessaoHojeId
-        ? '<a href="'+BASE+'/sessao/'+d.sessaoHojeId+'" class="tabbtn">&#128220; Histórico do dia</a>'
-        : '<span class="tabbtn" style="opacity:.4;cursor:not-allowed" title="Ainda nao ha sessao analisada hoje">&#128220; Histórico do dia</span>';
-    }
     var sessSlot = document.getElementById('sessoes-recentes-slot');
     if (sessSlot && d.sessions) {
       sessSlot.innerHTML = d.sessions.length
         ? d.sessions.map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
-        : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>';
+        : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessão hoje ainda</span>';
     }
   } catch(e) { /* falha silenciosa - nao atrapalha o resto da tela */ }
 }
@@ -558,24 +518,18 @@ function checkRaceAlerts() {
     if (isNaN(idx) || !results[idx]) return;
     var r = results[idx];
     el.classList.toggle('rc-old', isOldRaceCard(r));
-    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom'); return; } // corrida antiga nunca pisca/soa
+    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); return; } // corrida antiga nunca pisca/soa
     var mins = minutesToRace(r);
     var shouldAlert = mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     if (shouldAlert) {
-      var custom = matchAlarmeFiltro(r);
-      if (custom) {
-        el.classList.remove('rc-alert'); el.classList.add('rc-alert-custom');
-        el.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6');
-      } else {
-        el.classList.remove('rc-alert-custom'); el.classList.add('rc-alert');
-      }
+      el.classList.add('rc-alert');
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
         alertedRaces[key] = true;
-        avisarCorrida(r, custom);
+        playBellSound();
       }
     } else {
-      el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom');
+      el.classList.remove('rc-alert');
     }
   });
 }
@@ -859,113 +813,9 @@ function tocarSuave(ctx) {
 }
 var SONS_DISPONIVEIS = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
 
-// AudioContext unico e reaproveitado. Criado/retomado num gesto do usuario, o
-// som continua tocando mesmo com a aba em segundo plano — um AudioContext novo
-// criado com a aba escondida nasce suspenso e nao toca.
-var _audioCtx = null;
-function getAudioCtx(){
-  try {
-    if (!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    if (_audioCtx.state === 'suspended') _audioCtx.resume();
-    return _audioCtx;
-  } catch(e) { return null; }
-}
-// Retoma o audio e pede permissao de notificacao no primeiro gesto do usuario
-// (navegadores exigem gesto). Roda uma vez.
-var _alertInit = false;
-function initAlertaUserGesto(){
-  if (_alertInit) return; _alertInit = true;
-  getAudioCtx();
-  prepararSonsAudio(); // gera os sons como <audio> (tocam em background) e destrava no gesto
-  try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch(e){}
-}
-// Notificacao de desktop — aparece mesmo com a aba minimizada / voce em outra
-// tela. So dispara quando a aba NAO esta visivel, pra nao duplicar aviso quando
-// voce ja esta olhando o sistema.
-function notificarCorrida(r, custom){
-  try {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    if (!document.hidden) return;
-    var hbr = r.hora_br || convertHora(r.hora||'');
-    var titulo = custom ? 'Alarme — corrida chegando' : 'Corrida chegando';
-    var corpo = (r.corrida||'') + (hbr ? (' · ' + hbr) : '');
-    // silent:true tira o "ding" padrao do Windows — quem toca e' o SOM ESCOLHIDO
-    // (via <audio>), pra voce ouvir o som configurado e nao o do sistema.
-    var n = new Notification(titulo, { body: corpo, tag: raceAlertKey(r), silent: true });
-    n.onclick = function(){ try { window.focus(); n.close(); } catch(e){} };
-    setTimeout(function(){ try { n.close(); } catch(e){} }, 20000);
-  } catch(e){}
-}
-// Fallback universal (mesmo sem permissao de notificacao): pisca o titulo da
-// aba enquanto a aba esta em segundo plano, pra chamar atencao na barra.
-var _tituloOrig = null, _tituloFlashTimer = null;
-function flashTituloAlerta(){
-  try {
-    if (!document.hidden || _tituloFlashTimer) return;
-    if (_tituloOrig === null) _tituloOrig = document.title;
-    var on = true;
-    _tituloFlashTimer = setInterval(function(){
-      document.title = on ? '🔔 Corrida chegando!' : (_tituloOrig || 'Greyhound Factory');
-      on = !on;
-    }, 1000);
-  } catch(e){}
-}
-function pararFlashTitulo(){
-  if (_tituloFlashTimer){ clearInterval(_tituloFlashTimer); _tituloFlashTimer = null; }
-  if (_tituloOrig !== null){ document.title = _tituloOrig; _tituloOrig = null; }
-}
-// ==== Sons como <audio> (data URI WAV) ====================================
-// Web Audio puro pode ser estrangulado/suspenso com a aba em segundo plano, e
-// aí o unico som que sobra é o "ding" do sistema. Renderizamos os 4 sons uma
-// vez (com os MESMOS timbres do Web Audio) para WAV e tocamos via <audio>, que
-// roda de forma confiavel em background — assim voce ouve o SOM ESCOLHIDO.
-var SOM_AUDIO = {}, _somAudioProntos = false;
-function _bufToWavDataURI(buffer){
-  var ch = buffer.getChannelData(0), sr = buffer.sampleRate, len = ch.length;
-  var ab = new ArrayBuffer(44 + len*2), view = new DataView(ab);
-  function ws(o,s){ for (var i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); }
-  ws(0,'RIFF'); view.setUint32(4, 36+len*2, true); ws(8,'WAVE'); ws(12,'fmt ');
-  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
-  view.setUint32(24,sr,true); view.setUint32(28,sr*2,true); view.setUint16(32,2,true);
-  view.setUint16(34,16,true); ws(36,'data'); view.setUint32(40,len*2,true);
-  var off = 44;
-  for (var i=0;i<len;i++,off+=2){ var s=Math.max(-1,Math.min(1,ch[i])); view.setInt16(off, s<0?s*0x8000:s*0x7FFF, true); }
-  var bytes = new Uint8Array(ab), bin=''; for (var j=0;j<bytes.length;j++) bin += String.fromCharCode(bytes[j]);
-  return 'data:audio/wav;base64,' + btoa(bin);
-}
-function _renderSom(fn, dur){
-  return new Promise(function(resolve, reject){
-    try {
-      var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-      if (!OAC) return reject('no-oac');
-      var sr = 44100, oac = new OAC(1, Math.ceil(sr*dur), sr);
-      fn(oac);
-      oac.startRendering().then(function(buf){ resolve(_bufToWavDataURI(buf)); }).catch(reject);
-    } catch(e){ reject(e); }
-  });
-}
-function prepararSonsAudio(){
-  if (_somAudioProntos) return; _somAudioProntos = true;
-  var specs = [['sino',tocarSino,0.7],['beep',tocarBeep,0.35],['alarme',tocarAlarme,0.75],['suave',tocarSuave,0.75]];
-  specs.forEach(function(s){
-    _renderSom(s[1], s[2]).then(function(uri){
-      var a = new Audio(uri); a.preload = 'auto'; SOM_AUDIO[s[0]] = a;
-      // destrava o autoplay tocando mudo uma vez, dentro do gesto do usuario
-      try { a.muted = true; var p = a.play(); if (p && p.then) p.then(function(){ a.pause(); a.currentTime=0; a.muted=false; }).catch(function(){ a.muted=false; }); else { a.pause(); a.muted=false; } } catch(e){ a.muted=false; }
-    }).catch(function(){});
-  });
-}
-// Dispara todos os avisos de uma corrida que entrou na janela de alerta.
-function avisarCorrida(r, custom){
-  playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
-  notificarCorrida(r, custom);
-  flashTituloAlerta();
-  registrarAvisoGlobal(raceAlertKey(r));
-}
-
 function playBellSound() {
   try {
-    var ctx = getAudioCtx(); if (!ctx) return;
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
     var fn = SONS_DISPONIVEIS[SOM_ALERTA] || tocarSino;
     fn(ctx);
   } catch(e) { console.error('[playBellSound] erro', e); }
@@ -973,36 +823,6 @@ function playBellSound() {
 
 function raceAlertKey(r) {
   return (r.hora||'') + '|' + (r.corrida||'');
-}
-// Alarme para filtro selecionado (Configuracoes > Automacao): cor + som proprios
-function alarmeTurnoDaCorrida(r){
-  var hbr = r.hora_br || convertHora(r.hora||'');
-  var h = parseInt((hbr||'').split(':')[0], 10);
-  if (isNaN(h)) return '';
-  return h < 13 ? 'manha' : 'tarde';
-}
-function matchAlarmeFiltro(r){
-  if (!ALARME_FILTRO.ativo) return false;
-  if (ALARME_FILTRO.turno && alarmeTurnoDaCorrida(r) !== ALARME_FILTRO.turno) return false;
-  // pista = codigo do Racing Post = 1a palavra de corrida (mesma convencao do motor/HR)
-  var pista = (r.corrida||'').trim().split(' ')[0];
-  var classe = (getRaceClass(r.corrida||'') || '').toUpperCase();
-  if (ALARME_FILTRO.pistas.length && ALARME_FILTRO.pistas.indexOf(pista) < 0) return false;
-  if (ALARME_FILTRO.classes.length && ALARME_FILTRO.classes.map(function(c){return c.toUpperCase();}).indexOf(classe) < 0) return false;
-  return true;
-}
-function playSom(nome){
-  try {
-    // Preferimos o <audio> (toca em background); Web Audio e' o fallback.
-    var a = SOM_AUDIO[nome];
-    if (a) {
-      try { a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function(){ _playSomWebAudio(nome); }); return; } catch(e){}
-    }
-    _playSomWebAudio(nome);
-  } catch(e) { console.error('[playSom] erro', e); }
-}
-function _playSomWebAudio(nome){
-  try { var ctx = getAudioCtx(); if (!ctx) return; (SONS_DISPONIVEIS[nome] || tocarSino)(ctx); } catch(e){}
 }
 
 function renderRaceListPanel(avbs) {
@@ -1021,14 +841,12 @@ function renderRaceListPanel(avbs) {
     var isOld = isOldRaceCard(r);
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
-    var alertCustom = isAlerting && matchAlarmeFiltro(r);
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
-    if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? ' rc-alert' : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
     if (isAlerting) {
       var key = raceAlertKey(r);
       if (!alertedRaces[key]) {
         alertedRaces[key] = true;
-        avisarCorrida(r, alertCustom);
+        playBellSound();
       }
     }
     div.setAttribute('data-idx', rIdx);
@@ -1768,8 +1586,7 @@ async function proceedAnalysis(){
       return;
     }
   }
-  document.getElementById('btngo').disabled=true;
-  document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
+  setSt('Analisando...');
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
   prog(5,'Preparando...');results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
   try{
@@ -1829,8 +1646,6 @@ async function proceedAnalysis(){
       setTimeout(function(){openPsModal();},1600);
     }
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
-  document.getElementById('btngo').disabled=false;
-  document.getElementById('btngo').innerHTML='&#9889; Automaticamente';
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});}catch(e){}
 }
 
@@ -1840,12 +1655,6 @@ document.addEventListener('DOMContentLoaded',async function(){
   injectSaveModal();
   injectValModal();
   injectFilterPanel();
-
-  // Alerta em segundo plano: retoma o audio e pede permissao de notificacao no
-  // primeiro gesto (exigencia dos navegadores). E para de piscar o titulo assim
-  // que voce volta pra aba.
-  ['click','keydown','touchstart'].forEach(function(ev){ document.addEventListener(ev, initAlertaUserGesto); });
-  document.addEventListener('visibilitychange', function(){ if (!document.hidden) pararFlashTitulo(); });
 
   // Entra imediatamente no foco com loading — ANTES de qualquer await
   var mainEl = document.getElementById('main-layout');
@@ -1884,7 +1693,6 @@ document.addEventListener('DOMContentLoaded',async function(){
   document.getElementById('rz').addEventListener('dragleave',function(){this.classList.remove('drag');});
   document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
-  document.getElementById('btngo').addEventListener('click',runAnalysis);
   document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){saveRaceField(i,f,el.value);}});
   document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){var val=el.type==='checkbox'?(el.checked?1:0):el.value;saveRaceField(i,f,val);if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}}});
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
@@ -1909,9 +1717,4 @@ document.addEventListener('DOMContentLoaded',async function(){
   // se a aba ficar aberta e o robo salvar a sessao de hoje so depois
   refreshSidebarSessions();
   setInterval(refreshSidebarSessions, 90000);
-
-  // Re-le a config do sistema periodicamente pra que mudancas salvas em
-  // Configuracoes (ex: "Alarme para filtro selecionado", som/tempo de alerta)
-  // passem a valer nesta tela sem precisar recarregar a pagina.
-  setInterval(loadSystemConfig, 30000);
 });

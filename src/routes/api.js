@@ -1201,13 +1201,7 @@ router.get('/config', (req, res) => {
       pdf_cron_time: config.pdf_cron_time || '13:30',
       alerta_min_antes: config.alerta_min_antes || 3,
       tela_grace_min: config.tela_grace_min != null ? config.tela_grace_min : 0,
-      som_alerta: config.som_alerta || 'sino',
-      alarme_filtro_ativo: config.alarme_filtro_ativo || 0,
-      alarme_filtro_turno: config.alarme_filtro_turno || '',
-      alarme_filtro_pistas: config.alarme_filtro_pistas || '',
-      alarme_filtro_classes: config.alarme_filtro_classes || '',
-      alarme_filtro_som: config.alarme_filtro_som || 'beep',
-      alarme_filtro_cor: config.alarme_filtro_cor || 'azul'
+      som_alerta: config.som_alerta || 'sino'
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
@@ -1293,8 +1287,10 @@ router.get('/sidebar-sessions', (req, res) => {
     const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(req.user.id);
     const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
     const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
+    // "Sessão de hoje" na barra lateral mostra SOMENTE a sessão automática do dia
+    // (Races <hoje>). Sessões de outros dias e as salvas avulsas ficam só em Históricos.
     res.json({
-      sessions: sessions.map(s => ({ id: s.id, name: s.name, total_avbs: s.total_avbs })),
+      sessions: sessaoHoje ? [{ id: sessaoHoje.id, name: sessaoHoje.name, total_avbs: sessaoHoje.total_avbs }] : [],
       sessaoHojeId: sessaoHoje ? sessaoHoje.id : null
     });
   } catch(err) { res.status(500).json({ error:err.message }); }
