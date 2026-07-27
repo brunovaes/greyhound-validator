@@ -131,13 +131,16 @@ async function loadAcertosResumo() {
   try {
     var r = await fetch(BASE + '/api/acertos-resumo');
     var d = await r.json();
-    var txtDia = d.dia.pct==null ? '-' : d.dia.pct + '%';
-    var colDia = d.dia.pct==null ? '#666' : (d.dia.pct>=50 ? '#22c55e' : '#ef4444');
-    var txtMes = d.mes.pct==null ? '-' : d.mes.pct + '%';
-    var colMes = d.mes.pct==null ? '#666' : (d.mes.pct>=50 ? '#22c55e' : '#ef4444');
-    // Atualiza as duas copias (sidebar no desktop + rodape no mobile)
-    document.querySelectorAll('.acertos-dia-val').forEach(function(el){ el.textContent = txtDia; el.style.color = colDia; });
-    document.querySelectorAll('.acertos-mes-val').forEach(function(el){ el.textContent = txtMes; el.style.color = colMes; });
+    var elDia = document.getElementById('acertos-dia');
+    var elMes = document.getElementById('acertos-mes');
+    if (elDia) {
+      elDia.textContent = d.dia.pct==null ? '-' : d.dia.pct + '%';
+      elDia.style.color = d.dia.pct==null ? '#666' : (d.dia.pct>=50 ? '#22c55e' : '#ef4444');
+    }
+    if (elMes) {
+      elMes.textContent = d.mes.pct==null ? '-' : d.mes.pct + '%';
+      elMes.style.color = d.mes.pct==null ? '#666' : (d.mes.pct>=50 ? '#22c55e' : '#ef4444');
+    }
   } catch(e) {}
 }
 
@@ -1289,6 +1292,19 @@ function injectValModal(){
 .val-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:var(--font-body);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:var(--font-body)}
 .val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:var(--font-body)}
+@media(max-width:768px){
+  #val-box{width:96vw;max-width:96vw;max-height:90vh}
+  #val-body{overflow-y:auto;padding:12px 8px}
+  .val-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .val-tbl{table-layout:auto;width:auto;min-width:640px}
+  #val-body.val-compact{max-height:90vh}
+  #val-body.val-compact .val-tbl{min-width:640px}
+  #val-body.val-compact .val-tbl th{font-size:11px;padding:3px 4px;line-height:1.2}
+  #val-body.val-compact .val-tbl td{font-size:11px;padding:3px 4px;line-height:1.2}
+  #val-body.val-compact .val-td-rem{font-size:10px;max-width:140px}
+  #val-body.val-compact .val-dog-hdr .trap-badge{width:22px;height:22px;font-size:11px}
+  #val-body.val-compact .val-name{font-size:12px}
+}
 .val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
 .val-link:hover{color:#60a5fa}.t1{background:radial-gradient(circle at 35% 35%,#ff4444,#c00 60%,#8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4)}.t2{background:radial-gradient(circle at 35% 35%,#4488ff,#1a3db5 60%,#0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3)}.t3{background:radial-gradient(circle at 35% 35%,#fff,#d0d0d0 60%,#a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8)}.t4{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a 60%,#000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15)}.t5{background:radial-gradient(circle at 35% 35%,#ffaa00,#e07000 60%,#a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4)}.t6{background:radial-gradient(circle at 50% 50%,#cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2)}
 `;

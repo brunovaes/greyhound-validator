@@ -1256,6 +1256,14 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 .sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
 .sv-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}
+/* Mobile: modal ocupa quase a tela toda e a tabela rola na horizontal
+   (colunas legiveis, arrasta pro lado pra ver Bends/Fin/Remarks/Grade/CalTm). */
+@media(max-width:768px){
+  #sv-box{width:96vw;max-width:96vw;max-height:90vh}
+  #sv-body{overflow-y:auto;padding:12px 8px}
+  .sv-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .sv-tbl{table-layout:auto;width:auto;min-width:640px}
+}
 </style>
 <style>
 #rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
