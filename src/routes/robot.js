@@ -528,9 +528,10 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 @media(max-width:800px){
   html,body{max-width:100%;overflow-x:hidden}
   .layout{flex-direction:column;padding:0 12px;gap:12px;max-width:100%}
-  .robot-sidebar{width:100%;position:static;flex-direction:row;flex-wrap:wrap;overflow-x:visible;gap:6px}
+  .robot-sidebar{width:100%;position:static;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch}
   .robot-sidebar h3{display:none}
-  .robot-menu-item{width:auto;white-space:nowrap;flex-shrink:0;padding:8px 10px;font-size:11px}
+  .robot-menu-item{width:auto;white-space:nowrap;flex-shrink:0}
+  .robot-hide-mobile{display:none!important}
   .robot-content{padding:12px 0;max-width:100%;min-width:0}
   .content{max-width:100%}
   .card{padding:14px;max-width:100%;overflow-x:hidden}
@@ -608,8 +609,8 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
   <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Automação</button>
   <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
-  <a class="robot-menu-item" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
-  <a class="robot-menu-item" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
+  <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
+  <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
