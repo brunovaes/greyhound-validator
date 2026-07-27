@@ -483,6 +483,16 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .bca{padding:9px 14px;background:transparent;color:var(--mut2);border:1px solid var(--bdr2);border-radius:var(--rad);cursor:pointer}
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* ==== Ajustes mobile Analisar (itens 1-3) — no fim para vencer as regras base ==== */
+@media(max-width:768px){
+  .sidebar{border-right:none!important}
+  .sess-recentes-box{display:none!important}
+  .acertos-sidebar{display:none!important}
+  .acertos-mobile{display:flex!important}
+  .fp-gauges-row{display:none!important}
+  .fp-dog-name{font-size:13px!important}
+  .fp-dog-perfil{font-size:10px!important}
+}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
 ${navBar(user, 'analisar')}
@@ -500,21 +510,21 @@ ${navBar(user, 'analisar')}
       <div class="flist" id="rlist"></div>
     </div>
     <div class="dv"></div>
-    <div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin:-4px 0 -2px;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    ${sessaoHoje ? `<a href="${BASE}/sessao/${sessaoHoje.id}" class="st-link" title="Abrir a sessao de hoje" style="text-decoration:none;display:block">` : ''}<div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin:-4px 0 -2px;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>${sessaoHoje ? `</a>` : ''}
     <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
     <div class="dv"></div>
-    <div>
+    <div class="sess-recentes-box">
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
       <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div class="acertos-box acertos-sidebar" style="display:flex;gap:8px;margin-top:8px">
       <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
         <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
-        <div id="acertos-dia" style="font-size:20px;font-weight:700;color:#666">-</div>
+        <div id="acertos-dia" class="acertos-dia-val" style="font-size:20px;font-weight:700;color:#666">-</div>
       </div>
       <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
         <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
-        <div id="acertos-mes" style="font-size:20px;font-weight:700;color:#666">-</div>
+        <div id="acertos-mes" class="acertos-mes-val" style="font-size:20px;font-weight:700;color:#666">-</div>
       </div>
     </div>
   </div>
@@ -537,6 +547,16 @@ ${navBar(user, 'analisar')}
     <div class="ab" id="ab" style="display:none">
       <button class="bexp" onclick="enterFocusMode()" style="border-color:rgba(34,197,94,.3);color:#22c55e">&#9654; Voltar ao Foco</button>
       <button class="bexp" id="btn-exp">Exportar CSV</button>
+    </div>
+  </div>
+  <div class="acertos-box acertos-mobile" style="display:none;gap:8px;margin-top:4px;padding:0 10px 16px">
+    <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
+      <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
+      <div class="acertos-dia-val" style="font-size:20px;font-weight:700;color:#666">-</div>
+    </div>
+    <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
+      <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
+      <div class="acertos-mes-val" style="font-size:20px;font-weight:700;color:#666">-</div>
     </div>
   </div>
 </div>
