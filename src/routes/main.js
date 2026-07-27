@@ -4,6 +4,7 @@ const { db, getUserConfig } = require('../db/database');
 const path = require('path');
 const fs = require('fs');
 const { requireAdmin } = require('../middleware/auth');
+const { can } = require('../access/store');
 const { designTokensCSS } = require('../utils/designTokens');
 const { nomeCorridaCompleto, nomePista } = require('../utils/nomesPistas');
 
@@ -20,12 +21,13 @@ function navBar(user, active) {
   return `<nav id="topnav" style="position:relative;background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
     <button id="nav-burger" onclick="toggleNav()" aria-label="Menu" style="display:none;background:none;border:none;color:#e9edf2;font-size:22px;cursor:pointer;padding:10px 8px;line-height:1">&#9776;</button>
     <div id="nav-links" style="display:flex">
-      <a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>
-      <a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>
+      ${can(user,'screen.analisar') ? `<a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>` : ''}
+      ${can(user,'screen.banca') ? `<a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Painel Admin</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuários</a>` : ''}
-      <a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>
+      ${isAdmin ? `<a href="${BASE}/acessos" class="nl${active==='acessos'?' na':''}">Acessos</a>` : ''}
+      ${can(user,'screen.live') ? `<a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>` : ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">
       <a href="${BASE}" id="race-alert-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.4);background:rgba(249,115,22,.1);border-radius:20px;padding:3px 10px;animation:blink 1.2s ease-in-out infinite">
