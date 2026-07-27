@@ -102,6 +102,7 @@ router.get('/admin/usuarios', requireAdmin, (req, res) => {
   const users = db.prepare('SELECT id,name,email,role,plan,analyses_used,analyses_limit,active,created_at,last_login FROM users ORDER BY created_at DESC').all();
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Usuários - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
@@ -124,6 +125,13 @@ td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:m
 .badge-premium{background:rgba(139,92,246,.15);color:#a78bfa}.badge-pro{background:rgba(96,165,250,.15);color:#60a5fa}.badge-free{background:rgba(100,100,100,.15);color:#888}
 .badge-on{background:rgba(34,197,94,.15);color:#22c55e}.badge-off{background:rgba(239,68,68,.12);color:#ef4444}
 .btn-sm{font-size:10px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;font-weight:600;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.tw{overflow-x:auto}
+@media(max-width:768px){
+  html,body{overflow-x:hidden}
+  .content{padding:14px 12px}
+  .tw{-webkit-overflow-scrolling:touch;border:1px solid #222;border-radius:8px}
+  .tw table{min-width:760px;border:none;border-radius:0}
+}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
 ${navBar(req.user, 'admin')}
@@ -142,7 +150,7 @@ ${navBar(req.user, 'admin')}
     </div>
   </form>
 </div>
-<table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th><th>Análises</th><th>Status</th><th>Último login</th><th>Ação</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th><th>Análises</th><th>Status</th><th>Último login</th><th>Ação</th></tr></thead><tbody>
 ${users.map(u => `<tr>
   <td><strong>${u.name}</strong></td><td style="color:#888">${u.email}</td>
   <td><span class="badge badge-${u.role}">${u.role}</span></td>
@@ -152,7 +160,7 @@ ${users.map(u => `<tr>
   <td style="color:#666;font-size:11px">${u.last_login?new Date(u.last_login).toLocaleDateString('pt-BR'):'Nunca'}</td>
   <td><form method="POST" action="${BASE}/admin/usuarios/toggle" style="display:inline"><input type="hidden" name="id" value="${u.id}"><button type="submit" class="btn-sm">${u.active?'Desativar':'Ativar'}</button></form></td>
 </tr>`).join('')}
-</tbody></table>
+</tbody></table></div>
 </div></body></html>`);
 });
 
