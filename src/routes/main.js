@@ -492,6 +492,12 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   .fp-gauges-row{display:none!important}
   .fp-dog-name{font-size:13px!important}
   .fp-dog-perfil{font-size:10px!important}
+  /* Esconde "Carregar PDFs" no mobile (o robo coleta os PDFs automaticamente) */
+  #rz{display:none!important}
+  /* Centraliza as mensagens do painel (ex: "Corridas encerradas"): no desktop
+     elas usam margin-left:-85px pra compensar a coluna Proximas; no mobile isso
+     jogava o texto pra esquerda. */
+  .focus-col > div{margin-left:0!important}
 }
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
