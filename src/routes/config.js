@@ -635,17 +635,17 @@ function tocarBeep(ctx){function tone(freq,start,dur){var o=ctx.createOscillator
 function tocarAlarme(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sawtooth';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(880,0,0.15);tone(660,0.15,0.15);tone(880,0.30,0.15);tone(660,0.45,0.15);}
 function tocarSuave(ctx){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
 var SONS_TESTE = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
-function testarSomAlarme(){ try{ var e=document.getElementById('alarme_filtro_som').value; var ctx=new (window.AudioContext||window.webkitAudioContext)(); (SONS_TESTE[e]||tocarSino)(ctx); }catch(err){console.error('[testarSomAlarme]',err);} }
+// Reutiliza um unico AudioContext e o "desbloqueia" (resume) dentro do clique.
+// No mobile (iOS) o AudioContext nasce suspenso; sem chamar resume() nenhum
+// som sai, mesmo o clique sendo um gesto do usuario.
+var _cfgAudioCtx = null;
+function _getCfgCtx(){ try{ if(!_cfgAudioCtx) _cfgAudioCtx = new (window.AudioContext||window.webkitAudioContext)(); return _cfgAudioCtx; }catch(e){ return null; } }
+function _tocarTeste(nome){ var ctx=_getCfgCtx(); if(!ctx)return; var play=function(){ try{ (SONS_TESTE[nome]||tocarSino)(ctx); }catch(e){ console.error('[testeSom]',e); } }; if(ctx.state==='suspended'){ ctx.resume().then(play).catch(play); } else { play(); } }
+function testarSomAlarme(){ var el=document.getElementById('alarme_filtro_som'); if(el) _tocarTeste(el.value); }
 var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'};
 function previewCorAlarme(){ var s=document.getElementById('alarme_filtro_cor'), pv=document.getElementById('alarme_cor_preview'); if(s&&pv)pv.style.background=CORES_ALARME_CFG[s.value]||'#3b82f6'; }
 function coletaAlarme(tipo){ var cls=tipo==='pista'?'alarme-pista-cb':'alarme-classe-cb'; var hid=tipo==='pista'?'alarme_pistas_val':'alarme_classes_val'; var vals=[]; document.querySelectorAll('.'+cls).forEach(function(cb){ if(cb.checked)vals.push(cb.value); }); var h=document.getElementById(hid); if(h)h.value=vals.join(','); }
-function testarSom(){
-  try {
-    var escolha = document.getElementById('som_alerta').value;
-    var ctx = new (window.AudioContext||window.webkitAudioContext)();
-    (SONS_TESTE[escolha]||tocarSino)(ctx);
-  } catch(e) { console.error('[testarSom] erro', e); }
-}
+function testarSom(){ var el=document.getElementById('som_alerta'); if(el) _tocarTeste(el.value); }
 function upR(input){var n=input.name;var v=document.getElementById('v_'+n);var b=document.getElementById('b_'+n);if(v)v.textContent=input.value+(n.startsWith('pct')?'%':'');if(b)b.style.width=(input.value*10)+'%';}
 // Liga/desliga visualmente os campos de um bloco quando o switch muda. NAO
 // usa o atributo "disabled" nos inputs — campos disabled ficam de fora do
