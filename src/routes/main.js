@@ -329,6 +329,14 @@ router.get('/', (req, res) => {
 ${designTokensCSS()}
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
 .main.focus-mode{grid-template-columns:250px 170px 1fr}
+@media(max-width:768px){
+  .main,.main.focus-mode{grid-template-columns:1fr;min-height:0}
+  .sidebar{border-right:none;border-bottom:1px solid var(--bdr2)}
+  .main.focus-mode .race-list-col{border-right:none;border-bottom:1px solid var(--bdr2);max-height:340px}
+  .main.focus-mode .focus-col{min-width:0}
+  .content{padding:12px 10px}
+  .tw{max-width:100%}
+}
 .sidebar{background:var(--sur);border-right:1px solid var(--bdr2);padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
 .sidebar h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut)}
 .tabnav{background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:2px}
@@ -1117,7 +1125,7 @@ table{width:100%;border-collapse:collapse;background:#111;min-width:900px}
   .content{padding:12px 10px}
   .kpis{grid-template-columns:repeat(3,1fr)}
   table{min-width:660px}
-  .tw table th:nth-child(8), .tw table td:nth-child(8){display:none} /* Observacoes some no mobile */
+  .tw table th:nth-child(7), .tw table td:nth-child(7){display:none} /* Observacoes some no mobile */
 }
 th{padding:10px 8px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#888;background:#1a1a1a;border-bottom:1px solid #333;vertical-align:top}
 td{padding:10px 8px;border-bottom:1px solid var(--sur2);font-size:12px;vertical-align:middle;text-align:center}
@@ -1134,7 +1142,7 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:92px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:150px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:175px">AvB</th><th style="width:75px">Conf</th><th style="width:110px">Resultado</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:60px">🚩</th><th>Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:105px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:150px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:140px">AvB</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:150px">Resultado</th><th style="width:60px">🚩</th><th>Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -1144,33 +1152,32 @@ ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
-<td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:12px">
-<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">
-<div class="trap-badge t${r.trap_fav}">${r.trap_fav}</div>
-<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_fav||'').split(' ')[0]}</div>
+<td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">
+<div class="trap-badge t${r.trap_fav}" style="width:20px;height:20px;font-size:11px">${r.trap_fav}</div>
+<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_fav||'').split(' ')[0]}</div>
 ${r.perfil_fav?`<div style="font-size:9px;color:#666;text-align:center">${r.perfil_fav}</div>`:''}
 </div>
-<div style="font-size:10px;color:#555;padding-top:8px">vs</div>
-<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">
-<div class="trap-badge t${r.trap_und}">${r.trap_und}</div>
-<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_und||'').split(' ')[0]}</div>
+<div style="font-size:10px;color:#555;padding-top:6px">vs</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">
+<div class="trap-badge t${r.trap_und}" style="width:20px;height:20px;font-size:11px">${r.trap_und}</div>
+<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_und||'').split(' ')[0]}</div>
 ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perfil_und}</div>`:''}
 </div></div>
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
-<td style="text-align:center"><span class="badge ${bc}">${r.nivel}</span><div style="font-size:10px;color:#888;margin-top:2px">${r.pct}%</div></td>
-<td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:24px;height:24px;font-size:12px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>
 <option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
 <option value="nao" style="color:#ef4444" ${r.bateu==='nao'?'selected':''}>✗ Não</option>
 </select></td>
+<td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:20px;height:20px;font-size:11px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center">${!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':'')}</td>
 <td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
 <td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
 <td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:default"><input type="checkbox" class="hist-inp" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" disabled> Não aberto</label></td>
 <td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
 </tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="11" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
+${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
 
 <style>

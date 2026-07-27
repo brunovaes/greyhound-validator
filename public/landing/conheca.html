@@ -91,10 +91,10 @@
     .res .pista{grid-area:pista}.res .hit{grid-area:hit}.res .avb{grid-area:avb}.res .conf{grid-area:conf;text-align:left}
     .intro h1{font-size:26px}.cta h2{font-size:22px}
     /* nav cabe no retrato: logo menor + botoes compactos */
-    .nav-in{gap:8px}
-    .navlogo{height:30px}
-    .nav-cta{gap:6px}
-    .nav-cta .btn{padding:7px 11px;font-size:12px}
+    .nav-in{gap:6px;height:60px;flex-wrap:nowrap}
+    .navlogo{height:28px;flex-shrink:1;min-width:0}
+    .nav-cta{gap:6px;flex-shrink:0}
+    .nav-cta .btn{padding:7px 10px;font-size:12px;white-space:nowrap}
     /* tabela de planos inteira na vertical, sem rolagem lateral */
     table.cmp{min-width:0}
     table.cmp th,table.cmp td{padding:8px 5px;font-size:11px}
@@ -149,7 +149,7 @@ table.cmp tfoot .btn{width:100%;padding:9px 10px;font-size:13px}
 
 <header class="nav">
   <div class="wrap nav-in">
-    <a href="#"><img src="{{BASE}}/static/landing/logo.png" class="navlogo" alt="Greyhound Factory"></a>
+    <a href="#"><img src="{{BASE}}/static/landing/logo_conheca.png" class="navlogo" alt="Greyhound Factory"></a>
     <div class="nav-cta">
       <a href="{{BASE}}/login" class="btn btn-ghost">Entrar</a>
       <a href="#" data-assinar class="btn btn-primary">Assinar</a>
