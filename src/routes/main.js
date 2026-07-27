@@ -552,14 +552,28 @@ ${navBar(user, 'analisar')}
   <div class="acertos-box acertos-mobile" style="display:none;gap:8px;margin-top:4px;padding:0 10px 16px">
     <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
       <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
-      <div class="acertos-dia-val" style="font-size:20px;font-weight:700;color:#666">-</div>
+      <div id="acertos-dia-m" style="font-size:20px;font-weight:700;color:#666">-</div>
     </div>
     <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
       <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
-      <div class="acertos-mes-val" style="font-size:20px;font-weight:700;color:#666">-</div>
+      <div id="acertos-mes-m" style="font-size:20px;font-weight:700;color:#666">-</div>
     </div>
   </div>
 </div>
+<script>
+/* Espelha os valores de Acertos (preenchidos pelo app.js na copia da sidebar)
+   para a copia do rodape usada no mobile — assim funciona independe da versao do app.js. */
+(function(){
+  function espelharAcertos(){
+    [['acertos-dia','acertos-dia-m'],['acertos-mes','acertos-mes-m']].forEach(function(p){
+      var src=document.getElementById(p[0]), dst=document.getElementById(p[1]);
+      if(src&&dst){ dst.textContent=src.textContent; dst.style.color=src.style.color; }
+    });
+  }
+  document.addEventListener('DOMContentLoaded', espelharAcertos);
+  setInterval(espelharAcertos, 1200);
+})();
+</script>
 
 <div class="pdf-ready-modal" id="pdf-ready-modal">
   <div class="pdf-ready-box">

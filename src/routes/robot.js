@@ -526,13 +526,21 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 .robot-content{flex:1;padding:24px 0;overflow-y:auto;min-width:0}
 .robot-panel{display:none}.robot-panel.active{display:block}
 @media(max-width:800px){
-  .layout{flex-direction:column;padding:0 12px;gap:12px}
-  .robot-sidebar{width:100%;position:static;flex-direction:row;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch}
+  html,body{max-width:100%;overflow-x:hidden}
+  .layout{flex-direction:column;padding:0 12px;gap:12px;max-width:100%}
+  .robot-sidebar{width:100%;position:static;flex-direction:row;flex-wrap:wrap;overflow-x:visible;gap:6px}
   .robot-sidebar h3{display:none}
-  .robot-menu-item{width:auto;white-space:nowrap;flex-shrink:0}
-  .robot-content{padding:12px 0}
-  .card{padding:14px}
+  .robot-menu-item{width:auto;white-space:nowrap;flex-shrink:0;padding:8px 10px;font-size:11px}
+  .robot-content{padding:12px 0;max-width:100%;min-width:0}
+  .content{max-width:100%}
+  .card{padding:14px;max-width:100%;overflow-x:hidden}
+  h1{font-size:17px}
   .log-box{height:220px}
+  .log-box,.res-log{word-break:break-word;white-space:pre-wrap}
+  .form-row{flex-direction:column;align-items:stretch;overflow-x:visible;gap:12px}
+  .form-row .field{width:100%}
+  .form-row .field input{width:100%!important}
+  .form-row .btn{width:100%}
   table{display:block;overflow-x:auto;max-width:100%}
 }
 .content{padding:24px;max-width:920px;margin:0 auto}
