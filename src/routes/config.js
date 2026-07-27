@@ -69,6 +69,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .bloco-switch input:checked+.slider:before{transform:translateX(18px)}
 .bloco-toggle-label{font-size:12px;font-weight:600}
 .bloco-fields[data-ativo="0"]{opacity:.4;pointer-events:none}
+/* O botao de testar o som continua clicavel mesmo com o alarme desligado,
+   pra poder ouvir a previa antes de ativar. */
+.bloco-fields[data-ativo="0"] .btn-teste-som{pointer-events:auto}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 .section{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:16px}
@@ -328,7 +331,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
         <option value="alarme" ${config.alarme_filtro_som==='alarme'?'selected':''}>Alarme</option>
         <option value="suave" ${config.alarme_filtro_som==='suave'?'selected':''}>Suave</option>
       </select>
-      <button type="button" onclick="testarSomAlarme()" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
+      <button type="button" class="btn-teste-som" onclick="testarSomAlarme(this)" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
     </div>
   </div>
   <div class="field"><label>Cor de Alerta</label>
@@ -635,17 +638,24 @@ function tocarBeep(ctx){function tone(freq,start,dur){var o=ctx.createOscillator
 function tocarAlarme(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sawtooth';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(880,0,0.15);tone(660,0.15,0.15);tone(880,0.30,0.15);tone(660,0.45,0.15);}
 function tocarSuave(ctx){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
 var SONS_TESTE = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
-// Reutiliza um unico AudioContext e o "desbloqueia" (resume) dentro do clique.
-// No mobile (iOS) o AudioContext nasce suspenso; sem chamar resume() nenhum
-// som sai, mesmo o clique sendo um gesto do usuario.
-var _cfgAudioCtx = null;
+// ==== Som robusto para o botao Testar (mesma tecnica do app.js) ====
+// No mobile o Web Audio "puro" quase nao toca: o AudioContext nasce suspenso e
+// precisa de resume() no gesto. Entao renderizamos cada som para um WAV (data
+// URI) e tocamos via <audio> (bem mais confiavel), com o Web Audio como fallback.
+var _cfgAudioCtx = null, _CFG_SOM_AUDIO = {}, _cfgSomProntos = false;
 function _getCfgCtx(){ try{ if(!_cfgAudioCtx) _cfgAudioCtx = new (window.AudioContext||window.webkitAudioContext)(); return _cfgAudioCtx; }catch(e){ return null; } }
-function _tocarTeste(nome){ var ctx=_getCfgCtx(); if(!ctx)return; var play=function(){ try{ (SONS_TESTE[nome]||tocarSino)(ctx); }catch(e){ console.error('[testeSom]',e); } }; if(ctx.state==='suspended'){ ctx.resume().then(play).catch(play); } else { play(); } }
-function testarSomAlarme(){ var el=document.getElementById('alarme_filtro_som'); if(el) _tocarTeste(el.value); }
+function _cfgBufToWav(buffer){ var ch=buffer.getChannelData(0),sr=buffer.sampleRate,len=ch.length; var ab=new ArrayBuffer(44+len*2),view=new DataView(ab); function ws(o,s){for(var i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));} ws(0,'RIFF');view.setUint32(4,36+len*2,true);ws(8,'WAVE');ws(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sr,true);view.setUint32(28,sr*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);ws(36,'data');view.setUint32(40,len*2,true); var off=44; for(var i=0;i<len;i++,off+=2){var s=Math.max(-1,Math.min(1,ch[i]));view.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);} var bytes=new Uint8Array(ab),bin=''; for(var j=0;j<bytes.length;j++)bin+=String.fromCharCode(bytes[j]); return 'data:audio/wav;base64,'+btoa(bin); }
+function _cfgRenderSom(fn,dur){ return new Promise(function(res,rej){ try{ var OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext; if(!OAC)return rej('no-oac'); var sr=44100,oac=new OAC(1,Math.ceil(sr*dur),sr); fn(oac); oac.startRendering().then(function(buf){res(_cfgBufToWav(buf));}).catch(rej); }catch(e){rej(e);} }); }
+function _cfgPrepararSons(){ if(_cfgSomProntos)return; _cfgSomProntos=true; var specs=[['sino',tocarSino,0.7],['beep',tocarBeep,0.35],['alarme',tocarAlarme,0.75],['suave',tocarSuave,0.75]]; specs.forEach(function(s){ _cfgRenderSom(s[1],s[2]).then(function(uri){ var a=new Audio(uri); a.preload='auto'; _CFG_SOM_AUDIO[s[0]]=a; try{ a.muted=true; var p=a.play(); if(p&&p.then)p.then(function(){a.pause();a.currentTime=0;a.muted=false;}).catch(function(){a.muted=false;}); else {a.pause();a.muted=false;} }catch(e){a.muted=false;} }).catch(function(){}); }); }
+function _cfgSomWebAudio(nome){ var ctx=_getCfgCtx(); if(!ctx)return; var play=function(){ try{(SONS_TESTE[nome]||tocarSino)(ctx);}catch(e){} }; if(ctx.state==='suspended'){ctx.resume().then(play).catch(play);}else{play();} }
+function _tocarTeste(nome){ _cfgPrepararSons(); var a=_CFG_SOM_AUDIO[nome]; if(a){ try{ a.currentTime=0; var p=a.play(); if(p&&p.catch)p.catch(function(){_cfgSomWebAudio(nome);}); return; }catch(e){} } _cfgSomWebAudio(nome); }
+function _flashBtnTeste(btn){ if(!btn)return; var t=btn.getAttribute('data-lbl')||btn.textContent; btn.setAttribute('data-lbl',t); btn.textContent='🔊 tocando...'; btn.style.borderColor='#22c55e'; setTimeout(function(){ btn.textContent=t; btn.style.borderColor='#444'; }, 900); }
+function testarSomAlarme(btn){ var el=document.getElementById('alarme_filtro_som'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
+try{ document.addEventListener('DOMContentLoaded', _cfgPrepararSons); }catch(e){}
 var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'};
 function previewCorAlarme(){ var s=document.getElementById('alarme_filtro_cor'), pv=document.getElementById('alarme_cor_preview'); if(s&&pv)pv.style.background=CORES_ALARME_CFG[s.value]||'#3b82f6'; }
 function coletaAlarme(tipo){ var cls=tipo==='pista'?'alarme-pista-cb':'alarme-classe-cb'; var hid=tipo==='pista'?'alarme_pistas_val':'alarme_classes_val'; var vals=[]; document.querySelectorAll('.'+cls).forEach(function(cb){ if(cb.checked)vals.push(cb.value); }); var h=document.getElementById(hid); if(h)h.value=vals.join(','); }
-function testarSom(){ var el=document.getElementById('som_alerta'); if(el) _tocarTeste(el.value); }
+function testarSom(btn){ var el=document.getElementById('som_alerta'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
 function upR(input){var n=input.name;var v=document.getElementById('v_'+n);var b=document.getElementById('b_'+n);if(v)v.textContent=input.value+(n.startsWith('pct')?'%':'');if(b)b.style.width=(input.value*10)+'%';}
 // Liga/desliga visualmente os campos de um bloco quando o switch muda. NAO
 // usa o atributo "disabled" nos inputs — campos disabled ficam de fora do
