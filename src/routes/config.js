@@ -5,7 +5,6 @@ const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
-const { NOMES_PISTAS } = require('../utils/nomesPistas');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -20,12 +19,6 @@ function getLogo() {
 router.get('/', requireAdmin, (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id, false);
-  const CORES_HEX_CFG = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
-  const alarmeCorHex = CORES_HEX_CFG[config.alarme_filtro_cor] || '#3b82f6';
-  const pistasAlarme = Object.keys(NOMES_PISTAS).map(function(k){return [k, NOMES_PISTAS[k]];}).sort(function(a,b){return a[1].localeCompare(b[1]);});
-  const classesAlarme = ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10','A11','A12'];
-  const alarmePistasSel = String(config.alarme_filtro_pistas||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
-  const alarmeClassesSel = String(config.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
   const logoB64 = getLogo();
 
   // Gera o switch liga/desliga de um bloco de configuracao. O input hidden
@@ -69,9 +62,6 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .bloco-switch input:checked+.slider:before{transform:translateX(18px)}
 .bloco-toggle-label{font-size:12px;font-weight:600}
 .bloco-fields[data-ativo="0"]{opacity:.4;pointer-events:none}
-/* O botao de testar o som continua clicavel mesmo com o alarme desligado,
-   pra poder ouvir a previa antes de ativar. */
-.bloco-fields[data-ativo="0"] .btn-teste-som{pointer-events:auto}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 .section{background:#161B27;border:1px solid #222;border-radius:10px;padding:20px;margin-bottom:16px}
@@ -95,8 +85,6 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .alert.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.2)}
 .alert.er{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
 .info-box{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#f97316;line-height:1.6}
-.graf-card{background:#0D1117;border:1px solid #222;border-radius:10px;padding:16px;margin-bottom:16px}
-.graf-title{font-size:12px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
 .toast-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
 .toast-bg.open{display:flex}
 .toast-box{background:#161B27;border:1px solid #22c55e;border-radius:14px;padding:32px 40px;text-align:center;animation:popIn .3s ease}
@@ -104,7 +92,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 .toast-icon{font-size:52px;margin-bottom:12px}
 .toast-box h3{font-size:17px;color:#f0f0f0;margin-bottom:6px}
 .toast-box p{font-size:12px;color:#888}
-@media(max-width:800px){.layout{grid-template-columns:1fr}.tabnav{position:static;flex-direction:row;overflow-x:auto;gap:4px;-webkit-overflow-scrolling:touch}.tabnav .tabbtn{width:auto;white-space:nowrap;flex-shrink:0}.content{padding:14px 12px}}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.tabnav{position:static;flex-direction:row;overflow-x:auto}}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
 ${navBar(user, 'config')}
@@ -121,9 +109,10 @@ ${navBar(user, 'config')}
   <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">${icon('filter',{size:14})} Filtros de Corrida</button>
   <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
   <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
-  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Alarme</button>
+  <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Automação</button>
+  <button type="button" class="tabbtn" data-tab="t-banca" onclick="showTab('t-banca')">${icon('trophy',{size:14})} Banca</button>
+  <button type="button" class="tabbtn" data-tab="t-export" onclick="showTab('t-export')">${icon('scroll',{size:14})} Exportar Derrotas</button>
   <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
-  <button type="button" class="tabbtn" data-tab="t-graf" onclick="showTab('t-graf');carregarGraf()">${icon('layers',{size:14})} Dashboard</button>
 </div>
 
 <div>
@@ -264,6 +253,14 @@ ${blocoToggle('bloco_motor_ativo', 'Motor de Pontuação')}
 </div>
 <div class="field"><label>Score mínimo para gerar AvB (pts)</label><input type="number" name="threshold_skip_avb" value="${config.threshold_skip_avb||10}" step="1" min="1" max="30"><span class="hint">Abaixo disso = corrida parelha = skip automatico</span></div>
 <div class="field"><label>Score mínimo para gerar Back (pts)</label><input type="number" name="threshold_back" value="${config.threshold_back||25}" step="1" min="10" max="50"><span class="hint">Diferenca entre 1o e 2o colocado — barra alta para Back</span></div>
+<div class="field"><label>Descartar por cio recente (fêmea)</label>
+  <select name="cio_recente_ativo">
+    <option value="0" ${(config.cio_recente_ativo?1:0)===0?'selected':''}>Desativado (padrão)</option>
+    <option value="1" ${(config.cio_recente_ativo?1:0)===1?'selected':''}>Ativado</option>
+  </select>
+  <span class="hint">Fêmea com cio "(Ssn)" recente vira elegível a descarte — o motor re-elege favorito/underdog. Comece DESLIGADO e backteste antes de ligar.</span>
+</div>
+<div class="field"><label>Janela do cio recente (dias)</label><input type="number" name="cio_recente_dias" value="${config.cio_recente_dias||90}" step="1" min="7" max="365"><span class="hint">Cio até N dias antes da corrida conta como recente. Varra 30/45/60/90 no backtest pra achar o melhor.</span></div>
 </div>
 </div>
 
@@ -302,70 +299,142 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 <div class="tab-panel" id="t-automacao">
+<div class="section">
+<div class="sec-title">Automação — Robôs e Visibilidade</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field">
+    <label>Refresh automático da tela (min)</label>
+    <input type="number" name="auto_refresh_min" value="${config.auto_refresh_min||1}" min="1" max="60">
+    <div class="hint">A cada quantos minutos atualiza o painel de corridas automaticamente</div>
+  </div>
+  <div class="field">
+    <label>Corridas exibidas em tela</label>
+    <input type="number" name="racas_em_tela" value="${config.racas_em_tela||6}" min="1" max="20">
+    <div class="hint">Quantidade fixa de proximas corridas mostradas na lista da aba Analisar (as que ja passaram saem da lista automaticamente)</div>
+  </div>
+  <div class="field">
+    <label>Intervalo do Robô de Resultados (min)</label>
+    <input type="number" name="results_interval_min" value="${config.results_interval_min||30}" min="10" max="120">
+    <div class="hint">A cada quantos minutos o robô atualiza os resultados</div>
+  </div>
+  <div class="field">
+    <label>Início da janela de resultados (BRT)</label>
+    <input type="time" name="results_window_start" value="${config.results_window_start||'07:30'}">
+    <div class="hint">Horário BRT de início das atualizações automáticas</div>
+  </div>
+  <div class="field">
+    <label>Fim da janela de resultados (BRT)</label>
+    <input type="time" name="results_window_end" value="${config.results_window_end||'19:30'}">
+    <div class="hint">Horário BRT de encerramento das atualizações automáticas</div>
+  </div>
+  <div class="field">
+    <label>Hora de execução do Robô de PDFs (BRT)</label>
+    <input type="time" name="pdf_cron_time" value="${config.pdf_cron_time||'13:30'}">
+    <div class="hint">Horário BRT em que o robô baixa os PDFs do dia seguinte</div>
+  </div>
+  <div class="field">
+    <label>Intervalo do Robô de Monitoramento (min)</label>
+    <input type="number" name="monitor_interval_min" value="${config.monitor_interval_min||60}" min="15" max="240">
+    <div class="hint">A cada quantos minutos o robô revisita os cards pra checar retirada/troca de galgo</div>
+  </div>
+  <div class="field">
+    <label>Início da janela de monitoramento (BRT)</label>
+    <input type="time" name="monitor_window_start" value="${config.monitor_window_start||'07:00'}">
+    <div class="hint">Horário BRT de início da checagem automática de cards</div>
+  </div>
+  <div class="field">
+    <label>Fim da janela de monitoramento (BRT)</label>
+    <input type="time" name="monitor_window_end" value="${config.monitor_window_end||'20:00'}">
+    <div class="hint">Horário BRT de encerramento da checagem automática de cards</div>
+  </div>
+  <div class="field">
+    <label>Checagem final — minutos antes da corrida</label>
+    <input type="number" name="final_check_min_antes" value="${config.final_check_min_antes||15}" min="5" max="60">
+    <div class="hint">Quanto tempo antes do horário da corrida o robô faz a validação final do card — se mudou algo, refaz a análise do zero (PDF novo + reprocessamento)</div>
+  </div>
+  <div class="field">
+    <label>Alerta sonoro — minutos antes da corrida</label>
+    <input type="number" name="alerta_min_antes" value="${config.alerta_min_antes||3}" min="0" max="15">
+    <div class="hint">Quantos minutos antes do horário a tela pisca e toca o sininho (padrão: 3)</div>
+  </div>
+  <div class="field">
+    <label>Som do alerta</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select name="som_alerta" id="som_alerta" style="flex:1">
+        <option value="sino" ${config.som_alerta==='sino'||!config.som_alerta?'selected':''}>Sino</option>
+        <option value="beep" ${config.som_alerta==='beep'?'selected':''}>Beep</option>
+        <option value="alarme" ${config.som_alerta==='alarme'?'selected':''}>Alarme</option>
+        <option value="suave" ${config.som_alerta==='suave'?'selected':''}>Suave</option>
+      </select>
+      <button type="button" onclick="testarSom()" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
+    </div>
+  </div>
+  <div class="field">
+    <label>Corrida fica em tela após rodar (minutos)</label>
+    <input type="number" name="tela_grace_min" value="${config.tela_grace_min!=null?config.tela_grace_min:0}" min="0" max="30">
+    <div class="hint">Quanto tempo depois do horário da corrida ela ainda aparece como "próxima" antes de sumir da lista (padrão: 0, some na hora exata)</div>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="tab-panel" id="t-banca">
+<div class="section">
+<div class="sec-title">Banca — Unidade Padrão e Controle de Risco</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field">
+    <label>Valor da unidade (padrão por aposta)</label>
+    <input type="number" step="0.5" min="0" name="banca_unidade_padrao" value="${config.banca_unidade_padrao||2.5}">
+    <div class="hint">Quantas unidades entram automaticamente quando você marca "Apostei" (1 unidade = 1% da banca do mês)</div>
+  </div>
+  <div class="field">
+    <label>Valor da banca inicial (R$)</label>
+    <input type="number" step="1" min="0" name="banca_valor_inicial" value="${config.banca_valor_inicial||1000}">
+    <div class="hint">Usado como padrão no primeiro mês (ou se você ainda não configurou nada na aba Banca)</div>
+  </div>
+  <div class="field">
+    <label>Percentual de stop do dia (%)</label>
+    <input type="number" step="1" min="0" max="100" name="banca_pct_stop" value="${config.banca_pct_stop!=null?config.banca_pct_stop:20}">
+    <div class="hint">Se o prejuízo do dia atingir esse percentual da banca, mostra um aviso (não bloqueia apostas, só avisa). Reinicia todo dia.</div>
+  </div>
+  <div class="field" style="grid-column:1/-1">
+    <label>Mensagem do aviso de stop</label>
+    <textarea name="banca_aviso_stop" rows="2" style="width:100%;resize:vertical">${config.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'}</textarea>
+    <div class="hint">Texto exibido no banner de aviso quando o percentual de stop do dia é atingido</div>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="tab-panel" id="t-export">
+<div class="section">
+<div class="sec-title">Exportar Derrotas — Planilha de Revisão</div>
+<div class="info-box">Gera uma planilha <strong>.xlsx</strong> com todas as derrotas (AvB que não bateu) do intervalo escolhido, já ordenadas por prioridade de revisão (maior confiança + favorito que chegou mais atrás primeiro). Traz as notas 0-100 de cada critério do favorito e colunas em branco pra marcação manual: <em>resultado confere / pista limpa / análise ruim / observações</em>. Inclui aba separada com os resultados suspeitos (onde o "bateu" gravado contradiz a chegada).</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field"><label>Data inicial</label><input type="date" id="exp_from" onclick="try{this.showPicker()}catch(e){}"><span class="hint">Primeiro dia do período (inclusivo)</span></div>
+  <div class="field"><label>Data final</label><input type="date" id="exp_to" onclick="try{this.showPicker()}catch(e){}"><span class="hint">Último dia do período (inclusivo)</span></div>
+</div>
+<div style="margin-top:18px">
+  <button type="button" class="btn-save" onclick="baixarDerrotas()">${icon('scroll',{size:14})} Baixar planilha de derrotas</button>
+</div>
+</div>
 
 <div class="section">
-<div class="sec-title">Alarme para filtro selecionado</div>
-<div class="bloco-toggle">
-  <input type="hidden" name="alarme_filtro_ativo" value="0">
-  <label class="bloco-switch">
-    <input type="checkbox" name="alarme_filtro_ativo" value="1" ${config.alarme_filtro_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label');l.style.color=this.checked?'#22c55e':'#888';l.textContent=this.checked?'Alarme ativo':'Alarme desligado';var ff=document.getElementById('alarme_filtro_fields');if(ff)ff.setAttribute('data-ativo',this.checked?'1':'0');">
-    <span class="slider"></span>
-  </label>
-  <span class="bloco-toggle-label" style="color:${config.alarme_filtro_ativo?'#22c55e':'#888'}">${config.alarme_filtro_ativo?'Alarme ativo':'Alarme desligado'}</span>
-</div>
-<div class="info-box">Quando ligado, as corridas que casam com o filtro (turno E pista E classe) piscam na cor escolhida e tocam o som escolhido no tempo do alerta. As demais seguem o alerta normal.</div>
-<div class="bloco-fields" id="alarme_filtro_fields" data-ativo="${config.alarme_filtro_ativo?'1':'0'}">
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
-  <div class="field"><label>Turno</label>
-    <select name="alarme_filtro_turno">
-      <option value="" ${!config.alarme_filtro_turno?'selected':''}>Todos</option>
-      <option value="manha" ${config.alarme_filtro_turno==='manha'?'selected':''}>Manhã</option>
-      <option value="tarde" ${config.alarme_filtro_turno==='tarde'?'selected':''}>Tarde</option>
-    </select>
-  </div>
-  <div class="field"><label>Som de Alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="alarme_filtro_som" id="alarme_filtro_som" style="flex:1">
-        <option value="sino" ${config.alarme_filtro_som==='sino'?'selected':''}>Sino</option>
-        <option value="beep" ${config.alarme_filtro_som==='beep'||!config.alarme_filtro_som?'selected':''}>Beep</option>
-        <option value="alarme" ${config.alarme_filtro_som==='alarme'?'selected':''}>Alarme</option>
-        <option value="suave" ${config.alarme_filtro_som==='suave'?'selected':''}>Suave</option>
-      </select>
-      <button type="button" class="btn-teste-som" onclick="testarSomAlarme(this)" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
-    </div>
-  </div>
-  <div class="field"><label>Cor de Alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="alarme_filtro_cor" id="alarme_filtro_cor" style="flex:1" onchange="previewCorAlarme()">
-        <option value="azul" ${config.alarme_filtro_cor==='azul'||!config.alarme_filtro_cor?'selected':''}>Azul</option>
-        <option value="roxo" ${config.alarme_filtro_cor==='roxo'?'selected':''}>Roxo</option>
-        <option value="laranja" ${config.alarme_filtro_cor==='laranja'?'selected':''}>Laranja</option>
-        <option value="rosa" ${config.alarme_filtro_cor==='rosa'?'selected':''}>Rosa</option>
-      </select>
-      <span id="alarme_cor_preview" style="display:inline-block;width:34px;height:22px;border-radius:5px;flex-shrink:0;background:${alarmeCorHex}"></span>
-    </div>
-  </div>
-</div>
-<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-  <div class="field"><label>Pista (várias)</label>
-    <div style="max-height:170px;overflow:auto;background:#0D1117;border:1px solid #222;border-radius:6px;padding:8px">
-      ${pistasAlarme.map(function(p){return `<label style="display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" class="alarme-pista-cb" value="${p[0]}" ${alarmePistasSel.indexOf(p[0])>=0?'checked':''} onchange="coletaAlarme('pista')" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">${p[1]}</label>`;}).join('')}
-    </div>
-    <input type="hidden" name="alarme_filtro_pistas" id="alarme_pistas_val" value="${config.alarme_filtro_pistas||''}">
-    <div class="hint">Nada marcado = qualquer pista.</div>
-  </div>
-  <div class="field"><label>Classe (várias)</label>
-    <div style="max-height:170px;overflow:auto;background:#0D1117;border:1px solid #222;border-radius:6px;padding:8px">
-      ${classesAlarme.map(function(cl){return `<label style="display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" class="alarme-classe-cb" value="${cl}" ${alarmeClassesSel.indexOf(cl)>=0?'checked':''} onchange="coletaAlarme('classe')" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">${cl}</label>`;}).join('')}
-    </div>
-    <input type="hidden" name="alarme_filtro_classes" id="alarme_classes_val" value="${config.alarme_filtro_classes||''}">
-    <div class="hint">Nada marcado = qualquer classe.</div>
-  </div>
-</div>
-</div>
+<div class="sec-title">Desempenho por Contexto — HR (Taxa de Acerto)</div>
+<div class="info-box">Gera um <strong>.xlsx</strong> com a taxa de acerto dos AvBs quebrada por <strong>pista</strong>, por <strong>nº de cães elegíveis</strong> e por <strong>classe</strong> — sempre com o "bateu" <strong>corrigido pela chegada real</strong> e o "cru" do banco lado a lado (a coluna de Erros de label mostra onde discordam = provável resultado digitado errado). É o instrumento pra decidir onde o motor é confiável e onde vale dar skip por contexto. Deixe as datas em branco para usar todo o histórico.</div>
+<div style="margin-top:6px">
+  <button type="button" class="btn-save" onclick="baixarDesempenho()">${icon('trophy',{size:14})} Baixar HR por contexto</button>
 </div>
 </div>
 
+<div class="section">
+<div class="sec-title">Exportar Dados Brutos (JSON) — para análise do motor</div>
+<div class="info-box">Gera o <strong>.json</strong> completo do backtest direto do banco (previsão, scores por critério, histórico, resultado real) — o arquivo usado pra afinar o motor. Agora já inclui automaticamente o <strong>race_card / trapsCard</strong> (composição do páreo e traps vazias) e o estilo <code>(W)/(M)</code> no nome de cada galgo. Nenhum preenchimento manual. Deixe as datas em branco para todo o histórico.</div>
+<div style="margin-top:6px">
+  <button type="button" class="btn-save" onclick="baixarDados()">${icon('gear',{size:14})} Baixar dados brutos (JSON)</button>
+</div>
+</div>
+</div>
 
 <div class="tab-panel" id="t-dash">
 <div class="section">
@@ -387,57 +456,13 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <div id="dash_f_pista_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
   </div>
   <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Nº cães</label><select id="dash_f_caes" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
-  <div class="field" style="width:140px;flex-shrink:0;position:relative"><label style="white-space:nowrap">Classe (várias)</label>
-    <div id="dash_f_classe_box" onclick="toggleClassePanel(event)" style="padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Todas ▾</div>
-    <div id="dash_f_classe_panel" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;margin-top:4px;background:#161B27;border:1px solid #333;border-radius:6px;max-height:230px;overflow:auto;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)"></div>
-  </div>
+  <div class="field" style="width:100px;flex-shrink:0"><label style="white-space:nowrap">Classe</label><select id="dash_f_classe" onchange="carregarDashboard()"><option value="">Todas</option></select></div>
   <div class="field" style="width:78px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd mín</label><input type="number" id="dash_qtd_min" min="1" placeholder="–" title="Nº mínimo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <div class="field" style="width:80px;flex-shrink:0"><label style="white-space:nowrap" title="Mostra só pistas/classes cujo Nº de corridas está no intervalo">Qtd máx</label><input type="number" id="dash_qtd_max" min="1" placeholder="–" title="Nº máximo de corridas da pista/classe" onchange="carregarDashboard()"></div>
   <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparFiltrosDash()">✕ Limpar</button>
 </div>
 </div>
 <div id="dash-content" style="margin-top:18px"><div style="color:#888;font-size:13px">Carregando…</div></div>
-</div>
-</div>
-
-<div class="tab-panel" id="t-graf">
-<div class="section">
-<div class="sec-title">Dashboard — Visão Geral</div>
-<div class="info-box">Vários gráficos numa tela só, com os mesmos filtros. Curva S acumulando os AvBs do período (abertos, acertados, errados), pizza por pista e desempenho por classe, turno e nº de cães. Tudo por login, com o "bateu" corrigido pela chegada real.</div>
-<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:8px">
-  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="g_from" onclick="try{this.showPicker()}catch(e){}" onchange="carregarGraf()"></div>
-  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="g_to" onclick="try{this.showPicker()}catch(e){}" onchange="carregarGraf()"></div>
-  <div class="field" style="flex:1;min-width:130px"><label style="white-space:nowrap">Turno</label><select id="g_turno" onchange="carregarGraf()"><option value="">Todos</option></select></div>
-  <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Pista</label><select id="g_pista" onchange="carregarGraf()"><option value="">Todas</option></select></div>
-  <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Classe</label><select id="g_classe" onchange="carregarGraf()"><option value="">Todas</option></select></div>
-  <button type="button" style="padding:9px 16px;background:transparent;border:1px solid #f97316;color:#f97316;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0" onclick="limparGraf()">✕ Limpar</button>
-</div>
-<div id="graf-kpis" style="display:flex;gap:12px;flex-wrap:wrap;margin:14px 0"></div>
-<div class="graf-card">
-  <div class="graf-title">Curva S — AvBs acumulados no período</div>
-  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;font-size:11px">
-    <span style="display:flex;align-items:center;gap:6px;color:#ccc"><span style="width:16px;height:0;border-top:2px solid #9aa4b2;display:inline-block"></span> Abertos</span>
-    <span style="display:flex;align-items:center;gap:6px;color:#ccc"><span style="width:16px;height:0;border-top:2px solid #22c55e;display:inline-block"></span> Acertados</span>
-    <span style="display:flex;align-items:center;gap:6px;color:#ccc"><span style="width:16px;height:0;border-top:2px dashed #ef4444;display:inline-block"></span> Errados</span>
-  </div>
-  <div id="graf-curvas"></div>
-</div>
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
-  <div>
-    <div class="graf-card">
-      <div class="graf-title">Distribuição por Pista (volume de AvBs)</div>
-      <div id="graf-pizza"></div>
-    </div>
-    <div class="graf-card">
-      <div class="graf-title">Pistas com mais vitórias (acertos)</div>
-      <div id="graf-pizza-vit"></div>
-    </div>
-  </div>
-  <div class="graf-card">
-    <div class="graf-title">Desempenho por Classe / Turno / Nº de cães</div>
-    <div id="graf-bars"></div>
-  </div>
-</div>
 </div>
 </div>
 
@@ -465,6 +490,28 @@ function showTab(id){
   document.querySelectorAll('.tabbtn').forEach(function(b){b.classList.remove('active');});
   document.getElementById(id).classList.add('active');
   document.querySelector('.tabbtn[data-tab="'+id+'"]').classList.add('active');
+}
+// Exportar Derrotas: monta a URL com o intervalo e dispara o download (a rota
+// responde com Content-Disposition attachment, entao window.location baixa).
+function baixarDerrotas(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(!f||!t){alert('Escolha a data inicial e a final.');return;}
+  if(f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  window.location.href='${BASE}/config/export-derrotas?from='+encodeURIComponent(f)+'&to='+encodeURIComponent(t);
+}
+// HR por contexto: datas opcionais (em branco = todo o historico).
+function baixarDesempenho(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
+  window.location.href='${BASE}/config/export-desempenho'+(qs.length?'?'+qs.join('&'):'');
+}
+// Dados brutos (JSON) pra analise: datas opcionais (em branco = tudo).
+function baixarDados(){
+  var f=document.getElementById('exp_from').value, t=document.getElementById('exp_to').value;
+  if(f&&t&&f>t){alert('A data inicial não pode ser maior que a final.');return;}
+  var qs=[]; if(f)qs.push('from='+encodeURIComponent(f)); if(t)qs.push('to='+encodeURIComponent(t));
+  window.location.href='${BASE}/config/export-dados'+(qs.length?'?'+qs.join('&'):'');
 }
 // ===== Dashboard de Desempenho (HR) =====
 function dashHrColor(hr){ return hr>=0.65?'#22c55e':(hr<0.5?'#ef4444':'#eab308'); }
@@ -525,46 +572,6 @@ document.addEventListener('click', function(e){
   var box=document.getElementById('dash_f_pista_box'), pan=document.getElementById('dash_f_pista_panel');
   if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box){ fecharPistaEComitar(); }
 });
-// ===== Classe (multipla) — mesmo padrao da Pista =====
-var dashClassesSel = [], dashClasseDirty = false;
-function cmpClasseCli(a,b){ a=String(a); b=String(b); var pa=(a.match(/[A-Za-z]+/)||[''])[0], pb=(b.match(/[A-Za-z]+/)||[''])[0]; if(pa!==pb) return pa.localeCompare(pb); var na=parseInt((a.match(/\d+/)||['0'])[0],10), nb=parseInt((b.match(/\d+/)||['0'])[0],10); if(na!==nb) return na-nb; return a.localeCompare(b); }
-function fecharClasseEComitar(){
-  var p=document.getElementById('dash_f_classe_panel'); if(p) p.style.display='none';
-  if(dashClasseDirty){ dashClasseDirty=false; carregarDashboard(); }
-}
-function toggleClassePanel(e){
-  if(e&&e.stopPropagation)e.stopPropagation();
-  var p=document.getElementById('dash_f_classe_panel'); if(!p) return;
-  if(p.style.display==='block'){ fecharClasseEComitar(); } else { p.style.display='block'; }
-}
-function preencheClassePanel(classes){
-  var pan=document.getElementById('dash_f_classe_panel'); if(!pan) return;
-  var lista=(classes||[]).slice().sort(cmpClasseCli);
-  dashClassesSel = dashClassesSel.filter(function(c){ return lista.indexOf(c)>=0; });
-  var h=lista.map(function(c){
-    var ck = dashClassesSel.indexOf(c)>=0?'checked':'';
-    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;text-align:left;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" value="'+c+'" '+ck+' onchange="onClasseCheck(this)" style="margin:0;padding:0;width:16px;height:16px;flex-shrink:0;cursor:pointer">'+c+'</label>';
-  }).join('');
-  pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem classes no período</div>';
-  atualizaClasseBox();
-}
-function onClasseCheck(cb){
-  var v=cb.value;
-  if(cb.checked){ if(dashClassesSel.indexOf(v)<0) dashClassesSel.push(v); }
-  else { dashClassesSel = dashClassesSel.filter(function(c){return c!==v;}); }
-  dashClasseDirty=true; atualizaClasseBox();  // NAO recarrega aqui — so ao sair do campo
-}
-function atualizaClasseBox(){
-  var box=document.getElementById('dash_f_classe_box'); if(!box) return;
-  var sel=dashClassesSel.slice().sort(cmpClasseCli);
-  if(!sel.length) box.textContent='Todas ▾';
-  else if(sel.length<=3) box.textContent=sel.join(', ')+' ▾';
-  else box.textContent=sel.length+' classes ▾';
-}
-document.addEventListener('click', function(e){
-  var box=document.getElementById('dash_f_classe_box'), pan=document.getElementById('dash_f_classe_panel');
-  if(pan && pan.style.display==='block' && !pan.contains(e.target) && e.target!==box){ fecharClasseEComitar(); }
-});
 function dashPreencheSelect(id, valores, sel, prefixoTodos){
   var el=document.getElementById(id); if(!el) return;
   var opts='<option value="">'+prefixoTodos+'</option>';
@@ -572,9 +579,8 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_caes','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  ['dash_f_turno','dash_f_caes','dash_f_classe','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
   dashPistasSel=[]; dashPistaDirty=false; atualizaPistaBox();
-  dashClassesSel=[]; dashClasseDirty=false; atualizaClasseBox();
   carregarDashboard();
 }
 async function carregarDashboard(){
@@ -582,7 +588,7 @@ async function carregarDashboard(){
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||13;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
-  var fCaes=document.getElementById('dash_f_caes').value, fClasse=dashClassesSel.join(',');
+  var fCaes=document.getElementById('dash_f_caes').value, fClasse=document.getElementById('dash_f_classe').value;
   var fQtdMin=document.getElementById('dash_qtd_min').value, fQtdMax=document.getElementById('dash_qtd_max').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
   var qs=['t1='+t1,'t2='+t2];
@@ -602,7 +608,7 @@ async function carregarDashboard(){
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
     preenchePistaPanel(d.opcoes.pistas);
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
-    preencheClassePanel(d.opcoes.classes);
+    dashPreencheSelect('dash_f_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
     var rz=d.resumo;
     var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.qtdMin||d.filtros.qtdMax;
     var recorte='';
@@ -613,7 +619,7 @@ async function carregarDashboard(){
       else if(d.filtros.qtdMax) qlbl='pistas c/ até '+d.filtros.qtdMax+' corridas';
       else if(d.filtros.qtdMin) qlbl='pistas c/ mín. '+d.filtros.qtdMin+' corridas';
       if(qlbl)partes.push(qlbl);
-      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push('Classe '+d.filtros.classe.split(',').join(', '));
+      if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push(d.filtros.classe);
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';
@@ -638,24 +644,13 @@ function tocarBeep(ctx){function tone(freq,start,dur){var o=ctx.createOscillator
 function tocarAlarme(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sawtooth';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(880,0,0.15);tone(660,0.15,0.15);tone(880,0.30,0.15);tone(660,0.45,0.15);}
 function tocarSuave(ctx){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
 var SONS_TESTE = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
-// ==== Som robusto para o botao Testar (mesma tecnica do app.js) ====
-// No mobile o Web Audio "puro" quase nao toca: o AudioContext nasce suspenso e
-// precisa de resume() no gesto. Entao renderizamos cada som para um WAV (data
-// URI) e tocamos via <audio> (bem mais confiavel), com o Web Audio como fallback.
-var _cfgAudioCtx = null, _CFG_SOM_AUDIO = {}, _cfgSomProntos = false;
-function _getCfgCtx(){ try{ if(!_cfgAudioCtx) _cfgAudioCtx = new (window.AudioContext||window.webkitAudioContext)(); return _cfgAudioCtx; }catch(e){ return null; } }
-function _cfgBufToWav(buffer){ var ch=buffer.getChannelData(0),sr=buffer.sampleRate,len=ch.length; var ab=new ArrayBuffer(44+len*2),view=new DataView(ab); function ws(o,s){for(var i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));} ws(0,'RIFF');view.setUint32(4,36+len*2,true);ws(8,'WAVE');ws(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sr,true);view.setUint32(28,sr*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);ws(36,'data');view.setUint32(40,len*2,true); var off=44; for(var i=0;i<len;i++,off+=2){var s=Math.max(-1,Math.min(1,ch[i]));view.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);} var bytes=new Uint8Array(ab),bin=''; for(var j=0;j<bytes.length;j++)bin+=String.fromCharCode(bytes[j]); return 'data:audio/wav;base64,'+btoa(bin); }
-function _cfgRenderSom(fn,dur){ return new Promise(function(res,rej){ try{ var OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext; if(!OAC)return rej('no-oac'); var sr=44100,oac=new OAC(1,Math.ceil(sr*dur),sr); fn(oac); oac.startRendering().then(function(buf){res(_cfgBufToWav(buf));}).catch(rej); }catch(e){rej(e);} }); }
-function _cfgPrepararSons(){ if(_cfgSomProntos)return; _cfgSomProntos=true; var specs=[['sino',tocarSino,0.7],['beep',tocarBeep,0.35],['alarme',tocarAlarme,0.75],['suave',tocarSuave,0.75]]; specs.forEach(function(s){ _cfgRenderSom(s[1],s[2]).then(function(uri){ var a=new Audio(uri); a.preload='auto'; _CFG_SOM_AUDIO[s[0]]=a; try{ a.muted=true; var p=a.play(); if(p&&p.then)p.then(function(){a.pause();a.currentTime=0;a.muted=false;}).catch(function(){a.muted=false;}); else {a.pause();a.muted=false;} }catch(e){a.muted=false;} }).catch(function(){}); }); }
-function _cfgSomWebAudio(nome){ var ctx=_getCfgCtx(); if(!ctx)return; var play=function(){ try{(SONS_TESTE[nome]||tocarSino)(ctx);}catch(e){} }; if(ctx.state==='suspended'){ctx.resume().then(play).catch(play);}else{play();} }
-function _tocarTeste(nome){ _cfgPrepararSons(); var a=_CFG_SOM_AUDIO[nome]; if(a){ try{ a.currentTime=0; var p=a.play(); if(p&&p.catch)p.catch(function(){_cfgSomWebAudio(nome);}); return; }catch(e){} } _cfgSomWebAudio(nome); }
-function _flashBtnTeste(btn){ if(!btn)return; var t=btn.getAttribute('data-lbl')||btn.textContent; btn.setAttribute('data-lbl',t); btn.textContent='🔊 tocando...'; btn.style.borderColor='#22c55e'; setTimeout(function(){ btn.textContent=t; btn.style.borderColor='#444'; }, 900); }
-function testarSomAlarme(btn){ var el=document.getElementById('alarme_filtro_som'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
-try{ document.addEventListener('DOMContentLoaded', _cfgPrepararSons); }catch(e){}
-var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'};
-function previewCorAlarme(){ var s=document.getElementById('alarme_filtro_cor'), pv=document.getElementById('alarme_cor_preview'); if(s&&pv)pv.style.background=CORES_ALARME_CFG[s.value]||'#3b82f6'; }
-function coletaAlarme(tipo){ var cls=tipo==='pista'?'alarme-pista-cb':'alarme-classe-cb'; var hid=tipo==='pista'?'alarme_pistas_val':'alarme_classes_val'; var vals=[]; document.querySelectorAll('.'+cls).forEach(function(cb){ if(cb.checked)vals.push(cb.value); }); var h=document.getElementById(hid); if(h)h.value=vals.join(','); }
-function testarSom(btn){ var el=document.getElementById('som_alerta'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
+function testarSom(){
+  try {
+    var escolha = document.getElementById('som_alerta').value;
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    (SONS_TESTE[escolha]||tocarSino)(ctx);
+  } catch(e) { console.error('[testarSom] erro', e); }
+}
 function upR(input){var n=input.name;var v=document.getElementById('v_'+n);var b=document.getElementById('b_'+n);if(v)v.textContent=input.value+(n.startsWith('pct')?'%':'');if(b)b.style.width=(input.value*10)+'%';}
 // Liga/desliga visualmente os campos de um bloco quando o switch muda. NAO
 // usa o atributo "disabled" nos inputs — campos disabled ficam de fora do
@@ -688,85 +683,6 @@ document.getElementById('cf').addEventListener('submit',async function(e){
     else throw new Error('Erro ao salvar');
   }catch(err){al.className='alert er';al.textContent='Erro: '+err.message;al.style.display='block';}
 });
-
-// ===== Dashboard (aba "Dashboard"): Curva S + pizza + barras, mesmos filtros =====
-var grafNomes = {};
-function nomePistaGraf(code){ return (grafNomes && grafNomes[code]) || code; }
-function limparGraf(){
-  ['g_from','g_to','g_turno','g_pista','g_classe'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
-  carregarGraf();
-}
-async function carregarGraf(){
-  var host=document.getElementById('graf-kpis'); if(!host) return;
-  var f=document.getElementById('g_from').value, t=document.getElementById('g_to').value;
-  var fTurno=document.getElementById('g_turno').value, fPista=document.getElementById('g_pista').value, fClasse=document.getElementById('g_classe').value;
-  var qs=['t1=6','t2=13'];
-  if(f)qs.push('from='+f); if(t)qs.push('to='+t);
-  if(fTurno)qs.push('turno='+encodeURIComponent(fTurno));
-  if(fPista)qs.push('pista='+encodeURIComponent(fPista));
-  if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
-  host.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
-  try{
-    var r=await fetch('${BASE}/config/desempenho-data?'+qs.join('&'));
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    var d=await r.json();
-    if(d.error) throw new Error(d.error);
-    grafNomes=d.nomes||{};
-    // popular selects (mantendo a selecao atual)
-    dashPreencheSelect('g_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
-    dashPreencheSelect('g_classe', d.opcoes.classes, d.filtros.classe, 'Todas');
-    (function(){ var el=document.getElementById('g_pista'); if(!el)return; var sel=d.filtros.pista||''; var opts='<option value="">Todas</option>'; (d.opcoes.pistas||[]).forEach(function(p){ opts+='<option value="'+p+'"'+(p===sel?' selected':'')+'>'+nomePistaGraf(p)+'</option>'; }); el.innerHTML=opts; })();
-    // KPIs
-    var rz=d.resumo;
-    host.innerHTML = dashKpi('AvBs resolvidos',rz.total,'#f0f0f0')
-      + dashKpi('HR corrigido',rz.total?Math.round(rz.hr*100)+'%':'-',dashHrColor(rz.hr))
-      + dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
-      + dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e');
-    desenharCurvaS(d.serieDiaria);
-    desenharPizza(d.porPista, 'graf-pizza', 'n');
-    desenharPizza(d.porPista, 'graf-pizza-vit', 'ac');
-    var bars=document.getElementById('graf-bars');
-    if(bars){ bars.innerHTML = dashSecao('Por Classe',d.porClasse)+dashSecao('Por Turno',d.porTurno)+dashSecao('Por Nº de Cães',d.porCaes) || '<div style="color:#888;font-size:13px">Sem dados.</div>'; if(!bars.innerHTML.trim()) bars.innerHTML='<div style="color:#888;font-size:13px">Sem dados no período.</div>'; }
-  }catch(e){ host.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
-}
-function desenharCurvaS(serie){
-  var host=document.getElementById('graf-curvas'); if(!host) return;
-  if(!serie||!serie.length){ host.innerHTML='<div style="color:#888;font-size:13px;padding:20px">Sem dados no período.</div>'; return; }
-  var ab=0,ac=0,er=0, pts=serie.map(function(x){ ab+=x.abertos; ac+=x.acertados; er+=x.errados; return {dia:x.dia,ab:ab,ac:ac,er:er}; });
-  var W=720,H=260,pl=40,pr=16,ptop=14,pb=32, n=pts.length, maxY=Math.max(1,pts[n-1].ab);
-  function X(i){ return pl + (n<=1?(W-pl-pr)/2:(i*(W-pl-pr)/(n-1))); }
-  function Y(v){ return ptop + (H-ptop-pb)*(1 - v/maxY); }
-  function pathOf(k){ return pts.map(function(p,i){ return (i?'L':'M')+X(i).toFixed(1)+' '+Y(p[k]).toFixed(1); }).join(' '); }
-  var grid=''; for(var g=0;g<=4;g++){ var val=Math.round(maxY*g/4), yy=Y(val); grid+='<line x1="'+pl+'" y1="'+yy.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+yy.toFixed(1)+'" stroke="#222" stroke-width="1"/><text x="'+(pl-6)+'" y="'+(yy+3).toFixed(1)+'" fill="#666" font-size="9" text-anchor="end">'+val+'</text>'; }
-  function dl(iso){ var p=(iso||'').split('-'); return p.length===3?(p[2]+'/'+p[1]):iso; }
-  var idxs=[0,Math.floor((n-1)/2),n-1].filter(function(v,i,a){return a.indexOf(v)===i;});
-  var xl=idxs.map(function(i){ return '<text x="'+X(i).toFixed(1)+'" y="'+(H-pb+16)+'" fill="#666" font-size="9" text-anchor="middle">'+dl(pts[i].dia)+'</text>'; }).join('');
-  function dots(k,c){ return pts.map(function(p,i){ return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(p[k]).toFixed(1)+'" r="2.5" fill="'+c+'"><title>'+p.dia+' — abertos '+p.ab+' · acertos '+p.ac+' · erros '+p.er+'</title></circle>'; }).join(''); }
-  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">'
-    + grid
-    + '<path d="'+pathOf('ab')+'" fill="none" stroke="#9aa4b2" stroke-width="2"/>'
-    + '<path d="'+pathOf('ac')+'" fill="none" stroke="#22c55e" stroke-width="2"/>'
-    + '<path d="'+pathOf('er')+'" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>'
-    + dots('ab','#9aa4b2') + dots('ac','#22c55e') + dots('er','#ef4444') + xl + '</svg>';
-}
-function desenharPizza(porPista, hostId, valKey){
-  var host=document.getElementById(hostId||'graf-pizza'); if(!host) return;
-  valKey = valKey || 'n';
-  var arr=(porPista||[]).slice().filter(function(x){return (x[valKey]||0)>0;}).sort(function(a,b){return (b[valKey]||0)-(a[valKey]||0);});
-  if(!arr.length){ host.innerHTML='<div style="color:#888;font-size:13px;padding:20px">Sem dados no período.</div>'; return; }
-  var TOP=7, top=arr.slice(0,TOP), resto=arr.slice(TOP);
-  var slices=top.map(function(x){return {label:nomePistaGraf(x.chave),val:x[valKey]||0};});
-  if(resto.length){ slices.push({label:'Outras ('+resto.length+')',val:resto.reduce(function(s,x){return s+(x[valKey]||0);},0)}); }
-  var CORES=['#56B4E9','#E69F00','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#888888'];
-  var total=slices.reduce(function(s,x){return s+x.val;},0), cx=90,cy=90,r=80, ang=-Math.PI/2, paths='';
-  slices.forEach(function(s,i){ var frac=s.val/total, a2=ang+frac*2*Math.PI, col=CORES[i%CORES.length];
-    if(frac>=0.999){ paths+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+col+'"><title>'+s.label+': '+s.val+' (100%)</title></circle>'; }
-    else { var x1=cx+r*Math.cos(ang),y1=cy+r*Math.sin(ang),x2=cx+r*Math.cos(a2),y2=cy+r*Math.sin(a2),large=frac>0.5?1:0;
-      paths+='<path d="M'+cx+' '+cy+' L'+x1.toFixed(1)+' '+y1.toFixed(1)+' A'+r+' '+r+' 0 '+large+' 1 '+x2.toFixed(1)+' '+y2.toFixed(1)+' Z" fill="'+col+'" stroke="#0D1117" stroke-width="2"><title>'+s.label+': '+s.val+' ('+Math.round(frac*100)+'%)</title></path>'; }
-    ang=a2; });
-  var legend=slices.map(function(s,i){ var col=CORES[i%CORES.length]; return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;margin-bottom:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+col+';flex-shrink:0"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.label+'</span><span style="color:#666">'+Math.round(s.val/total*100)+'%</span></div>'; }).join('');
-  host.innerHTML='<div style="display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="170" height="170" style="flex-shrink:0">'+paths+'</svg><div style="flex:1;min-width:130px">'+legend+'</div></div>';
-}
 </script></body></html>`);
 });
 
@@ -808,13 +724,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alerta_min_antes INTEGER DEFAULT 3").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN tela_grace_min INTEGER DEFAULT 0").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN som_alerta TEXT DEFAULT 'sino'").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_ativo INTEGER DEFAULT 0").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_turno TEXT DEFAULT ''").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_pistas TEXT DEFAULT ''").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,auto_refresh_min=?,racas_em_tela=?,results_interval_min=?,results_window_start=?,results_window_end=?,pdf_cron_time=?,monitor_interval_min=?,monitor_window_start=?,monitor_window_end=?,final_check_min_antes=?,alerta_min_antes=?,tela_grace_min=?,som_alerta=?,banca_unidade_padrao=?,banca_valor_inicial=?,banca_pct_stop=?,banca_aviso_stop=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -825,17 +737,30 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.max_niveis_pool||2,
       d.max_linhas_cat_inferior||3,
       d.max_dias_gap_nova_cat||14,
+      d.cio_recente_ativo==='1'||d.cio_recente_ativo===1?1:0,
+      d.cio_recente_dias!=null&&d.cio_recente_dias!==''?d.cio_recente_dias:90,
+      d.auto_refresh_min||1,
+      d.racas_em_tela||6,
+      d.results_interval_min||30,
+      d.results_window_start||'07:30',
+      d.results_window_end||'19:30',
+      d.pdf_cron_time||'13:30',
+      d.monitor_interval_min||60,
+      d.monitor_window_start||'07:00',
+      d.monitor_window_end||'20:00',
+      d.final_check_min_antes||15,
+      d.alerta_min_antes!=null?d.alerta_min_antes:3,
+      d.tela_grace_min!=null?d.tela_grace_min:0,
+      d.som_alerta||'sino',
+      d.banca_unidade_padrao||2.5,
+      d.banca_valor_inicial||1000,
+      d.banca_pct_stop!=null&&d.banca_pct_stop!==''?d.banca_pct_stop:20,
+      d.banca_aviso_stop||'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
       d.bloco_pesos_ativo==='1'||d.bloco_pesos_ativo===1?1:0,
       d.bloco_categoria_ativo==='1'||d.bloco_categoria_ativo===1?1:0,
       d.bloco_filtros_ativo==='1'||d.bloco_filtros_ativo===1?1:0,
       d.bloco_confianca_ativo==='1'||d.bloco_confianca_ativo===1?1:0,
       d.bloco_motor_ativo==='1'||d.bloco_motor_ativo===1?1:0,
-      (d.alarme_filtro_ativo==='1'||d.alarme_filtro_ativo===1)?1:0,
-      d.alarme_filtro_turno||'',
-      d.alarme_filtro_pistas||'',
-      d.alarme_filtro_classes||'',
-      d.alarme_filtro_som||'beep',
-      d.alarme_filtro_cor||'azul',
       user.id
     );
     res.json({ ok: true });

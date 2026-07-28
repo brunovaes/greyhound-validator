@@ -632,6 +632,18 @@ function mapHistLinhas(linhasValidas) {
   return (linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)}));
 }
 
+// Datas em ISO "YYYY-MM-DD" -> diferenca em dias (usa Date.UTC pra nao pegar
+// fuso). diasEntre(cio, corrida) > 0 quando o cio foi ANTES da corrida.
+function isoParaUTC(s) {
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
+}
+function diasEntre(isoAntes, isoDepois) {
+  const a = isoParaUTC(isoAntes), b = isoParaUTC(isoDepois);
+  if (a === null || b === null) return null;
+  return Math.round((b - a) / 86400000);
+}
+
 // FUNCAO PRINCIPAL: processa uma corrida extraida
 function processarCorrida(corridaRaw, config) {
   const { hora, corrida, dist, classe, postPick, trapsCard, galgos, dataCard, trackFull, trapsConfiaveis } = corridaRaw;
@@ -661,6 +673,21 @@ function processarCorrida(corridaRaw, config) {
 
   for (const galgo of (galgos||[])) {
     if (trapsCard && trapsCard.length && !trapsCard.includes(galgo.trap)) continue;
+
+    // Cio recente (item 3, CONFIGURAVEL e DESLIGADO por padrao): femea cujo
+    // ultimo cio "(Ssn <data>)" foi ha menos de N dias da data da corrida vira
+    // elegivel a descarte, na mesma mecanica dos outros eliminados (sai do pool,
+    // o AvB re-elege favorito/underdog). "(SsnSupp)"/sem data -> ssnDate null,
+    // nunca dispara. Janela em dias configuravel (cio_recente_dias).
+    if (config.cio_recente_ativo && galgo.ssnDate && dataCard) {
+      const diasCio = diasEntre(galgo.ssnDate, dataCard);
+      const janelaCio = config.cio_recente_dias || 90;
+      if (diasCio !== null && diasCio >= 0 && diasCio <= janelaCio) {
+        eliminados.push({ trap: galgo.trap, motivo: `Cio recente (${galgo.ssnDate}, ${diasCio}d <= ${janelaCio}d)` });
+        continue;
+      }
+    }
+
     const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config, mediaBRT);
 
     // Verificar retorno de inatividade longa (trial/solo após pausa >= threshold dias)

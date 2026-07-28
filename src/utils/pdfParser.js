@@ -145,21 +145,57 @@ const GRADE_RE = /^(?:[A-Z]\d+|HP|OR\d*|B\d+|T\d*|D\d+|IV|S\d+|ON\d*|Mdn)$/;
 const COLOR_BREED_RE = /\b(?:bk|bd|be|bef|bebd|bew|wbe|wbd|wbk|bkw|dkbd|dkbe|dkbef|fawn|fw|w|f)\s+(?:b|d)\s+/i;
 const RNUM_PREFIX_RE = /^\([A-Za-z][A-Za-z0-9]*\)\s*/;
 
-// ── Extrai nome e BRT ────────────────────────────────────────────────────────
+// (Ssn <data>) na linha do nome = data do ULTIMO cio da femea. Ex: "(Ssn 15Jun26)".
+// "(SsnSupp)" (season supplement) NAO tem data — nunca casa aqui, fica null.
+const SSN_DATE_RE = /\(Ssn\s+(\d{1,2}[A-Za-z]{3}\d{2})\)/i;
+const MESES_ABBR = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+
+// "15Jun26" (formato DDMonYY do card) -> "2026-06-15" (mesmo formato ISO do
+// dataCard, pra o api.js comparar as duas datas sem ambiguidade). O parseDataCard
+// existente NAO serve aqui: ele exige mes por extenso ("15 June 2026").
+function parseSsnDate(str) {
+  const m = String(str || '').match(/^(\d{1,2})([A-Za-z]{3})(\d{2})$/);
+  if (!m) return null;
+  const mes = MESES_ABBR[m[2].toLowerCase()];
+  if (!mes) return null;
+  return '20' + m[3] + '-' + String(mes).padStart(2, '0') + '-' + String(parseInt(m[1])).padStart(2, '0');
+}
+
+// Corta o nome do galgo no padrao de cor/sexo (COLOR_BREED_RE, ex.: "bk b ").
+//   - sem cor na string  -> a string inteira e' o nome (ex.: "Marwood Raven")
+//   - nome ANTES da cor  -> devolve so o nome ("Matts Bomber (M) bk d ..." -> "Matts Bomber (M)")
+//   - cor logo no inicio -> nao ha nome util aqui -> '' (deixa o chamador tentar a nameLine)
+function cortarNomePorCor(str) {
+  const base = String(str || '').replace(RNUM_PREFIX_RE, '').trim();
+  const idx = base.search(COLOR_BREED_RE);
+  if (idx === -1) return base;
+  if (idx > 3) return base.substring(0, idx).trim();
+  return '';
+}
+
+// ── Extrai nome, BRT e data de cio ───────────────────────────────────────────
 function extractBrtInfo(brtLine, nameLine) {
   const brtMatch = brtLine.match(/BRT:\s*([\d.]+)\s+([A-Z][A-Z0-9]*)/);
   const brt      = brtMatch ? parseFloat(brtMatch[1]) : 0;
   const brtClasse= brtMatch ? brtMatch[2] : '';
 
+  // Nome: corta no padrao de cor/sexo — INDEPENDENTE de haver "BRT:" na linha.
+  // 1o tenta no trecho antes do "BRT:" (galgo com nome+pedigree+BRT na mesma
+  // linha). Se ali nao sobrou nome (ex.: pdf.js quebrou o galgo em 2 linhas e o
+  // "BRT:" caiu sozinho numa delas — mesmo caso de um galgo sem BRT publicado),
+  // corta na nameLine associada. Antes, esse fallback usava a nameLine INTEIRA e
+  // trazia o pedigree grudado no nome (bug confirmado no card 7:44 Sunderland,
+  // galgo "Hollyhill Beauty").
   const beforeBrt = brtLine.split('BRT:')[0].trim();
-  const colorIdx  = beforeBrt.search(COLOR_BREED_RE);
-  let nome = '';
-  if (colorIdx > 3) {
-    nome = beforeBrt.substring(0, colorIdx).trim().replace(RNUM_PREFIX_RE, '').trim();
-  } else if (nameLine) {
-    nome = nameLine.replace(RNUM_PREFIX_RE, '').trim();
-  }
-  return { nome, brt, brtClasse };
+  let nome = cortarNomePorCor(beforeBrt);
+  if (!nome && nameLine) nome = cortarNomePorCor(nameLine);
+
+  // Data do cio (item 3): procura "(Ssn <data>)" tanto na linha do BRT quanto na
+  // do nome (dependendo de onde o pdf.js colocou). "(SsnSupp)"/sem data -> null.
+  const ssnMatch = ((brtLine || '') + ' ' + (nameLine || '')).match(SSN_DATE_RE);
+  const ssnDate = ssnMatch ? parseSsnDate(ssnMatch[1]) : null;
+
+  return { nome, brt, brtClasse, ssnDate };
 }
 
 // ── Parse da direita: CALTM, GRADE, [SP], WGHT, GNG, WNTM ──────────────────
@@ -315,10 +351,10 @@ async function parseRacingPostPDF(buffer, trapPalette) {
   }
 
   const galgos = dogSections.map((section, idx) => {
-    const brt = brtEntries[idx] || { nome: `Dog ${idx+1}`, brt: 0, brtClasse: '' };
+    const brt = brtEntries[idx] || { nome: `Dog ${idx+1}`, brt: 0, brtClasse: '', ssnDate: null };
     const historico = section.map(r => parseHistoryLine(r.text)).filter(h => h !== null);
     const trap = trapsConfiaveis ? trapsPorIndice[idx] : idx + 1;
-    return { trap, nome: brt.nome, brt: brt.brt, brtClasse: brt.brtClasse, historico };
+    return { trap, nome: brt.nome, brt: brt.brt, brtClasse: brt.brtClasse, ssnDate: brt.ssnDate || null, historico };
   }).filter(g => g.historico.length > 0);
 
   // Oportunidade de recalibrar a paleta: card com os 6 galgos completos (sem
@@ -358,6 +394,7 @@ module.exports = {
   isBrtLine,
   extractBrtInfo,
   parseDataCard,
+  parseSsnDate,
   // Exportados pro api.js poder ler a paleta padrao (semente) e persistir/
   // aplicar a paleta calibrada do banco nas proximas chamadas de parse
   DEFAULT_TRAP_COLORS,

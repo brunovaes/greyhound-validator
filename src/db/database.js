@@ -112,6 +112,8 @@ db.exec(`
     max_niveis_pool INTEGER DEFAULT 2,
     max_linhas_cat_inferior INTEGER DEFAULT 3,
     max_dias_gap_nova_cat INTEGER DEFAULT 14,
+    cio_recente_ativo INTEGER DEFAULT 0,
+    cio_recente_dias INTEGER DEFAULT 90,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
@@ -171,12 +173,6 @@ db.exec(`
 
 // Migracoes seguras para banco existente
 const migrations = [
-  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_ativo INTEGER DEFAULT 0",
-  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_turno TEXT DEFAULT ''",
-  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_pistas TEXT DEFAULT ''",
-  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''",
-  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'",
-  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'",
   'ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0',
   'ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1',
   'ALTER TABLE analysis_config ADD COLUMN ajuste_classe_segundos REAL DEFAULT 0.20',
@@ -239,6 +235,8 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN som_alerta TEXT DEFAULT 'sino'", // adicionado 14/07 — sino/beep/alarme/suave
   "ALTER TABLE races ADD COLUMN finishing_order_json TEXT DEFAULT NULL", // adicionado 14/07 — chegada completa (1o-6o), nao so o top3
   "ALTER TABLE races ADD COLUMN flag_atrasada INTEGER DEFAULT 0", // adicionado 14/07 — corrida atrasada, marcada na mao, pisca ate ter resultado
+  "ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 0", // item 3 (28/07) — descarte por cio recente, DESLIGADO por padrao ate backtestar
+  "ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90", // item 3 (28/07) — janela do cio em dias (varrer 30/45/60/90 no backtest)
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
@@ -297,7 +295,7 @@ const MOTOR_FIXO_DEFAULTS = {
   categoria: { max_cat_diff_caltm: 1, max_niveis_pool: 2, max_linhas_cat_inferior: 3, max_dias_gap_nova_cat: 14 },
   filtros: { classes_aceitas: 'A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12', dist_min: 400, dist_max: 575, min_corridas_uteis: 3 },
   confianca: { pct_alta: 65, pct_media: 50 },
-  motor: { ajuste_classe_segundos: 0.20, desconto_acidente_leve: 0.10, desconto_acidente_medio: 0.20, proporcao_media_caltm: 0.60, teto_diff_normalizacao: 0.50, threshold_skip_avb: 10.0, threshold_back: 25.0 }
+  motor: { ajuste_classe_segundos: 0.20, desconto_acidente_leve: 0.10, desconto_acidente_medio: 0.20, proporcao_media_caltm: 0.60, teto_diff_normalizacao: 0.50, threshold_skip_avb: 10.0, threshold_back: 25.0, cio_recente_ativo: 0 }
 };
 
 // aplicaBlocos=true (padrao): retorna os valores EFETIVOS (o que o motor de
