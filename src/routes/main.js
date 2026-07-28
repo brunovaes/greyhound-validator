@@ -1260,8 +1260,8 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 /* Mobile: modal ocupa quase a tela toda e a tabela rola na horizontal
    (colunas legiveis, arrasta pro lado pra ver Bends/Fin/Remarks/Grade/CalTm). */
 @media(max-width:768px){
-  #sv-box{width:96vw;max-width:96vw;max-height:90vh}
-  #sv-body{overflow-y:auto;padding:12px 8px}
+  #sv-box{width:96vw;max-width:96vw;max-height:90vh;overflow:hidden}
+  #sv-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
   .sv-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .sv-tbl{table-layout:auto;width:auto;min-width:640px}
 }

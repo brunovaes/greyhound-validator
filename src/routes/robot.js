@@ -48,18 +48,15 @@ function getTodayDate() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
+// Horario FIXO da coleta automatica: 06:00 BRT (09:00 UTC). Definido no sistema
+// e NAO editavel pela UI de proposito — ja houve reset acidental pra 13:30 via
+// tela. Para mudar, altere so esta constante.
+const PDF_CRON_BRT = '06:00';
 function scheduleCronRobot() {
-  const { db } = require('../db/database');
-  let utcH = 16, utcM = 30; // padrão 13:30 BRT = 16:30 UTC
-  try {
-    const cfg = db.prepare('SELECT pdf_cron_time FROM analysis_config WHERE user_id=1').get();
-    if (cfg && cfg.pdf_cron_time) {
-      const p = cfg.pdf_cron_time.split(':');
-      let brtH = parseInt(p[0]||13), brtM = parseInt(p[1]||30);
-      utcH = brtH + 3; if (utcH >= 24) utcH -= 24;
-      utcM = brtM;
-    }
-  } catch(e) {}
+  const _p = PDF_CRON_BRT.split(':');
+  let brtH = parseInt(_p[0], 10) || 6, brtM = parseInt(_p[1], 10) || 0;
+  let utcH = brtH + 3; if (utcH >= 24) utcH -= 24;
+  let utcM = brtM;
   const now = new Date();
   const nextRun = new Date();
   nextRun.setUTCHours(utcH, utcM, 0, 0);
@@ -777,7 +774,7 @@ ${navBar(req.user, 'robot')}
       <div class="field"><label>Intervalo Robô de Resultados (min)</label><input type="number" id="au_results_interval_min" value="${cfgAuto.results_interval_min||30}" min="10" max="120"></div>
       <div class="field"><label>Início janela de resultados (BRT)</label><input type="time" id="au_results_window_start" value="${cfgAuto.results_window_start||'07:30'}"></div>
       <div class="field"><label>Fim janela de resultados (BRT)</label><input type="time" id="au_results_window_end" value="${cfgAuto.results_window_end||'19:30'}"></div>
-      <div class="field"><label>Hora do Robô de PDFs (BRT)</label><input type="time" id="au_pdf_cron_time" value="${cfgAuto.pdf_cron_time||'13:30'}"></div>
+      <div class="field"><label>Hora do Robô de PDFs (BRT)</label><input type="time" id="au_pdf_cron_time" value="06:00" disabled title="Definido no sistema — nao editavel"><div style="font-size:10px;color:#666;margin-top:4px">Fixo em 06:00 (definido no sistema, apenas ilustrativo)</div></div>
       <div class="field"><label>Intervalo Robô de Monitoramento (min)</label><input type="number" id="au_monitor_interval_min" value="${cfgAuto.monitor_interval_min||60}" min="15" max="240"></div>
       <div class="field"><label>Início janela de monitoramento (BRT)</label><input type="time" id="au_monitor_window_start" value="${cfgAuto.monitor_window_start||'07:00'}"></div>
       <div class="field"><label>Fim janela de monitoramento (BRT)</label><input type="time" id="au_monitor_window_end" value="${cfgAuto.monitor_window_end||'20:00'}"></div>
@@ -1319,7 +1316,7 @@ async function salvarAutomacao(){
   var body={
     auto_refresh_min:g('au_auto_refresh_min'), racas_em_tela:g('au_racas_em_tela'),
     results_interval_min:g('au_results_interval_min'), results_window_start:g('au_results_window_start'), results_window_end:g('au_results_window_end'),
-    pdf_cron_time:g('au_pdf_cron_time'), monitor_interval_min:g('au_monitor_interval_min'),
+    monitor_interval_min:g('au_monitor_interval_min'),
     monitor_window_start:g('au_monitor_window_start'), monitor_window_end:g('au_monitor_window_end'),
     final_check_min_antes:g('au_final_check_min_antes'), alerta_min_antes:g('au_alerta_min_antes'),
     tela_grace_min:g('au_tela_grace_min'), som_alerta:g('au_som_alerta')
@@ -1342,13 +1339,14 @@ router.post('/save-automacao', requireAdmin, express.json(), (req, res) => {
     const d = req.body || {};
     const userId = req.user.id;
     getUserConfig(userId); // garante a linha de config
-    db.prepare(`UPDATE analysis_config SET auto_refresh_min=?, racas_em_tela=?, results_interval_min=?, results_window_start=?, results_window_end=?, pdf_cron_time=?, monitor_interval_min=?, monitor_window_start=?, monitor_window_end=?, final_check_min_antes=?, alerta_min_antes=?, tela_grace_min=?, som_alerta=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    // pdf_cron_time NAO entra aqui de proposito: o horario da coleta e fixo no
+    // sistema (06:00, ver PDF_CRON_BRT) e o campo na tela e so ilustrativo.
+    db.prepare(`UPDATE analysis_config SET auto_refresh_min=?, racas_em_tela=?, results_interval_min=?, results_window_start=?, results_window_end=?, monitor_interval_min=?, monitor_window_start=?, monitor_window_end=?, final_check_min_antes=?, alerta_min_antes=?, tela_grace_min=?, som_alerta=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       parseInt(d.auto_refresh_min) || 1,
       parseInt(d.racas_em_tela) || 6,
       parseInt(d.results_interval_min) || 30,
       d.results_window_start || '07:30',
       d.results_window_end || '19:30',
-      d.pdf_cron_time || '13:30',
       parseInt(d.monitor_interval_min) || 60,
       d.monitor_window_start || '07:00',
       d.monitor_window_end || '20:00',

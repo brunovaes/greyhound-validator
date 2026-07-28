@@ -1293,8 +1293,8 @@ function injectValModal(){
 .val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:var(--font-body)}
 .val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:var(--font-body)}
 @media(max-width:768px){
-  #val-box{width:96vw;max-width:96vw;max-height:90vh}
-  #val-body{overflow-y:auto;padding:12px 8px}
+  #val-box{width:96vw;max-width:96vw;max-height:90vh;overflow:hidden}
+  #val-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
   .val-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .val-tbl{table-layout:auto;width:auto;min-width:640px}
   #val-body.val-compact{max-height:90vh}
