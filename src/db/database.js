@@ -237,6 +237,15 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN flag_atrasada INTEGER DEFAULT 0", // adicionado 14/07 — corrida atrasada, marcada na mao, pisca ate ter resultado
   "ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1", // item 3 (28/07) — descarte por cio recente, LIGADO por padrao (decidido 28/07: rodar com notificacao em tela)
   "ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90", // item 3 (28/07) — janela do cio em dias (varrer 30/45/60/90 no backtest)
+  // Restauradas em 28/07: foram removidas por engano no b815691, junto com a
+  // aba Alarme do config.js. Sem elas, banco novo nao nasce com as colunas e o
+  // "Alarme para filtro selecionado" quebra ate alguem salvar o Configuracoes.
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_ativo INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_turno TEXT DEFAULT ''",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_pistas TEXT DEFAULT ''",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
