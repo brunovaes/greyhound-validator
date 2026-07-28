@@ -499,11 +499,25 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
      elas usam margin-left:-85px pra compensar a coluna Proximas; no mobile isso
      jogava o texto pra esquerda. */
   .focus-col > div{margin-left:0!important}
+  /* Modal de confronto/relatorio (injetado pelo app.js): em tela cheia no
+     mobile usando a altura real do aparelho, rolando ate o fim (corrige o
+     corte do iOS). !important pra vencer o estilo que o app.js injeta depois. */
+  #val-modal{align-items:stretch!important;padding:10px!important}
+  #val-box{width:100%!important;max-width:100%!important;height:100%!important;max-height:100%!important;overflow:hidden!important}
+  #val-hdr{flex-shrink:0!important}
+  #val-body{flex:1 1 auto!important;min-height:0!important;height:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
+  #val-body.val-compact{max-height:none!important}
+  .val-dog{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+  .val-tbl{table-layout:auto!important;width:auto!important;min-width:600px!important}
 }
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
 ${navBar(user, 'analisar')}
 <div class="main" id="main-layout">
+  <!-- Botao "Automaticamente" foi removido da UI, mas o app.js (servido de src/app.js)
+       ainda pode referenciar #btngo. Este elemento oculto evita erro de JS
+       (getElementById('btngo') nunca retorna null). -->
+  <button id="btngo" style="display:none" aria-hidden="true" tabindex="-1"></button>
   <div class="sidebar">
     <div style="margin-bottom:-3px">
       <h2>Analisar corridas</h2>
@@ -1260,8 +1274,10 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 /* Mobile: modal ocupa quase a tela toda e a tabela rola na horizontal
    (colunas legiveis, arrasta pro lado pra ver Bends/Fin/Remarks/Grade/CalTm). */
 @media(max-width:768px){
-  #sv-box{width:96vw;max-width:96vw;max-height:90vh;overflow:hidden}
-  #sv-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
+  #sv-modal{align-items:stretch;padding:10px}
+  #sv-box{width:100%;max-width:100%;height:100%;max-height:100%;overflow:hidden}
+  #sv-hdr{flex-shrink:0}
+  #sv-body{flex:1 1 auto;min-height:0;height:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
   .sv-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .sv-tbl{table-layout:auto;width:auto;min-width:640px}
 }
