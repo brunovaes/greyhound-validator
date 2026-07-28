@@ -1228,7 +1228,19 @@ router.get('/config', (req, res) => {
       pdf_cron_time: config.pdf_cron_time || '13:30',
       alerta_min_antes: config.alerta_min_antes || 3,
       tela_grace_min: config.tela_grace_min != null ? config.tela_grace_min : 0,
-      som_alerta: config.som_alerta || 'sino'
+      som_alerta: config.som_alerta || 'sino',
+      // racas_em_tela: NUNCA foi devolvido aqui, apesar de o app.js sempre ter
+      // lido "c.racas_em_tela" no loadSystemConfig. Sem este campo o cliente
+      // ficava preso no default 6 e a configuracao nao surtia efeito nenhum.
+      racas_em_tela: config.racas_em_tela || 6,
+      // Alarme para filtro selecionado: removido daqui por engano, o que deixava
+      // a feature configuravel mas muda (o matchAlarmeFiltro recebia tudo vazio).
+      alarme_filtro_ativo: config.alarme_filtro_ativo || 0,
+      alarme_filtro_turno: config.alarme_filtro_turno || '',
+      alarme_filtro_pistas: config.alarme_filtro_pistas || '',
+      alarme_filtro_classes: config.alarme_filtro_classes || '',
+      alarme_filtro_som: config.alarme_filtro_som || 'beep',
+      alarme_filtro_cor: config.alarme_filtro_cor || 'azul'
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
