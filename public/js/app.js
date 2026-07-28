@@ -1781,8 +1781,7 @@ async function proceedAnalysis(){
       return;
     }
   }
-  document.getElementById('btngo').disabled=true;
-  document.getElementById('btngo').innerHTML='<span class="spinner"></span>Analisando...';
+  var _btngo=document.getElementById('btngo'); if(_btngo){_btngo.disabled=true;_btngo.innerHTML='<span class="spinner"></span>Analisando...';}
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
   prog(5,'Preparando...');results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
   try{
@@ -1842,8 +1841,7 @@ async function proceedAnalysis(){
       setTimeout(function(){openPsModal();},1600);
     }
   }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
-  document.getElementById('btngo').disabled=false;
-  document.getElementById('btngo').innerHTML='&#9889; Automaticamente';
+  var _btngoR=document.getElementById('btngo'); if(_btngoR){_btngoR.disabled=false;_btngoR.innerHTML='&#9889; Automaticamente';}
   try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});}catch(e){}
 }
 
@@ -1897,7 +1895,7 @@ document.addEventListener('DOMContentLoaded',async function(){
   document.getElementById('rz').addEventListener('dragleave',function(){this.classList.remove('drag');});
   document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
   document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
-  document.getElementById('btngo').addEventListener('click',runAnalysis);
+  var _bgClick=document.getElementById('btngo'); if(_bgClick)_bgClick.addEventListener('click',runAnalysis);
   document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){saveRaceField(i,f,el.value);}});
   document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){var val=el.type==='checkbox'?(el.checked?1:0):el.value;saveRaceField(i,f,val);if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}}});
   document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
