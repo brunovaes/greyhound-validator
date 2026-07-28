@@ -877,7 +877,7 @@ function processarCorrida(corridaRaw, config) {
     histUnd:mapHistLinhas(pior.linhasValidas),
     histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})),
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})),
-    raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome})),
+    raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,ssnDate:g.ssnDate||null})),
     eliminados,
     postPick:postPick||'',
     dataCard,

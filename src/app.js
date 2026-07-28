@@ -460,6 +460,7 @@ async function syncFromServer() {
       if (idx === -1) return;
       var cur = results[idx];
       var oldNivel = cur.nivel, oldFav = cur.trapFav, oldUnd = cur.trapUnd;
+      var oldCioTraps = (cur.eliminados||[]).filter(function(e){return /Cio recente/i.test(e.motivo||'');}).map(function(e){return e.trap;});
       if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel || cur.flagAtrasada!==!!r.flag_atrasada) {
         changedAny = true;
       }
@@ -477,6 +478,7 @@ async function syncFromServer() {
       cur.betEntrou = !!r.bet_entrou;
       cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:2.5;
       cur.scores = r.scores || cur.scores; // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
+      try { cur.eliminados = r.eliminados?JSON.parse(r.eliminados):[]; } catch(e){ cur.eliminados = cur.eliminados||[]; }
       cur.flagAtrasada = !!r.flag_atrasada;
       cur.id = r.id;
       cur.finalCheckStatus = r.final_check_status || null;
@@ -493,6 +495,14 @@ async function syncFromServer() {
       } else if (oldNivel !== 'skip' && cur.nivel !== 'skip' && (oldFav !== cur.trapFav || oldUnd !== cur.trapUnd)) {
         cur._reanaliseFlag = { type:'reanalise', at: Date.now() };
         changes.push({ tipo:'reanalise', txt: _hbr+' '+_pista+' reanalisada (fav agora T'+cur.trapFav+')' });
+      }
+      // Cio recente (item 3): avisa quando a regra passou a descartar um galgo
+      // que antes nao estava descartado (ex.: substituto em cio pego pelo robo).
+      var _newCio = (cur.eliminados||[]).filter(function(e){return /Cio recente/i.test(e.motivo||'');});
+      var _freshCio = _newCio.filter(function(e){ return oldCioTraps.indexOf(e.trap)===-1; });
+      if (_freshCio.length) {
+        cur._reanaliseFlag = { type:'reanalise', at: Date.now() };
+        changes.push({ tipo:'cio', txt: '🩸 '+_hbr+' '+_pista+' — cio recente: '+_freshCio.map(function(e){return 'T'+e.trap;}).join(', ')+' descartada' });
       }
     });
 
@@ -1248,6 +1258,10 @@ function buildRelatorioHtml(r){
   if (r.eliminados && r.eliminados.length) {
     html += '<div style="'+sec+'"><div style="'+title+'">Galgos eliminados antes do cálculo</div>';
     html += r.eliminados.map(function(e){
+      var _cio = /Cio recente/i.test(e.motivo||'');
+      if (_cio) {
+        return '<div style="font-size:12px;color:#fca5a5;padding:4px 0;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;padding-left:6px;border-radius:3px;margin:2px 0"><span style="margin-right:4px">🩸</span><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
+      }
       return '<div style="font-size:12px;color:#ccc;padding:4px 0"><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
     }).join('');
     html += '</div>';

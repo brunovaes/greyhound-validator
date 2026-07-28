@@ -161,6 +161,14 @@ function parseSsnDate(str) {
   return '20' + m[3] + '-' + String(mes).padStart(2, '0') + '-' + String(parseInt(m[1])).padStart(2, '0');
 }
 
+// Procura "(Ssn <data>)" em qualquer blob de texto e devolve a data ISO (ou
+// null). Usado pelo robo de monitoramento, que le o card raspado do navegador
+// (nao o PDF) e precisa da mesma logica de cio pro galgo substituto.
+function extractSsnFromText(text) {
+  const m = String(text || '').match(SSN_DATE_RE);
+  return m ? parseSsnDate(m[1]) : null;
+}
+
 // Corta o nome do galgo no padrao de cor/sexo (COLOR_BREED_RE, ex.: "bk b ").
 //   - sem cor na string  -> a string inteira e' o nome (ex.: "Marwood Raven")
 //   - nome ANTES da cor  -> devolve so o nome ("Matts Bomber (M) bk d ..." -> "Matts Bomber (M)")
@@ -395,6 +403,7 @@ module.exports = {
   extractBrtInfo,
   parseDataCard,
   parseSsnDate,
+  extractSsnFromText,
   // Exportados pro api.js poder ler a paleta padrao (semente) e persistir/
   // aplicar a paleta calibrada do banco nas proximas chamadas de parse
   DEFAULT_TRAP_COLORS,

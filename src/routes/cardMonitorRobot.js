@@ -8,7 +8,7 @@
 const { db, getUserConfig, saveRobotLog, loadRobotLog } = require('../db/database');
 const { processarCorrida } = require('./api');
 const { logChanges } = require('../utils/auditLog');
-const { parseHistoryLine, isHistLine, isColHeader, isBrtLine } = require('../utils/pdfParser');
+const { parseHistoryLine, isHistLine, isColHeader, isBrtLine, extractSsnFromText } = require('../utils/pdfParser');
 
 require('dns').setDefaultResultOrder('ipv4first');
 
@@ -200,6 +200,11 @@ function extractDogHistoricoFromFormText(text, dogName) {
     i++;
   }
 
+  // Data de cio (item 3): "(Ssn <data>)" fica na faixa nome/raca do galgo,
+  // antes do historico. Extrai da janela [nome .. cabecalho de colunas]. Se o
+  // texto raspado nao trouxer o "(Ssn ...)", fica null (sem regressao).
+  const ssnDate = extractSsnFromText(lines.slice(startIdx, Math.max(startIdx + 1, i)).join(' '));
+
   // Passo 2: agora sim colhe as linhas de historico, ate 5 ou ate o padrao quebrar
   const historico = [];
   while (i < maxScan && historico.length < 5) {
@@ -213,7 +218,7 @@ function extractDogHistoricoFromFormText(text, dogName) {
     if (historico.length > 0) break; // ja vinha colhendo e quebrou o padrao — acabou o bloco
     i++;
   }
-  return { historico, debugNote: 'match "' + lines[startIdx] + '" (score ' + bestScore.toFixed(2) + '), cabecalho colunas ' + (foundColHeader ? 'achado' : 'NAO achado') + ', ' + historico.length + ' linhas extraidas' };
+  return { historico, ssnDate, debugNote: 'match "' + lines[startIdx] + '" (score ' + bestScore.toFixed(2) + '), cabecalho colunas ' + (foundColHeader ? 'achado' : 'NAO achado') + ', ' + historico.length + ' linhas, cio ' + (ssnDate || 'nao detectado') };
 }
 
 // Casa os nomes extraidos (ordem NAO confiavel como trap, ja que o numero do
@@ -521,7 +526,7 @@ async function runCardMonitorRobot(targetDate) {
           const extraido = extractDogHistoricoFromFormText(formText, c.nomeNovo);
           addLog('info', '  T' + c.trap + ' "' + c.nomeNovo + '": ' + extraido.debugNote);
           if (!extraido.historico.length) { algumFalhou = true; return; }
-          galgosNovos[c.trap] = { nome: c.nomeNovo, historico: extraido.historico };
+          galgosNovos[c.trap] = { nome: c.nomeNovo, historico: extraido.historico, ssnDate: extraido.ssnDate || null };
         });
 
         if (algumFalhou) {
@@ -542,10 +547,13 @@ async function runCardMonitorRobot(targetDate) {
           .filter(function(g) { return trapsVagos.indexOf(g.trap) === -1; })
           .map(function(g) {
             if (galgosNovos[g.trap]) {
-              return { trap: g.trap, nome: galgosNovos[g.trap].nome, historico: galgosNovos[g.trap].historico };
+              // Galgo substituto: nome/historico/ssnDate recem-raspados da aba Form.
+              return { trap: g.trap, nome: galgosNovos[g.trap].nome, historico: galgosNovos[g.trap].historico, ssnDate: galgosNovos[g.trap].ssnDate || null };
             }
             const antigo = histAllAntigo.find(function(h) { return h.trap === g.trap; });
-            return { trap: g.trap, nome: g.nome, historico: (antigo && antigo.historico) || [] };
+            // Galgo que nao mudou: ssnDate vem do race_card salvo na analise
+            // inicial (analises antigas, anteriores a este recurso, ficam null).
+            return { trap: g.trap, nome: g.nome, historico: (antigo && antigo.historico) || [], ssnDate: g.ssnDate || null };
           });
 
         const postPickMatch = cardText.match(/POST PICK:\s*([\d-]+)/i);
@@ -559,11 +567,21 @@ async function runCardMonitorRobot(targetDate) {
           postPick: postPick,
           trapsCard: galgosParaAnalise.map(function(g){ return g.trap; }),
           galgos: galgosParaAnalise,
+          // Data da corrida (hoje) — necessaria pra regra de cio recente comparar
+          // com o ssnDate do galgo. Sem isso, a regra nunca dispara na reanalise.
+          dataCard: DATE,
           trackFull: scrapedTrack || dbRace.track_full || null
         };
 
         const config = getUserConfig(dbRace.user_id);
         const novoResultado = processarCorrida(corridaRaw, config);
+
+        // Se a regra de cio recente pegou alguem na reanalise, registra bem
+        // visivel no log do robo (o front tambem mostra via eliminados/popup).
+        const cioElim = (novoResultado.eliminados || []).filter(function(e){ return /Cio recente/i.test(e.motivo || ''); });
+        if (cioElim.length) {
+          addLog('warn', '  🩸 CIO RECENTE em ' + dbRace.corrida + ' ' + dbRace.hora + ': ' + cioElim.map(function(e){ return 'T' + e.trap + ' (' + e.motivo + ')'; }).join(', ') + ' — descartado do AvB.');
+        }
 
         if (novoResultado.nivel === 'skip') {
           addLog('warn', '  reanalise resultou em SKIP (' + (novoResultado.obs || '') + ') — card atualizado, resultado da analise nao mudou pra evitar perder o AvB anterior. Confira manualmente.');
