@@ -3,6 +3,7 @@ const router = express.Router();
 const { findUserByEmail, validatePassword, createUser, db } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
+const { planLabel, planDuracao } = require('../utils/plans');
 const { designTokensCSS } = require('../utils/designTokens');
 const path = require('path');
 const fs = require('fs');
@@ -145,7 +146,7 @@ ${navBar(req.user, 'admin')}
       <div class="field"><label>Email</label><input type="email" name="email" placeholder="email@exemplo.com" required></div>
       <div class="field"><label>Senha</label><input type="password" name="password" placeholder="senha" required></div>
       <div class="field"><label>Perfil</label><select name="role"><option value="user">Usuário</option><option value="admin">Admin</option></select></div>
-      <div class="field"><label>Plano</label><select name="plan"><option value="free">Free (30/mês)</option><option value="pro">Pro (200/mês)</option><option value="premium">Premium (ilimitado)</option></select></div>
+      <div class="field"><label>Plano</label><select name="plan"><option value="free">Standard - Semanal (30/mês)</option><option value="pro">Pró - Mensal (200/mês)</option><option value="premium">Premium - Trimestral (ilimitado)</option></select></div>
       <div class="field" style="display:flex;align-items:flex-end"><button type="submit" class="btn">Criar</button></div>
     </div>
   </form>
@@ -154,7 +155,7 @@ ${navBar(req.user, 'admin')}
 ${users.map(u => `<tr>
   <td><strong>${u.name}</strong></td><td style="color:#888">${u.email}</td>
   <td><span class="badge badge-${u.role}">${u.role}</span></td>
-  <td><span class="badge badge-${u.plan}">${u.plan}</span></td>
+  <td><span class="badge badge-${u.plan}" title="${planDuracao(u.plan)}">${planLabel(u.plan)}</span></td>
   <td style="color:#888">${u.analyses_used}/${u.analyses_limit===999999?'&infin;':u.analyses_limit}</td>
   <td><span class="badge badge-${u.active?'on':'off'}">${u.active?'Ativo':'Inativo'}</span></td>
   <td style="color:#666;font-size:11px">${u.last_login?new Date(u.last_login).toLocaleDateString('pt-BR'):'Nunca'}</td>

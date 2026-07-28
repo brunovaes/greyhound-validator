@@ -96,10 +96,11 @@
     .nav-cta{gap:6px;flex-shrink:0}
     .nav-cta .btn{padding:7px 10px;font-size:12px;white-space:nowrap}
     /* tabela de planos inteira na vertical, sem rolagem lateral */
-    table.cmp{min-width:0}
-    table.cmp th,table.cmp td{padding:8px 5px;font-size:11px}
-    table.cmp thead th{font-size:11.5px}
-    table.cmp thead th small{font-size:9px;margin-top:2px}
+    table.cmp{min-width:0!important;table-layout:fixed!important;width:100%!important}
+    table.cmp th,table.cmp td{padding:8px 4px!important;font-size:10.5px!important;white-space:normal!important;word-break:break-word}
+    table.cmp td:first-child,table.cmp th:first-child{width:44%!important}
+    table.cmp thead th{font-size:11px!important}
+    table.cmp thead th small{font-size:8.5px!important;margin-top:2px}
   }
 .showcase{display:flex;flex-direction:column;gap:20px}
 .shot{background:#0b0e14;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 22px 55px -34px rgba(0,0,0,.85)}
@@ -253,18 +254,20 @@ table.cmp tfoot .btn{width:100%;padding:9px 10px;font-size:13px}
     <div class="tablewrap"><table class="cmp">
       <thead><tr>
         <th>O que você tem</th>
-        <th>Semanal<small>R$ 99,90 / semana</small></th>
-        <th class="best">Mensal<small>R$ 199,90 / mês</small></th>
-        <th>Trimestral<small>R$ 349,90 / 3 meses</small></th>
+        <th>Standard<small>Semanal · R$ 99,90</small></th>
+        <th class="best">Pró<small>Mensal · R$ 199,90</small></th>
+        <th>Premium<small>Trimestral · R$ 349,90</small></th>
       </tr></thead>
       <tbody>
         <tr><td>Análise de todas as corridas do dia</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
-        <tr><td>Confronto entre os galgos + nível de confiança</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
-        <tr><td>Alertas de corrida</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Painel de confronto + nível de confiança</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
         <tr><td>Histórico e taxa de acerto</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
-        <tr><td>Dashboard de desempenho (HR)</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Tela de corridas ao vivo</td><td><span class="yes">&#10003;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Configurações de Análise</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
         <tr><td>Controle de banca pessoal</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
-        <tr><td>Configurações de análise</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="no">&#215;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Função de carregar PDFs</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="yes">&#10003;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Alertas customizados de corridas</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="no">&#215;</span></td><td><span class="yes">&#10003;</span></td></tr>
+        <tr><td>Dashboard Geral e de desempenho (HR)</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="no">&#215;</span></td><td><span class="yes">&#10003;</span></td></tr>
         <tr><td>Suporte</td><td>Padrão</td><td class="col-best">Diário</td><td>Individualizado</td></tr>
         <tr><td>Grupo VIP</td><td><span class="no">&#215;</span></td><td class="col-best"><span class="no">&#215;</span></td><td><span class="yes">&#10003;</span></td></tr>
       </tbody>

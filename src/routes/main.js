@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { requireAdmin } = require('../middleware/auth');
 const { can } = require('../access/store');
+const { planLabel } = require('../utils/plans');
 const { designTokensCSS } = require('../utils/designTokens');
 const { nomeCorridaCompleto, nomePista } = require('../utils/nomesPistas');
 
@@ -42,7 +43,7 @@ function navBar(user, active) {
         <span style="display:inline-block;width:7px;height:7px;background:#60a5fa;border-radius:50%"></span>
         <span id="robot-badge-txt">Robô rodando...</span>
       </a>
-      <span id="nav-userinfo" style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${user.plan}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
+      <span id="nav-userinfo" style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${planLabel(user.plan)}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
       <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
     </div>
   </nav>

@@ -29,13 +29,16 @@ db.exec(
 
 function seedDefaults() {
   const seed = [
-    { key: 'admin',   name: 'Admin',   is_admin: 1, is_system: 1 },
-    { key: 'free',    name: 'Free',    is_admin: 0, is_system: 1 },
-    { key: 'pro',     name: 'Pro',     is_admin: 0, is_system: 1 },
-    { key: 'premium', name: 'Premium', is_admin: 0, is_system: 1 },
+    { key: 'admin',   name: 'Admin',    is_admin: 1, is_system: 1 },
+    { key: 'free',    name: 'Standard', is_admin: 0, is_system: 1 },
+    { key: 'pro',     name: 'Pró',      is_admin: 0, is_system: 1 },
+    { key: 'premium', name: 'Premium',  is_admin: 0, is_system: 1 },
   ];
   const ins = db.prepare('INSERT OR IGNORE INTO access_profiles(key,name,is_admin,is_system) VALUES(?,?,?,?)');
   seed.forEach(function (p) { ins.run(p.key, p.name, p.is_admin, p.is_system); });
+  // Migra nomes antigos para os novos rotulos, sem sobrescrever renome manual.
+  db.prepare("UPDATE access_profiles SET name='Standard' WHERE key='free' AND name='Free'").run();
+  db.prepare("UPDATE access_profiles SET name='Pró' WHERE key='pro' AND name IN ('Pro','Pró')").run();
 }
 seedDefaults();
 
