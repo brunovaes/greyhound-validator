@@ -609,6 +609,30 @@ function refreshFocusMode() {
   }
 }
 
+// Botao "Atualizar" ao lado de PROXIMAS. Se a tela esta mostrando corridas
+// ANTIGAS (PDFs de data anterior, carregados so pra estudo), o Atualizar
+// descarta elas e recarrega as corridas de HOJE — e o autoCheckAndAnalyze
+// mostra as de hoje OU a mensagem de "encerrado / sem corridas" se o dia
+// ja acabou. Se ja esta mostrando as de hoje, so faz o refresh normal.
+function atualizarProximas() {
+  var avbs = results.filter(function(r){ return r.nivel !== 'skip' && r.trapFav > 0; });
+  var soAntigas = avbs.length > 0 && avbs.every(isOldRaceCard);
+
+  if (soAntigas) {
+    // Descarta as corridas antigas e volta pro fluxo automatico do dia.
+    results = [];
+    raceFiles = [];
+    capFiles = [];
+    focusRaceIdx = -1;
+    clearSessionState();
+    autoCheckAndAnalyze();   // carrega as de hoje, ou avisa que nao ha corridas
+    return;
+  }
+
+  // Corridas de hoje (ou nada carregado) -> refresh normal da lista.
+  refreshFocusMode();
+}
+
 function enterFocusMode() {
   var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
@@ -851,7 +875,7 @@ function renderRaceListPanel(avbs) {
   if (!col) return;
   col.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)">'
     + '<span style="font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Próximas</span>'
-    + '<button onclick="refreshFocusMode()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
+    + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
   var first = true;
   var tc = ['','t1','t2','t3','t4','t5','t6'];
