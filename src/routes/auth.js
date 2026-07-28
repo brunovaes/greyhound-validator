@@ -134,13 +134,14 @@ td{padding:9px 12px;border-bottom:1px solid #222;font-size:12px;vertical-align:m
   .tw table{min-width:760px;border:none;border-radius:0}
 }
 </style></head><body>
-<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
-${navBar(req.user, 'admin')}
+${req.query.embed ? '' : `<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>`}
+${req.query.embed ? '' : navBar(req.user, 'admin')}
 <div class="content">
-<h1>Gestão de Usuários</h1>
+${req.query.embed ? '' : '<h1>Gestão de Usuários</h1>'}
 <div class="form-card">
   <h2>Criar novo usuário</h2>
   <form method="POST" action="${BASE}/admin/usuarios/criar">
+    <input type="hidden" name="embed" value="${req.query.embed ? '1' : ''}">
     <div class="form-grid">
       <div class="field"><label>Nome</label><input type="text" name="name" placeholder="Nome completo" required></div>
       <div class="field"><label>Email</label><input type="email" name="email" placeholder="email@exemplo.com" required></div>
@@ -159,7 +160,7 @@ ${users.map(u => `<tr>
   <td style="color:#888">${u.analyses_used}/${u.analyses_limit===999999?'&infin;':u.analyses_limit}</td>
   <td><span class="badge badge-${u.active?'on':'off'}">${u.active?'Ativo':'Inativo'}</span></td>
   <td style="color:#666;font-size:11px">${u.last_login?new Date(u.last_login).toLocaleDateString('pt-BR'):'Nunca'}</td>
-  <td><form method="POST" action="${BASE}/admin/usuarios/toggle" style="display:inline"><input type="hidden" name="id" value="${u.id}"><button type="submit" class="btn-sm">${u.active?'Desativar':'Ativar'}</button></form></td>
+  <td><form method="POST" action="${BASE}/admin/usuarios/toggle" style="display:inline"><input type="hidden" name="id" value="${u.id}"><input type="hidden" name="embed" value="${req.query.embed ? '1' : ''}"><button type="submit" class="btn-sm">${u.active?'Desativar':'Ativar'}</button></form></td>
 </tr>`).join('')}
 </tbody></table></div>
 </div></body></html>`);
@@ -169,14 +170,14 @@ router.post('/admin/usuarios/criar', requireAdmin, express.urlencoded({ extended
   const { name, email, password, role, plan } = req.body;
   const limit = plan === 'premium' ? 999999 : plan === 'pro' ? 200 : 30;
   createUser(name, email, password, role, plan, limit);
-  res.redirect(BASE + '/admin/usuarios');
+  res.redirect(BASE + '/admin/usuarios' + (req.body.embed === '1' ? '?embed=1' : ''));
 });
 
 router.post('/admin/usuarios/toggle', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
   const { id } = req.body;
   const user = db.prepare('SELECT active FROM users WHERE id=?').get(id);
   if (user) db.prepare('UPDATE users SET active=? WHERE id=?').run(user.active ? 0 : 1, id);
-  res.redirect(BASE + '/admin/usuarios');
+  res.redirect(BASE + '/admin/usuarios' + (req.body.embed === '1' ? '?embed=1' : ''));
 });
 
 module.exports = router;

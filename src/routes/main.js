@@ -26,8 +26,6 @@ function navBar(user, active) {
       ${can(user,'screen.banca') ? `<a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Painel Admin</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/admin/usuarios" class="nl${active==='admin'?' na':''}">Usuários</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/acessos" class="nl${active==='acessos'?' na':''}">Acessos</a>` : ''}
       ${can(user,'screen.live') ? `<a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>` : ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">

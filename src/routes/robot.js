@@ -525,6 +525,7 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 .robot-menu-item .icon{font-size:16px}
 .robot-content{flex:1;padding:24px 0;overflow-y:auto;min-width:0}
 .robot-panel{display:none}.robot-panel.active{display:block}
+.admin-embed{width:100%;min-height:calc(100vh - 240px);border:none;background:#0D1117;display:block}
 @media(max-width:800px){
   html,body{max-width:100%;overflow-x:hidden}
   .layout{flex-direction:column;padding:0 12px;gap:12px;max-width:100%}
@@ -609,6 +610,8 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
   <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Automação</button>
   <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
+  <button class="robot-menu-item" id="mb-usuarios" onclick="showPanel('usuarios')"><span class="icon">${icon('list',{size:16})}</span> Usuários</button>
+  <button class="robot-menu-item" id="mb-acessos" onclick="showPanel('acessos')"><span class="icon">${icon('gear',{size:16})}</span> Acessos</button>
   <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
   <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
@@ -827,6 +830,13 @@ ${navBar(req.user, 'robot')}
   </div>
 </div><!-- fim panel-export -->
 
+<div class="robot-panel" id="panel-usuarios">
+  <iframe class="admin-embed" data-src="${BASE}/admin/usuarios?embed=1" title="Usuários" onload="window.resizeEmbed&&resizeEmbed(this)"></iframe>
+</div>
+<div class="robot-panel" id="panel-acessos">
+  <iframe class="admin-embed" data-src="${BASE}/acessos?embed=1" title="Acessos" onload="window.resizeEmbed&&resizeEmbed(this)"></iframe>
+</div>
+
 </div><!-- fim robot-content -->
 </div><!-- fim layout -->
 
@@ -1025,8 +1035,20 @@ async function downloadAll() {
 function showPanel(id) {
   document.querySelectorAll('.robot-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.robot-menu-item').forEach(b => b.classList.remove('active'));
-  document.getElementById('panel-' + id).classList.add('active');
+  var panel = document.getElementById('panel-' + id);
+  panel.classList.add('active');
   document.getElementById('mb-' + id).classList.add('active');
+  // Carrega o iframe (Usuários/Acessos) só na 1a vez que a aba abre.
+  var fr = panel.querySelector('iframe.admin-embed');
+  if (fr && !fr.getAttribute('src') && fr.dataset.src) fr.setAttribute('src', fr.dataset.src);
+}
+// Ajusta a altura do iframe embutido ao conteudo (mesma origem).
+function resizeEmbed(f) {
+  try {
+    var h = f.contentWindow.document.body.scrollHeight;
+    if (h > 0) f.style.height = (h + 20) + 'px';
+    setTimeout(function(){ try { f.style.height = (f.contentWindow.document.body.scrollHeight + 20) + 'px'; } catch(e){} }, 600);
+  } catch (e) { /* fallback: usa o min-height do CSS */ }
 }
 
 // ── Robô de Resultados ───────────────────────────────────────────────────────

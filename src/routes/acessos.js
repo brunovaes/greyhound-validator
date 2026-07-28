@@ -87,10 +87,10 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
   .tabnav .tabbtn{width:auto;white-space:nowrap;flex-shrink:0}
 }
 </style></head><body>
-<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
-${navBar(req.user, 'acessos')}
+${req.query.embed ? '' : `<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>`}
+${req.query.embed ? '' : navBar(req.user, 'acessos')}
 <div class="content">
-<h1>Controle de Acessos</h1>
+${req.query.embed ? '' : '<h1>Controle de Acessos</h1>'}
 <p class="sub">Escolha um perfil e ligue/desligue o que ele pode ver e usar. O perfil Admin libera tudo automaticamente.</p>
 <div class="alert ok" id="alert"></div>
 
