@@ -505,10 +505,13 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   #val-modal{align-items:stretch!important;padding:10px!important}
   #val-box{width:100%!important;max-width:100%!important;height:100%!important;max-height:100%!important;overflow:hidden!important}
   #val-hdr{flex-shrink:0!important}
-  #val-body{flex:1 1 auto!important;min-height:0!important;height:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
+  #val-body{flex:1 1 auto!important;min-height:0!important;height:auto!important;overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
   #val-body.val-compact{max-height:none!important}
-  .val-dog{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
-  .val-tbl{table-layout:auto!important;width:auto!important;min-width:600px!important}
+  /* Conteudo do relatorio/confronto: alinhado a esquerda e sem centralizar,
+     pra rolagem horizontal comecar mostrando o inicio (nome do galgo) */
+  #val-body > *{margin-left:0!important;margin-right:0!important}
+  .val-dog{overflow-x:visible!important}
+  .val-tbl{table-layout:auto!important;width:auto!important;min-width:560px!important}
 }
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
