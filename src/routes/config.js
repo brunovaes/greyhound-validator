@@ -707,39 +707,86 @@ function _instalado(){ return window.navigator.standalone===true || (window.matc
 
 async function statusPush(){
   var el=document.getElementById('push-status'); if(!el) return null;
+  // Diagnostico do proprio aparelho, sempre visivel. Serve pra ninguem
+  // precisar adivinhar em que pe as coisas estao.
+  var diag=[];
+  diag.push('Aparelho: '+(_iOS()?'iOS':'outro'));
+  diag.push('aberto pelo icone (standalone): '+(_instalado()?'sim':'NAO'));
+  diag.push('serviceWorker: '+(('serviceWorker' in navigator)?'sim':'NAO'));
+  diag.push('PushManager: '+(('PushManager' in window)?'sim':'NAO'));
+  diag.push('permissao: '+(('Notification' in window)?Notification.permission:'API ausente'));
+  var linhaDiag='<div style="font-size:11px;color:#666;margin-top:6px;line-height:1.7">'+diag.join(' · ')+'</div>';
+
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-    if(_iOS() && !_instalado()){
-      el.innerHTML='<span style="color:#f97316">Este iPhone ainda nao instalou o app.</span> Abra no <strong>Safari</strong>, toque em Compartilhar, "Adicionar a Tela de Inicio", e ative por ali.';
-    } else {
-      el.innerHTML='<span style="color:#ef4444">Este navegador nao suporta notificacoes push.</span>';
-    }
-    return null;
+    var aviso = (_iOS() && !_instalado())
+      ? '<span style="color:#f97316">Este iPhone abriu pela aba do navegador.</span> Abra no <strong>Safari</strong>, Compartilhar, "Adicionar a Tela de Inicio", e use o icone.'
+      : '<span style="color:#ef4444">Este navegador nao suporta notificacoes push.</span>';
+    el.innerHTML=aviso+linhaDiag; return null;
   }
   try{
     var r=await fetch('${BASE}/api/push/status'); var d=await r.json();
-    if(!d.ativo){ el.innerHTML='<span style="color:#ef4444">Push desligado no servidor:</span> '+(d.motivo||'')+'. Falta cadastrar as variaveis VAPID.'; return d; }
-    el.innerHTML = d.aparelhos
-      ? '<span style="color:#22c55e">Ativo.</span> '+d.aparelhos+' aparelho(s) inscrito(s) neste login.'
-      : 'Push disponivel, mas <strong>nenhum aparelho inscrito</strong> ainda.';
+    var txt;
+    if(!d.ativo){
+      txt='<span style="color:#ef4444">Push desligado no servidor:</span> '+(d.motivo||'')+'.';
+    } else if(d.aparelhos){
+      txt='<span style="color:#22c55e">Ativo.</span> '+d.aparelhos+' aparelho(s) inscrito(s) <strong>neste login</strong>'
+        + (d.totalSistema!=null && d.totalSistema>d.aparelhos ? ' (o sistema tem '+d.totalSistema+' no total, em outros logins)' : '') + '.';
+    } else {
+      txt='Push disponivel, mas <strong>nenhum aparelho inscrito neste login</strong>'
+        + (d.totalSistema ? ' — existem '+d.totalSistema+' inscrito(s) em OUTROS logins, entao provavelmente voce ativou logado com outro usuario.' : '.');
+    }
+    el.innerHTML=txt+linhaDiag;
     return d;
-  }catch(e){ el.innerHTML='<span style="color:#ef4444">Erro ao consultar status: '+e.message+'</span>'; return null; }
+  }catch(e){ el.innerHTML='<span style="color:#ef4444">Erro ao consultar status: '+e.message+'</span>'+linhaDiag; return null; }
+}
+
+// Passo a passo visivel. Cada etapa escreve na tela ANTES de tentar, entao se
+// travar da pra ver exatamente onde. A versao anterior falhava em silencio:
+// se o service worker nao estivesse registrado, o await ficava pendurado pra
+// sempre sem erro nenhum.
+function _passo(n,txt){ _pushMsg('['+n+'/5] '+txt,'#eab308'); }
+function _comLimite(promessa,ms,oque){
+  return Promise.race([promessa, new Promise(function(_,rej){
+    setTimeout(function(){ rej(new Error('tempo esgotado esperando '+oque+' ('+(ms/1000)+'s)')); }, ms);
+  })]);
 }
 
 async function ativarPush(){
-  _pushMsg('Ativando…');
-  var d=await statusPush();
-  if(!d||!d.ativo||!d.chavePublica){ _pushMsg('Nao da pra ativar agora, veja a mensagem acima.','#ef4444'); return; }
   try{
-    var perm=await Notification.requestPermission();
-    if(perm!=='granted'){ _pushMsg('Permissao negada. Libere as notificacoes nos ajustes do aparelho e tente de novo.','#ef4444'); return; }
-    var reg=await navigator.serviceWorker.ready;
+    _passo(1,'checando suporte do navegador…');
+    if(!('serviceWorker' in navigator)) throw new Error('este navegador nao tem serviceWorker');
+    if(!('PushManager' in window))      throw new Error('este navegador nao tem PushManager' + (_iOS()&&!_instalado() ? ' — no iPhone e preciso abrir pelo icone da Tela de Inicio, nao pela aba do navegador' : ''));
+    if(!('Notification' in window))     throw new Error('este navegador nao tem Notification');
+
+    _passo(2,'consultando o servidor…');
+    var r0=await fetch('${BASE}/api/push/status'); var d=await r0.json();
+    if(!d.ativo) throw new Error('push desligado no servidor: '+(d.motivo||''));
+    if(!d.chavePublica) throw new Error('servidor nao devolveu a chave publica');
+
+    _passo(3,'registrando o service worker…');
+    // Registra aqui tambem, sem depender do alertaGlobal.js ter rodado.
+    // register() e' idempotente.
+    await navigator.serviceWorker.register('${BASE}/sw.js',{scope:'${BASE}/'});
+    var reg=await _comLimite(navigator.serviceWorker.ready, 15000, 'o service worker ficar ativo');
+
+    _passo(4,'pedindo permissao (permissao atual: '+Notification.permission+')…');
+    var perm=Notification.permission;
+    if(perm==='default') perm=await Notification.requestPermission();
+    if(perm!=='granted') throw new Error('permissao "'+perm+'". Va em Ajustes > Notificacoes > Greyhound e libere. Se o app nao estiver na lista, remova o icone da Tela de Inicio e instale de novo pelo Safari.');
+
+    _passo(5,'assinando e enviando ao servidor…');
     var sub=await reg.pushManager.getSubscription();
-    if(!sub){ sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_b64ParaBytes(d.chavePublica)}); }
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_b64ParaBytes(d.chavePublica)});
     var r=await fetch('${BASE}/api/push/subscrever',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub})});
-    if(!r.ok){ var er=await r.json().catch(function(){return{};}); throw new Error(er.error||('HTTP '+r.status)); }
-    _pushMsg('Aparelho inscrito. Use "Enviar teste" pra confirmar, de preferencia com a tela bloqueada.','#22c55e');
+    var rd=await r.json().catch(function(){return{};});
+    if(!r.ok) throw new Error('servidor recusou a inscricao: '+(rd.error||('HTTP '+r.status)));
+
+    _pushMsg('Pronto! Aparelho inscrito. Agora peca o teste DE OUTRO aparelho (ex.: notebook) com este aqui bloqueado.','#22c55e');
     statusPush();
-  }catch(e){ _pushMsg('Falhou: '+e.message,'#ef4444'); }
+  }catch(e){
+    _pushMsg('Parou aqui: '+e.message,'#ef4444');
+    console.error('[push] ativar falhou:', e);
+  }
 }
 
 async function testarPush(){

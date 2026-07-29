@@ -20,6 +20,7 @@ router.get('/status', (req, res) => {
     motivo: sender.disponivel() ? null : sender.motivoInativo(),
     chavePublica: sender.chavePublica(),
     aparelhos: subs.length,
+    totalSistema: store.listarTodas().length,   // ajuda a detectar "inscrevi com outro login"
     lista: subs.map(s => ({
       id: s.endpoint.slice(-12),          // so o final, pra identificar sem expor
       userAgent: s.user_agent || '',
