@@ -192,6 +192,18 @@
   ['click', 'keydown', 'touchstart'].forEach(function (ev) { document.addEventListener(ev, initGesto); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) pararFlash(); });
 
+  /* ---- service worker (Web Push) ----
+   * Registra o sw.js em toda tela autenticada. E' idempotente: chamar de novo
+   * com o mesmo caminho nao cria outro registro. Precisa estar registrado
+   * ANTES de o botao "Ativar notificacoes" (Configuracoes) tentar assinar.
+   * O caminho e' BASE + '/sw.js' de proposito — servido de /static/ o escopo
+   * nao cobriria as telas do sistema. */
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' })
+      .then(function (reg) { console.log('[push] service worker registrado, escopo:', reg.scope); })
+      .catch(function (e) { console.warn('[push] service worker nao registrou:', e && e.message); });
+  }
+
   ciclo();
   setInterval(ciclo, 15000);
 })();

@@ -384,6 +384,20 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 </div>
 </div>
+
+<div class="section">
+<div class="sec-title">Notificações no celular (push)</div>
+<div class="info-box">
+  O alarme comum depende de o site estar aberto na tela. A notificação push é diferente: quem envia é o <strong>servidor</strong>, então ela chega com o celular bloqueado, no bolso, com o navegador fechado.<br><br>
+  <strong>No iPhone existe uma exigência da Apple:</strong> só funciona a partir do site instalado na Tela de Início, e a instalação precisa ser feita pelo <strong>Safari</strong> (pelo Chrome não existe). Abra o site no Safari, toque em Compartilhar, "Adicionar à Tela de Início", e ative a notificação pelo ícone que aparecer.
+</div>
+<div id="push-status" style="font-size:13px;color:#888;margin-bottom:12px">Verificando…</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+  <button type="button" class="btn-save" id="push-ativar" onclick="ativarPush()">Ativar notificações neste aparelho</button>
+  <button type="button" class="btn-reset" id="push-testar" onclick="testarPush()">Enviar teste</button>
+</div>
+<div id="push-msg" style="font-size:12px;margin-top:10px"></div>
+</div>
 </div>
 
 
@@ -676,6 +690,69 @@ var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4
 function previewCorAlarme(){ var s=document.getElementById('alarme_filtro_cor'), pv=document.getElementById('alarme_cor_preview'); if(s&&pv)pv.style.background=CORES_ALARME_CFG[s.value]||'#3b82f6'; }
 function coletaAlarme(tipo){ var cls=tipo==='pista'?'alarme-pista-cb':'alarme-classe-cb'; var hid=tipo==='pista'?'alarme_pistas_val':'alarme_classes_val'; var vals=[]; document.querySelectorAll('.'+cls).forEach(function(cb){ if(cb.checked)vals.push(cb.value); }); var h=document.getElementById(hid); if(h)h.value=vals.join(','); }
 function testarSom(btn){ var el=document.getElementById('som_alerta'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
+// ===== Notificacoes push =====
+// A chave publica VAPID vem em base64url e o PushManager exige Uint8Array.
+function _b64ParaBytes(b64){
+  var pad='='.repeat((4-b64.length%4)%4);
+  var raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  var out=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+function _pushMsg(txt,cor){ var e=document.getElementById('push-msg'); if(e){e.textContent=txt;e.style.color=cor||'#888';} }
+// No iOS, standalone=true significa "aberto pelo icone da Tela de Inicio".
+// Fora disso o PushManager simplesmente nao existe, por decisao da Apple.
+function _iOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent); }
+function _instalado(){ return window.navigator.standalone===true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); }
+
+async function statusPush(){
+  var el=document.getElementById('push-status'); if(!el) return null;
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    if(_iOS() && !_instalado()){
+      el.innerHTML='<span style="color:#f97316">Este iPhone ainda nao instalou o app.</span> Abra no <strong>Safari</strong>, toque em Compartilhar, "Adicionar a Tela de Inicio", e ative por ali.';
+    } else {
+      el.innerHTML='<span style="color:#ef4444">Este navegador nao suporta notificacoes push.</span>';
+    }
+    return null;
+  }
+  try{
+    var r=await fetch('${BASE}/api/push/status'); var d=await r.json();
+    if(!d.ativo){ el.innerHTML='<span style="color:#ef4444">Push desligado no servidor:</span> '+(d.motivo||'')+'. Falta cadastrar as variaveis VAPID.'; return d; }
+    el.innerHTML = d.aparelhos
+      ? '<span style="color:#22c55e">Ativo.</span> '+d.aparelhos+' aparelho(s) inscrito(s) neste login.'
+      : 'Push disponivel, mas <strong>nenhum aparelho inscrito</strong> ainda.';
+    return d;
+  }catch(e){ el.innerHTML='<span style="color:#ef4444">Erro ao consultar status: '+e.message+'</span>'; return null; }
+}
+
+async function ativarPush(){
+  _pushMsg('Ativando…');
+  var d=await statusPush();
+  if(!d||!d.ativo||!d.chavePublica){ _pushMsg('Nao da pra ativar agora, veja a mensagem acima.','#ef4444'); return; }
+  try{
+    var perm=await Notification.requestPermission();
+    if(perm!=='granted'){ _pushMsg('Permissao negada. Libere as notificacoes nos ajustes do aparelho e tente de novo.','#ef4444'); return; }
+    var reg=await navigator.serviceWorker.ready;
+    var sub=await reg.pushManager.getSubscription();
+    if(!sub){ sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_b64ParaBytes(d.chavePublica)}); }
+    var r=await fetch('${BASE}/api/push/subscrever',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub})});
+    if(!r.ok){ var er=await r.json().catch(function(){return{};}); throw new Error(er.error||('HTTP '+r.status)); }
+    _pushMsg('Aparelho inscrito. Use "Enviar teste" pra confirmar, de preferencia com a tela bloqueada.','#22c55e');
+    statusPush();
+  }catch(e){ _pushMsg('Falhou: '+e.message,'#ef4444'); }
+}
+
+async function testarPush(){
+  _pushMsg('Enviando…');
+  try{
+    var r=await fetch('${BASE}/api/push/testar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    var d=await r.json();
+    if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+    _pushMsg('Enviado para '+d.enviados+' de '+d.total+' aparelho(s). Se nao chegar em ate 1 min, o aparelho pode ter revogado a inscricao.','#22c55e');
+  }catch(e){ _pushMsg('Falhou: '+e.message,'#ef4444'); }
+}
+document.addEventListener('DOMContentLoaded', statusPush);
+
 function upR(input){var n=input.name;var v=document.getElementById('v_'+n);var b=document.getElementById('b_'+n);if(v)v.textContent=input.value+(n.startsWith('pct')?'%':'');if(b)b.style.width=(input.value*10)+'%';}
 // Liga/desliga visualmente os campos de um bloco quando o switch muda. NAO
 // usa o atributo "disabled" nos inputs — campos disabled ficam de fora do
