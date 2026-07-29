@@ -45,6 +45,7 @@ function navBar(user, active) {
       <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
     </div>
   </nav>
+  <script src="${BASE}/static/js/alertaGlobal.js" defer></script>
   <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
     <span style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
     <div style="display:flex;align-items:center;gap:10px">
@@ -281,12 +282,11 @@ function navBar(user, active) {
         if (!proxima) { badge.style.display = 'none'; return; }
         document.getElementById('race-alert-txt').textContent = proxima.corrida + ' em ' + proximaMin + ' min';
         badge.style.display = 'flex';
-        var key = proxima.hora + '|' + proxima.corrida;
-        if (!alertedRacesGlobal[key]) {
-          alertedRacesGlobal[key] = true;
-          salvarAlertedRacesGlobal();
-          tocarSomAlertaGlobal(d.som_alerta);
-        }
+        // O SOM saiu daqui de proposito. Este bloco cuida so do SELO no menu.
+        // Quem toca e' o app.js (tela Analisar) ou o alertaGlobal.js (demais
+        // telas) — os dois respeitam o "Alarme para filtro selecionado"
+        // (turno/pista/classe, som e cor), coisa que este trecho antigo nunca
+        // fez. Manter os dois tocando duplicava o aviso.
       }).catch(function(){});
     }
     checkRaceProximity();

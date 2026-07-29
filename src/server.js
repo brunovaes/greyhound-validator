@@ -31,7 +31,11 @@ app.use(BASE + '/banca', requireLogin, require('./routes/banca'));
 app.use(BASE + '/acessos', requireLogin, require('./routes/acessos'));
 app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__dirname, '../public/pdfs')));
 
-app.get('/', (req, res) => res.redirect(BASE));
+// Landing publica: "/" e "/conheca", fora do BASE e sem login. Precisa vir
+// depois das rotas do BASE (nao ha conflito de caminho) e substitui o antigo
+// redirect direto pro login. O proprio landing.js ja cai no redirect pro BASE
+// se o HTML nao for encontrado, entao nao ha risco de rota morta.
+app.use('/', require('./routes/landing'));
 
 app.listen(PORT, () => {
   console.log(`Greyhound Validator em http://localhost:${PORT}${BASE}`);
