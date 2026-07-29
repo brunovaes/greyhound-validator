@@ -326,7 +326,7 @@ router.get('/manifest.json', (req, res) => {
   res.setHeader('Content-Type', 'application/manifest+json');
   res.json({
     name: 'Greyhound Factory',
-    short_name: 'Greyhound',
+    short_name: 'GF',   // curto de proposito: o iOS anexa este nome em toda notificacao ("from GF")
     description: 'Analise de corridas de galgos',
     start_url: BASE + '/',
     scope: BASE + '/',
@@ -364,7 +364,7 @@ router.get('/', (req, res) => {
 <link rel="manifest" href="${BASE}/manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Greyhound">
+<meta name="apple-mobile-web-app-title" content="GF">
 <meta name="theme-color" content="#0D1117">
 <link rel="apple-touch-icon" href="${BASE}/static/img/logo.png">
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">

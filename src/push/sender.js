@@ -137,9 +137,15 @@ function montarPayloadCorrida(c, opts) {
     c.dist ? c.dist + 'm' : null
   ].filter(Boolean).join(' · ');
 
+  // "CORRIDA SELECIONADA" vai na primeira linha do CORPO, e nao no titulo, de
+  // proposito: o iOS anexa "from <nome do app>" ao titulo e, quando varias
+  // notificacoes empilham, so o titulo aparece. Mantendo hora e pista la em
+  // cima, da pra identificar a corrida sem expandir.
+  const chamada = o.chamada === false ? null : '❗CORRIDA SELECIONADA';
+
   return {
     titulo: '🏁 ' + (c.horaBr || '--:--') + ' 📍 ' + (local || 'corrida'),
-    corpo: [linha1, linha2].filter(Boolean).join('\n'),
+    corpo: [chamada, linha1, linha2].filter(Boolean).join('\n'),
     url: c.url || (process.env.BASE_PATH || '/greyhound'),
     tag: c.tag || ('corrida-' + (c.horaBr || '') + '-' + (c.pista || '')),
     icone: (process.env.BASE_PATH || '/greyhound') + '/static/img/logo.png'
