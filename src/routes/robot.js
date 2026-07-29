@@ -64,52 +64,150 @@ function scheduleCronRobot() {
   const msUntil = nextRun - now;
   console.log('[CRON] Próxima coleta automática em ' + Math.round(msUntil/60000) + ' minutos (' + nextRun.toISOString() + ')');
   setTimeout(async function() {
-    if (!robotStatus.running) {
-      const date = getTodayDate();
-      console.log('[CRON] 🤖 Iniciando coleta automática para ' + date);
-      resetStatus();
-      robotStatus.running = true;
-      addLog('info', '🌙 Coleta automática iniciada — ' + date);
-      try {
-        await runRobot(date, 400, 575, '', '');
-        addLog('ok', '✅ Coleta automática concluída — ' + robotStatus.pdfs.length + ' PDFs');
-        console.log('[CRON] Coleta concluída: ' + robotStatus.pdfs.length + ' PDFs');
-        cleanOldPdfFolders();
-
-        // Encadeia a analise automatica logo depois — antes, so a coleta de
-        // PDF era automatica; a analise em si (rodar o motor, criar a sessao
-        // do dia) dependia de alguem abrir o navegador. Pedido do Bruno em
-        // 15/07/2026.
-        try {
-          addLog('info', '🧠 Iniciando analise automatica — ' + date);
-          const { rodarAnaliseAutomatica } = require('./api');
-          const resultado = await rodarAnaliseAutomatica(date, 1);
-          if (resultado.ok) {
-            addLog('ok', '✅ Analise automatica concluida — ' + resultado.avbs + '/' + resultado.total + ' AvBs (sessao ' + resultado.sessionId + ')');
-            console.log('[CRON] Analise automatica concluida: ' + resultado.avbs + ' AvBs');
-          } else if (resultado.jaExistia) {
-            addLog('info', 'ℹ️ Sessao de ' + date + ' ja existia, analise automatica pulada.');
-          } else {
-            addLog('err', '❌ Analise automatica falhou: ' + resultado.erro);
-            console.error('[CRON] Analise automatica falhou:', resultado.erro);
-          }
-        } catch(errAnalise) {
-          addLog('err', '❌ Erro na analise automatica: ' + errAnalise.message);
-          console.error('[CRON] Erro na analise automatica:', errAnalise.message);
-        }
-      } catch(e) {
-        addLog('err', '❌ Erro na coleta automática: ' + e.message);
-        console.error('[CRON] Erro:', e.message);
-        robotStatus.running = false;
-        robotStatus.error = e.message;
-      }
-    } else {
-      console.log('[CRON] Robô já está rodando, coleta automática ignorada.');
-    }
-    scheduleCronRobot(); // reagenda para amanhã
+    await tentarColeta('cron 06:00');
+    scheduleCronRobot(); // reagenda para amanha
   }, msUntil);
 }
+
+// ─── COLETA: EXECUCAO + REDE DE SEGURANCA ─────────────────────────────────
+// O agendador acima vive num setTimeout dentro do processo. Se o servidor cair
+// ou for reimplantado (todo git push e um restart no Railway), o timer morre
+// junto; ao voltar depois das 06:00 o codigo agendava pra AMANHA e o dia ficava
+// sem coleta nenhuma. Aqui entram os tres gatilhos que fecham esse buraco:
+//   1) cron 06:00       — o de sempre
+//   2) 2a tentativa     — 06:30, cobre falha de execucao (Browserless/site fora)
+//   3) catch-up no boot — cobre ausencia de execucao (servidor estava fora)
+// Todos passam pelas MESMAS travas de tentarColeta(), entao nao se atropelam
+// nem baixam tudo de novo quando a coleta do dia ja deu certo.
+
+const PDF_CRON_RETRY_BRT   = '06:30'; // 2a tentativa; constante de proposito (ver nota do PDF_CRON_BRT)
+const COLETA_MAX_TENTATIVAS = 3;      // teto do dia, somando os tres gatilhos
+const COLETA_JANELA_INI_BRT = 6;      // antes disso nao ha card publicado
+const COLETA_JANELA_FIM_BRT = 18;     // depois disso o dia de corridas ja acabou
+const COLETA_INTERVALO_MIN  = 20;     // varios deploys seguidos = 1 tentativa, nao varias
+const COLETA_BOOT_DELAY_MIN = 3;      // folga pro Browserless e os outros robos subirem
+
+// Hora atual em BRT (0-23.99). O servidor roda em UTC no Railway — mesma
+// premissa do scheduleCronRobot(), que faz utcH = brtH + 3.
+function horaBRT() {
+  const d = new Date();
+  return ((d.getUTCHours() - 3 + 24) % 24) + d.getUTCMinutes() / 60;
+}
+
+// Controle diario da coleta, persistido em robot_logs (tabela que ja existe e
+// sobrevive a restart). Nao mexe no schema: e so mais uma chave.
+function lerControleColeta() {
+  const hoje = getTodayDate();
+  const c = loadRobotLog('pdf_cron_control');
+  if (!c || c.date !== hoje) return { date: hoje, tentativas: 0, ok: false, ultimaEm: null };
+  return { date: c.date, tentativas: c.tentativas || 0, ok: !!c.ok, ultimaEm: c.ultimaEm || null };
+}
+function gravarControleColeta(c) { saveRobotLog('pdf_cron_control', c); }
+
+// Executa a coleta + analise. Identico ao que rodava inline no cron.
+async function executarColeta() {
+    const date = getTodayDate();
+    console.log('[CRON] 🤖 Iniciando coleta automática para ' + date);
+    resetStatus();
+    robotStatus.running = true;
+    addLog('info', '🌙 Coleta automática iniciada — ' + date);
+    try {
+      await runRobot(date, 400, 575, '', '');
+      addLog('ok', '✅ Coleta automática concluída — ' + robotStatus.pdfs.length + ' PDFs');
+      console.log('[CRON] Coleta concluída: ' + robotStatus.pdfs.length + ' PDFs');
+      cleanOldPdfFolders();
+
+      // Encadeia a analise automatica logo depois — antes, so a coleta de
+      // PDF era automatica; a analise em si (rodar o motor, criar a sessao
+      // do dia) dependia de alguem abrir o navegador. Pedido do Bruno em
+      // 15/07/2026.
+      try {
+        addLog('info', '🧠 Iniciando analise automatica — ' + date);
+        const { rodarAnaliseAutomatica } = require('./api');
+        const resultado = await rodarAnaliseAutomatica(date, 1);
+        if (resultado.ok) {
+          addLog('ok', '✅ Analise automatica concluida — ' + resultado.avbs + '/' + resultado.total + ' AvBs (sessao ' + resultado.sessionId + ')');
+          console.log('[CRON] Analise automatica concluida: ' + resultado.avbs + ' AvBs');
+        } else if (resultado.jaExistia) {
+          addLog('info', 'ℹ️ Sessao de ' + date + ' ja existia, analise automatica pulada.');
+        } else {
+          addLog('err', '❌ Analise automatica falhou: ' + resultado.erro);
+          console.error('[CRON] Analise automatica falhou:', resultado.erro);
+        }
+      } catch(errAnalise) {
+        addLog('err', '❌ Erro na analise automatica: ' + errAnalise.message);
+        console.error('[CRON] Erro na analise automatica:', errAnalise.message);
+      }
+    } catch(e) {
+      addLog('err', '❌ Erro na coleta automática: ' + e.message);
+      console.error('[CRON] Erro:', e.message);
+      robotStatus.running = false;
+      robotStatus.error = e.message;
+    }
+}
+
+// Porta de entrada unica dos tres gatilhos. Devolve true se chegou a rodar.
+async function tentarColeta(origem) {
+  const ctrl = lerControleColeta();
+  const h = horaBRT();
+  const pula = (motivo) => { console.log('[COLETA] (' + origem + ') pulada: ' + motivo); return false; };
+
+  if (ctrl.ok)                                return pula('coleta de ' + ctrl.date + ' ja concluida');
+  if (robotStatus.running)                    return pula('robo ja esta rodando');
+  if (h < COLETA_JANELA_INI_BRT || h >= COLETA_JANELA_FIM_BRT)
+                                              return pula('fora da janela ' + COLETA_JANELA_INI_BRT + 'h-' + COLETA_JANELA_FIM_BRT + 'h BRT (agora ' + h.toFixed(2) + ')');
+  if (ctrl.tentativas >= COLETA_MAX_TENTATIVAS)
+                                              return pula('teto de ' + COLETA_MAX_TENTATIVAS + ' tentativas atingido hoje');
+  if (ctrl.ultimaEm && (Date.now() - ctrl.ultimaEm) < COLETA_INTERVALO_MIN * 60000)
+                                              return pula('ultima tentativa ha menos de ' + COLETA_INTERVALO_MIN + ' min');
+
+  // Marca a tentativa ANTES de rodar: se o processo cair no meio, ela conta
+  // do mesmo jeito e o teto continua valendo.
+  ctrl.tentativas += 1;
+  ctrl.ultimaEm = Date.now();
+  gravarControleColeta(ctrl);
+  console.log('[COLETA] (' + origem + ') tentativa ' + ctrl.tentativas + '/' + COLETA_MAX_TENTATIVAS + ' — iniciando');
+  addLog('info', '🔁 Coleta acionada por: ' + origem + ' (tentativa ' + ctrl.tentativas + '/' + COLETA_MAX_TENTATIVAS + ')');
+
+  try {
+    await executarColeta();
+  } catch (e) {
+    console.error('[COLETA] (' + origem + ') erro nao tratado:', e.message);
+  }
+
+  // Sucesso = trouxe pelo menos 1 PDF. Sem PDF nenhum, deixa ok=false pra que
+  // o proximo gatilho ainda possa tentar dentro do teto.
+  const trouxe = (robotStatus.pdfs && robotStatus.pdfs.length) || 0;
+  const fim = lerControleColeta();
+  fim.ok = trouxe > 0;
+  gravarControleColeta(fim);
+  console.log('[COLETA] (' + origem + ') fim — ' + trouxe + ' PDFs, ok=' + fim.ok);
+  return true;
+}
+
+// Gatilho 2: segunda tentativa no mesmo dia.
+function scheduleRetryColeta() {
+  const _r = PDF_CRON_RETRY_BRT.split(':');
+  let utcH = (parseInt(_r[0], 10) || 6) + 3; if (utcH >= 24) utcH -= 24;
+  const utcM = parseInt(_r[1], 10) || 30;
+  const agora = new Date();
+  const prox = new Date();
+  prox.setUTCHours(utcH, utcM, 0, 0);
+  if (prox <= agora) prox.setUTCDate(prox.getUTCDate() + 1);
+  const ms = prox - agora;
+  console.log('[COLETA] 2a tentativa (' + PDF_CRON_RETRY_BRT + ' BRT) em ' + Math.round(ms / 60000) + ' min');
+  setTimeout(async function() {
+    await tentarColeta('2a tentativa ' + PDF_CRON_RETRY_BRT);
+    scheduleRetryColeta();
+  }, ms);
+}
+
 scheduleCronRobot();
+scheduleRetryColeta();
+// Gatilho 3: catch-up ao ligar. As travas de tentarColeta() decidem se roda.
+setTimeout(function() {
+  tentarColeta('catch-up no boot').catch(function(e) { console.error('[COLETA] catch-up:', e.message); });
+}, COLETA_BOOT_DELAY_MIN * 60000);
 
 
 // ─── CRON RESULTADOS — a cada 30 min entre 07:30–19:30 BRT ───────────────────
