@@ -91,7 +91,7 @@ function montarPayload({ titulo, corpo, url, tag, icone }) {
     corpo: corpo || '',
     url: url || (process.env.BASE_PATH || '/greyhound'),
     tag: tag || 'geral',
-    icone: icone || ((process.env.BASE_PATH || '/greyhound') + '/static/img/logo.png')
+    icone: icone || ((process.env.BASE_PATH || '/greyhound') + '/static/img/icon-180.png')
   };
 }
 
@@ -148,7 +148,7 @@ function montarPayloadCorrida(c, opts) {
     corpo: [chamada, linha1, linha2].filter(Boolean).join('\n'),
     url: c.url || (process.env.BASE_PATH || '/greyhound'),
     tag: c.tag || ('corrida-' + (c.horaBr || '') + '-' + (c.pista || '')),
-    icone: (process.env.BASE_PATH || '/greyhound') + '/static/img/logo.png'
+    icone: (process.env.BASE_PATH || '/greyhound') + '/static/img/icon-180.png'
   };
 }
 

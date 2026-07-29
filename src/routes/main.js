@@ -335,8 +335,8 @@ router.get('/manifest.json', (req, res) => {
     background_color: '#0D1117',
     theme_color: '#0D1117',
     icons: [
-      { src: BASE + '/static/img/logo.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: BASE + '/static/img/logo.png', sizes: '512x512', type: 'image/png', purpose: 'any' }
+      { src: BASE + '/static/img/icon-180.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
+      { src: BASE + '/static/img/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }
     ]
   });
 });
@@ -366,7 +366,7 @@ router.get('/', (req, res) => {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GF">
 <meta name="theme-color" content="#0D1117">
-<link rel="apple-touch-icon" href="${BASE}/static/img/logo.png">
+<link rel="apple-touch-icon" sizes="180x180" href="${BASE}/static/img/icon-180.png">
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
