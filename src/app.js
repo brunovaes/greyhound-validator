@@ -983,14 +983,39 @@ function _renderSom(fn, dur){
     } catch(e){ reject(e); }
   });
 }
+// WAV de 10ms em silencio. Serve so pra dar um play() SINCRONO dentro do
+// gesto do usuario: no iOS (Safari e tambem o Chrome, que usa WebKit por
+// baixo) um <audio> so fica destravado se o play() acontecer no MESMO tick
+// do toque. Depois de destravado, trocar o .src mantem a liberacao.
+var _SILENCIO_WAV = 'data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
 function prepararSonsAudio(){
   if (_somAudioProntos) return; _somAudioProntos = true;
   var specs = [['sino',tocarSino,0.7],['beep',tocarBeep,0.35],['alarme',tocarAlarme,0.75],['suave',tocarSuave,0.75]];
+
+  // PASSO 1 (sincrono, dentro do gesto): cria os <audio> ja com o silencio e
+  // toca. E' isto que destrava o autoplay no iOS. Antes, o new Audio()/play()
+  // acontecia no .then() do render — assincrono, fora do gesto — e por isso o
+  // alarme ficava mudo no celular sem dar erro nenhum. O botao "Testar" do
+  // Configuracoes funcionava porque ali o play() e' sincrono no clique.
+  specs.forEach(function(s){
+    try {
+      var a = new Audio(_SILENCIO_WAV);
+      a.preload = 'auto';
+      SOM_AUDIO[s[0]] = a;
+      var p = a.play();
+      if (p && p.then) p.then(function(){ try { a.pause(); a.currentTime = 0; } catch(e){} }).catch(function(){});
+    } catch(e){}
+  });
+
+  // PASSO 2 (assincrono): quando o timbre real terminar de ser renderizado,
+  // so troca o .src do elemento que JA esta destravado. Nunca criar um Audio
+  // novo aqui, senao o destravamento se perde.
   specs.forEach(function(s){
     _renderSom(s[1], s[2]).then(function(uri){
-      var a = new Audio(uri); a.preload = 'auto'; SOM_AUDIO[s[0]] = a;
-      // destrava o autoplay tocando mudo uma vez, dentro do gesto do usuario
-      try { a.muted = true; var p = a.play(); if (p && p.then) p.then(function(){ a.pause(); a.currentTime=0; a.muted=false; }).catch(function(){ a.muted=false; }); else { a.pause(); a.muted=false; } } catch(e){ a.muted=false; }
+      var a = SOM_AUDIO[s[0]];
+      if (a) { try { a.src = uri; a.load(); } catch(e){} }
+      else { try { var b = new Audio(uri); b.preload = 'auto'; SOM_AUDIO[s[0]] = b; } catch(e){} }
     }).catch(function(){});
   });
 }

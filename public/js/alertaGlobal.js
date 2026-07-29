@@ -73,12 +73,32 @@
       } catch (e) { reject(e); }
     });
   }
+  // WAV de 10ms em silencio, so pra dar um play() SINCRONO dentro do gesto.
+  // No iOS o <audio> so fica destravado se o play() rodar no mesmo tick do
+  // toque; depois disso, trocar o .src mantem a liberacao.
+  var _SILENCIO_WAV = 'data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
   function prepararSons() {
     if (_somProntos) return; _somProntos = true;
-    [['sino', tocarSino, 0.7], ['beep', tocarBeep, 0.35], ['alarme', tocarAlarme, 0.75], ['suave', tocarSuave, 0.75]].forEach(function (s) {
+    var specs = [['sino', tocarSino, 0.7], ['beep', tocarBeep, 0.35], ['alarme', tocarAlarme, 0.75], ['suave', tocarSuave, 0.75]];
+
+    // PASSO 1 (sincrono, dentro do gesto): destrava o autoplay no iOS.
+    specs.forEach(function (s) {
+      try {
+        var a = new Audio(_SILENCIO_WAV);
+        a.preload = 'auto';
+        SOM_AUDIO[s[0]] = a;
+        var p = a.play();
+        if (p && p.then) p.then(function () { try { a.pause(); a.currentTime = 0; } catch (e) {} }).catch(function () {});
+      } catch (e) {}
+    });
+
+    // PASSO 2 (assincrono): so troca o .src do elemento ja destravado.
+    specs.forEach(function (s) {
       _render(s[1], s[2]).then(function (uri) {
-        var a = new Audio(uri); a.preload = 'auto'; SOM_AUDIO[s[0]] = a;
-        try { a.muted = true; var p = a.play(); if (p && p.then) p.then(function () { a.pause(); a.currentTime = 0; a.muted = false; }).catch(function () { a.muted = false; }); else { a.pause(); a.muted = false; } } catch (e) { a.muted = false; }
+        var a = SOM_AUDIO[s[0]];
+        if (a) { try { a.src = uri; a.load(); } catch (e) {} }
+        else { try { var b = new Audio(uri); b.preload = 'auto'; SOM_AUDIO[s[0]] = b; } catch (e) {} }
       }).catch(function () {});
     });
   }
