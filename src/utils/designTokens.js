@@ -22,6 +22,20 @@ h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:.3px;font-weight:600}
 button,.btn,.btn-save,.btn-reset,.btn-red,input[type=submit]{font-family:var(--font-display);letter-spacing:.5px;font-weight:600}
 .card-title,.sec-title{font-family:var(--font-display);letter-spacing:.7px;font-weight:600}
 .trap-badge,.badge,.top3-tag{font-family:var(--font-display);letter-spacing:.3px}
+
+/* Zoom global da aplicacao (so desktop). A UI e' densa em dado e a 100% fica
+   apertada em tela pequena de notebook; 0.9 devolve respiro sem mexer em
+   nenhum tamanho individual.
+   - So vale acima de 800px: no mobile o layout ja se reorganiza pelos
+     breakpoints e encolher tudo atrapalharia a leitura.
+   - A landing e o /conheca NAO passam por aqui (sao HTML estatico servido
+     pelo landing.js), entao continuam em 100%.
+   - Telas que nao devem encolher sobrescrevem com "body{zoom:1}" no proprio
+     <style> da pagina, que vem depois deste bloco (ver login em auth.js).
+   Pra desligar tudo, basta trocar o .9 por 1 aqui. */
+@media (min-width:801px){
+  body{zoom:.9}
+}
 `;
 }
 

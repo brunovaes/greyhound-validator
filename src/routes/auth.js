@@ -50,7 +50,10 @@ router.get('/login', (req, res) => {
 <style>
 ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+/* Login fica em 100%: o layout e' de fundo sangrado (.bg/.bg-video/.overlay
+   sao position:fixed;inset:0) e o card ja e' centralizado com max-width, entao
+   o zoom global nao ajudaria e ainda arriscaria deixar faixa nas bordas. */
+body{zoom:1;background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .bg{position:fixed;inset:0;${bgB64 ? `background:url('${bgB64}') center center/cover no-repeat;` : 'background:#000;'}opacity:.5;z-index:0}
 .bg-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5;z-index:0}
 .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.3) 0%,rgba(0,0,0,.85) 100%);z-index:1}
