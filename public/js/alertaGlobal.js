@@ -5,8 +5,13 @@
  * (evita aviso duplicado). Autossuficiente, sem dependências. */
 (function () {
   'use strict';
-  // Na tela de análise o app.js já dispara o alarme — não duplicar aqui.
-  if (window.__ghAlarmeApp) return;
+  // Na tela de analise o app.js ja dispara o alarme — nao duplicar aqui.
+  // A checagem e feita no ciclo(), e nao aqui na entrada, porque o navBar
+  // (que carrega este script) e renderizado ANTES do <script src="/app.js">
+  // na pagina de Analise. Na entrada do IIFE a flag ainda nao existiria.
+  // A tag usa defer, entao na pratica o app.js ja rodou, mas a checagem
+  // dentro do ciclo torna isso independente de ordem de carga.
+  function souPassivo() { return !!window.__ghAlarmeApp; }
 
   // BASE a partir do próprio <script src="...">
   var BASE = '/greyhound';
@@ -147,6 +152,7 @@
     } catch (e) { return []; }
   }
   async function ciclo() {
+    if (souPassivo()) return;          // tela de Analise: quem avisa e o app.js
     if (!(await carregarConfig())) return; // não logado / erro
     var races = await pegarCorridas();
     races.forEach(function (r) {
