@@ -95,4 +95,55 @@ function montarPayload({ titulo, corpo, url, tag, icone }) {
   };
 }
 
-module.exports = { disponivel, motivoInativo, chavePublica, enviarPara, enviarParaUsuario, montarPayload };
+// ─── Formato da notificacao de corrida ─────────────────────────────────────
+// Fica aqui, e nao no agendador, porque o botao de teste e o disparo
+// automatico precisam produzir EXATAMENTE o mesmo texto. Se divergirem, o
+// teste deixa de valer como teste.
+//
+// Layout (decidido com o Bruno):
+//   titulo:  🏁 10:24 📍 Kinsley A6
+//   corpo:   🐕 5v3 ⭐ Alta 72%
+//            ⏰ larga em 3 min · 480m
+//
+// Negrito: a Notification API aceita SO texto puro no corpo, sem HTML nem
+// markdown. O jeito de destacar e' trocar por caracteres Unicode de negrito
+// matematico (5v3 -> 𝟱𝘃𝟯), que sao glifos proprios, nao formatacao.
+// Custo: leitor de tela lê mal e fonte sem o glifo mostra quadradinho.
+// Por isso e' opcional, controlado pelo parametro negrito.
+function emNegrito(s) {
+  let out = '';
+  for (const c of String(s)) {
+    const n = c.charCodeAt(0);
+    if (c >= '0' && c <= '9')      out += String.fromCodePoint(0x1D7EC + (n - 48));
+    else if (c >= 'a' && c <= 'z') out += String.fromCodePoint(0x1D5EE + (n - 97));
+    else if (c >= 'A' && c <= 'Z') out += String.fromCodePoint(0x1D5D4 + (n - 65));
+    else                           out += c;
+  }
+  return out;
+}
+
+// corrida: { horaBr, pista, classe, trapFav, trapUnd, nivel, pct, dist, minutos, url }
+function montarPayloadCorrida(c, opts) {
+  const o = opts || {};
+  const destaque = o.negrito ? emNegrito : (x) => x;
+
+  const local = [c.pista, c.classe].filter(Boolean).join(' ');
+  const avb = (c.trapFav != null && c.trapUnd != null) ? destaque(c.trapFav + 'v' + c.trapUnd) : null;
+  const conf = c.nivel ? destaque(c.nivel + (c.pct != null ? ' ' + Math.round(c.pct) + '%' : '')) : null;
+
+  const linha1 = ['🐕 ' + (avb || '-'), conf ? '⭐ ' + conf : null].filter(Boolean).join(' ');
+  const linha2 = [
+    c.minutos != null ? '⏰ larga em ' + c.minutos + ' min' : null,
+    c.dist ? c.dist + 'm' : null
+  ].filter(Boolean).join(' · ');
+
+  return {
+    titulo: '🏁 ' + (c.horaBr || '--:--') + ' 📍 ' + (local || 'corrida'),
+    corpo: [linha1, linha2].filter(Boolean).join('\n'),
+    url: c.url || (process.env.BASE_PATH || '/greyhound'),
+    tag: c.tag || ('corrida-' + (c.horaBr || '') + '-' + (c.pista || '')),
+    icone: (process.env.BASE_PATH || '/greyhound') + '/static/img/logo.png'
+  };
+}
+
+module.exports = { disponivel, motivoInativo, chavePublica, enviarPara, enviarParaUsuario, montarPayload, montarPayloadCorrida, emNegrito };
