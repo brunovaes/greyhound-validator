@@ -123,29 +123,34 @@ function emNegrito(s) {
 }
 
 // corrida: { horaBr, pista, classe, trapFav, trapUnd, nivel, pct, dist, minutos, url }
+//
+// Layout:
+//   titulo:  🏁 10:24
+//   corpo:   📍 Kinsley A6
+//            🐕 𝟱𝘃𝟯 ⏰ em 3 min
+//
+// O titulo ficou curto de proposito. O iOS anexa " from GF" a ele e renderiza
+// os dois como um bloco so, quebrando a linha quando nao cabe — e nao ha como
+// impedir isso pelo payload. Emoji custa quase o dobro de um caractere comum,
+// entao cada um no titulo aproxima a quebra. Com pista de nome longo
+// (Sunderland, Shelbourne, Central Park) qualquer titulo maior estouraria,
+// por isso a pista foi pro corpo, onde sobra espaco.
 function montarPayloadCorrida(c, opts) {
   const o = opts || {};
   const destaque = o.negrito ? emNegrito : (x) => x;
 
   const local = [c.pista, c.classe].filter(Boolean).join(' ');
   const avb = (c.trapFav != null && c.trapUnd != null) ? destaque(c.trapFav + 'v' + c.trapUnd) : null;
-  const conf = c.nivel ? destaque(c.nivel + (c.pct != null ? ' ' + Math.round(c.pct) + '%' : '')) : null;
 
-  const linha1 = ['🐕 ' + (avb || '-'), conf ? '⭐ ' + conf : null].filter(Boolean).join(' ');
-  const linha2 = [
-    c.minutos != null ? '⏰ larga em ' + c.minutos + ' min' : null,
-    c.dist ? c.dist + 'm' : null
-  ].filter(Boolean).join(' · ');
-
-  // "CORRIDA SELECIONADA" vai na primeira linha do CORPO, e nao no titulo, de
-  // proposito: o iOS anexa "from <nome do app>" ao titulo e, quando varias
-  // notificacoes empilham, so o titulo aparece. Mantendo hora e pista la em
-  // cima, da pra identificar a corrida sem expandir.
-  const chamada = o.chamada === false ? null : '❗CORRIDA SELECIONADA';
+  const linhaLocal = local ? '📍 ' + local : null;
+  const linhaAvb = [
+    avb ? '🐕 ' + avb : null,
+    c.minutos != null ? '⏰ em ' + c.minutos + ' min' : null
+  ].filter(Boolean).join(' ');
 
   return {
-    titulo: '🏁 ' + (c.horaBr || '--:--') + ' 📍 ' + (local || 'corrida'),
-    corpo: [chamada, linha1, linha2].filter(Boolean).join('\n'),
+    titulo: '🏁 ' + (c.horaBr || '--:--'),
+    corpo: [linhaLocal, linhaAvb || null].filter(Boolean).join('\n'),
     url: c.url || (process.env.BASE_PATH || '/greyhound'),
     tag: c.tag || ('corrida-' + (c.horaBr || '') + '-' + (c.pista || '')),
     icone: (process.env.BASE_PATH || '/greyhound') + '/static/img/icon-180.png'
