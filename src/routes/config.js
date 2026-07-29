@@ -226,6 +226,26 @@ ${blocoToggle('bloco_filtros_ativo', 'Filtros de Corrida')}
 <div class="field"><label>Classes aceitas</label><input type="text" name="classes_aceitas" value="${config.classes_aceitas}"><span class="hint">Separadas por virgula</span></div>
 </div>
 </div>
+
+<div class="section">
+<div class="sec-title">Descarte por cio (fêmea)</div>
+<div class="info-box">
+  Fica <strong>fora</strong> do bloco acima de proposito: o cio obedece so ao proprio switch e continua valendo mesmo com "Filtros de Corrida" no padrao de fabrica. Quando dispara, o galgo sai do pool e o AvB re-elege favorito e underdog — o descarte aparece destacado em vermelho no Relatorio de Analise.
+</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field"><label>Descartar por cio recente</label>
+    <select name="cio_recente_ativo">
+      <option value="0" ${(config.cio_recente_ativo?1:0)===0?'selected':''}>Desativado</option>
+      <option value="1" ${(config.cio_recente_ativo?1:0)===1?'selected':''}>Ativado (padrão)</option>
+    </select>
+    <span class="hint">Fêmea com cio "(Ssn &lt;data&gt;)" recente na linha do card vira elegível a descarte. O "(SsnSupp)", que vem sem data, nunca dispara.</span>
+  </div>
+  <div class="field"><label>Janela do cio recente (dias)</label>
+    <input type="number" name="cio_recente_dias" value="${config.cio_recente_dias||90}" step="1" min="7" max="365">
+    <span class="hint">Cio até N dias antes da corrida conta como recente. Padrão 90 (cerca de 3 meses). Varra 30/45/60/90 no backtest pra achar o melhor.</span>
+  </div>
+</div>
+</div>
 </div>
 
 <div class="tab-panel" id="t-confianca">
@@ -264,14 +284,6 @@ ${blocoToggle('bloco_motor_ativo', 'Motor de Pontuação')}
 </div>
 <div class="field"><label>Score mínimo para gerar AvB (pts)</label><input type="number" name="threshold_skip_avb" value="${config.threshold_skip_avb||10}" step="1" min="1" max="30"><span class="hint">Abaixo disso = corrida parelha = skip automatico</span></div>
 <div class="field"><label>Score mínimo para gerar Back (pts)</label><input type="number" name="threshold_back" value="${config.threshold_back||25}" step="1" min="10" max="50"><span class="hint">Diferenca entre 1o e 2o colocado — barra alta para Back</span></div>
-<div class="field"><label>Descartar por cio recente (fêmea)</label>
-  <select name="cio_recente_ativo">
-    <option value="0" ${(config.cio_recente_ativo?1:0)===0?'selected':''}>Desativado (padrão)</option>
-    <option value="1" ${(config.cio_recente_ativo?1:0)===1?'selected':''}>Ativado</option>
-  </select>
-  <span class="hint">Fêmea com cio "(Ssn)" recente vira elegível a descarte — o motor re-elege favorito/underdog. Comece DESLIGADO e backteste antes de ligar.</span>
-</div>
-<div class="field"><label>Janela do cio recente (dias)</label><input type="number" name="cio_recente_dias" value="${config.cio_recente_dias||90}" step="1" min="7" max="365"><span class="hint">Cio até N dias antes da corrida conta como recente. Varra 30/45/60/90 no backtest pra achar o melhor.</span></div>
 </div>
 </div>
 
