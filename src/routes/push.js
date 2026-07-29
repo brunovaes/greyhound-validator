@@ -58,6 +58,9 @@ router.post('/desinscrever', express.json(), (req, res) => {
 // a ponta a ponta: se este chegar com o celular BLOQUEADO, o caminho da Apple
 // esta funcionando e o agendador (etapa B) e' so consequencia.
 router.post('/testar', express.json(), async (req, res) => {
+  // Log na ENTRADA: separa "a requisicao nem chegou" (nenhuma linha) de
+  // "chegou e o envio falhou" (esta linha + um [push] falha logo abaixo).
+  console.log('[push] /testar recebido — user ' + req.user.id);
   if (!sender.disponivel()) {
     return res.status(503).json({ error: 'push inativo: ' + sender.motivoInativo() });
   }
@@ -68,6 +71,7 @@ router.post('/testar', express.json(), async (req, res) => {
     url: BASE,
     tag: 'teste'
   }));
+  console.log('[push] /testar resultado: ' + JSON.stringify(r));
   if (r.semInscricao) return res.status(400).json({ error: 'nenhum aparelho inscrito neste login' });
   res.json(r);
 });

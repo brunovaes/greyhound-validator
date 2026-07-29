@@ -50,19 +50,24 @@ function chavePublica() { return process.env.VAPID_PUBLIC_KEY || null; }
 // fica gerando erro pra sempre.
 async function enviarPara(row, payload) {
   if (!_ativo) return { ok: false, erro: _motivoInativo };
+  const alvo = String(row.endpoint || '').slice(-12);   // so o final, pra nao vazar o endpoint no log
   try {
     await webpush.sendNotification(store.paraWebPush(row), JSON.stringify(payload));
     store.marcarOk(row.endpoint);
+    // Log de SUCESSO tambem, de proposito: sem ele, "nada no log" era
+    // ambiguo entre "a requisicao nunca chegou" e "foi enviado e deu certo",
+    // o que impedia qualquer diagnostico. Aceito o log mais verboso.
+    console.log('[push] enviado OK -> ...' + alvo + ' | tag=' + (payload && payload.tag));
     return { ok: true };
   } catch (e) {
     const code = e && e.statusCode;
     if (code === 404 || code === 410) {
       store.remover(row.endpoint);
-      console.log('[push] inscricao morta removida (' + code + ')');
+      console.log('[push] inscricao morta removida (' + code + ') -> ...' + alvo);
       return { ok: false, removida: true, erro: 'inscricao expirada' };
     }
     store.marcarFalha(row.endpoint);
-    console.error('[push] falha ' + (code || '?') + ':', e && e.message);
+    console.error('[push] falha ' + (code || '?') + ' -> ...' + alvo + ':', e && e.message);
     return { ok: false, erro: (e && e.message) || 'erro desconhecido' };
   }
 }
