@@ -1,4 +1,43 @@
+# ─── Dependencias ───
 node_modules/
+npm-debug.log*
+package-lock.json.bak
+
+# ─── Segredos ───
+# .env.example fica versionado de proposito, como modelo
 .env
-greyhound.db
-*.db-journal
+.env.local
+.env.*.local
+
+# ─── PDFs e dados de runtime ───
+# Baixados pelo robo, reproduziveis, nao sao lidos do repo.
+# O runtime le de PDF_PATH (Railway: /data/pdfs), nunca daqui.
+Racingpost/
+public/pdfs/
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Exportacoes e artefatos gerados ───
+*.zip
+*.xlsx
+backtest_motor_*.json
+Analises_Greyhound_*.pdf
+Derrotas_*.xlsx
+HR_por_contexto_*.xlsx
+
+# ─── Temporarios de auditoria e resgate ───
+# (config_bom.js, diff_app.txt, audit_api.txt etc)
+*_bom.js
+diff_*.txt
+audit_*.txt
+
+# ─── Sistema operacional / editor ───
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
