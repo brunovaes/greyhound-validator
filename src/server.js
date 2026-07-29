@@ -29,6 +29,9 @@ app.use(BASE + '/config', requireLogin, require('./routes/config'));
 app.use(BASE + '/robot', requireLogin, require('./routes/robot'));
 app.use(BASE + '/banca', requireLogin, require('./routes/banca'));
 app.use(BASE + '/acessos', requireLogin, require('./routes/acessos'));
+// Web Push: inscricao de aparelhos e envio. Fica atras do requireLogin pra que
+// cada inscricao nasca amarrada ao usuario logado.
+app.use(BASE + '/api/push', requireLogin, require('./routes/push'));
 app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__dirname, '../public/pdfs')));
 
 // Landing publica: "/" e "/conheca", fora do BASE e sem login. Precisa vir

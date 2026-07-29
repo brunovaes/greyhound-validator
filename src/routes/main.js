@@ -308,6 +308,39 @@ router.get('/app.js', (req, res) => {
   res.sendFile(require('path').join(__dirname, '../../src/app.js'));
 });
 
+// ─── PWA / Web Push ────────────────────────────────────────────────────────
+// O service worker PRECISA ser servido daqui (BASE + '/sw.js') e nao de
+// /static/js/. Um service worker so controla paginas ABAIXO do caminho de onde
+// foi entregue: servido de /greyhound/static/js/, o escopo seria
+// /greyhound/static/ e ele nao controlaria tela nenhuma do sistema.
+router.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-cache');   // SW velho em cache e' fonte classica de dor de cabeca
+  res.sendFile(require('path').join(__dirname, '../../public/sw.js'));
+});
+
+// Manifest do PWA. Gerado aqui em vez de arquivo estatico porque precisa do
+// BASE_PATH real nas URLs.
+router.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json');
+  res.json({
+    name: 'Greyhound Factory',
+    short_name: 'Greyhound',
+    description: 'Analise de corridas de galgos',
+    start_url: BASE + '/',
+    scope: BASE + '/',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#0D1117',
+    theme_color: '#0D1117',
+    icons: [
+      { src: BASE + '/static/img/logo.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: BASE + '/static/img/logo.png', sizes: '512x512', type: 'image/png', purpose: 'any' }
+    ]
+  });
+});
+
 router.get('/', (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
@@ -325,6 +358,15 @@ router.get('/', (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Greyhound Validator</title>
+<!-- PWA: esta e' a start_url do manifest, entao e' daqui que o "Adicionar a
+     Tela de Inicio" do Safari deve ser feito. No iOS o Web Push SO funciona a
+     partir do icone instalado, nunca da aba normal do navegador. -->
+<link rel="manifest" href="${BASE}/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Greyhound">
+<meta name="theme-color" content="#0D1117">
+<link rel="apple-touch-icon" href="${BASE}/static/img/logo.png">
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
