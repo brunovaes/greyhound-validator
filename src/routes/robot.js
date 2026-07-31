@@ -2914,6 +2914,44 @@ router.post('/diagnostico-traps/reverter', requireAdmin, express.urlencoded({ ex
   }
 });
 
+// ─── BACKUP DO BANCO ───────────────────────────────────────────────────────
+// Baixa o /data/greyhound.db inteiro. Existe porque o banco NAO fica no repo:
+// ele vive no volume do Railway, entao salvar a pasta do projeto no PC nao
+// protege dado nenhum.
+//
+// Usa VACUUM INTO em vez de copiar o arquivo direto. Copiar um SQLite enquanto
+// ha escrita acontecendo pode gerar um arquivo corrompido (justo o que voce
+// menos quer num backup). O VACUUM INTO produz um snapshot consistente.
+//
+// So admin. O arquivo contem TUDO, inclusive os hashes de senha dos usuarios,
+// entao guarde num lugar seguro e nao mande por canal publico.
+router.get('/backup-db', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');   // import local, mesmo padrao do resto do arquivo
+  const os = require('os');
+  const destino = path.join(os.tmpdir(), 'greyhound-backup-' + Date.now() + '.db');
+  try {
+    db.exec("VACUUM INTO '" + destino.replace(/'/g, "''") + "'");
+    const tam = fs.statSync(destino).size;
+    const carimbo = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    console.log('[BACKUP] gerado: ' + (tam / 1048576).toFixed(1) + ' MB');
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="greyhound-' + carimbo + '.db"');
+    res.setHeader('Content-Length', String(tam));
+
+    const stream = fs.createReadStream(destino);
+    stream.pipe(res);
+    // Apaga o temporario assim que terminar de enviar, com ou sem erro.
+    const limpar = () => { try { fs.unlinkSync(destino); } catch (e) {} };
+    stream.on('close', limpar);
+    stream.on('error', (e) => { console.error('[BACKUP] erro no stream:', e.message); limpar(); });
+  } catch (e) {
+    try { fs.unlinkSync(destino); } catch (_) {}
+    console.error('[BACKUP] falhou:', e.message);
+    res.status(500).send('Falha ao gerar o backup: ' + e.message);
+  }
+});
+
 module.exports = router;
 module.exports.formatTime = formatTime;
 module.exports.preencherScoresJsonFaltando = preencherScoresJsonFaltando;
