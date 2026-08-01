@@ -10,6 +10,7 @@ const { designTokensCSS } = require('../utils/designTokens');
 const { nomeCorridaCompleto, nomePista } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
+const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
 
 function getLogo() {
   const logoPath = path.join(__dirname, '../../public/img/logo.png');
@@ -344,14 +345,15 @@ router.get('/manifest.json', (req, res) => {
 router.get('/', (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
-  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7').all(user.id);
+  // Sessoes e corridas sao do SISTEMA: le sempre o canonico, nao o login.
+  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7').all(CANONICO);
   // new Date() roda no SERVIDOR (Railway = UTC), nao no relogio do Bruno.
   // Sem o ajuste de -3h, depois das 21h BRT o servidor ja calcula a data de
   // AMANHA (UTC ja virou o dia seguinte), fazendo o "Historico do dia" achar
   // que nao existe sessao de hoje mesmo ela existindo.
   const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
   const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
-  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
+  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
   const taxa = stats.t > 0 ? Math.round(stats.a/stats.t*100) : 0;
   const logoB64 = getLogo();
 
@@ -1124,8 +1126,8 @@ applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
 
 router.get('/historico', (req, res) => {
   const user = req.user;
-  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(user.id);
-  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(user.id);
+  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
+  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Histórico - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
@@ -1189,7 +1191,7 @@ document.getElementById('del-bg').addEventListener('click',function(e){if(e.targ
 
 router.post('/sessao/:id/deletar', (req, res) => {
   const user = req.user;
-  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, user.id);
+  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
   if (sess) {
     db.prepare('DELETE FROM races WHERE session_id=?').run(sess.id);
     db.prepare('DELETE FROM race_sessions WHERE id=?').run(sess.id);
@@ -1199,9 +1201,11 @@ router.post('/sessao/:id/deletar', (req, res) => {
 
 router.get('/sessao/:id', (req, res) => {
   const user = req.user;
-  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, user.id);
+  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
   if (!sess) return res.redirect(BASE + '/historico');
   const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(sess.id);
+  // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
+  aplicarPessoais(db, races, user.id);
   const racesValidas = races.filter(r=>r.nivel!=='skip');
   const skipCount = races.length - racesValidas.length;
   const resolvidas = racesValidas.filter(r=>r.bateu).length;

@@ -6,6 +6,7 @@ const router = express.Router();
 const multer = require('multer');
 const https = require('https');
 const archiver = require('archiver');
+const { CANONICO, aplicarPessoais, salvarPessoal, ehCampoPessoal } = require('../db/compartilhado');
 
 // Fetch com streaming da API Anthropic - evita timeout em respostas longas
 function fetchAnthropicStream(apiKey, body) {
@@ -1165,7 +1166,9 @@ router.put('/race/:id', express.json(), (req, res) => {
   const userId = req.user.id;
   const raceId = parseInt(req.params.id);
   if (!raceId) return res.status(400).json({ error: 'ID inválido' });
-  const race = db.prepare('SELECT id FROM races WHERE id=? AND user_id=?').get(raceId, userId);
+  // A corrida e' do sistema (canonica), nao do login: qualquer usuario abre a
+  // mesma corrida. O que muda por usuario e' so o dado pessoal.
+  const race = db.prepare('SELECT id FROM races WHERE id=?').get(raceId);
   if (!race) return res.status(404).json({ error: 'Corrida não encontrada' });
 
   // Update PARCIAL: so mexe nos campos que vieram no body, pra nao apagar
@@ -1181,17 +1184,29 @@ router.put('/race/:id', express.json(), (req, res) => {
     const cfg = getUserConfig(userId);
     body.bet_unidades = cfg.banca_unidade_padrao || 2.5;
   }
+  // Separa o que e' da corrida (vale pra todos) do que e' do usuario.
+  // odd, valor, aposta, avb nao aberto e flag de atrasada vao pra
+  // race_user_data; o resto continua na races, compartilhado.
   const sets = [];
   const values = [];
+  const pessoais = [];
   for (const key of allowed) {
-    if (Object.prototype.hasOwnProperty.call(body, key)) {
-      sets.push(key + '=?');
-      values.push(body[key]);
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    if (ehCampoPessoal(key)) { pessoais.push(key); continue; }
+    // "bateu" e' compartilhado: corrigir afeta todo mundo, entao so admin.
+    if (key === 'bateu' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Somente admin pode alterar o campo "bateu".' });
     }
+    sets.push(key + '=?');
+    values.push(body[key]);
   }
-  if (!sets.length) return res.json({ ok: true });
-  values.push(raceId, userId);
-  db.prepare(`UPDATE races SET ${sets.join(',')} WHERE id=? AND user_id=?`).run(...values);
+
+  for (const key of pessoais) salvarPessoal(db, raceId, userId, key, body[key]);
+
+  if (sets.length) {
+    values.push(raceId);
+    db.prepare(`UPDATE races SET ${sets.join(',')} WHERE id=?`).run(...values);
+  }
   res.json({ ok: true });
 });
 
