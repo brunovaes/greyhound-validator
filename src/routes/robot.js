@@ -2952,6 +2952,46 @@ router.get('/backup-db', requireAdmin, (req, res) => {
   }
 });
 
+// ─── DIAGNOSTICO DA VIRADA "CORRIDA COMPARTILHADA" ─────────────────────────
+// Fotografa o estado dos dados antes de virar leitura e escrita (etapas 2.2 e
+// 2.3). Responde as perguntas que decidem o desenho: quantas corridas existem
+// fora do usuario canonico, quantas ficariam invisiveis, e como o dado pessoal
+// se distribui. So leitura, nao altera nada.
+router.get('/diag-compartilhado', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  try {
+    const q = (sql) => { try { return db.prepare(sql).all(); } catch (e) { return [{ erro: e.message }]; } };
+    const um = (sql) => { try { return db.prepare(sql).get(); } catch (e) { return { erro: e.message }; } };
+
+    res.json({
+      corridas_por_usuario: q('SELECT user_id, COUNT(*) total FROM races GROUP BY user_id ORDER BY total DESC'),
+      sessoes_por_usuario: q('SELECT user_id, COUNT(*) total FROM race_sessions GROUP BY user_id ORDER BY total DESC'),
+      dado_pessoal_por_usuario: q('SELECT user_id, COUNT(*) total FROM race_user_data GROUP BY user_id ORDER BY total DESC'),
+      total_race_user_data: um('SELECT COUNT(*) total FROM race_user_data'),
+      // Corridas de outros usuarios que NAO tem equivalente no canonico:
+      // sao as que sumiriam da vista se a leitura passasse a mostrar so as do
+      // usuario 1. Se este numero for alto, precisamos promove-las antes.
+      sem_equivalente_no_canonico: um(`
+        SELECT COUNT(*) total FROM races r
+        WHERE r.user_id <> 1
+          AND NOT EXISTS (
+            SELECT 1 FROM races c
+            WHERE c.user_id = 1 AND c.hora = r.hora AND c.corrida = r.corrida
+              AND IFNULL(c.data_card,'') = IFNULL(r.data_card,'')
+          )`),
+      amostra_sem_equivalente: q(`
+        SELECT r.id, r.user_id, r.data_card, r.hora, r.corrida FROM races r
+        WHERE r.user_id <> 1
+          AND NOT EXISTS (
+            SELECT 1 FROM races c
+            WHERE c.user_id = 1 AND c.hora = r.hora AND c.corrida = r.corrida
+              AND IFNULL(c.data_card,'') = IFNULL(r.data_card,'')
+          ) LIMIT 20`),
+      usuarios: q('SELECT id, email, role, active FROM users ORDER BY id')
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
 module.exports.formatTime = formatTime;
 module.exports.preencherScoresJsonFaltando = preencherScoresJsonFaltando;
