@@ -87,4 +87,21 @@ router.post('/testar', express.json(), async (req, res) => {
   res.json({ enviados: (r1.enviados || 0) + (r2.enviados || 0), total: (r1.total || 0) + (r2.total || 0), detalhe: out });
 });
 
+// Apaga TODAS as inscricoes do usuario logado. Serve pra limpar duplicatas:
+// cada reinstalacao do icone na Tela de Inicio cria uma inscricao nova, e as
+// antigas so somem sozinhas quando a Apple responde 410 num envio futuro —
+// ate la o mesmo aviso chega varias vezes. Depois de limpar, basta ativar as
+// notificacoes uma vez no aparelho que voce realmente usa.
+router.post('/limpar', express.json(), (req, res) => {
+  try {
+    const antes = store.listarPorUsuario(req.user.id).length;
+    for (const s of store.listarPorUsuario(req.user.id)) store.remover(s.endpoint);
+    console.log('[push] inscricoes limpas — user ' + req.user.id + ': ' + antes + ' removida(s)');
+    res.json({ ok: true, removidas: antes });
+  } catch (e) {
+    console.error('[push] erro ao limpar:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
