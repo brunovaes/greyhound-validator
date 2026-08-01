@@ -125,16 +125,15 @@ function emNegrito(s) {
 // corrida: { horaBr, pista, classe, trapFav, trapUnd, nivel, pct, dist, minutos, url }
 //
 // Layout:
-//   titulo:  🏁 10:24
-//   corpo:   📍 Kinsley A6
-//            🐕 𝟱𝘃𝟯 ⏰ em 3 min
+//   titulo:  🏁 10:24 🐕 𝟱𝘃𝟯
+//   corpo:   📍 Kinsley A6 ⏰ 3 min
 //
-// O titulo ficou curto de proposito. O iOS anexa " from GF" a ele e renderiza
-// os dois como um bloco so, quebrando a linha quando nao cabe — e nao ha como
-// impedir isso pelo payload. Emoji custa quase o dobro de um caractere comum,
-// entao cada um no titulo aproxima a quebra. Com pista de nome longo
-// (Sunderland, Shelbourne, Central Park) qualquer titulo maior estouraria,
-// por isso a pista foi pro corpo, onde sobra espaco.
+// O iOS anexa " from <nome do app>" ao titulo e quebra a linha quando nao
+// cabe — nao ha como impedir pelo payload. Tentamos encurtar o titulo e ainda
+// assim quebrou, entao a quebra virou premissa em vez de inimigo: se ela vai
+// acontecer de qualquer jeito, o titulo passa a levar o que DECIDE a entrada.
+// Isso tem um ganho real: quando varias notificacoes empilham, o iOS colapsa e
+// mostra SO o titulo. Com hora + AvB ali, da pra ler sem expandir.
 function montarPayloadCorrida(c, opts) {
   const o = opts || {};
   const destaque = o.negrito ? emNegrito : (x) => x;
@@ -142,15 +141,15 @@ function montarPayloadCorrida(c, opts) {
   const local = [c.pista, c.classe].filter(Boolean).join(' ');
   const avb = (c.trapFav != null && c.trapUnd != null) ? destaque(c.trapFav + 'v' + c.trapUnd) : null;
 
-  const linhaLocal = local ? '📍 ' + local : null;
-  const linhaAvb = [
-    avb ? '🐕 ' + avb : null,
-    c.minutos != null ? '⏰ em ' + c.minutos + ' min' : null
+  const titulo = ['🏁 ' + (c.horaBr || '--:--'), avb ? '🐕 ' + avb : null].filter(Boolean).join(' ');
+  const corpo = [
+    local ? '📍 ' + local : null,
+    c.minutos != null ? '⏰ ' + c.minutos + ' min' : null
   ].filter(Boolean).join(' ');
 
   return {
-    titulo: '🏁 ' + (c.horaBr || '--:--'),
-    corpo: [linhaLocal, linhaAvb || null].filter(Boolean).join('\n'),
+    titulo: titulo,
+    corpo: corpo,
     url: c.url || (process.env.BASE_PATH || '/greyhound'),
     tag: c.tag || ('corrida-' + (c.horaBr || '') + '-' + (c.pista || '')),
     icone: (process.env.BASE_PATH || '/greyhound') + '/static/img/icon-180.png'
