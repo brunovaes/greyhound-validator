@@ -317,13 +317,47 @@ const MOTOR_FIXO_DEFAULTS = {
 // Configuracoes, pra nao "esconder"/perder a customizacao antiga do usuario
 // quando ele desliga um bloco temporariamente (se nao fizesse essa distincao,
 // religar o bloco depois mostraria os valores fixos como se fossem os dele).
+// A configuracao do sistema (pesos, filtros, motor, robos, alarme) e' UMA SO,
+// global, guardada sempre na linha CONFIG_GLOBAL_ID.
+//
+// Ate 31/07/2026 ela era por usuario: cada admin gravava na propria linha e o
+// robo lia a do usuario 1. Resultado, um admin mexia nas Configuracoes e nada
+// acontecia — a tela ate dizia "se aplicam a TODOS os usuarios", mas o save
+// terminava em WHERE user_id = <admin logado>. A promessa e o codigo diziam
+// coisas diferentes.
+//
+// Agora o parametro userId e' aceito e IGNORADO de proposito, pra nao precisar
+// mudar as dezenas de chamadas espalhadas (getUserConfig(req.user.id), etc).
+// Quantos admins existirem, todos veem e editam a mesma configuracao.
+const CONFIG_GLOBAL_ID = 1;
+
+// Excecao a regra do global: a banca e' de cada um. Valor da unidade, banca
+// inicial, percentual de stop e a mensagem do aviso continuam por usuario,
+// sobrepostos por cima da configuracao global. Quem grava esses quatro e' a
+// rota /banca/save-config, sempre na linha do proprio usuario.
+const CAMPOS_BANCA_PESSOAIS = ['banca_unidade_padrao', 'banca_valor_inicial', 'banca_pct_stop', 'banca_aviso_stop'];
+
 function getUserConfig(userId, aplicaBlocos) {
   if (aplicaBlocos === undefined) aplicaBlocos = true;
-  let config = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(userId);
+  let config = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(CONFIG_GLOBAL_ID);
   if (!config) {
-    db.prepare('INSERT INTO analysis_config (user_id) VALUES (?)').run(userId);
-    config = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(userId);
+    db.prepare('INSERT INTO analysis_config (user_id) VALUES (?)').run(CONFIG_GLOBAL_ID);
+    config = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(CONFIG_GLOBAL_ID);
   }
+
+  // Sobrepoe a banca do usuario logado. Campo nunca configurado (null) mantem
+  // o valor da linha global, que serve de padrao.
+  if (userId != null && userId !== CONFIG_GLOBAL_ID) {
+    let pessoal = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(userId);
+    if (!pessoal) {
+      db.prepare('INSERT INTO analysis_config (user_id) VALUES (?)').run(userId);
+      pessoal = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(userId);
+    }
+    for (const campo of CAMPOS_BANCA_PESSOAIS) {
+      if (pessoal && pessoal[campo] != null) config[campo] = pessoal[campo];
+    }
+  }
+
   if (!aplicaBlocos) return config;
   // Bloco desligado (bloco_x_ativo=0) -> usa os valores de fabrica (motor
   // fixo) daquele bloco em vez do que o usuario configurou manualmente.
@@ -422,4 +456,4 @@ function loadRobotLog(robotName) {
   } catch (e) { return null; }
 }
 
-module.exports = { db, hashPassword, createUser, findUserByEmail, validatePassword, getUserConfig, saveRobotLog, loadRobotLog, getTrapBadgeColors, saveTrapBadgeColors };
+module.exports = { db, hashPassword, createUser, findUserByEmail, validatePassword, getUserConfig, saveRobotLog, loadRobotLog, getTrapBadgeColors, saveTrapBadgeColors, CONFIG_GLOBAL_ID };

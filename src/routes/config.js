@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db, getUserConfig } = require('../db/database');
+const { db, getUserConfig, CONFIG_GLOBAL_ID } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
@@ -110,7 +110,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 ${navBar(user, 'config')}
 <div class="content">
 <h1>Configurações de Análise</h1>
-<p class="sub">Estas configuracoes se aplicam a TODOS os usuarios do sistema.</p>
+<p class="sub">Estas configurações são únicas do sistema: valem para todos os usuários e para os robôs automáticos. Qualquer admin que alterar aqui, altera para todos.</p>
 <div class="alert" id="alert"></div>
 <form id="cf">
 <div class="layout">
@@ -984,7 +984,11 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.alarme_filtro_classes||'',
       d.alarme_filtro_som||'beep',
       d.alarme_filtro_cor||'azul',
-      user.id
+      // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
+      // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
+      // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
+      // surtia efeito nenhum — em silencio.
+      CONFIG_GLOBAL_ID
     );
     res.json({ ok: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
@@ -992,9 +996,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
 
 router.get('/reset', requireAdmin, (req, res) => {
   const user = req.user;
-  db.prepare('DELETE FROM analysis_config WHERE user_id=?').run(user.id);
+  db.prepare('DELETE FROM analysis_config WHERE user_id=?').run(CONFIG_GLOBAL_ID);
   const { getUserConfig } = require('../db/database');
-  getUserConfig(user.id);
+  getUserConfig(CONFIG_GLOBAL_ID);
   res.redirect(BASE + '/config');
 });
 
