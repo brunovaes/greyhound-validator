@@ -1,4 +1,8 @@
 'use strict';
+// Corridas sao compartilhadas (etapa 2.x): as consultas leem sempre o dono
+// canonico. O userId recebido continua valendo pro dado PESSOAL (odd, valor,
+// aposta), sobreposto por aplicarPessoais depois da leitura.
+const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
 // src/utils/exportDerrotas.js
 // Gera a planilha de "Revisao de Derrotas" (mesmo formato entregue na conversa
 // de afinacao do motor) direto do banco, para um intervalo de datas escolhido
@@ -60,8 +64,9 @@ function coletarDerrotas(userId, fromISO, toISO, dbOverride) {
   const rows = db.prepare(
     `SELECT r.*, s.name AS sessao
        FROM races r JOIN race_sessions s ON s.id = r.session_id
-      WHERE r.user_id = ? AND r.bateu = 'nao'`
-  ).all(userId);
+      WHERE r.user_id = ?  /* CANONICO: corridas sao do sistema */ AND r.bateu = 'nao'`
+  ).all(CANONICO);
+  aplicarPessoais(db, rows, userId);   // odd/valor/aposta do usuario que pediu
 
   const out = [];
   for (const r of rows) {
@@ -244,8 +249,9 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
   const rows = db.prepare(
     `SELECT r.*, s.name AS sessao
        FROM races r JOIN race_sessions s ON s.id = r.session_id
-      WHERE r.user_id = ? AND r.trap_fav > 0 AND r.trap_und > 0`
-  ).all(userId);
+      WHERE r.user_id = ?  /* CANONICO: corridas sao do sistema */ AND r.trap_fav > 0 AND r.trap_und > 0`
+  ).all(CANONICO);
+  aplicarPessoais(db, rows, userId);   // odd/valor/aposta do usuario que pediu
   const from = fromISO ? new Date(fromISO + 'T00:00:00') : null;
   const to = toISO ? new Date(toISO + 'T23:59:59') : null;
   const out = [];
@@ -532,9 +538,10 @@ function buildBacktestJson(userId, fromISO, toISO, dbOverride) {
   const rows = db.prepare(
     `SELECT r.*, s.name AS sessao
        FROM races r JOIN race_sessions s ON s.id = r.session_id
-      WHERE r.user_id = ? AND r.trap_fav > 0 AND r.trap_und > 0
+      WHERE r.user_id = ?  /* CANONICO: corridas sao do sistema */ AND r.trap_fav > 0 AND r.trap_und > 0
       ORDER BY s.created_at, r.hora`
-  ).all(userId);
+  ).all(CANONICO);
+  aplicarPessoais(db, rows, userId);   // odd/valor/aposta do usuario que pediu
   const from = fromISO ? new Date(fromISO + 'T00:00:00') : null;
   const to = toISO ? new Date(toISO + 'T23:59:59') : null;
 

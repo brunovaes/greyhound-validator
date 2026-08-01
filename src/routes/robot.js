@@ -1435,7 +1435,12 @@ router.post('/save-automacao', requireAdmin, express.json(), (req, res) => {
   try {
     const { db } = require('../db/database');
     const d = req.body || {};
-    const userId = req.user.id;
+    // Linha GLOBAL, nao a do admin logado: a configuracao dos robos e' uma so
+    // pro sistema. Gravar em req.user.id faria o segundo admin editar uma
+    // linha que ninguem le, em silencio — mesmo bug que ja existia no
+    // Configuracoes e foi corrigido em 31/07.
+    const { CONFIG_GLOBAL_ID } = require('../db/database');
+    const userId = CONFIG_GLOBAL_ID;
     getUserConfig(userId); // garante a linha de config
     // pdf_cron_time NAO entra aqui de proposito: o horario da coleta e fixo no
     // sistema (06:00, ver PDF_CRON_BRT) e o campo na tela e so ilustrativo.

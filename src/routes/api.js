@@ -1121,7 +1121,7 @@ async function rodarAnaliseAutomatica(date, userId) {
 
   const dateParts = date.split('-'); // date vem como YYYY-MM-DD
   const sessionName = 'Races ' + dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0];
-  const jaExiste = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(userId, sessionName);
+  const jaExiste = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(CANONICO, sessionName);
   if (jaExiste) return { ok: false, erro: 'Sessao "' + sessionName + '" ja existe (id ' + jaExiste.id + ')', jaExistia: true };
 
   const batches = [];
@@ -1144,7 +1144,7 @@ async function rodarAnaliseAutomatica(date, userId) {
   }
   if (!allRaces.length) return { ok: false, erro: 'Nenhuma corrida processada com sucesso', errors };
 
-  const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(userId, sessionName, allRaces.length, allRaces.filter(r=>r.nivel!=='skip').length);
+  const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(CANONICO, sessionName, allRaces.length, allRaces.filter(r=>r.nivel!=='skip').length);
   const sessionId = result.lastInsertRowid;
   const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (const r of allRaces) {
@@ -1154,7 +1154,7 @@ async function rodarAnaliseAutomatica(date, userId) {
     h = h-4; if (h<0) h+=24;
     const horaBr = p.length>=2 ? h+':'+p[1] : '';
     const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-    ins.run(sessionId,userId,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
+    ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
   }
   db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(userId);
 
@@ -1214,7 +1214,10 @@ router.post('/session', express.json(), (req, res) => {
   try {
     const user = req.user;
     const { name, races } = req.body;
-    const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(user.id, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
+    // CANONICO e nao user.id: a sessao criada pela analise manual e' do
+    // sistema, igual a que o robo cria. Sem isso, cada usuario criaria a
+    // propria sessao paralela e voltariamos ao problema que a 2.x resolve.
+    const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(CANONICO, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
     const sessionId = result.lastInsertRowid;
     const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for(const r of races) {
@@ -1224,7 +1227,15 @@ router.post('/session', express.json(), (req, res) => {
       h=h-4; if(h<0)h+=24; // UK→BRT
       const horaBr=p.length>=2?h+':'+p[1]:'';
       const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-      ins.run(sessionId,user.id,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,r.odd||null,r.valor||null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,r.avbNaoAberto?1:0,r.histAll?JSON.stringify(r.histAll):null,r.videoUrl||null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
+      const info = ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,r.videoUrl||null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
+      // Os campos pessoais NAO vao mais na races (que agora e' compartilhada):
+      // vao pra race_user_data, amarrados ao usuario que salvou a sessao.
+      const novoId = Number(info && info.lastInsertRowid);
+      if (novoId) {
+        if (r.odd != null && r.odd !== '') salvarPessoal(db, novoId, user.id, 'odd', r.odd);
+        if (r.valor != null && r.valor !== '') salvarPessoal(db, novoId, user.id, 'valor', r.valor);
+        if (r.avbNaoAberto) salvarPessoal(db, novoId, user.id, 'avb_nao_aberto', 1);
+      }
     }
     res.json({ ok:true, sessionId });
   } catch(err) { res.status(500).json({ error:err.message }); }
@@ -1263,9 +1274,11 @@ router.get('/config', (req, res) => {
 router.get('/session/:id/races', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const sess = db.prepare('SELECT id, name FROM race_sessions WHERE id=? AND user_id=?').get(id, req.user.id);
+    const sess = db.prepare('SELECT id, name FROM race_sessions WHERE id=? AND user_id=?').get(id, CANONICO);
     if (!sess) return res.status(404).json({ error: 'Sessão não encontrada' });
     const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(id);
+    // odd/valor/aposta/atrasada sao de cada usuario, nao da corrida
+    aplicarPessoais(db, races, req.user.id);
     // Reconstroi 'scores' (usado pelo Relatorio de Analise) a partir da coluna
     // scores_json — o cliente sempre espera esse campo como array, nunca como
     // a string JSON crua salva no banco.
@@ -1280,7 +1293,7 @@ router.get('/session/:id/races', (req, res) => {
 
 router.get('/sessions', (req, res) => {
   try {
-    const sessions = db.prepare('SELECT id, name, created_at FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(req.user.id);
+    const sessions = db.prepare('SELECT id, name, created_at FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
     res.json(sessions);
   } catch(err) { res.status(500).json({ error:err.message }); }
 });
@@ -1325,7 +1338,7 @@ router.get('/proxima-corrida', (req, res) => {
     const now = new Date();
     const todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
     const sessionName = 'Races '+todayLabel;
-    const sess = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(req.user.id, sessionName);
+    const sess = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(CANONICO, sessionName);
     if (!sess) return res.json({ races: [] });
     const races = db.prepare(
       "SELECT hora, hora_br, corrida, trap_fav, name_fav, trap_und, name_und FROM races WHERE session_id=? AND nivel!='skip' AND trap_fav>0"
@@ -1338,7 +1351,7 @@ router.get('/proxima-corrida', (req, res) => {
 
 router.get('/sidebar-sessions', (req, res) => {
   try {
-    const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(req.user.id);
+    const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 8').all(CANONICO);
     const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
     const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
     res.json({
@@ -1351,7 +1364,7 @@ router.get('/sidebar-sessions', (req, res) => {
 router.delete('/session/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const sess = db.prepare('SELECT id FROM race_sessions WHERE id=? AND user_id=?').get(id, req.user.id);
+    const sess = db.prepare('SELECT id FROM race_sessions WHERE id=? AND user_id=?').get(id, CANONICO);
     if (!sess) return res.status(404).json({ error: 'Sessão não encontrada' });
     db.prepare('DELETE FROM races WHERE session_id=?').run(id);
     db.prepare('DELETE FROM race_sessions WHERE id=?').run(id);
