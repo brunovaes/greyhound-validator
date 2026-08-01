@@ -395,6 +395,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div style="display:flex;gap:10px;flex-wrap:wrap">
   <button type="button" class="btn-save" id="push-ativar" onclick="ativarPush()">Ativar notificações neste aparelho</button>
   <button type="button" class="btn-reset" id="push-testar" onclick="testarPush()">Enviar teste</button>
+  <button type="button" class="btn-reset" id="push-limpar" onclick="limparPush()" title="Remove todos os aparelhos inscritos neste login. Util quando o mesmo aviso chega repetido.">Limpar aparelhos</button>
 </div>
 <div id="push-msg" style="font-size:12px;margin-top:10px"></div>
 </div>
@@ -787,6 +788,23 @@ async function ativarPush(){
     _pushMsg('Parou aqui: '+e.message,'#ef4444');
     console.error('[push] ativar falhou:', e);
   }
+}
+
+// Cada reinstalacao do icone cria uma inscricao nova; as velhas so somem
+// quando falham. Isso limpa todas de uma vez pra reativar so a que interessa.
+async function limparPush(){
+  var d = await statusPush();
+  var n = d && d.aparelhos ? d.aparelhos : 0;
+  if (!n) { _pushMsg('Nao ha aparelho inscrito neste login.','#888'); return; }
+  if (!confirm('Remover os '+n+' aparelho(s) inscritos neste login? Depois e so tocar em Ativar notificacoes no aparelho que voce usa.')) return;
+  _pushMsg('Limpando…');
+  try{
+    var r = await fetch('${BASE}/api/push/limpar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    var rd = await r.json();
+    if(!r.ok) throw new Error(rd.error||('HTTP '+r.status));
+    _pushMsg(rd.removidas+' aparelho(s) removido(s). Ative de novo no aparelho que voce usa.','#22c55e');
+    statusPush();
+  }catch(e){ _pushMsg('Falhou: '+e.message,'#ef4444'); }
 }
 
 async function testarPush(){
