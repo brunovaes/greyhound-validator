@@ -13,6 +13,8 @@ const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
+const { exigirAcesso } = require('../middleware/acesso');
+const { CANONICO } = require('../db/compartilhado');
 
 function getBancaPadrao(userId) {
   const cfg = getUserConfig(userId);
@@ -46,12 +48,13 @@ function calcGanhoPct(bet) {
 
 function getApostas(userId) {
   return db.prepare(
-    `SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.name_fav, r.name_und, r.odd, r.bet_unidades, r.bateu,
+    `SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.name_fav, r.name_und, rud.odd AS odd, rud.bet_unidades AS bet_unidades, r.bateu,
             date(s.created_at, '-3 hours') as dia
      FROM races r JOIN race_sessions s ON s.id = r.session_id
-     WHERE r.user_id=? AND r.odd IS NOT NULL AND r.odd != ''
+          LEFT JOIN race_user_data rud ON rud.race_id = r.id AND rud.user_id = ?
+     WHERE r.user_id=? AND rud.odd IS NOT NULL AND rud.odd != ''
      ORDER BY s.created_at ASC, r.hora ASC`
-  ).all(userId);
+  ).all(userId, CANONICO);
 }
 
 // Monta a cadeia de banca mes-a-mes: cada mes que teve >=1 aposta ganha um
@@ -208,7 +211,7 @@ router.post('/save-config', express.json(), (req, res) => {
 });
 
 // ── Pagina HTML ──────────────────────────────────────────────────────────────
-router.get('/', (req, res) => {
+router.get('/', exigirAcesso('screen.banca'), (req, res) => {
   const logoB64 = getLogo();
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0, 10);

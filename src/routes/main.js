@@ -11,6 +11,7 @@ const { nomeCorridaCompleto, nomePista } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
+const { exigirAcesso } = require('../middleware/acesso');
 
 function getLogo() {
   const logoPath = path.join(__dirname, '../../public/img/logo.png');
@@ -342,7 +343,7 @@ router.get('/manifest.json', (req, res) => {
   });
 });
 
-router.get('/', (req, res) => {
+router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
   // Sessoes e corridas sao do SISTEMA: le sempre o canonico, nao o login.
@@ -667,7 +668,7 @@ ${navBar(user, 'analisar')}
 <script src="${BASE}/app.js"></script></body></html>`);
 });
 
-router.get('/live', (req, res) => {
+router.get('/live', exigirAcesso('screen.live'), (req, res) => {
   const user = req.user;
   const logoB64 = getLogo();
   // URLs fixas das pistas (ajustar aqui quando precisar trocar)
@@ -748,7 +749,7 @@ ${navBar(user, 'live')}
 </body></html>`);
 });
 
-router.get('/live/popup', (req, res) => {
+router.get('/live/popup', exigirAcesso('screen.live'), (req, res) => {
   const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
   const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
   const GHBR_1 = {
@@ -1124,7 +1125,7 @@ applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
 </body></html>`);
 });
 
-router.get('/historico', (req, res) => {
+router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
   const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
@@ -1199,7 +1200,7 @@ router.post('/sessao/:id/deletar', (req, res) => {
   res.redirect(BASE + '/historico');
 });
 
-router.get('/sessao/:id', (req, res) => {
+router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
   const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
   if (!sess) return res.redirect(BASE + '/historico');

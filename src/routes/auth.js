@@ -5,6 +5,7 @@ const { requireAdmin } = require('../middleware/auth');
 const { navBar } = require('./main');
 const { planLabel, planDuracao } = require('../utils/plans');
 const { designTokensCSS } = require('../utils/designTokens');
+const accessStore = require('../access/store');
 const path = require('path');
 const fs = require('fs');
 const BASE = process.env.BASE_PATH || '/greyhound';
@@ -50,10 +51,7 @@ router.get('/login', (req, res) => {
 <style>
 ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
-/* Login fica em 100%: o layout e' de fundo sangrado (.bg/.bg-video/.overlay
-   sao position:fixed;inset:0) e o card ja e' centralizado com max-width, entao
-   o zoom global nao ajudaria e ainda arriscaria deixar faixa nas bordas. */
-body{zoom:1;background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+body{background:#000;color:#f0f0f0;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .bg{position:fixed;inset:0;${bgB64 ? `background:url('${bgB64}') center center/cover no-repeat;` : 'background:#000;'}opacity:.5;z-index:0}
 .bg-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5;z-index:0}
 .overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.3) 0%,rgba(0,0,0,.85) 100%);z-index:1}
@@ -67,6 +65,8 @@ input:focus{outline:none;border-color:#22c55e;background:rgba(34,197,94,.05)}
 button{width:100%;padding:13px;background:#22c55e;color:#000;font-weight:700;font-size:15px;border:none;border-radius:8px;cursor:pointer;margin-top:4px;letter-spacing:.3px;transition:all .2s}
 button:hover{background:#16a34a;box-shadow:0 4px 20px rgba(34,197,94,.3)}
 .err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:16px;text-align:center}
+.perfil-sel{padding:4px 8px;background:#0D1117;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:11px;max-width:170px}
+.perfil-sel:focus{outline:none;border-color:#22c55e}
 </style></head><body>
 ${bgVideoUrl
   ? `<video class="bg-video" autoplay muted loop playsinline><source src="${bgVideoUrl}" type="video/mp4"></video>`
@@ -103,7 +103,10 @@ router.get('/logout', (req, res) => {
 });
 
 router.get('/admin/usuarios', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id,name,email,role,plan,analyses_used,analyses_limit,active,created_at,last_login FROM users ORDER BY created_at DESC').all();
+  const users = db.prepare('SELECT id,name,email,role,plan,analyses_used,analyses_limit,active,created_at,last_login,access_profile FROM users ORDER BY created_at DESC').all();
+  // Perfis de acesso disponiveis, pro seletor de cada linha. Sem isto, os
+  // perfis criados na tela de Acessos nao podiam ser dados a ninguem.
+  const perfisAcesso = accessStore.listProfiles().filter(p => !p.is_admin);
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -155,18 +158,36 @@ ${req.query.embed ? '' : '<h1>Gestão de Usuários</h1>'}
     </div>
   </form>
 </div>
-<div class="tw"><table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th><th>Análises</th><th>Status</th><th>Último login</th><th>Ação</th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Plano</th><th>Perfil de acesso</th><th>Análises</th><th>Status</th><th>Último login</th><th>Ação</th></tr></thead><tbody>
 ${users.map(u => `<tr>
   <td><strong>${u.name}</strong></td><td style="color:#888">${u.email}</td>
   <td><span class="badge badge-${u.role}">${u.role}</span></td>
   <td><span class="badge badge-${u.plan}" title="${planDuracao(u.plan)}">${planLabel(u.plan)}</span></td>
+  <td>${u.role==='admin'
+        ? '<span class="badge badge-admin" title="Admin sempre tem acesso total">total</span>'
+        : `<select class="perfil-sel" data-id="${u.id}" onchange="salvarPerfil(this)">
+             <option value="">Pelo plano (${planLabel(u.plan)})</option>
+             ${perfisAcesso.map(p => `<option value="${p.key}" ${u.access_profile===p.key?'selected':''}>${p.name}</option>`).join('')}
+           </select>`}</td>
   <td style="color:#888">${u.analyses_used}/${u.analyses_limit===999999?'&infin;':u.analyses_limit}</td>
   <td><span class="badge badge-${u.active?'on':'off'}">${u.active?'Ativo':'Inativo'}</span></td>
   <td style="color:#666;font-size:11px">${u.last_login?new Date(u.last_login).toLocaleDateString('pt-BR'):'Nunca'}</td>
   <td><form method="POST" action="${BASE}/admin/usuarios/toggle" style="display:inline"><input type="hidden" name="id" value="${u.id}"><input type="hidden" name="embed" value="${req.query.embed ? '1' : ''}"><button type="submit" class="btn-sm">${u.active?'Desativar':'Ativar'}</button></form></td>
 </tr>`).join('')}
 </tbody></table></div>
-</div></body></html>`);
+</div>
+<script>
+function salvarPerfil(sel){
+  var id=sel.getAttribute('data-id'), antes=sel.getAttribute('data-antes')||'';
+  sel.disabled=true;
+  fetch('${BASE}/admin/usuarios/perfil',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,profile:sel.value})})
+    .then(function(r){return r.json();})
+    .then(function(d){ sel.disabled=false; if(!d.ok){ alert('Nao foi possivel salvar o perfil.'); sel.value=antes; } else { sel.setAttribute('data-antes',sel.value); } })
+    .catch(function(){ sel.disabled=false; sel.value=antes; alert('Erro de conexao.'); });
+}
+document.querySelectorAll('.perfil-sel').forEach(function(s){ s.setAttribute('data-antes', s.value); });
+</script>
+</body></html>`);
 });
 
 router.post('/admin/usuarios/criar', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
@@ -181,6 +202,31 @@ router.post('/admin/usuarios/toggle', requireAdmin, express.urlencoded({ extende
   const user = db.prepare('SELECT active FROM users WHERE id=?').get(id);
   if (user) db.prepare('UPDATE users SET active=? WHERE id=?').run(user.active ? 0 : 1, id);
   res.redirect(BASE + '/admin/usuarios' + (req.body.embed === '1' ? '?embed=1' : ''));
+});
+
+// Grava o perfil de acesso de um usuario. Vazio = volta a seguir o plano.
+router.post('/admin/usuarios/perfil', requireAdmin, express.json(), (req, res) => {
+  try {
+    const { id, profile } = req.body || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'id ausente' });
+    const alvo = db.prepare('SELECT id, role FROM users WHERE id=?').get(id);
+    if (!alvo) return res.status(404).json({ ok: false, error: 'usuario nao encontrado' });
+    // Admin nao recebe perfil: ele sempre tem acesso total, por desenho.
+    if (alvo.role === 'admin') return res.json({ ok: true, ignorado: 'admin tem acesso total' });
+
+    const chave = String(profile || '').trim();
+    if (chave) {
+      const p = accessStore.getProfileByKey(chave);
+      if (!p) return res.status(400).json({ ok: false, error: 'perfil inexistente' });
+      if (p.is_admin) return res.status(400).json({ ok: false, error: 'nao e possivel atribuir o perfil Admin' });
+    }
+    db.prepare('UPDATE users SET access_profile=? WHERE id=?').run(chave || null, id);
+    console.log('[acesso] perfil do usuario ' + id + ' -> ' + (chave || '(pelo plano)'));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[acesso] erro ao salvar perfil:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 module.exports = router;

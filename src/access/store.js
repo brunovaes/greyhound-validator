@@ -27,6 +27,13 @@ db.exec(
   ');'
 );
 
+// Coluna que amarra um usuario a um perfil especifico. Ate a Fase 2 o perfil
+// vinha SO do plano (user.plan), o que tornava os perfis criados na tela de
+// Acessos inuteis: dava pra criar "Analista", configurar tudo, e nenhum
+// usuario podia receber esse perfil. Com a coluna, o admin escolhe na tela de
+// Usuarios; quem ficar sem escolha continua caindo no plano, como antes.
+try { db.prepare('ALTER TABLE users ADD COLUMN access_profile TEXT').run(); } catch (e) { /* ja existe */ }
+
 function seedDefaults() {
   const seed = [
     { key: 'admin',   name: 'Admin',    is_admin: 1, is_system: 1 },
@@ -89,6 +96,11 @@ function setPermsBulk(id, permsObj) {
 function profileForUser(user) {
   if (!user) return null;
   if (user.role === 'admin') return getProfileByKey('admin');
+  // 1) perfil escolhido pelo admin na tela de Usuarios; 2) senao, o plano.
+  if (user.access_profile) {
+    const p = getProfileByKey(user.access_profile);
+    if (p) return p;
+  }
   return getProfileByKey(user.plan) || null;
 }
 
