@@ -65,7 +65,12 @@ input:focus{outline:none;border-color:#22c55e;background:rgba(34,197,94,.05)}
 button{width:100%;padding:13px;background:#22c55e;color:#000;font-weight:700;font-size:15px;border:none;border-radius:8px;cursor:pointer;margin-top:4px;letter-spacing:.3px;transition:all .2s}
 button:hover{background:#16a34a;box-shadow:0 4px 20px rgba(34,197,94,.3)}
 .err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:16px;text-align:center}
-.perfil-sel{padding:4px 8px;background:#0D1117;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:11px;max-width:170px}
+.perfil-sel{padding:4px 8px;background:#0D1117;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:11px;max-width:170px;
+  /* color-scheme faz o navegador desenhar a LISTA ABERTA no tema escuro. O
+     dropdown nativo e' pintado pelo sistema, nao pelo CSS da pagina — sem
+     isto ele abre branco, destoando do resto da tela. */
+  color-scheme:dark;cursor:pointer}
+.perfil-sel option{background:#161B27;color:#f0f0f0}
 .perfil-sel:focus{outline:none;border-color:#22c55e}
 </style></head><body>
 ${bgVideoUrl
