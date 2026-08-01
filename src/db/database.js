@@ -251,6 +251,20 @@ for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
 }
 
+// Etapa 2.1 da virada "corrida compartilhada, aposta pessoal": cria a
+// race_user_data e copia pra la os campos pessoais que hoje vivem na races.
+// E' puramente aditivo — nao muda leitura nem escrita e nao apaga nada, entao
+// o sistema segue se comportando como antes. Roda depois dos ALTER TABLE
+// acima porque depende de colunas que eles criam (bet_entrou, flag_atrasada,
+// avb_nao_aberto). E' idempotente: nas proximas subidas ele so avisa e sai.
+try {
+  require('./migracaoCompartilhado').migrar(db);
+} catch (e) {
+  // Falhar aqui NAO pode derrubar o app: sem a tabela nova o sistema continua
+  // funcionando no modelo antigo.
+  console.error('[migracao 2.1] falhou (o app segue no modelo antigo):', e.message);
+}
+
 // Ajuste pontual 13/07/2026: muda a janela padrao do robo de Resultados de
 // 09:00-18:30 pra 07:30-19:30 — corridas do fim do dia UK (ate ~20:00 BRT)
 // estavam ficando de fora da janela antiga, e nunca pegavam resultado
