@@ -40,6 +40,11 @@ app.use(BASE + '/static/pdfs', require('express').static(require('path').join(__
 // se o HTML nao for encontrado, entao nao ha risco de rota morta.
 app.use('/', require('./routes/landing'));
 
+// Agendador do push: varre as corridas do dia e notifica X minutos antes da
+// largada, respeitando o filtro (turno/pista/classe) de cada inscrito. Fica
+// inerte se as chaves VAPID nao estiverem configuradas.
+try { require('./push/agendador').iniciar(); } catch (e) { console.error('[push/agendador] nao iniciou:', e.message); }
+
 app.listen(PORT, () => {
   console.log(`Greyhound Validator em http://localhost:${PORT}${BASE}`);
 });
