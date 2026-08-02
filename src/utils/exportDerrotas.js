@@ -379,31 +379,11 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   // Aplica o cruzamento. Pista e classe aceitam MULTIPLA (lista separada por virgula).
   const pistaSel = String(f.pista || '').split(',').map(s => s.trim()).filter(Boolean);
   const classeSel = String(f.classe || '').split(',').map(s => s.trim()).filter(Boolean);
-
-  // FILTRO POR PARES (pista + classe juntas). Formato: "Hove:A5,Harlow:A6".
-  //
-  // Existe porque os filtros separados fazem produto cartesiano: escolher
-  // {Hove,Harlow} x {A5,A6} traz as QUATRO combinacoes, inclusive Hove A6 e
-  // Harlow A5, que voce nao pediu. Com pares, cada pista carrega as proprias
-  // classes e so os pares informados entram.
-  //
-  // Pista sem classe no par ("Hove:") significa "essa pista inteira".
-  // Quando ha pares, eles mandam e os filtros soltos de pista/classe sao
-  // ignorados — evita dois criterios concorrentes dizendo coisas diferentes.
-  const paresSel = String(f.pares || '').split(',').map(s => s.trim()).filter(Boolean)
-    .map(par => {
-      const i = par.indexOf(':');
-      return i === -1 ? { pista: par, classe: '' } : { pista: par.slice(0, i), classe: par.slice(i + 1) };
-    });
-  const casaPar = x => paresSel.some(p => p.pista === x.pista && (!p.classe || p.classe === x.classe));
-
   const items = todos.filter(x =>
     (!f.turno || x.turno === f.turno) &&
+    (!pistaSel.length || pistaSel.includes(x.pista)) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
-    (paresSel.length
-      ? casaPar(x)
-      : ((!pistaSel.length || pistaSel.includes(x.pista)) &&
-         (!classeSel.length || classeSel.includes(x.classe))))
+    (!classeSel.length || classeSel.includes(x.classe))
   );
 
   // Filtro por QUANTIDADE de corridas: mostra so os grupos (pista/classe) cujo
@@ -422,11 +402,7 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   return {
     periodo: { from: fromISO || null, to: toISO || null },
     turnos: { t1, t2 },
-    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', pares: f.pares || '', qtdMin: f.qtdMin || '', qtdMax: f.qtdMax || '' },
-    // Classes que EXISTEM em cada pista, pro front montar a arvore
-    // (marcou a pista -> abrem as classes dela, e so as dela).
-    classesPorPista: (function(){ const m={}; todos.forEach(x=>{ if(!x.pista) return; (m[x.pista]=m[x.pista]||new Set()).add(x.classe); });
-      const o={}; Object.keys(m).forEach(k=>{ o[k]=Array.from(m[k]).filter(Boolean).sort(cmpClasse); }); return o; })(),
+    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', qtdMin: f.qtdMin || '', qtdMax: f.qtdMax || '' },
     opcoes, nomes,
     resumo: {
       total, acertos: ac,
