@@ -21,7 +21,7 @@
   } catch (e) {}
 
   var CORES_ALARME = { azul: '#3b82f6', roxo: '#8b5cf6', laranja: '#f97316', rosa: '#ec4899' };
-  var ALARME = { ativo: 0, turno: '', pistas: [], classes: [], regras: [], som: 'beep', cor: 'azul' };
+  var ALARME = { ativo: 0, turno: '', pistas: [], classes: [], som: 'beep', cor: 'azul' };
   var SOM_ALERTA = 'sino', ALERTA_MIN_ANTES = 3;
 
   /* ---- helpers de tempo/parsing (espelham o app.js) ---- */
@@ -30,28 +30,11 @@
   function isOldRaceCard(r) { var dc = r.data_card || r.dataCard; if (!dc) return false; var now = new Date(); var t = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'); return dc < t; }
   function getRaceClass(corrida) { var m = (corrida || '').trim().match(/([A-Z]\d+)$/i); return m ? m[1].toUpperCase() : null; }
   function turnoDaCorrida(r) { var hbr = r.hora_br || convertHora(r.hora || ''); var h = parseInt((hbr || '').split(':')[0], 10); if (isNaN(h)) return ''; return h < 13 ? 'manha' : 'tarde'; }
-  // Casa contra a LISTA de regras (mesma logica do app.js e do agendador).
-  // Cada regra e' fechada: turno + pista + classes juntos. Vazio = qualquer.
-  // Lista vazia devolve null = "use o filtro antigo".
-  function casaRegras(regras, turnoCorrida, pista, classe){
-    if (!regras || !regras.length) return null;
-    for (var i=0;i<regras.length;i++){
-      var g=regras[i]||{};
-      if (g.turno && g.turno !== turnoCorrida) continue;
-      if (g.pista && g.pista !== pista) continue;
-      var cs=(g.classes||[]).map(function(c){return String(c).toUpperCase();});
-      if (cs.length && cs.indexOf(classe) < 0) continue;
-      return true;
-    }
-    return false;
-  }
   function matchAlarme(r) {
     if (!ALARME.ativo) return false;
+    if (ALARME.turno && turnoDaCorrida(r) !== ALARME.turno) return false;
     var pista = (r.corrida || '').trim().split(' ')[0];
     var classe = (getRaceClass(r.corrida || '') || '').toUpperCase();
-    var porRegra = casaRegras(ALARME.regras, turnoDaCorrida(r), pista, classe);
-    if (porRegra !== null) return porRegra;
-    if (ALARME.turno && turnoDaCorrida(r) !== ALARME.turno) return false;
     if (ALARME.pistas.length && ALARME.pistas.indexOf(pista) < 0) return false;
     if (ALARME.classes.length && ALARME.classes.map(function (c) { return c.toUpperCase(); }).indexOf(classe) < 0) return false;
     return true;
@@ -171,7 +154,6 @@
       ALARME.classes = (c.alarme_filtro_classes || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
       ALARME.som = c.alarme_filtro_som || 'beep';
       ALARME.cor = c.alarme_filtro_cor || 'azul';
-      try { ALARME.regras = c.alarme_filtro_regras ? JSON.parse(c.alarme_filtro_regras) : []; } catch (e) { ALARME.regras = []; }
       return true;
     } catch (e) { return false; }
   }

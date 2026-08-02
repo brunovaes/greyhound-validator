@@ -110,7 +110,7 @@ var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
 var TELA_GRACE_MIN = 0;
 var SOM_ALERTA = 'sino';
-var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], regras:[], som:'beep', cor:'azul' };
+var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], som:'beep', cor:'azul' };
 var CORES_ALARME = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899' };
 var _sysCfgSig = ''; // assinatura da ultima config carregada (detecta mudanca p/ reaplicar o alarme)
 // Sinaliza que ESTA tela (analise) ja cuida do alarme — o alertaGlobal.js
@@ -159,7 +159,6 @@ async function loadSystemConfig() {
     ALARME_FILTRO.classes = (c.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
     ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
-    try { ALARME_FILTRO.regras = c.alarme_filtro_regras ? JSON.parse(c.alarme_filtro_regras) : []; } catch(e){ ALARME_FILTRO.regras = []; }
     // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
     // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
     // descarta o estado de alerta atual (o aviso padrao e' descartado) e
@@ -1046,31 +1045,8 @@ function alarmeTurnoDaCorrida(r){
   if (isNaN(h)) return '';
   return h < 13 ? 'manha' : 'tarde';
 }
-
-// Casa a corrida contra a LISTA de regras. Cada regra e' uma combinacao
-// fechada (turno + pista + classes), entao "Youghal A5,A6" nao dispara em
-// outra pista nem em outra classe — que era o problema do filtro unico, que
-// cruzava tudo com tudo. Basta UMA regra casar.
-// Campo vazio dentro da regra = "qualquer". Lista vazia = cai no filtro
-// antigo (compatibilidade com quem ja tinha configurado).
-function ALARME_CASA_REGRAS(regras, turnoCorrida, pista, classe){
-  if (!regras || !regras.length) return null;   // null = "use o filtro antigo"
-  for (var i=0;i<regras.length;i++){
-    var g=regras[i]||{};
-    if (g.turno && g.turno !== turnoCorrida) continue;
-    if (g.pista && g.pista !== pista) continue;
-    var cs=(g.classes||[]).map(function(c){return String(c).toUpperCase();});
-    if (cs.length && cs.indexOf(classe) < 0) continue;
-    return true;
-  }
-  return false;
-}
 function matchAlarmeFiltro(r){
   if (!ALARME_FILTRO.ativo) return false;
-  var _pista = (r.corrida||'').trim().split(' ')[0];
-  var _classe = (getRaceClass(r.corrida||'') || '').toUpperCase();
-  var _porRegra = ALARME_CASA_REGRAS(ALARME_FILTRO.regras, alarmeTurnoDaCorrida(r), _pista, _classe);
-  if (_porRegra !== null) return _porRegra;
   if (ALARME_FILTRO.turno && alarmeTurnoDaCorrida(r) !== ALARME_FILTRO.turno) return false;
   // pista = codigo do Racing Post = 1a palavra de corrida (mesma convencao do motor/HR)
   var pista = (r.corrida||'').trim().split(' ')[0];
