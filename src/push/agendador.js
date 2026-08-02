@@ -65,8 +65,30 @@ function turnoDaCorrida(horaBr) {
 }
 
 // Espelha o matchAlarme() do alertaGlobal.js. Filtro vazio = qualquer valor.
+// Casa contra a LISTA de regras (mesma logica do app.js e do alertaGlobal.js).
+// Cada regra e' fechada: turno + pista + classes juntos. Lista vazia devolve
+// null, e o codigo cai no filtro antigo.
+function casaRegras(regras, turnoCorrida, pista, classe) {
+  if (!regras || !regras.length) return null;
+  for (const g of regras) {
+    if (g.turno && g.turno !== turnoCorrida) continue;
+    if (g.pista && g.pista !== pista) continue;
+    const cs = (g.classes || []).map(c => String(c).toUpperCase());
+    if (cs.length && cs.indexOf(classe) < 0) continue;
+    return true;
+  }
+  return false;
+}
+
 function casaFiltro(cfg, race) {
   if (!cfg.alarme_filtro_ativo) return false;
+
+  let regras = [];
+  try { regras = cfg.alarme_filtro_regras ? JSON.parse(cfg.alarme_filtro_regras) : []; } catch (e) { regras = []; }
+  const porRegra = casaRegras(regras, turnoDaCorrida(race.hora_br),
+                              pistaDaCorrida(race.corrida), classeDaCorrida(race.corrida));
+  if (porRegra !== null) return porRegra;
+
   if (cfg.alarme_filtro_turno && turnoDaCorrida(race.hora_br) !== cfg.alarme_filtro_turno) return false;
 
   const pistas = String(cfg.alarme_filtro_pistas || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -161,4 +183,4 @@ function iniciar() {
   setInterval(() => { ciclo().catch(e => console.error('[push/agendador]', e.message)); }, INTERVALO_MS);
 }
 
-module.exports = { iniciar, ciclo, casaFiltro, minutosAte, classeDaCorrida, pistaDaCorrida, turnoDaCorrida };
+module.exports = { iniciar, ciclo, casaFiltro, casaRegras, minutosAte, classeDaCorrida, pistaDaCorrida, turnoDaCorrida };

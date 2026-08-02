@@ -367,20 +367,35 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
 </div>
 <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-  <div class="field"><label>Pista (várias)</label>
-    <div style="max-height:170px;overflow:auto;background:#0D1117;border:1px solid #222;border-radius:6px;padding:8px">
-      ${pistasAlarme.map(function(p){return `<label style="display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" class="alarme-pista-cb" value="${p[0]}" ${alarmePistasSel.indexOf(p[0])>=0?'checked':''} onchange="coletaAlarme('pista')" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">${p[1]}</label>`;}).join('')}
+  <div class="field" style="grid-column:1/-1">
+    <label>Regras do alarme</label>
+    <div class="hint" style="margin-bottom:8px">Monte uma linha por combinação: escolha turno, pista e as classes, e clique em <strong>Incluir</strong>. Cada linha é fechada, então "Youghal A5, A6" não dispara em outra pista nem em outra classe. Sem nenhuma regra, o alarme vale para qualquer corrida.</div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;background:#0D1117;border:1px solid #222;border-radius:8px;padding:10px">
+      <div style="flex:0 0 120px">
+        <label style="font-size:10px">Turno</label>
+        <select id="rg_turno" style="width:100%;padding:6px 8px;background:#161B27;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:12px;color-scheme:dark">
+          <option value="">Todos</option><option value="manha">Manhã</option><option value="tarde">Tarde</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:170px">
+        <label style="font-size:10px">Pista</label>
+        <select id="rg_pista" onchange="rgPistaMudou()" style="width:100%;padding:6px 8px;background:#161B27;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:12px;color-scheme:dark">
+          <option value="">Qualquer pista</option>
+          ${pistasAlarme.map(function(p){return `<option value="${p[0]}">${p[1]}</option>`;}).join('')}
+        </select>
+      </div>
+      <div style="flex:2;min-width:220px">
+        <label style="font-size:10px">Classes (nenhuma = todas)</label>
+        <div id="rg_classes" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div>
+      </div>
+      <button type="button" class="btn-save" style="padding:8px 18px;font-size:12px" onclick="rgIncluir()">Incluir</button>
     </div>
-    <input type="hidden" name="alarme_filtro_pistas" id="alarme_pistas_val" value="${config.alarme_filtro_pistas||''}">
-    <div class="hint">Nada marcado = qualquer pista.</div>
+
+    <div id="rg_lista" style="margin-top:10px"></div>
+    <input type="hidden" name="alarme_filtro_regras" id="alarme_regras_val" value="">
   </div>
-  <div class="field"><label>Classe (várias)</label>
-    <div style="max-height:170px;overflow:auto;background:#0D1117;border:1px solid #222;border-radius:6px;padding:8px">
-      ${classesAlarme.map(function(cl){return `<label style="display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" class="alarme-classe-cb" value="${cl}" ${alarmeClassesSel.indexOf(cl)>=0?'checked':''} onchange="coletaAlarme('classe')" style="width:15px;height:15px;flex-shrink:0;cursor:pointer">${cl}</label>`;}).join('')}
-    </div>
-    <input type="hidden" name="alarme_filtro_classes" id="alarme_classes_val" value="${config.alarme_filtro_classes||''}">
-    <div class="hint">Nada marcado = qualquer classe.</div>
-  </div>
+
 </div>
 </div>
 </div>
@@ -754,6 +769,101 @@ function _cfgPrepararSons(){ if(_cfgSomProntos)return; _cfgSomProntos=true; var 
 function _cfgSomWebAudio(nome){ var ctx=_getCfgCtx(); if(!ctx)return; var play=function(){ try{(SONS_TESTE[nome]||tocarSino)(ctx);}catch(e){} }; if(ctx.state==='suspended'){ctx.resume().then(play).catch(play);}else{play();} }
 function _tocarTeste(nome){ _cfgPrepararSons(); var a=_CFG_SOM_AUDIO[nome]; if(a){ try{ a.currentTime=0; var p=a.play(); if(p&&p.catch)p.catch(function(){_cfgSomWebAudio(nome);}); return; }catch(e){} } _cfgSomWebAudio(nome); }
 function _flashBtnTeste(btn){ if(!btn)return; var t=btn.getAttribute('data-lbl')||btn.textContent; btn.setAttribute('data-lbl',t); btn.textContent='🔊 tocando...'; btn.style.borderColor='#22c55e'; setTimeout(function(){ btn.textContent=t; btn.style.borderColor='#444'; }, 900); }
+// ===== Regras do alarme (turno + pista + classes, uma linha por combinacao) =====
+// Guardadas como JSON num hidden, enviado junto com o formulario.
+var RG_CLASSES = ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10','A11','A12'];
+var rgRegras = [];      // [{turno:'', pista:'', classes:['A5','A6']}]
+var rgClassesSel = [];  // classes marcadas no construtor
+var rgEditando = -1;    // indice em edicao, -1 = incluindo nova
+
+function rgNomePista(cod){
+  var sel=document.getElementById('rg_pista');
+  for(var i=0;i<sel.options.length;i++) if(sel.options[i].value===cod) return sel.options[i].text;
+  return cod||'Qualquer pista';
+}
+function rgRotuloTurno(t){ return t==='manha'?'Manhã':(t==='tarde'?'Tarde':'Todos'); }
+
+function rgPintaClasses(){
+  var box=document.getElementById('rg_classes'); if(!box) return;
+  box.innerHTML = RG_CLASSES.map(function(c){
+    var on = rgClassesSel.indexOf(c)>=0;
+    return '<button type="button" class="rg-cls" data-classe="'+c+'" style="font-size:11px;padding:3px 9px;border-radius:10px;cursor:pointer;border:1px solid '
+      + (on?'#22c55e;background:rgba(34,197,94,.15);color:#22c55e':'#333;background:#0D1117;color:#888')+'">'+c+'</button>';
+  }).join('');
+}
+function rgPistaMudou(){ /* reservado: se um dia as classes variarem por pista */ }
+
+function rgIncluir(){
+  var turno=document.getElementById('rg_turno').value;
+  var pista=document.getElementById('rg_pista').value;
+  var nova={turno:turno,pista:pista,classes:rgClassesSel.slice()};
+  if(rgEditando>=0){ rgRegras[rgEditando]=nova; rgEditando=-1; }
+  else {
+    // Evita duplicata exata: mesma combinacao ja na lista nao precisa entrar de novo.
+    var igual=rgRegras.some(function(r){
+      return r.turno===nova.turno && r.pista===nova.pista
+        && r.classes.slice().sort().join(',')===nova.classes.slice().sort().join(',');
+    });
+    if(igual){ alert('Essa regra já está na lista.'); return; }
+    rgRegras.push(nova);
+  }
+  rgClassesSel=[]; document.getElementById('rg_turno').value=''; document.getElementById('rg_pista').value='';
+  rgPintaClasses(); rgPintaLista();
+}
+function rgPintaLista(){
+  var box=document.getElementById('rg_lista'); if(!box) return;
+  document.getElementById('alarme_regras_val').value = rgRegras.length?JSON.stringify(rgRegras):'';
+  if(!rgRegras.length){
+    box.innerHTML='<div style="font-size:12px;color:#666;padding:8px 0">Nenhuma regra. O alarme vale para qualquer corrida.</div>';
+    return;
+  }
+  var linhas=rgRegras.map(function(r,i){
+    var cls = r.classes && r.classes.length ? r.classes.join(', ') : 'todas as classes';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid #222;font-size:12px">'
+      + '<span style="color:#666;width:18px">'+(i+1)+'</span>'
+      + '<span style="flex:1;color:#ddd"><strong style="color:#22c55e">'+rgNomePista(r.pista)+'</strong>'
+      + ' · Turno: '+rgRotuloTurno(r.turno)+' · Classes: '+cls+'</span>'
+      + '<button type="button" class="rg-edit" data-i="'+i+'" style="font-size:11px;background:none;border:none;color:#60a5fa;cursor:pointer">editar</button>'
+      + '<button type="button" class="rg-del" data-i="'+i+'" style="font-size:11px;background:none;border:none;color:#ef4444;cursor:pointer">remover</button>'
+      + '</div>';
+  }).join('');
+  box.innerHTML='<div style="background:#0D1117;border:1px solid #222;border-radius:8px;overflow:hidden">'+linhas+'</div>'
+    + '<button type="button" id="rg_limpar" style="margin-top:8px;font-size:11px;background:none;border:1px solid #333;color:#888;border-radius:6px;padding:5px 12px;cursor:pointer">Limpar todas</button>';
+}
+function rgEditar(i){
+  var r=rgRegras[i]; if(!r) return;
+  document.getElementById('rg_turno').value=r.turno||'';
+  document.getElementById('rg_pista').value=r.pista||'';
+  rgClassesSel=(r.classes||[]).slice(); rgEditando=i;
+  rgPintaClasses();
+}
+// Delegacao em vez de onclick inline: dentro de template literal as aspas de
+// onclick="" exigem escape que se resolve errado e derruba o script inteiro.
+document.addEventListener('click', function(ev){
+  var t=ev.target; if(!t || !t.getAttribute) return;
+  if(t.classList.contains('rg-cls')){
+    var c=t.getAttribute('data-classe'), k=rgClassesSel.indexOf(c);
+    if(k>=0) rgClassesSel.splice(k,1); else rgClassesSel.push(c);
+    rgClassesSel.sort(function(a,b){ return parseInt(a.slice(1),10)-parseInt(b.slice(1),10); });
+    rgPintaClasses();
+  } else if(t.classList.contains('rg-edit')){
+    rgEditar(parseInt(t.getAttribute('data-i'),10));
+  } else if(t.classList.contains('rg-del')){
+    var i=parseInt(t.getAttribute('data-i'),10);
+    rgRegras.splice(i,1); if(rgEditando===i) rgEditando=-1;
+    rgPintaLista();
+  } else if(t.id==='rg_limpar'){
+    if(confirm('Remover todas as regras do alarme?')){ rgRegras=[]; rgEditando=-1; rgPintaLista(); }
+  }
+});
+(function rgIniciar(){
+  try{ var v=document.getElementById('alarme_regras_val'); if(!v) return;
+    var salvo=${config.alarme_filtro_regras ? config.alarme_filtro_regras : '[]'};
+    if(salvo && salvo.length) rgRegras=salvo;
+  }catch(e){}
+  rgPintaClasses(); rgPintaLista();
+})();
+
 function testarSomAlarme(btn){ var el=document.getElementById('alarme_filtro_som'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
 try{ document.addEventListener('DOMContentLoaded', _cfgPrepararSons); }catch(e){}
 var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'};
@@ -1045,9 +1155,10 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1071,6 +1182,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.alarme_filtro_classes||'',
       d.alarme_filtro_som||'beep',
       d.alarme_filtro_cor||'azul',
+      d.alarme_filtro_regras||null,
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao

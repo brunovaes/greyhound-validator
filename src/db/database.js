@@ -246,6 +246,12 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_classes TEXT DEFAULT ''",
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'",
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'",
+  // Lista de regras do alarme, em JSON: [{turno,pista,classes:[...]}, ...].
+  // Substitui o filtro unico (turno+pistas+classes), que fazia produto
+  // cartesiano: escolher {Hove,Harlow} x {A5,A6} disparava tambem em Hove A6
+  // e Harlow A5. Com regras, cada linha e' uma combinacao fechada.
+  // Vazio/nulo = cai no filtro antigo, entao nada quebra em quem ja usava.
+  "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
