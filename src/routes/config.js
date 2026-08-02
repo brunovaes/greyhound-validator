@@ -524,6 +524,9 @@ function dashSecao(titulo,arr){
   return '<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">'+titulo+'</div>'+arr.map(dashBar).join('')+'</div>';
 }
 var dashPistasSel = [], dashPistaDirty = false, dashNomes = {};
+var dashClassesPorPista = {};
+var dashParesSel = {};            // { pista: [classes marcadas] }
+var dashPistasDisponiveis = [];   // pistas do periodo, pra redesenhar o painel
 function nomePistaCli(code){ return (dashNomes && dashNomes[code]) || code; }
 function fecharPistaEComitar(){
   var p=document.getElementById('dash_f_pista_panel'); if(p) p.style.display='none';
@@ -537,18 +540,81 @@ function togglePistaPanel(e){
 function preenchePistaPanel(pistas){
   var pan=document.getElementById('dash_f_pista_panel'); if(!pan) return;
   dashPistasSel = dashPistasSel.filter(function(p){ return (pistas||[]).indexOf(p)>=0; });
+  // Limpa pares de pistas que sumiram do periodo
+  Object.keys(dashParesSel).forEach(function(p){ if((pistas||[]).indexOf(p)<0) delete dashParesSel[p]; });
+
   var h=(pistas||[]).map(function(p){
-    var ck = dashPistasSel.indexOf(p)>=0?'checked':'';
-    return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:4px 6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;text-align:left;text-transform:none;letter-spacing:normal;font-weight:400"><input type="checkbox" value="'+p+'" '+ck+' onchange="onPistaCheck(this)" style="margin:0;padding:0;width:16px;height:16px;flex-shrink:0;cursor:pointer">'+nomePistaCli(p)+'</label>';
+    var marcada = dashPistasSel.indexOf(p)>=0;
+    var classes = (dashClassesPorPista[p]||[]);
+    var sel = dashParesSel[p]||[];
+    // Classes ficam ANINHADAS na pista: so aparecem quando a pista esta
+    // marcada, e sao so as que existem naquela pista. E' o que evita o
+    // produto cartesiano — marcar Hove+A5 e Harlow+A6 nao traz Hove A6.
+    var filhas = (marcada && classes.length)
+      ? '<div style="padding:2px 0 6px 26px;display:flex;flex-wrap:wrap;gap:4px">'
+        + '<span style="font-size:10px;color:#666;width:100%;margin-bottom:2px">classes (nada marcado = todas desta pista)</span>'
+        + classes.map(function(c){
+            var on = sel.indexOf(c)>=0;
+            return '<button type="button" class="cls-pill" data-pista="'+p+'" data-classe="'+c+'" '
+              + 'style="font-size:11px;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid '
+              + (on?'#22c55e;background:rgba(34,197,94,.15);color:#22c55e':'#333;background:#0D1117;color:#888')+'">'+c+'</button>';
+          }).join('')
+        + '</div>'
+      : '';
+    return '<div style="border-bottom:1px solid #222;padding:2px 0">'
+      + '<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;text-align:left;text-transform:none;letter-spacing:normal;font-weight:400">'
+      + '<input type="checkbox" value="'+p+'" '+(marcada?'checked':'')+' onchange="onPistaCheck(this)" style="margin:0;padding:0;width:16px;height:16px;flex-shrink:0;cursor:pointer">'
+      + nomePistaCli(p) + '</label>' + filhas + '</div>';
   }).join('');
   pan.innerHTML = h || '<div style="color:#888;font-size:11px;padding:4px">Sem pistas no período</div>';
+  ligaDelegacaoClasses();
   atualizaPistaBox();
+}
+// Liga/desliga uma classe DENTRO de uma pista. Sem parar a propagacao o clique
+// fecharia o painel (ha um listener de clique-fora), e o usuario perderia a
+// selecao no meio.
+// Delegacao: UM listener no painel, em vez de onclick inline em cada botao.
+// Motivo pratico: este HTML e' montado dentro de um template literal, e aspas
+// dentro de onclick="" exigem escape que se resolve errado e quebra o script
+// inteiro em silencio (foi o que travou a tela de Configuracoes em 01/08).
+// Com data-* nao ha aspas a escapar.
+function ligaDelegacaoClasses(){
+  var pan=document.getElementById('dash_f_pista_panel');
+  if(!pan || pan.__delegado) return;
+  pan.__delegado = true;
+  pan.addEventListener('click', function(ev){
+    var b = ev.target && ev.target.closest ? ev.target.closest('.cls-pill') : null;
+    if(!b) return;
+    toggleClasseDaPista(ev, b.getAttribute('data-pista'), b.getAttribute('data-classe'));
+  });
+}
+function toggleClasseDaPista(ev,pista,classe){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  var arr = dashParesSel[pista] || (dashParesSel[pista]=[]);
+  var i = arr.indexOf(classe);
+  if(i>=0) arr.splice(i,1); else arr.push(classe);
+  dashPistaDirty=true;
+  preenchePistaPanel(dashPistasDisponiveis);
+  var pan=document.getElementById('dash_f_pista_panel'); if(pan) pan.style.display='block';
 }
 function onPistaCheck(cb){
   var v=cb.value;
   if(cb.checked){ if(dashPistasSel.indexOf(v)<0) dashPistasSel.push(v); }
-  else { dashPistasSel = dashPistasSel.filter(function(p){return p!==v;}); }
-  dashPistaDirty=true; atualizaPistaBox();  // NAO recarrega aqui — so ao sair do campo
+  else { dashPistasSel = dashPistasSel.filter(function(p){return p!==v;}); delete dashParesSel[v]; }
+  dashPistaDirty=true;
+  preenchePistaPanel(dashPistasDisponiveis);
+  var pan=document.getElementById('dash_f_pista_panel'); if(pan) pan.style.display='block';
+}
+// Monta "Hove:A5,Hove:A6,Harlow:A6". Pista sem classe marcada vira "Hove:",
+// que o backend le como "essa pista inteira".
+function montaPares(){
+  var out=[];
+  dashPistasSel.forEach(function(p){
+    var cs = dashParesSel[p]||[];
+    if(!cs.length) out.push(p+':');
+    else cs.forEach(function(c){ out.push(p+':'+c); });
+  });
+  return out.join(',');
 }
 function atualizaPistaBox(){
   var box=document.getElementById('dash_f_pista_box'); if(!box) return;
@@ -608,7 +674,7 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
 }
 function limparFiltrosDash(){
   ['dash_f_turno','dash_f_caes','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
-  dashPistasSel=[]; dashPistaDirty=false; atualizaPistaBox();
+  dashPistasSel=[]; dashParesSel={}; dashPistaDirty=false; preenchePistaPanel(dashPistasDisponiveis);
   dashClassesSel=[]; dashClasseDirty=false; atualizaClasseBox();
   carregarDashboard();
 }
@@ -624,6 +690,7 @@ async function carregarDashboard(){
   if(f)qs.push('from='+f); if(t)qs.push('to='+t);
   if(fTurno)qs.push('turno='+encodeURIComponent(fTurno));
   if(fPista)qs.push('pista='+encodeURIComponent(fPista));
+  var fPares=montaPares(); if(fPares)qs.push('pares='+encodeURIComponent(fPares));
   if(fCaes)qs.push('caes='+encodeURIComponent(fCaes));
   if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
   if(fQtdMin)qs.push('qtdMin='+encodeURIComponent(fQtdMin));
@@ -635,7 +702,9 @@ async function carregarDashboard(){
     if(d.error) throw new Error(d.error);
     dashNomes = d.nomes || {};
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
-    preenchePistaPanel(d.opcoes.pistas);
+    dashPistasDisponiveis = d.opcoes.pistas || [];
+    dashClassesPorPista = d.classesPorPista || {};
+    preenchePistaPanel(dashPistasDisponiveis);
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
     preencheClassePanel(d.opcoes.classes);
     var rz=d.resumo;
@@ -1136,6 +1205,7 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       pista: String(req.query.pista || '').trim(),
       caes: String(req.query.caes || '').trim(),
       classe: String(req.query.classe || '').trim(),
+      pares: String(req.query.pares || '').trim(),
       qtdMin: String(req.query.qtdMin || '').trim(),
       qtdMax: String(req.query.qtdMax || '').trim()
     };
