@@ -853,7 +853,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
     + '</div>'
     + '</div>'
-    + '<div id="fp-alts" style="display:none;flex:0 0 30%;min-width:230px;flex-direction:column;gap:10px;align-self:center"></div>'
+    + '<div id="fp-alts" style="display:none;flex:0 0 33%;min-width:260px;flex-direction:column;gap:10px;align-self:center"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
     // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
@@ -916,10 +916,10 @@ function _cardAlternativa(r, a, escolhidoAtual){
 
   return '<div class="fp-alt-card" style="'+opaco+'background:var(--sur2);border:1px solid '+borda+';border-radius:8px;padding:7px 8px">'
     + '<div style="display:flex;align-items:center;justify-content:center;gap:4px">'
-    +   '<img src="'+getDogImg(ta, r.corrida||'')+'" style="height:52px;object-fit:contain" alt="T'+ta+'">'
-    +   '<div style="text-align:center;line-height:1"><div style="font-size:8px;color:var(--mut2);font-weight:700">VENCE</div>'
+    +   '<img src="'+getDogImg(ta, r.corrida||'')+'" style="height:78px;object-fit:contain" alt="T'+ta+'">'
+    +   '<div style="text-align:center;line-height:1"><div style="font-size:9px;color:var(--mut2);font-weight:700;letter-spacing:.5px">VENCE</div>'
     +   '<div style="font-size:11px;color:#22c55e">&#9658;</div></div>'
-    +   '<img src="'+getDogImg(tb, r.corrida||'x')+'" style="height:52px;object-fit:contain;transform:scaleX(-1)" alt="T'+tb+'">'
+    +   '<img src="'+getDogImg(tb, r.corrida||'x')+'" style="height:78px;object-fit:contain;transform:scaleX(-1)" alt="T'+tb+'">'
     + '</div>'
     + '<div style="font-size:10px;color:#cbd5e1;text-align:center;font-weight:600;margin-top:3px">T'+ta+' '+(a.aNome||'')+' &times; T'+tb+' '+(a.bNome||'')+'</div>'
     + '<div style="font-size:9px;color:var(--mut);text-align:center;display:flex;gap:5px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:2px">'
