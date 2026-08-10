@@ -824,7 +824,8 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
-    + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:stretch">'
+    + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:flex-start">'
+    + '<div class="fp-arena-col" style="flex:1 1 auto;min-width:0">'
     + '<div class="fp-arena" style="flex:1 1 70%">'
     // Dog fav (esquerda, corre para direita)
     + '<div class="fp-dog-side">'
@@ -846,12 +847,13 @@ function renderFocusPanel(r, idx) {
     + (perfU?'<div class="fp-dog-perfil" style="color:'+perfColorU+'">'+perfU+'</div>':'')
     + '</div>'
     + '</div>'
-    + '<div id="fp-alts" style="display:none;flex:0 0 30%;min-width:210px;flex-direction:column;gap:8px;justify-content:center"></div>'
-    + '</div>'
     + '<div class="fp-gauges-row">'
     + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass, histU) + '</div>'
     + '<div class="fp-gauges-div"></div>'
     + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
+    + '</div>'
+    + '</div>'
+    + '<div id="fp-alts" style="display:none;flex:0 0 30%;min-width:230px;flex-direction:column;gap:10px;align-self:center"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
     // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
@@ -910,10 +912,10 @@ function _cardAlternativa(r, a, escolhidoAtual){
 
   return '<div class="fp-alt-card" style="'+opaco+'background:var(--sur2);border:1px solid '+borda+';border-radius:8px;padding:7px 8px">'
     + '<div style="display:flex;align-items:center;justify-content:center;gap:4px">'
-    +   '<img src="'+getDogImg(ta, r.corrida||'')+'" style="height:34px;object-fit:contain" alt="T'+ta+'">'
+    +   '<img src="'+getDogImg(ta, r.corrida||'')+'" style="height:52px;object-fit:contain" alt="T'+ta+'">'
     +   '<div style="text-align:center;line-height:1"><div style="font-size:8px;color:var(--mut2);font-weight:700">VENCE</div>'
     +   '<div style="font-size:11px;color:#22c55e">&#9658;</div></div>'
-    +   '<img src="'+getDogImg(tb, r.corrida||'x')+'" style="height:34px;object-fit:contain;transform:scaleX(-1)" alt="T'+tb+'">'
+    +   '<img src="'+getDogImg(tb, r.corrida||'x')+'" style="height:52px;object-fit:contain;transform:scaleX(-1)" alt="T'+tb+'">'
     + '</div>'
     + '<div style="font-size:10px;color:#cbd5e1;text-align:center;font-weight:600;margin-top:3px">T'+ta+' '+(a.aNome||'')+' &times; T'+tb+' '+(a.bNome||'')+'</div>'
     + '<div style="font-size:9px;color:var(--mut);text-align:center;display:flex;gap:5px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:2px">'
