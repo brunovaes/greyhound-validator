@@ -846,7 +846,7 @@ function renderFocusPanel(r, idx) {
     + (perfU?'<div class="fp-dog-perfil" style="color:'+perfColorU+'">'+perfU+'</div>':'')
     + '</div>'
     + '</div>'
-    + '<div id="fp-alts" style="flex:0 0 30%;min-width:210px;display:flex;flex-direction:column;gap:8px;justify-content:center"></div>'
+    + '<div id="fp-alts" style="display:none;flex:0 0 30%;min-width:210px;flex-direction:column;gap:8px;justify-content:center"></div>'
     + '</div>'
     + '<div class="fp-gauges-row">'
     + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass, histU) + '</div>'
@@ -978,12 +978,64 @@ function _linkBetwinner(snap){
   return null;
 }
 
+// ── SIMULADOR (so pra testar a tela sem depender do robo) ───────────────────
+// Liga com ?simavb=1 na URL, ou chamando simAvb() no console. Desliga com
+// ?simavb=0 ou simAvb(false). Monta 3 AvBs falsos com os traps reais da
+// corrida em foco, pra dar pra ver arena + 2 alternativas + odds + escolha
+// sem precisar mexer no relogio nem esperar o mercado abrir.
+var _SIM_AVB = (function(){
+  try { return new URLSearchParams(location.search).get('simavb') === '1'; } catch(e){ return false; }
+})();
+function simAvb(liga){
+  _SIM_AVB = (liga !== false);
+  console.log('[sim] AvBs simulados', _SIM_AVB ? 'LIGADOS' : 'desligados');
+  var r = results[focusRaceIdx];
+  if (r) renderFocusPanel(r, focusRaceIdx);
+  return _SIM_AVB;
+}
+function _snapSimulado(r){
+  // Usa os traps que existem de verdade na corrida, pra imagem e historico
+  // baterem. Se a corrida tiver poucos galgos, repete o que houver.
+  var traps = (r.histAll||[]).map(function(g){ return g.trap; }).filter(function(t){ return t!=null; });
+  if (traps.length < 4) traps = [r.trapFav||1, r.trapUnd||2, 3, 4, 5, 6];
+  var nome = function(t){ return _nomeDoTrap(r, t) || ('Galgo T'+t); };
+  var mk = function(pos, ta, tb, motor, odd, mercado, trend, valor){
+    return { pos:pos, aTrap:ta, aNome:nome(ta), bTrap:tb, bNome:nome(tb),
+             enginePct:motor, avaliacao:motor, oddAvenceB:odd, odd:odd,
+             marketPct:mercado, edge:Math.round((motor-mercado)*10)/10,
+             trend:trend, valor:valor,
+             flags:{ trapVazia:[], cioRecente:null, obs:'' } };
+  };
+  return {
+    gameId: 999999, pista: getPista(r.corrida||''), analiseCorrida: r.corrida,
+    raceNum:'Race SIM', estado:'ao_vivo',
+    statusLine:'SIMULADO — inicia dentro de 3 minutos',
+    avbs: [
+      mk(1, traps[0], traps[1], 68, 1.55, 61.2, 'desceu', true),
+      mk(2, traps[2] || traps[0], traps[3] || traps[1], 59, 1.90, 55.4, 'subiu', false),
+      mk(3, traps[1], traps[4] || traps[2] || traps[0], 54, 2.10, 52.1, 'igual', false)
+    ],
+    sugeridos: []
+  };
+}
+
 function renderOddsLive(r){
+  // Modo simulado: nao chama o robo, monta o snapshot na hora.
+  if (_SIM_AVB) { _pintaOddsLive(r, { corridas:[ _snapSimulado(r) ] }); return; }
+
   var box = document.getElementById('fp-odds-live');
   if(!box || !r) return;
   fetch(BASE+'/robot/odds/live', { credentials:'same-origin' })
     .then(function(res){ return res.ok ? res.json() : null; })
-    .then(function(d){
+    .then(function(d){ _pintaOddsLive(r, d); })
+    .catch(function(){});
+}
+
+// Desenha o bloco ao vivo a partir de um snapshot — venha ele do robo ou do
+// simulador. Mantido separado justamente pra os dois caminhos produzirem
+// EXATAMENTE a mesma tela (se divergissem, o teste deixaria de valer).
+function _pintaOddsLive(r, d){
+  (function(){
       var box2 = document.getElementById('fp-odds-live'); if(!box2) return;
       if(!d){ box2.innerHTML=''; return; }
       var lista = d.corridas||[];
@@ -995,6 +1047,7 @@ function renderOddsLive(r){
           + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner</span>'
           + '<span>aguardando esta corrida abrir (ou pista ainda não mapeada)</span></div>';
         var hb0 = document.getElementById('fp-odds-hdr'); if(hb0) hb0.innerHTML='';
+        var ba0 = document.getElementById('fp-alts'); if(ba0){ ba0.innerHTML=''; ba0.style.display='none'; }
         return;
       }
       var avbs = snap.avbs||[], sug = snap.sugeridos||[];
@@ -1023,7 +1076,8 @@ function renderOddsLive(r){
       if(box3){
         if(lista3.length > 1){
           box3.innerHTML = lista3.slice(1,3).map(function(a){ return _cardAlternativa(r, a, r.avbEscolhido); }).join('');
-        } else { box3.innerHTML=''; }
+          box3.style.display = 'flex';   // so ocupa espaco quando ha alternativa
+        } else { box3.innerHTML=''; box3.style.display='none'; }
       }
       // A pos 1 pode mudar de um ciclo pro outro. Se mudou E o usuario ainda
       // nao escolheu nada, a arena grande se redesenha pro novo par.
@@ -1051,8 +1105,7 @@ function renderOddsLive(r){
         + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b;font-weight:800;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px">'
         + '<span>&#9889; AvBs ao vivo — betwinner' + (_linkBetwinner(snap)?' <a href="'+_linkBetwinner(snap)+'" target="_blank" rel="noopener" style="color:#60a5fa;font-weight:700;text-transform:none;letter-spacing:0">abrir na casa &#8599;</a>':'') + '</span><span style="color:var(--mut);font-weight:600;text-transform:none">'+(snap.statusLine||'')+'</span></div>'
         + linhas + '</div>';
-    })
-    .catch(function(){});
+  })();
 }
 
 // Nomes de campo usados no front (results[i]) as vezes diferem da coluna no
