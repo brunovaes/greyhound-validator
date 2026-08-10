@@ -879,6 +879,10 @@ function startOddsLive(r){
   renderOddsLive(r);
   _oddsLiveTimer = setInterval(function(){ renderOddsLive(r); }, 5000);
 }
+// NAO ESTA MAIS EM USO: as linhas de AvB do rodape sairam quando a arena e os
+// cards de alternativa passaram a mostrar a mesma informacao. Mantido de
+// proposito — e' codigo do chat do motor, e apagar funcao alheia ja gerou
+// estrago aqui antes. Se o motor confirmar que nao precisa, pode sair.
 function _avbRow(par, odd, mercado, motor, edge, trend){
   var seta = trend==='subiu'?'<span style="color:#ef4444">&#9650;</span>':trend==='desceu'?'<span style="color:#22c55e">&#9660;</span>':'';
   var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'</span>';
@@ -1092,21 +1096,21 @@ function _pintaOddsLive(r, d){
           return;                              // o proprio re-render dispara o ciclo de novo
         }
       }
-      var linhas = '';
-
-      if(avbs.length){
-        avbs.forEach(function(a){ linhas += _avbRow('T'+a.aTrap+' '+a.aNome+' &times; T'+a.bTrap+' '+a.bNome, a.oddAvenceB, a.marketPct, a.enginePct, a.edge, a.trend); });
-      } else if(sug.length){
-        linhas += '<div style="font-size:10px;color:var(--mut);margin-bottom:2px">Sugeridos (antes de abrir):</div>';
-        sug.forEach(function(s){ linhas += _avbRow('T'+s.aTrap+' &times; T'+s.bTrap, null, null, s.enginePct, null, null); });
-      } else {
-        linhas = '<div style="font-size:11px;color:var(--mut)">sem AvB aberto ainda</div>';
-      }
+      // O bloco de baixo virou so uma FAIXA DE STATUS. As linhas de AvB que
+      // ficavam aqui foram removidas de proposito: depois que a arena e os
+      // cards de alternativa passaram a mostrar par, odd, mercado, motor e
+      // edge, este bloco so repetia a mesma informacao ocupando tela.
+      // Fica o que nao existe em outro lugar: o link pra casa e o status
+      // ("inicia dentro de X minutos").
+      var link = _linkBetwinner(snap);
+      var temAvb = (avbs.length || sug.length);
       box2.innerHTML =
-        '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:8px">'
-        + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b;font-weight:800;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px">'
-        + '<span>&#9889; AvBs ao vivo — betwinner' + (_linkBetwinner(snap)?' <a href="'+_linkBetwinner(snap)+'" target="_blank" rel="noopener" style="color:#60a5fa;font-weight:700;text-transform:none;letter-spacing:0">abrir na casa &#8599;</a>':'') + '</span><span style="color:var(--mut);font-weight:600;text-transform:none">'+(snap.statusLine||'')+'</span></div>'
-        + linhas + '</div>';
+        '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:10px">'
+        + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner'
+        +   (link ? ' <a href="'+link+'" target="_blank" rel="noopener" style="color:#60a5fa;font-weight:700;text-transform:none;letter-spacing:0">abrir na casa &#8599;</a>' : '')
+        + '</span>'
+        + '<span style="color:var(--mut)">' + (snap.statusLine || (temAvb ? '' : 'sem AvB aberto ainda')) + '</span>'
+        + '</div>';
   })();
 }
 
