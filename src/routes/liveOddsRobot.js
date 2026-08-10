@@ -18,15 +18,13 @@ const {
 const BASE = 'https://betwinner1.com/service-api';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
-// betwinner LI (id fixo da pista) -> codigo de pista do sistema. Semente com as
-// confirmadas; o robo loga qualquer LI novo que aparecer pra completar aqui.
-const LI_PARA_PISTA = {
-  1395099: 'Notts',
-  1697507: 'Yrmth',
-  1700067: 'Harlow'
-  // 1392623: '???'  // apareceu uma vez — confirmar nome e mapear
-};
-const CHAMPS_CONHECIDOS = Object.keys(LI_PARA_PISTA);
+// Casamento de pista por NOME: o feed do betwinner traz o nome da pista (ex.
+// "Nottingham"), e a gente reverte pelo nomesPistas do sistema. Zero ID
+// hardcodado — funciona pra qualquer pista que exista no nomesPistas.
+const { NOMES_PISTAS } = require('../utils/nomesPistas');
+const NOME_PARA_PISTA = {};
+for (const code in NOMES_PISTAS) NOME_PARA_PISTA[String(NOMES_PISTAS[code]).toLowerCase()] = code;
+function pistaPorNome(nome) { return NOME_PARA_PISTA[String(nome || '').toLowerCase().trim()] || null; }
 
 const status = {
   running: false,
@@ -59,13 +57,26 @@ function httpGetJson(url) {
   });
 }
 
+// Passo 1: quais pistas de galgo estao ao vivo agora. SEM champs, o feed
+// devolve o esporte 68 com a lista `L` de champs (pista) ao vivo — so os IDs.
+async function descobrirChampsAoVivo() {
+  const url = `${BASE}/LiveFeed/GetSportsShortZip?sports=68&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`;
+  const data = await httpGetJson(url);
+  const sport = ((data && data.Value) || []).find(s => s.I === 68);
+  return ((sport && sport.L) || []).map(c => c.LI).filter(Boolean);
+}
+
+// Passo 2: com os champs ao vivo, busca as corridas de cada pista. Casa a pista
+// por NOME (via nomesPistas). champsIds explicito ainda funciona (pra teste).
 async function listarCorridasAoVivo(champsIds) {
-  const champs = (champsIds && champsIds.length ? champsIds : CHAMPS_CONHECIDOS).join(',');
-  const url = `${BASE}/LiveFeed/GetSportsShortZip?sports=68&champs=${champs}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`;
+  let champs = (champsIds && champsIds.length) ? champsIds : null;
+  if (!champs) { try { champs = await descobrirChampsAoVivo(); } catch (e) { champs = []; } }
+  if (!champs || !champs.length) return [];
+  const url = `${BASE}/LiveFeed/GetSportsShortZip?sports=68&champs=${champs.join(',')}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`;
   const disc = await httpGetJson(url);
   return parseLiveRaces(disc).map(r => {
-    const pista = LI_PARA_PISTA[r.li] || null;
-    if (!pista && r.li) { status.pistasNovas[r.li] = r.track; }
+    const pista = pistaPorNome(r.track);
+    if (!pista && r.track) status.pistasNovas[r.track] = (r.li || '?'); // nome que nao casou no nomesPistas
     return Object.assign({}, r, { pista });
   });
 }
@@ -160,7 +171,7 @@ function getStatus() { return Object.assign({}, status, { porCorrida: undefined 
 function getSnapshots() { return Object.values(status.porCorrida); }
 
 module.exports = {
-  LI_PARA_PISTA, listarCorridasAoVivo, buscarMercados, snapshotCorrida, marcarTendencia,
-  sugerirAvbs, iniciar, parar, getStatus, getSnapshots,
+  pistaPorNome, descobrirChampsAoVivo, listarCorridasAoVivo, buscarMercados,
+  snapshotCorrida, marcarTendencia, sugerirAvbs, iniciar, parar, getStatus, getSnapshots,
   _status: status
 };
