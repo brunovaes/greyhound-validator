@@ -757,9 +757,15 @@ function _perfilDoTrap(r, trap){
 // Lemos os dois pra tela nao quebrar quando o motor migrar.
 // Odd do par que esta na arena, guardada pelo ultimo ciclo do poller.
 function _parOddAtual(r, ta, tb){
+  // 1) odd do ultimo ciclo do robo pra ESTE par
   var l=(r&&r._avbsAoVivo)||[];
-  var a=l.find(function(x){return String(x.aTrap)===String(ta)&&String(x.bTrap)===String(tb);});
-  return a ? _avbOdd(a) : (r&&r.avbEscolhido&&r.avbEscolhido.odd)||null;
+  var achado=l.find(function(x){return String(x.aTrap)===String(ta)&&String(x.bTrap)===String(tb);});
+  if(achado) return _avbOdd(achado);
+  // 2) se o par pedido e' justamente o escolhido, usa a odd guardada na escolha
+  if(r&&r.avbEscolhido&&String(r.avbEscolhido.a)===String(ta)&&String(r.avbEscolhido.b)===String(tb)) return r.avbEscolhido.odd||null;
+  // 3) nao ha odd conhecida — devolve null pra o campo ficar vazio em vez de
+  //    manter um valor de outro par (dado errado passa despercebido)
+  return null;
 }
 function _avbOdd(a){ return a && (a.oddAvenceB != null ? a.oddAvenceB : a.odd); }
 function _avbMotor(a){ return a && (a.enginePct != null ? a.enginePct : a.avaliacao); }
@@ -960,17 +966,64 @@ document.addEventListener('click', function(ev){
 // O que muda: o par registrado (fav/und) e a odd. O PODIO e o resto da analise
 // ficam como o motor calculou. Uma vez escolhido, a arena para de trocar
 // sozinha: aquele par e' o que vai pro Historico e pra Banca.
+// Caixa de confirmacao propria, no visual do app. O confirm() do navegador
+// aparece colado na barra de endereco, com fonte do sistema, e destoa da tela
+// inteira — num fluxo de 5 minutos antes da largada isso atrapalha mais do
+// que ajuda.
+function _confirmarNaTela(titulo, texto, rotuloOk, aoConfirmar){
+  var velho = document.getElementById('gf-confirm'); if(velho) velho.remove();
+  var bg = document.createElement('div');
+  bg.id = 'gf-confirm';
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px';
+  bg.innerHTML =
+    '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;padding:22px 24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+    + '<div style="font-size:15px;font-weight:700;color:#f0f0f0;margin-bottom:8px">'+titulo+'</div>'
+    + '<div style="font-size:12.5px;color:#9aa4b2;line-height:1.6;margin-bottom:18px">'+texto+'</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +   '<button type="button" id="gf-confirm-nao" style="padding:8px 16px;background:transparent;border:1px solid #2a3140;color:#9aa4b2;border-radius:6px;font-size:12px;cursor:pointer">Cancelar</button>'
+    +   '<button type="button" id="gf-confirm-sim" style="padding:8px 18px;background:#22c55e;border:none;color:#000;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">'+rotuloOk+'</button>'
+    + '</div></div>';
+  document.body.appendChild(bg);
+  var fechar = function(){ bg.remove(); };
+  bg.querySelector('#gf-confirm-nao').addEventListener('click', fechar);
+  bg.querySelector('#gf-confirm-sim').addEventListener('click', function(){ fechar(); aoConfirmar(); });
+  bg.addEventListener('click', function(e){ if(e.target===bg) fechar(); });   // clique fora fecha
+}
+
+// Aplica a odd no campo e persiste. Valor vazio limpa o campo — e' o que deve
+// acontecer quando nao ha odd conhecida pro par que ficou na arena.
+function _aplicarOdd(valor){
+  var el=document.getElementById('fp-odd');
+  var v = (valor==null || valor==='') ? '' : String(valor);
+  if(el) el.value = v;
+  updateFocusField('odd', v);
+}
+
 function escolherAvb(trapA, trapB, odd){
   var idx=focusRaceIdx, r=results[idx];
   if(!r) return;
   var jaEra = r.avbEscolhido && String(r.avbEscolhido.a)===String(trapA) && String(r.avbEscolhido.b)===String(trapB);
+
   if(jaEra){
-    if(!confirm('Desfazer a escolha deste AvB? A corrida volta a seguir o AvB do motor.')) return;
-    r.avbEscolhido=null;
-  } else {
-    r.avbEscolhido={ a:trapA, b:trapB, odd:(odd||null), em:Date.now() };
-    if(odd){ var el=document.getElementById('fp-odd'); if(el) el.value=odd; updateFocusField('odd', odd); }
+    _confirmarNaTela(
+      'Desfazer a escolha?',
+      'A corrida volta a seguir o AvB do motor, e a odd volta a ser a do AvB principal.',
+      'Desfazer',
+      function(){
+        r.avbEscolhido = null;
+        // A odd tem que acompanhar o par que fica na arena. Sem isto o campo
+        // guardava a odd do AvB desfeito — dado errado, e silencioso.
+        var p = _parEmFoco(r);
+        _aplicarOdd(_parOddAtual(r, p.a, p.b));
+        saveSessionState();
+        renderFocusPanel(r, idx);
+      }
+    );
+    return;
   }
+
+  r.avbEscolhido={ a:trapA, b:trapB, odd:(odd||null), em:Date.now() };
+  _aplicarOdd(odd);
   saveSessionState();
   renderFocusPanel(r, idx);   // redesenha arena + alternativas com o novo estado
 }
