@@ -830,7 +830,12 @@ function renderOddsLive(r){
       var pista = getPista(r.corrida||'');
       var snap = lista.find(function(c){ return c.analiseCorrida===r.corrida; })
              || lista.find(function(c){ return c.pista===pista; });
-      if(!snap){ box2.innerHTML=''; return; }
+      if(!snap){
+        box2.innerHTML = '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:8px;font-size:10px;color:var(--mut);display:flex;justify-content:space-between;gap:8px">'
+          + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner</span>'
+          + '<span>aguardando esta corrida abrir (ou pista ainda não mapeada)</span></div>';
+        return;
+      }
       var avbs = snap.avbs||[], sug = snap.sugeridos||[];
       var linhas = '';
       if(avbs.length){
