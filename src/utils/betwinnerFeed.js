@@ -148,7 +148,37 @@ function crossWithEngine(avbs, scores) {
   });
 }
 
+// ── Sugestao de AvBs ANTES do betwinner abrir a corrida ──────────────────────
+// A casa pareia caes de capacidade parecida. Enquanto o mercado nao abre, a
+// gente antecipa isso a partir do score do motor: pega os N mais fortes e forma
+// os pares de MENOR diferenca de score (os mais equilibrados = os mais provaveis
+// de a casa abrir). Cada par ja vem com o % do motor. Quando a corrida abrir no
+// betwinner, o robo troca esses sugeridos pelos reais (com odd + edge).
+//   scores: [{ trap, nome, score }]  (do scores_json da analise)
+function sugerirAvbs(scores, opts) {
+  opts = opts || {};
+  const topN = opts.topN || 4;        // considera os N caes mais fortes
+  const maxPares = opts.maxPares || 3; // quantos pares sugerir
+  const arr = (scores || []).filter(s => s && s.score != null)
+    .slice().sort((a, b) => b.score - a.score);
+  const top = arr.slice(0, topN);
+  const pares = [];
+  for (let i = 0; i < top.length; i++) {
+    for (let j = i + 1; j < top.length; j++) {
+      const A = top[i], B = top[j]; // A tem score >= B (favorito do par)
+      pares.push({
+        aTrap: A.trap, aNome: A.nome, bTrap: B.trap, bNome: B.nome,
+        diff: Math.round((A.score - B.score) * 10) / 10,
+        enginePct: Math.max(5, Math.min(95, scoreToPct(A.score - B.score))),
+        estado: 'sugerido'
+      });
+    }
+  }
+  pares.sort((a, b) => a.diff - b.diff); // mais equilibrados primeiro
+  return pares.slice(0, maxPares);
+}
+
 module.exports = {
   impliedProb, marketPairProb, scoreToPct, parsePlayerName,
-  parseLiveRaces, parseRaceMarkets, crossWithEngine
+  parseLiveRaces, parseRaceMarkets, crossWithEngine, sugerirAvbs
 };

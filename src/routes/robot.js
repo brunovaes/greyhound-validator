@@ -352,6 +352,36 @@ function scheduleMonitorCron() {
 }
 scheduleMonitorCron();
 
+// ─── ROBÔ DE ODDS AO VIVO (betwinner) — loop de 5s, so dentro da janela ──────
+const liveOddsModule = require('./liveOddsRobot');
+function _convDbHoraUk24(hora){ const p=String(hora||'').split(':'); if(p.length<2) return null; let h=parseInt(p[0]); const m=parseInt(p[1])||0; if(h>=1&&h<=9) h+=12; return h*60+m; }
+function _tsToUk24Min(ts){ try{ const s=new Date(ts*1000).toLocaleString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit',hour12:false}); const p=s.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }catch(e){ return null; } }
+// Casa a corrida do betwinner (pista + horario UK) com a analise do dia e
+// devolve os scores do motor (scores_json). null = sem analise casada ainda.
+function _scoresParaCorridaAoVivo(liveRace){
+  if(!liveRace || !liveRace.pista || !liveRace.startTs) return null;
+  const alvo=_tsToUk24Min(liveRace.startTs); if(alvo==null) return null;
+  try{
+    const { db } = require('../db/database');
+    const date=getTodayDate();
+    const rows=db.prepare("SELECT r.hora, r.scores_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
+    for(const row of rows){ const dm=_convDbHoraUk24(row.hora); if(dm!=null && Math.abs(dm-alvo)<=2){ try{ return JSON.parse(row.scores_json); }catch(e){ return null; } } }
+  }catch(e){}
+  return null;
+}
+function _dentroJanelaOdds(){
+  try{
+    const { db } = require('../db/database');
+    const cfg=db.prepare('SELECT monitor_window_start, monitor_window_end FROM analysis_config WHERE user_id=1').get()||{};
+    const startBRT=cfg.monitor_window_start||'07:00', endBRT=cfg.monitor_window_end||'20:00';
+    const now=new Date(); const brt=((now.getUTCHours()*60+now.getUTCMinutes())-180+1440)%1440;
+    const s=startBRT.split(':').map(Number), e=endBRT.split(':').map(Number);
+    return brt>=(s[0]*60+s[1]) && brt<=(e[0]*60+e[1]);
+  }catch(e){ return true; }
+}
+try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds }); }
+catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
+
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
 // estao dentro da janela de X minutos antes do horario (configuravel,
 // default 15 — ver final_check_min_antes em Configuracoes). Complementa o
@@ -1968,6 +1998,17 @@ router.get('/monitor/status', requireAdmin, (req, res) => {
     if (persisted) return res.json(persisted);
   }
   res.json(st);
+});
+
+// ── Robô de Odds ao Vivo (betwinner) ────────────────────────────────────────
+router.get('/odds/status', requireAdmin, (req, res) => { res.json(liveOddsModule.getStatus()); });
+router.get('/odds/live', requireAdmin, (req, res) => {
+  res.json({ corridas: liveOddsModule.getSnapshots(), pistasNovas: (liveOddsModule._status || {}).pistasNovas || {} });
+});
+router.post('/odds/stop', requireAdmin, (req, res) => { liveOddsModule.parar(); res.json({ ok: true }); });
+router.post('/odds/start', requireAdmin, (req, res) => {
+  try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds }); res.json({ ok: true }); }
+  catch(e){ res.status(500).json({ error: e.message }); }
 });
 
 router.get('/final-check/status', requireAdmin, (req, res) => {
