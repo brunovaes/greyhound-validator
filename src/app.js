@@ -715,6 +715,55 @@ function enterFocusMode() {
   serverSyncInterval = setInterval(syncFromServer, 120000);
 }
 
+// ── AvBs ao vivo: helpers de par ─────────────────────────────────────────────
+// O robo de reanalise pode trocar QUAL par aparece na arena grande (a pos 1 do
+// ranking muda entre ciclos de 5s). Estes helpers acham nome/perfil/historico
+// de um trap qualquer dentro do que o motor ja mandou em r.histAll / r.scores,
+// pra arena conseguir se redesenhar pra qualquer dupla.
+
+// Par escolhido pelo usuario (fica) > par ao vivo do momento > fav x und do motor.
+// Uma vez que o usuario ESCOLHE, aquele par manda e nao muda mais sozinho —
+// e' ele que vai pro historico e pra banca.
+function _parEmFoco(r){
+  if (r && r.avbEscolhido && r.avbEscolhido.a) return { a:r.avbEscolhido.a, b:r.avbEscolhido.b, escolhido:true };
+  if (r && r._parAoVivo && r._parAoVivo.a)     return { a:r._parAoVivo.a, b:r._parAoVivo.b, aoVivo:true };
+  return { a: r && r.trapFav || 1, b: r && r.trapUnd || 2 };
+}
+function _nomeDoTrap(r, trap){
+  if(!r || trap==null) return '';
+  if(String(trap)===String(r.trapFav)) return r.nameFav||'';
+  if(String(trap)===String(r.trapUnd)) return r.nameUnd||'';
+  var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
+  if(g && g.nome) return g.nome;
+  var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
+  return (sc && sc.nome) || '';
+}
+function _histDoTrap(r, trap){
+  if(!r || trap==null) return null;
+  if(String(trap)===String(r.trapFav) && r.histFav) return r.histFav;
+  if(String(trap)===String(r.trapUnd) && r.histUnd) return r.histUnd;
+  var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
+  return g ? (g.historico||[]) : null;
+}
+function _perfilDoTrap(r, trap){
+  if(!r || trap==null) return '';
+  if(String(trap)===String(r.trapFav)) return r.perfilFav||'';
+  if(String(trap)===String(r.trapUnd)) return r.perfilUnd||'';
+  var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
+  return (sc && sc.perfil) || '';
+}
+// O motor entrega odd/avaliacao com nomes diferentes conforme a versao
+// (oddAvenceB/enginePct no robo atual, odd/avaliacao no contrato do handoff).
+// Lemos os dois pra tela nao quebrar quando o motor migrar.
+// Odd do par que esta na arena, guardada pelo ultimo ciclo do poller.
+function _parOddAtual(r, ta, tb){
+  var l=(r&&r._avbsAoVivo)||[];
+  var a=l.find(function(x){return String(x.aTrap)===String(ta)&&String(x.bTrap)===String(tb);});
+  return a ? _avbOdd(a) : (r&&r.avbEscolhido&&r.avbEscolhido.odd)||null;
+}
+function _avbOdd(a){ return a && (a.oddAvenceB != null ? a.oddAvenceB : a.odd); }
+function _avbMotor(a){ return a && (a.enginePct != null ? a.enginePct : a.avaliacao); }
+
 function renderFocusPanel(r, idx) {
   var focusCol = document.getElementById('focus-col');
   if (!focusCol) return;
@@ -750,14 +799,33 @@ function renderFocusPanel(r, idx) {
     ? (r.hora||'') + ' - ' + r.trackFull + (raceClass ? ' ('+raceClass+')' : '') + ' - ' + (r.dist||'') + 'm'
     : (r.corrida||'-');
 
+  // Par mostrado na arena grande. Comeca no fav x und do motor e pode ser
+  // trocado ao vivo pelo robo de reanalise (a pos 1 do ranking muda entre
+  // ciclos) ou pela escolha do usuario. So a ARENA muda — podio, gauges de
+  // contexto e o resto do painel continuam do original.
+  var _par = _parEmFoco(r);
+  tf = _par.a; tu = _par.b;
+  nf = _nomeDoTrap(r, tf) || nf;
+  nu = _nomeDoTrap(r, tu) || nu;
+  histF = _histDoTrap(r, tf) || histF;
+  histU = _histDoTrap(r, tu) || histU;
+  perfF = _perfilDoTrap(r, tf) || perfF;
+  perfU = _perfilDoTrap(r, tu) || perfU;
+  perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
+  perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
+  imgF = getDogImg(tf, r.corrida||'');
+  imgU = getDogImg(tu, r.corrida||'x');
+
   focusCol.innerHTML =
     oldBanner
     + suspectBanner
-    + '<div class="fp-hdr">'
+    + '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
     + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
+    + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
-    + '<div class="fp-arena">'
+    + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:stretch">'
+    + '<div class="fp-arena" style="flex:1 1 70%">'
     // Dog fav (esquerda, corre para direita)
     + '<div class="fp-dog-side">'
     + '<img class="fp-dog-img" src="'+imgF+'" alt="'+nf+'" onerror="this.style.opacity=\'.2\'">'
@@ -769,6 +837,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
     + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
+    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#22c55e':'transparent')+';border:1px solid #22c55e;color:'+(_parEmFoco(r).escolhido?'#000':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
@@ -776,6 +845,8 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-dog-name">'+nu+'</div>'
     + (perfU?'<div class="fp-dog-perfil" style="color:'+perfColorU+'">'+perfU+'</div>':'')
     + '</div>'
+    + '</div>'
+    + '<div id="fp-alts" style="flex:0 0 30%;min-width:210px;display:flex;flex-direction:column;gap:8px;justify-content:center"></div>'
     + '</div>'
     + '<div class="fp-gauges-row">'
     + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass, histU) + '</div>'
@@ -818,6 +889,95 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
     + '<span style="color:var(--mut);display:flex;gap:7px;align-items:center;white-space:nowrap">'+parts.join(' &middot; ')+' '+edgeStr+' '+seta+'</span>'
     + '</div>';
 }
+// Card compacto de uma alternativa (pos 2 e 3): os 2 galgos, a seta VENCE, os
+// numeros do mercado e os dois botoes. Sem onclick inline com aspas — os dados
+// vao em data-* e um listener unico trata o clique (aspas escapadas dentro de
+// template literal ja derrubaram tela neste projeto).
+function _cardAlternativa(r, a, escolhidoAtual){
+  var ta=a.aTrap, tb=a.bTrap;
+  var odd=_avbOdd(a), motor=_avbMotor(a);
+  var ehEscolhido = escolhidoAtual && String(escolhidoAtual.a)===String(ta) && String(escolhidoAtual.b)===String(tb);
+  var opaco = (escolhidoAtual && !ehEscolhido) ? 'opacity:.35;' : '';
+  var borda = ehEscolhido ? '#22c55e' : 'var(--bdr2)';
+  var seta = a.trend==='subiu'?'<span style="color:#ef4444">&#9650;</span>':a.trend==='desceu'?'<span style="color:#22c55e">&#9660;</span>':'';
+  var edge = a.edge;
+  var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'%</span>';
+  var selo = a.valor ? '<span style="font-size:9px;color:#eab308;font-weight:800">&#9733; valor</span>' : '';
+  var nums=[];
+  if(odd!=null) nums.push('odd <strong style="color:#cbd5e1">'+odd+'</strong>');
+  if(a.marketPct!=null) nums.push('mkt '+a.marketPct+'%');
+  if(motor!=null) nums.push('motor '+motor+'%');
+
+  return '<div class="fp-alt-card" style="'+opaco+'background:var(--sur2);border:1px solid '+borda+';border-radius:8px;padding:7px 8px">'
+    + '<div style="display:flex;align-items:center;justify-content:center;gap:4px">'
+    +   '<img src="'+getDogImg(ta, r.corrida||'')+'" style="height:34px;object-fit:contain" alt="T'+ta+'">'
+    +   '<div style="text-align:center;line-height:1"><div style="font-size:8px;color:var(--mut2);font-weight:700">VENCE</div>'
+    +   '<div style="font-size:11px;color:#22c55e">&#9658;</div></div>'
+    +   '<img src="'+getDogImg(tb, r.corrida||'x')+'" style="height:34px;object-fit:contain;transform:scaleX(-1)" alt="T'+tb+'">'
+    + '</div>'
+    + '<div style="font-size:10px;color:#cbd5e1;text-align:center;font-weight:600;margin-top:3px">T'+ta+' '+(a.aNome||'')+' &times; T'+tb+' '+(a.bNome||'')+'</div>'
+    + '<div style="font-size:9px;color:var(--mut);text-align:center;display:flex;gap:5px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:2px">'
+    +   nums.join(' &middot; ') + ' ' + edgeStr + ' ' + seta + ' ' + selo + '</div>'
+    + '<div style="display:flex;gap:4px;margin-top:5px">'
+    +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'" style="flex:1;font-size:9px;padding:3px;background:#161b27;border:1px solid var(--bdr2);color:#cbd5e1;border-radius:4px;cursor:pointer">Analisar</button>'
+    +   '<button type="button" class="alt-entrar" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(odd!=null?odd:'')+'" style="flex:1;font-size:9px;padding:3px;background:'+(ehEscolhido?'#22c55e':'transparent')+';border:1px solid #22c55e;color:'+(ehEscolhido?'#000':'#22c55e')+';border-radius:4px;cursor:pointer;font-weight:700">'+(ehEscolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    + '</div></div>';
+}
+
+// "Analisar disputa" de QUALQUER par, nao so o fav x und. Mesma tabela, par
+// parametrizavel — o buildDogCard ja aceita qualquer galgo.
+function openValModalPar(key, trapA, trapB){
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[VAL-PAR] nao achou:',key);return;}
+  var nA=_nomeDoTrap(r,trapA), nB=_nomeDoTrap(r,trapB);
+  var hA=_histDoTrap(r,trapA)||[], hB=_histDoTrap(r,trapB)||[];
+  document.getElementById('val-title').textContent='T'+trapA+' '+nA+' vs T'+trapB+' '+nB;
+  var body=document.getElementById('val-body');
+  body.classList.remove('val-compact');
+  body.innerHTML=buildDogCard(trapA,nA,_perfilDoTrap(r,trapA),hA)+'<div class="val-sep"></div>'+buildDogCard(trapB,nB,_perfilDoTrap(r,trapB),hB);
+  document.getElementById('val-modal').classList.add('open');
+}
+
+// Listener unico pros botoes das alternativas e da arena.
+document.addEventListener('click', function(ev){
+  var t=ev.target; if(!t||!t.classList) return;
+  var r=results[focusRaceIdx]; if(!r) return;
+  var key=r.hora+'|'+r.corrida;
+  if(t.classList.contains('alt-analisar')){
+    openValModalPar(key, parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10));
+  } else if(t.classList.contains('alt-entrar')){
+    escolherAvb(parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10), t.getAttribute('data-odd'));
+  }
+});
+
+// ESCOLHER um AvB. Regra: UM por corrida — escolher outro substitui.
+// O que muda: o par registrado (fav/und) e a odd. O PODIO e o resto da analise
+// ficam como o motor calculou. Uma vez escolhido, a arena para de trocar
+// sozinha: aquele par e' o que vai pro Historico e pra Banca.
+function escolherAvb(trapA, trapB, odd){
+  var idx=focusRaceIdx, r=results[idx];
+  if(!r) return;
+  var jaEra = r.avbEscolhido && String(r.avbEscolhido.a)===String(trapA) && String(r.avbEscolhido.b)===String(trapB);
+  if(jaEra){
+    if(!confirm('Desfazer a escolha deste AvB? A corrida volta a seguir o AvB do motor.')) return;
+    r.avbEscolhido=null;
+  } else {
+    r.avbEscolhido={ a:trapA, b:trapB, odd:(odd||null), em:Date.now() };
+    if(odd){ var el=document.getElementById('fp-odd'); if(el) el.value=odd; updateFocusField('odd', odd); }
+  }
+  saveSessionState();
+  renderFocusPanel(r, idx);   // redesenha arena + alternativas com o novo estado
+}
+
+// Link pra corrida no betwinner. O robo ainda nao entrega a URL real — quando
+// entregar (ex.: snap.urlBetwinner ou montada pelo gameId), troca so aqui.
+function _linkBetwinner(snap){
+  if(!snap) return null;
+  if(snap.urlBetwinner) return snap.urlBetwinner;
+  if(snap.gameId) return 'https://betwinner.com/pt/line/greyhound-racing/' + snap.gameId;  // provisorio
+  return null;
+}
+
 function renderOddsLive(r){
   var box = document.getElementById('fp-odds-live');
   if(!box || !r) return;
@@ -834,10 +994,50 @@ function renderOddsLive(r){
         box2.innerHTML = '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:8px;font-size:10px;color:var(--mut);display:flex;justify-content:space-between;gap:8px">'
           + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner</span>'
           + '<span>aguardando esta corrida abrir (ou pista ainda não mapeada)</span></div>';
+        var hb0 = document.getElementById('fp-odds-hdr'); if(hb0) hb0.innerHTML='';
         return;
       }
       var avbs = snap.avbs||[], sug = snap.sugeridos||[];
+      var hb = document.getElementById('fp-odds-hdr');
+      if(hb){
+        if(avbs.length){
+          var top = avbs[0];
+          var e = top.edge;
+          var edgeH = (e==null)?'':' &middot; <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'var(--mut)'))+';font-weight:700">edge '+(e>0?'+':'')+e+'</span>';
+          hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>'
+            + '<div style="font-size:12px;color:#cbd5e1;font-weight:700;white-space:nowrap">T'+top.aTrap+'&times;T'+top.bTrap+' &middot; '+top.oddAvenceB+'</div>'
+            + '<div style="font-size:9px;color:var(--mut);white-space:nowrap">mkt '+top.marketPct+'%'+edgeH+'</div>';
+        } else if(sug.length){
+          var s0 = sug[0];
+          hb.innerHTML = '<div style="font-size:9px;color:#f59e0b;font-weight:800;letter-spacing:.5px">&#9889; SUGERIDO</div>'
+            + '<div style="font-size:12px;color:#cbd5e1;font-weight:700;white-space:nowrap">T'+s0.aTrap+'&times;T'+s0.bTrap+'</div>'
+            + '<div style="font-size:9px;color:var(--mut)">motor '+s0.enginePct+'%</div>';
+        } else { hb.innerHTML=''; }
+      }
+      // ── Alternativas (pos 2 e 3) + par da arena ──────────────────────────
+      // A lista ja vem ranqueada do motor: o primeiro e' a arena grande, os
+      // demais viram cards a direita (maximo 2, total 3).
+      r._avbsAoVivo = avbs.length ? avbs : sug;
+      var box3 = document.getElementById('fp-alts');
+      var lista3 = avbs.length ? avbs : sug;
+      if(box3){
+        if(lista3.length > 1){
+          box3.innerHTML = lista3.slice(1,3).map(function(a){ return _cardAlternativa(r, a, r.avbEscolhido); }).join('');
+        } else { box3.innerHTML=''; }
+      }
+      // A pos 1 pode mudar de um ciclo pro outro. Se mudou E o usuario ainda
+      // nao escolheu nada, a arena grande se redesenha pro novo par.
+      if(lista3.length && !r.avbEscolhido){
+        var top1 = lista3[0];
+        var mudou = !r._parAoVivo || String(r._parAoVivo.a)!==String(top1.aTrap) || String(r._parAoVivo.b)!==String(top1.bTrap);
+        if(mudou){
+          r._parAoVivo = { a: top1.aTrap, b: top1.bTrap };
+          renderFocusPanel(r, focusRaceIdx);   // re-render completo com o novo par
+          return;                              // o proprio re-render dispara o ciclo de novo
+        }
+      }
       var linhas = '';
+
       if(avbs.length){
         avbs.forEach(function(a){ linhas += _avbRow('T'+a.aTrap+' '+a.aNome+' &times; T'+a.bTrap+' '+a.bNome, a.oddAvenceB, a.marketPct, a.enginePct, a.edge, a.trend); });
       } else if(sug.length){
@@ -849,7 +1049,7 @@ function renderOddsLive(r){
       box2.innerHTML =
         '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:8px">'
         + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b;font-weight:800;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px">'
-        + '<span>&#9889; AvBs ao vivo — betwinner</span><span style="color:var(--mut);font-weight:600;text-transform:none">'+(snap.statusLine||'')+'</span></div>'
+        + '<span>&#9889; AvBs ao vivo — betwinner' + (_linkBetwinner(snap)?' <a href="'+_linkBetwinner(snap)+'" target="_blank" rel="noopener" style="color:#60a5fa;font-weight:700;text-transform:none;letter-spacing:0">abrir na casa &#8599;</a>':'') + '</span><span style="color:var(--mut);font-weight:600;text-transform:none">'+(snap.statusLine||'')+'</span></div>'
         + linhas + '</div>';
     })
     .catch(function(){});
