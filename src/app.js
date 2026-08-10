@@ -791,7 +791,63 @@ function renderFocusPanel(r, idx) {
     + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '</div>'
-    + (obs ? '<div class="fp-obs">'+obs+'</div>' : '');
+    + (obs ? '<div class="fp-obs">'+obs+'</div>' : '')
+    + '<div id="fp-odds-live" style="margin-top:8px"></div>';
+
+  startOddsLive(r);
+}
+
+// ── AvBs ao vivo do betwinner no painel de foco ──────────────────────────────
+// Puxa /robot/odds/live de 5 em 5s e mostra os AvBs da corrida em foco: ao vivo
+// (odd + % mercado + % motor + edge + tendencia) ou, antes de abrir, os sugeridos.
+var _oddsLiveTimer = null;
+function startOddsLive(r){
+  if (_oddsLiveTimer) { clearInterval(_oddsLiveTimer); _oddsLiveTimer = null; }
+  renderOddsLive(r);
+  _oddsLiveTimer = setInterval(function(){ renderOddsLive(r); }, 5000);
+}
+function _avbRow(par, odd, mercado, motor, edge, trend){
+  var seta = trend==='subiu'?'<span style="color:#ef4444">&#9650;</span>':trend==='desceu'?'<span style="color:#22c55e">&#9660;</span>':'';
+  var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'</span>';
+  var parts = [];
+  if(odd!=null) parts.push('odd '+odd);
+  if(mercado!=null) parts.push('mkt '+mercado+'%');
+  if(motor!=null) parts.push('motor '+motor+'%');
+  return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0;gap:10px;border-bottom:1px solid rgba(255,255,255,.04)">'
+    + '<span style="color:#cbd5e1;font-weight:600">'+par+'</span>'
+    + '<span style="color:var(--mut);display:flex;gap:7px;align-items:center;white-space:nowrap">'+parts.join(' &middot; ')+' '+edgeStr+' '+seta+'</span>'
+    + '</div>';
+}
+function renderOddsLive(r){
+  var box = document.getElementById('fp-odds-live');
+  if(!box || !r) return;
+  fetch(BASE+'/robot/odds/live', { credentials:'same-origin' })
+    .then(function(res){ return res.ok ? res.json() : null; })
+    .then(function(d){
+      var box2 = document.getElementById('fp-odds-live'); if(!box2) return;
+      if(!d){ box2.innerHTML=''; return; }
+      var lista = d.corridas||[];
+      var pista = getPista(r.corrida||'');
+      var snap = lista.find(function(c){ return c.analiseCorrida===r.corrida; })
+             || lista.find(function(c){ return c.pista===pista; });
+      if(!snap){ box2.innerHTML=''; return; }
+      var avbs = snap.avbs||[], sug = snap.sugeridos||[];
+      var linhas = '';
+      if(avbs.length){
+        avbs.forEach(function(a){ linhas += _avbRow('T'+a.aTrap+' '+a.aNome+' &times; T'+a.bTrap+' '+a.bNome, a.oddAvenceB, a.marketPct, a.enginePct, a.edge, a.trend); });
+      } else if(sug.length){
+        linhas += '<div style="font-size:10px;color:var(--mut);margin-bottom:2px">Sugeridos (antes de abrir):</div>';
+        sug.forEach(function(s){ linhas += _avbRow('T'+s.aTrap+' &times; T'+s.bTrap, null, null, s.enginePct, null, null); });
+      } else {
+        linhas = '<div style="font-size:11px;color:var(--mut)">sem AvB aberto ainda</div>';
+      }
+      box2.innerHTML =
+        '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:8px">'
+        + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b;font-weight:800;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px">'
+        + '<span>&#9889; AvBs ao vivo — betwinner</span><span style="color:var(--mut);font-weight:600;text-transform:none">'+(snap.statusLine||'')+'</span></div>'
+        + linhas + '</div>';
+    })
+    .catch(function(){});
 }
 
 // Nomes de campo usados no front (results[i]) as vezes diferem da coluna no

@@ -364,8 +364,8 @@ function _scoresParaCorridaAoVivo(liveRace){
   try{
     const { db } = require('../db/database');
     const date=getTodayDate();
-    const rows=db.prepare("SELECT r.hora, r.scores_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
-    for(const row of rows){ const dm=_convDbHoraUk24(row.hora); if(dm!=null && Math.abs(dm-alvo)<=2){ try{ return JSON.parse(row.scores_json); }catch(e){ return null; } } }
+    const rows=db.prepare("SELECT r.hora, r.corrida, r.scores_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
+    for(const row of rows){ const dm=_convDbHoraUk24(row.hora); if(dm!=null && Math.abs(dm-alvo)<=2){ try{ return { scores: JSON.parse(row.scores_json), corrida: row.corrida, hora: row.hora }; }catch(e){ return null; } } }
   }catch(e){}
   return null;
 }

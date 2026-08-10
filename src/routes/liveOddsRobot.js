@@ -112,7 +112,9 @@ async function umCiclo(getScores) {
 
   for (const r of abertas) {
     const chave = r.gameId;
-    const scores = (typeof getScores === 'function') ? (getScores(r) || null) : null;
+    // getScores(r) devolve { scores, corrida, hora } da analise casada, ou null.
+    const analise = (typeof getScores === 'function') ? (getScores(r) || null) : null;
+    const scores = analise ? (analise.scores || null) : null;
     let snap;
     try { snap = await snapshotCorrida(r.gameId, scores, (status.porCorrida[chave] || {}).avbs); }
     catch (e) { addLog('warn', `${r.track} ${r.raceNum}: ${e.message}`); continue; }
@@ -122,6 +124,7 @@ async function umCiclo(getScores) {
       avbs: snap.avbs,
       sugeridos: scores ? sugerirAvbs(scores) : [],
       temAnalise: !!scores,
+      analiseCorrida: analise ? (analise.corrida || null) : null, // casa com o front
       updatedAt: Date.now()
     };
   }
