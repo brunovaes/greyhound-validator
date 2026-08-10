@@ -845,6 +845,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-vence-arrow">&#9658;</div>'
     + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
     + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#22c55e':'transparent')+';border:1px solid #22c55e;color:'+(_parEmFoco(r).escolhido?'#000':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
@@ -905,6 +906,16 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 // numeros do mercado e os dois botoes. Sem onclick inline com aspas — os dados
 // vao em data-* e um listener unico trata o clique (aspas escapadas dentro de
 // template literal ja derrubaram tela neste projeto).
+// Botao "Apostar" que leva pra corrida na casa. Quando o robo passar a
+// entregar URL por AvB (hoje e' por corrida), basta o _linkBetwinner mudar.
+function _botaoApostar(r){
+  var link = _linkBetwinner(r && r._snapAoVivo);
+  if(!link) return '';
+  return '<a href="'+link+'" target="_blank" rel="noopener" '
+    + 'style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:800;padding:5px;border-radius:4px;'
+    + 'background:#1d4ed8;color:#fff;text-decoration:none;letter-spacing:.3px">APOSTAR NA CASA &#8599;</a>';
+}
+
 function _cardAlternativa(r, a, escolhidoAtual){
   var ta=a.aTrap, tb=a.bTrap;
   var odd=_avbOdd(a), motor=_avbMotor(a);
@@ -933,7 +944,13 @@ function _cardAlternativa(r, a, escolhidoAtual){
     + '<div style="display:flex;gap:4px;margin-top:5px">'
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'" style="flex:1;font-size:9px;padding:3px;background:#161b27;border:1px solid var(--bdr2);color:#cbd5e1;border-radius:4px;cursor:pointer">Analisar</button>'
     +   '<button type="button" class="alt-entrar" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(odd!=null?odd:'')+'" style="flex:1;font-size:9px;padding:3px;background:'+(ehEscolhido?'#22c55e':'transparent')+';border:1px solid #22c55e;color:'+(ehEscolhido?'#000':'#22c55e')+';border-radius:4px;cursor:pointer;font-weight:700">'+(ehEscolhido?'ESCOLHIDO':'Entrar')+'</button>'
-    + '</div></div>';
+    + '</div>'
+    // O link da casa so aparece no AvB ESCOLHIDO. Hoje ele e' por CORRIDA (o
+    // robo monta pelo gameId), entao repeti-lo nos tres cards apontaria tres
+    // vezes pro mesmo lugar. Mostrando so no escolhido, ele aparece justo
+    // quando serve: na hora de ir apostar.
+    + (ehEscolhido ? _botaoApostar(r) : '')
+    + '</div>';
 }
 
 // "Analisar disputa" de QUALQUER par, nao so o fav x und. Mesma tabela, par
@@ -1130,6 +1147,7 @@ function _pintaOddsLive(r, d){
       // A lista ja vem ranqueada do motor: o primeiro e' a arena grande, os
       // demais viram cards a direita (maximo 2, total 3).
       r._avbsAoVivo = avbs.length ? avbs : sug;
+      r._snapAoVivo = snap;   // guarda o snapshot pro link da casa
       var box3 = document.getElementById('fp-alts');
       var lista3 = avbs.length ? avbs : sug;
       if(box3){
