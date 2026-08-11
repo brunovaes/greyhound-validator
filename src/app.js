@@ -861,7 +861,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
     + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
-    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#22c55e':'transparent')+';border:1px solid #22c55e;color:'+(_parEmFoco(r).escolhido?'#000':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
@@ -928,9 +928,15 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 function _botaoApostar(r){
   var link = _linkBetwinner(r && r._snapAoVivo);
   if(!link) return '';
-  return '<a href="'+link+'" target="_blank" rel="noopener" '
-    + 'style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:800;padding:5px;border-radius:4px;'
-    + 'background:#1d4ed8;color:#fff;text-decoration:none;letter-spacing:.3px">APOSTAR NA CASA &#8599;</a>';
+  // Imagem em vez de texto: public/img/apostar_bw.png, servida via /static.
+  // Se o arquivo faltar, o onerror troca pelo texto — melhor um rotulo feio
+  // que um link invisivel numa acao que envolve dinheiro.
+  return '<a href="'+link+'" target="_blank" rel="noopener" title="Apostar na casa" '
+    + 'style="display:block;margin-top:6px;text-align:center;line-height:0">'
+    + '<img src="'+BASE+'/static/img/apostar_bw.png" alt="Apostar" '
+    +   'style="max-width:100%;height:30px;object-fit:contain" '
+    +   'onerror="this.outerHTML=\'<span style=&quot;display:block;padding:5px;background:#1d4ed8;color:#fff;font-size:10px;font-weight:800;border-radius:4px&quot;>APOSTAR</span>\'">'
+    + '</a>';
 }
 
 function _cardAlternativa(r, a, escolhidoAtual){
@@ -938,7 +944,7 @@ function _cardAlternativa(r, a, escolhidoAtual){
   var odd=_avbOdd(a), motor=_avbMotor(a);
   var ehEscolhido = escolhidoAtual && String(escolhidoAtual.a)===String(ta) && String(escolhidoAtual.b)===String(tb);
   var opaco = (escolhidoAtual && !ehEscolhido) ? 'opacity:.35;' : '';
-  var borda = ehEscolhido ? '#22c55e' : 'var(--bdr2)';
+  var borda = ehEscolhido ? '#1d4ed8' : 'var(--bdr2)';
   var seta = a.trend==='subiu'?'<span style="color:#ef4444">&#9650;</span>':a.trend==='desceu'?'<span style="color:#22c55e">&#9660;</span>':'';
   var edge = a.edge;
   var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'%</span>';
@@ -960,7 +966,7 @@ function _cardAlternativa(r, a, escolhidoAtual){
     +   nums.join(' &middot; ') + ' ' + edgeStr + ' ' + seta + ' ' + selo + '</div>'
     + '<div style="display:flex;gap:4px;margin-top:5px">'
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'" style="flex:1;font-size:9px;padding:3px;background:#161b27;border:1px solid var(--bdr2);color:#cbd5e1;border-radius:4px;cursor:pointer">Analisar</button>'
-    +   '<button type="button" class="alt-entrar" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(odd!=null?odd:'')+'" style="flex:1;font-size:9px;padding:3px;background:'+(ehEscolhido?'#22c55e':'transparent')+';border:1px solid #22c55e;color:'+(ehEscolhido?'#000':'#22c55e')+';border-radius:4px;cursor:pointer;font-weight:700">'+(ehEscolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    +   '<button type="button" class="alt-entrar" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(odd!=null?odd:'')+'" style="flex:1;font-size:9px;padding:3px;background:'+(ehEscolhido?'#1d4ed8':'transparent')+';border:1px solid '+(ehEscolhido?'#1d4ed8':'#22c55e')+';color:'+(ehEscolhido?'#fff':'#22c55e')+';border-radius:4px;cursor:pointer;font-weight:700">'+(ehEscolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + '</div>'
     // O link da casa so aparece no AvB ESCOLHIDO. Hoje ele e' por CORRIDA (o
     // robo monta pelo gameId), entao repeti-lo nos tres cards apontaria tres
@@ -1145,7 +1151,17 @@ function _pintaOddsLive(r, d){
       var hb = document.getElementById('fp-odds-hdr');
       if(hb){
         if(avbs.length){
+          // O chip segue o AvB ESCOLHIDO. Sem isto ele mostrava sempre o
+          // avbs[0] do robo, entao escolher uma alternativa deixava o topo da
+          // tela exibindo par e odd de OUTRA disputa — dado errado no lugar
+          // mais visivel.
           var top = avbs[0];
+          if (r.avbEscolhido) {
+            var _ach = avbs.find(function(x){
+              return String(x.aTrap)===String(r.avbEscolhido.a) && String(x.bTrap)===String(r.avbEscolhido.b);
+            });
+            if (_ach) top = _ach;
+          }
           var e = top.edge;
           var edgeH = (e==null)?'':' &middot; <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'var(--mut)'))+';font-weight:700">edge '+(e>0?'+':'')+e+'</span>';
           hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>'
