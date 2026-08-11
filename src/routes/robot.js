@@ -2049,6 +2049,43 @@ router.get('/odds/status', requireAdmin, (req, res) => { res.json(liveOddsModule
 router.get('/odds/live', requireAdmin, (req, res) => {
   res.json({ corridas: liveOddsModule.getSnapshots(), pistasNovas: (liveOddsModule._status || {}).pistasNovas || {} });
 });
+
+// DIAGNOSTICO (somente leitura): das corridas de HOJE que estao no sistema
+// (carregadas), quantas entram no perfil A1-A12 + 400-500m — e quais ficam de
+// fora e por que. Ajuda a entender "poucas corridas apresentadas". Nao altera nada.
+router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = getTodayDate();
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.nivel FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? ORDER BY r.hora"
+    ).all(date);
+    const classeDe = c => { const m = String(c || '').match(/A(\d+)/i); return m ? parseInt(m[1]) : null; };
+    const distDe = d => { const m = String(d == null ? '' : d).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+    const noPerfil = [], foraPerfil = [];
+    for (const r of rows) {
+      const cl = classeDe(r.corrida), d = distDe(r.dist);
+      const okCl = cl != null && cl >= 1 && cl <= 12;
+      const okD = d >= 400 && d <= 500;
+      const item = { hora: r.hora, corrida: r.corrida, dist: d, classe: cl, nivel: r.nivel };
+      if (okCl && okD) noPerfil.push(item);
+      else {
+        item.motivo = [!okCl ? (cl == null ? 'sem classe A' : 'classe fora (A' + cl + ')') : null, !okD ? 'dist fora (' + d + 'm)' : null].filter(Boolean).join(' + ');
+        foraPerfil.push(item);
+      }
+    }
+    res.json({
+      data: date,
+      total_carregadas: rows.length,
+      no_perfil_A1a12_400a500: noPerfil.length,
+      dentro_mas_skip: noPerfil.filter(x => x.nivel === 'skip').length,
+      fora_do_perfil: foraPerfil.length,
+      corridas_no_perfil: noPerfil,
+      corridas_fora: foraPerfil
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
 router.post('/odds/stop', requireAdmin, (req, res) => { liveOddsModule.parar(); res.json({ ok: true }); });
 router.post('/odds/start', requireAdmin, (req, res) => {
   try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds, onClose: _gravarFechamentoAvb }); res.json({ ok: true }); }
