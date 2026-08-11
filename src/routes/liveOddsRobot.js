@@ -58,9 +58,19 @@ function addLog(type, msg) {
   console.log(`[ODDS] [${type}] ${msg}`);
 }
 
+// Headers "de navegador" — o betwinner responde 406 pra requisicao "seca". O
+// Referer/Origin/Accept amplo faz a chamada parecer o proprio site.
+const HEADERS = {
+  'User-Agent': UA,
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+  'Referer': 'https://betwinner1.com/br/live/greyhound-racing',
+  'Origin': 'https://betwinner1.com',
+  'X-Requested-With': 'XMLHttpRequest'
+};
 function httpGetJson(url) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } }, res => {
+    const req = https.get(url, { headers: HEADERS }, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       let data = ''; res.setEncoding('utf8');
       res.on('data', c => data += c);
@@ -165,10 +175,33 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
 // O casamento analise<->corrida do betwinner (por pista+horario) fica no chamador
 // (robot.js), que tem acesso ao banco.
 let timer = null;
+
+// Cache da DESCOBERTA de pistas/corridas. O GetSportsShortZip (a lista de quais
+// corridas estao ao vivo) e' o endpoint que toma 406 quando batido de 5 em 5s.
+// Ele muda pouco (corridas entram/saem a cada ~1min), entao descobrimos so a cada
+// ~30s e mantemos a ultima lista boa quando a descoberta falha — enquanto as ODDS
+// de cada corrida (gameEvents, outro endpoint) continuam de 5 em 5s.
+const DISCOVERY_TTL_MS = 30000;
+let _listaCache = { races: [], ts: 0, ok: false };
+
+async function obterCorridas() {
+  const agora = Date.now();
+  const fresco = _listaCache.ok && (agora - _listaCache.ts) < DISCOVERY_TTL_MS;
+  if (fresco) return _listaCache.races;
+  try {
+    const races = await listarCorridasAoVivo();
+    _listaCache = { races, ts: agora, ok: true };
+    return races;
+  } catch (e) {
+    // mantem a ultima lista boa e ADIA a proxima tentativa (nao martela de 5 em 5s)
+    _listaCache.ts = agora;
+    addLog('warn', 'descoberta falhou (' + e.message + ') — mantendo ultima lista (' + _listaCache.races.length + ')');
+    return _listaCache.races;
+  }
+}
+
 async function umCiclo(getScores) {
-  let races;
-  try { races = await listarCorridasAoVivo(); }
-  catch (e) { addLog('warn', 'falha ao listar: ' + e.message); return; }
+  const races = await obterCorridas();
 
   status.corridasAoVivo = races.length;
   const abertas = races.filter(r => /Inicia/i.test(r.statusLine)); // ainda vao largar
