@@ -2086,6 +2086,90 @@ router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
+
+// DIAGNOSTICO COMPLETO DOS SKIPS (somente leitura): reprocessa cada corrida de
+// HOJE no perfil (A1-A12 + 400-500m) que virou skip e revela o MOTIVO real de
+// cada uma, com numeros: margem favorito×underdog vs o corte (threshold_skip_avb)
+// e galgos elegiveis vs o minimo (min_corridas_uteis). Nao altera nada no banco.
+router.get('/diag/skips', requireAdmin, async (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const { processarCorrida } = require('./api');
+    const date = getTodayDate();
+    const classeDe = c => { const m = String(c || '').match(/A(\d+)/i); return m ? parseInt(m[1]) : null; };
+    const distDe = d => { const m = String(d == null ? '' : d).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.user_id FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.nivel='skip' ORDER BY r.hora"
+    ).all(date);
+    const alvo = rows.filter(r => { const cl = classeDe(r.corrida), dd = distDe(r.dist); return cl != null && cl >= 1 && cl <= 12 && dd >= 400 && dd <= 500; });
+
+    const PDF_DIR = getPdfDir(date);
+    let arquivos = []; try { arquivos = fs.readdirSync(PDF_DIR); } catch (e) {}
+
+    const porMotivo = { margem_insuficiente: 0, historico_insuficiente: 0, distancia_classe: 0, trap_invalido: 0, sem_pdf: 0, reprocessou_sem_skip: 0, outro: 0 };
+    const porPista = {};   // pista -> { total, margem, historico, outro }
+    const margens = [], historico = [], detalhe = [];
+
+    for (const r of alvo) {
+      const pista = (r.corrida || '').split(' ')[0];
+      porPista[pista] = porPista[pista] || { total: 0, margem: 0, historico: 0, outro: 0 };
+      porPista[pista].total++;
+
+      const candidato = encontrarPdfDaCorrida(arquivos, formatTime(r.hora), pista.toLowerCase());
+      if (!candidato) { porMotivo.sem_pdf++; detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'sem PDF salvo p/ reprocessar' }); continue; }
+
+      let resu = null;
+      try {
+        const buf = fs.readFileSync(path.join(PDF_DIR, candidato));
+        const parsed = await parseRacingPostPDF(buf, getTrapBadgeColors() || undefined);
+        resu = processarCorrida(parsed, getUserConfig(r.user_id));
+      } catch (e) { porMotivo.outro++; detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'erro ao reprocessar: ' + e.message }); continue; }
+      if (!resu) { porMotivo.outro++; continue; }
+
+      if (resu.motivoSkip === 'margem_insuficiente') {
+        porMotivo.margem_insuficiente++; porPista[pista].margem++;
+        margens.push({ hora: r.hora, corrida: r.corrida, diffAvB: resu.diffAvB, threshold: resu.thresholdSkip });
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'margem', diffAvB: resu.diffAvB, faltou: Math.round((resu.thresholdSkip - resu.diffAvB) * 10) / 10 });
+      } else if (resu.motivoSkip === 'historico_insuficiente') {
+        porMotivo.historico_insuficiente++; porPista[pista].historico++;
+        const elim = (resu.eliminados || []).map(e => e.motivo);
+        historico.push({ hora: r.hora, corrida: r.corrida, elegiveis: resu.elegiveisCount, min: resu.minCorridasUteis, eliminados: elim });
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'historico', elegiveis: resu.elegiveisCount, eliminados: elim });
+      } else if (resu.nivel === 'skip') {
+        const obs = String(resu.obs || '');
+        if (/fora do range|nao aceita/i.test(obs)) { porMotivo.distancia_classe++; }
+        else if (/trap invalido/i.test(obs)) { porMotivo.trap_invalido++; }
+        else { porMotivo.outro++; }
+        porPista[pista].outro++;
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'outro', obs: obs.slice(0, 90) });
+      } else {
+        // reprocessou e NAO deu mais skip (dado/config mudou desde a analise salva)
+        porMotivo.reprocessou_sem_skip++;
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'reprocessou SEM skip agora (nivel=' + resu.nivel + ', pct=' + resu.pct + ')' });
+      }
+    }
+
+    const cfg = getUserConfig(1) || {};
+    const thr = cfg.threshold_skip_avb || 10;
+    const distMargem = {
+      no_corte_0a2: margens.filter(x => x.diffAvB >= thr - 2).length,      // faltou 0-2 pts (recuperaria baixando pouco)
+      medio_2a4: margens.filter(x => x.diffAvB >= thr - 4 && x.diffAvB < thr - 2).length,
+      longe_mais4: margens.filter(x => x.diffAvB < thr - 4).length          // genuinamente equilibradas
+    };
+
+    res.json({
+      data: date,
+      config: { threshold_skip_avb: thr, min_corridas_uteis: cfg.min_corridas_uteis || 3, min_galgos_elegiveis: 4 },
+      total_skips_no_perfil: alvo.length,
+      por_motivo: porMotivo,
+      margem_distribuicao_vs_corte: distMargem,
+      por_pista: porPista,
+      margens, historico, detalhe
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
 router.post('/odds/stop', requireAdmin, (req, res) => { liveOddsModule.parar(); res.json({ ok: true }); });
 router.post('/odds/start', requireAdmin, (req, res) => {
   try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds, onClose: _gravarFechamentoAvb }); res.json({ ok: true }); }

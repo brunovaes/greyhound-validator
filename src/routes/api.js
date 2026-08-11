@@ -722,7 +722,7 @@ function processarCorrida(corridaRaw, config) {
   }
 
   if (elegiveis.length < 4) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Galgos insuficientes com histórico válido para esta corrida.`, trapsCard:trapsCard||[], trapsConfiaveis, eliminados, dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Galgos insuficientes com histórico válido para esta corrida.`, motivoSkip:'historico_insuficiente', elegiveisCount:elegiveis.length, minCorridasUteis, trapsCard:trapsCard||[], trapsConfiaveis, eliminados, dataCard, trackFull };
   }
 
   // Calcular scores com todos os elegiveis como referencia
@@ -861,7 +861,7 @@ function processarCorrida(corridaRaw, config) {
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
 
   if (diffAvB < thresholdSkip) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, motivoSkip:'margem_insuficiente', diffAvB:Math.round(diffAvB*10)/10, thresholdSkip, diffBack:Math.round(diffBack*10)/10, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
   }
 
   const pct = scoreToPct(diffAvB);
