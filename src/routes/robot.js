@@ -466,20 +466,21 @@ function scheduleFinalCheckCron() {
 }
 scheduleFinalCheckCron();
 
-// ─── PREENCHIMENTO AUTOMATICO DE scores_json — corridas que ficaram sem o
-// campo do Relatorio de Analise (corrida salva antes do fix de scores_json
-// ir pro ar) ganham o dado de volta sozinhas, sem precisar clicar em nada.
-// So le o PDF que ja esta salvo no disco (rapido, sem navegador, sem
-// internet) e so escreve a coluna scores_json — nao mexe em trap_fav,
-// pct, nivel nem em nada que ja decidiu o AvB, entao nao tem risco de
-// mudar uma analise que voce ja viu. Roda de 10 em 10 min.
+// ─── PREENCHIMENTO AUTOMATICO DE scores_json E hist_full — corridas salvas
+// antes destes campos irem pro ar ganham o dado de volta sozinhas, sem clicar
+// em nada. scores_json = Relatorio de Analise; hist_full = historico dos 6
+// galgos (necessario p/ a REANALISE par-a-par ao vivo — sem ele o robo de odds
+// cai na fallback do motor 1). So le o PDF ja salvo no disco (rapido, sem
+// navegador/internet) e SO escreve a coluna que estiver NULL — nao mexe em
+// trap_fav, pct, nivel nem em nada que ja decidiu o AvB. Roda de 10 em 10 min.
 async function preencherScoresJsonFaltando(DATE) {
   const { db } = require('../db/database');
   const { processarCorrida } = require('./api');
 
   const rows = db.prepare(
-    "SELECT r.id, r.hora, r.corrida, r.user_id FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-    "WHERE date(s.created_at,'-3 hours')=? AND r.scores_json IS NULL AND r.nivel != 'skip' AND r.trap_fav > 0"
+    "SELECT r.id, r.hora, r.corrida, r.user_id, (r.scores_json IS NULL) AS semScores, (r.hist_full IS NULL) AS semHist " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at,'-3 hours')=? AND (r.scores_json IS NULL OR r.hist_full IS NULL) AND r.nivel != 'skip' AND r.trap_fav > 0"
   ).all(DATE);
   if (!rows.length) return { total: 0, corrigidas: 0 };
 
@@ -502,9 +503,16 @@ async function preencherScoresJsonFaltando(DATE) {
 
       const config = getUserConfig(row.user_id);
       const novoResultado = processarCorrida(resultParse, config);
-      if (novoResultado && novoResultado.scores) {
-        db.prepare('UPDATE races SET scores_json=? WHERE id=?').run(JSON.stringify(novoResultado.scores), row.id);
-        corrigidas++;
+      if (novoResultado) {
+        // preenche SO o que estiver faltando (nao sobrescreve dado ja salvo)
+        const sets = [], vals = [];
+        if (row.semScores && novoResultado.scores)  { sets.push('scores_json=?'); vals.push(JSON.stringify(novoResultado.scores)); }
+        if (row.semHist   && novoResultado.histFull){ sets.push('hist_full=?');   vals.push(JSON.stringify(novoResultado.histFull)); }
+        if (sets.length) {
+          vals.push(row.id);
+          db.prepare('UPDATE races SET ' + sets.join(',') + ' WHERE id=?').run(...vals);
+          corrigidas++;
+        }
       }
     } catch(e) { /* pula essa corrida, tenta as outras */ }
   }
