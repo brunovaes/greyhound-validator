@@ -105,6 +105,12 @@ function injectStyles(){
   var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
 }
 
+// Modo simulado de AvBs (?simavb=1). Declarado no TOPO de proposito: o
+// shouldShowRace consulta esta flag e roda muito antes do bloco de AvBs.
+var _SIM_AVB = (function(){
+  try { return new URLSearchParams(location.search).get('simavb') === '1'; } catch(e){ return false; }
+})();
+
 var RACAS_EM_TELA = 6;
 var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
@@ -430,6 +436,9 @@ function isOldRaceCard(r) {
 // so pra consulta/estudo, nao participa da logica de "ja passou". Corridas
 // de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
 function shouldShowRace(r) {
+  // No modo simulado (?simavb=1) o filtro de horario nao vale: a ideia e'
+  // conseguir testar a tela com qualquer corrida, inclusive as ja encerradas.
+  if (typeof _SIM_AVB !== 'undefined' && _SIM_AVB) return true;
   return isOldRaceCard(r) || isUpcoming(r);
 }
 
@@ -626,7 +635,9 @@ function refreshFocusMode() {
   // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
   // Se sobrou alguma corrida no lote mas nenhuma e antiga nem futura, e
   // porque sao corridas de hoje que ja aconteceram — mensagem diferente.
-  if (isDayClosed(avbs)) { avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg(); return; }
+  // No simulado, segue em frente mesmo com o dia encerrado — senao nao ha
+  // corrida em foco e nao ha o que simular.
+  if (!(typeof _SIM_AVB !== 'undefined' && _SIM_AVB) && isDayClosed(avbs)) { avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg(); return; }
 
   // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja
   // passadas — exceto corridas antigas (data anterior a hoje), que ficam
@@ -634,6 +645,12 @@ function refreshFocusMode() {
   var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
+
+  // Simulado: se nada esta em foco (dia encerrado, por exemplo), foca a
+  // primeira corrida pra haver painel onde desenhar os AvBs de teste.
+  if ((typeof _SIM_AVB !== 'undefined' && _SIM_AVB) && focusRaceIdx < 0 && toShow.length) {
+    renderFocusPanel(toShow[0], results.indexOf(toShow[0]));
+  }
 
   // Se a corrida em foco já passou, avança para a próxima automaticamente
   // (corridas antigas nunca "avançam" sozinhas — ficam fixas pra consulta)
@@ -1059,9 +1076,7 @@ function _linkBetwinner(snap){
 // ?simavb=0 ou simAvb(false). Monta 3 AvBs falsos com os traps reais da
 // corrida em foco, pra dar pra ver arena + 2 alternativas + odds + escolha
 // sem precisar mexer no relogio nem esperar o mercado abrir.
-var _SIM_AVB = (function(){
-  try { return new URLSearchParams(location.search).get('simavb') === '1'; } catch(e){ return false; }
-})();
+
 function simAvb(liga){
   _SIM_AVB = (liga !== false);
   console.log('[sim] AvBs simulados', _SIM_AVB ? 'LIGADOS' : 'desligados');
