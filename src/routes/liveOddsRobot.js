@@ -26,6 +26,19 @@ const NOME_PARA_PISTA = {};
 for (const code in NOMES_PISTAS) NOME_PARA_PISTA[String(NOMES_PISTAS[code]).toLowerCase()] = code;
 function pistaPorNome(nome) { return NOME_PARA_PISTA[String(nome || '').toLowerCase().trim()] || null; }
 
+// Deep-link da corrida no betwinner (pro botao "Entre na BW"):
+// https://betwinner1.com/br/live/greyhound-racing/{champId}-{slug}/{gameId}-{slug}
+function _slug(s) { return String(s || '').toLowerCase().trim().replace(/\s+/g, '-'); }
+function bwUrlCorrida(li, gameId, track) {
+  if (!li || !gameId) return null;
+  const s = _slug(track);
+  return `https://betwinner1.com/br/live/greyhound-racing/${li}-${s}/${gameId}-${s}`;
+}
+
+// Provisorios ate virem de Configuracoes (Etapa D):
+const LIMITE_EDGE_VALOR = 5; // edge minimo p/ o selo "valor"
+const MAX_AVBS = 3;          // quantos AvBs mostrar na tela
+
 const status = {
   running: false,
   stopRequested: false,
@@ -104,6 +117,12 @@ async function snapshotCorrida(gameId, scores, prevAvbs) {
   let avbs = crossWithEngine(race.avbs, scores || []);
   avbs = marcarTendencia(avbs, prevAvbs);
   avbs.sort((a, b) => (b.edge == null ? -999 : b.edge) - (a.edge == null ? -999 : a.edge));
+  // pos (ranking 1..N) + selo valor; limita a MAX_AVBS. Obs: quando o robo de
+  // reanalise entrar, ele passa a ditar a ordem/avaliacao — estes campos ficam.
+  avbs = avbs.slice(0, MAX_AVBS).map((a, i) => Object.assign({}, a, {
+    pos: i + 1,
+    valor: (a.edge != null && a.edge >= LIMITE_EDGE_VALOR)
+  }));
   return Object.assign({}, race, { avbs });
 }
 
@@ -130,8 +149,9 @@ async function umCiclo(getScores) {
     try { snap = await snapshotCorrida(r.gameId, scores, (status.porCorrida[chave] || {}).avbs); }
     catch (e) { addLog('warn', `${r.track} ${r.raceNum}: ${e.message}`); continue; }
     status.porCorrida[chave] = {
-      gameId: r.gameId, track: r.track, pista: r.pista, raceNum: r.raceNum,
+      gameId: r.gameId, li: r.li, track: r.track, pista: r.pista, raceNum: r.raceNum,
       statusLine: r.statusLine, startTs: r.startTs,
+      bwUrl: bwUrlCorrida(r.li, r.gameId, r.track),
       avbs: snap.avbs,
       sugeridos: scores ? sugerirAvbs(scores) : [],
       temAnalise: !!scores,
