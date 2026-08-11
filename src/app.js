@@ -864,7 +864,7 @@ function renderFocusPanel(r, idx) {
     // ESCOLHIDO e a logo de apostar ficam numa coluna de largura FIXA, com os
     // dois esticados (width:100%). Sem isso o botao tinha a largura do texto e
     // a imagem a largura dela — ficavam desalinhados um sobre o outro.
-    + '<div style="display:flex;flex-direction:column;align-items:stretch;gap:4px;width:104px;margin:5px auto 0">'
+    + '<div style="display:flex;flex-direction:column;align-items:stretch;gap:5px;width:130px;margin:6px auto 0">'
     + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="width:100%;font-size:10px;font-weight:700;padding:3px 0;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
     + '</div>'
@@ -933,17 +933,17 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 function _botaoApostar(r){
   var link = _linkBetwinner(r && r._snapAoVivo);
   if(!link) return '';
-  // Mesma caixa do botao ESCOLHIDO: largura total do card e a mesma altura,
-  // pra os dois ficarem empilhados sem degrau. A imagem se ajusta dentro
-  // (object-fit:contain) em vez de definir o tamanho.
+  // A IMAGEM e' o botao: sem caixa de fundo, largura total do container e
+  // altura proporcional (height:auto). A tentativa anterior punha a arte
+  // dentro de um retangulo azul de altura fixa, e ela ficava espremida no
+  // meio de um fundo que nao era dela.
   // Se o arquivo faltar, o onerror troca por um rotulo — link invisivel numa
   // acao que envolve dinheiro seria pior que um rotulo feio.
   return '<a href="'+link+'" target="_blank" rel="noopener" title="Apostar na casa" '
-    + 'style="display:flex;align-items:center;justify-content:center;'
-    + 'width:100%;height:22px;border-radius:4px;background:#1d4ed8;overflow:hidden;text-decoration:none">'
+    + 'style="display:block;width:100%;line-height:0;text-decoration:none">'
     + '<img src="'+BASE+'/static/img/apostar_bw.png" alt="Apostar" '
-    +   'style="max-width:100%;max-height:100%;object-fit:contain;display:block" '
-    +   'onerror="this.outerHTML=\'<span style=&quot;color:#fff;font-size:9px;font-weight:800;letter-spacing:.3px&quot;>APOSTAR</span>\'">'
+    +   'style="width:100%;height:auto;display:block" '
+    +   'onerror="this.outerHTML=\'<span style=&quot;display:block;padding:5px;background:#1d4ed8;color:#fff;font-size:10px;font-weight:800;text-align:center;border-radius:5px&quot;>APOSTAR</span>\'">'
     + '</a>';
 }
 
