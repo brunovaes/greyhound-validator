@@ -928,14 +928,17 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 function _botaoApostar(r){
   var link = _linkBetwinner(r && r._snapAoVivo);
   if(!link) return '';
-  // Imagem em vez de texto: public/img/apostar_bw.png, servida via /static.
-  // Se o arquivo faltar, o onerror troca pelo texto — melhor um rotulo feio
-  // que um link invisivel numa acao que envolve dinheiro.
+  // Mesma caixa do botao ESCOLHIDO: largura total do card e a mesma altura,
+  // pra os dois ficarem empilhados sem degrau. A imagem se ajusta dentro
+  // (object-fit:contain) em vez de definir o tamanho.
+  // Se o arquivo faltar, o onerror troca por um rotulo — link invisivel numa
+  // acao que envolve dinheiro seria pior que um rotulo feio.
   return '<a href="'+link+'" target="_blank" rel="noopener" title="Apostar na casa" '
-    + 'style="display:block;margin-top:6px;text-align:center;line-height:0">'
+    + 'style="display:flex;align-items:center;justify-content:center;margin-top:4px;'
+    + 'width:100%;height:22px;border-radius:4px;background:#1d4ed8;overflow:hidden;text-decoration:none">'
     + '<img src="'+BASE+'/static/img/apostar_bw.png" alt="Apostar" '
-    +   'style="max-width:100%;height:30px;object-fit:contain" '
-    +   'onerror="this.outerHTML=\'<span style=&quot;display:block;padding:5px;background:#1d4ed8;color:#fff;font-size:10px;font-weight:800;border-radius:4px&quot;>APOSTAR</span>\'">'
+    +   'style="max-width:100%;max-height:100%;object-fit:contain;display:block" '
+    +   'onerror="this.outerHTML=\'<span style=&quot;color:#fff;font-size:9px;font-weight:800;letter-spacing:.3px&quot;>APOSTAR</span>\'">'
     + '</a>';
 }
 
@@ -1047,7 +1050,7 @@ function escolherAvb(trapA, trapB, odd){
   if(jaEra){
     _confirmarNaTela(
       'Desfazer a escolha?',
-      'A corrida volta a seguir o AvB do motor, e a odd volta a ser a do AvB principal.',
+      'A corrida volta a seguir o AvB mais bem avaliado no momento pela reanalise, e a odd acompanha esse par.',
       'Desfazer',
       function(){
         r.avbEscolhido = null;
