@@ -2089,6 +2089,19 @@ router.get('/odds/live', requireAdmin, (req, res) => {
   res.json({ corridas: liveOddsModule.getSnapshots(), pistasNovas: (liveOddsModule._status || {}).pistasNovas || {} });
 });
 
+// DIAGNOSTICO (somente leitura): TODAS as pistas que o betwinner expos ao vivo
+// desde que o robo ligou. Serve pra saber se uma pista (ex.: Sunderland) chega
+// a aparecer no feed de galgo. Se nunca aparece o dia todo => o betwinner nao a
+// lista (estrutural/cobertura). Se aparece => foi janela ruim/timing (proxy resolve).
+router.get('/odds/diag/champs', requireAdmin, (req, res) => {
+  const cv = (liveOddsModule.getChampsVistos && liveOddsModule.getChampsVistos()) || {};
+  const lista = Object.keys(cv).map(nome => Object.assign({ nome }, cv[nome]))
+    .sort((a, b) => (a.nome > b.nome ? 1 : -1));
+  const q = (req.query.q || '').toLowerCase();
+  const filtradas = q ? lista.filter(p => p.nome.toLowerCase().includes(q)) : lista;
+  res.json({ total: lista.length, encontrou: q ? filtradas.length : undefined, pistas: filtradas });
+});
+
 // DIAGNOSTICO (somente leitura): das corridas de HOJE que estao no sistema
 // (carregadas), quantas entram no perfil A1-A12 + 400-500m — e quais ficam de
 // fora e por que. Ajuda a entender "poucas corridas apresentadas". Nao altera nada.

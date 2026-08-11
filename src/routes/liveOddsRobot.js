@@ -150,12 +150,26 @@ async function fetchFeed(path, useProxy) {
   throw ultimoErro || new Error('todos os dominios falharam');
 }
 
+// Registro de TODAS as pistas que o betwinner ja expos ao vivo desde que o robo
+// ligou (diagnostico de cobertura). Se uma pista some da tela mas NUNCA aparece
+// aqui o dia todo, o betwinner nao a lista no feed de galgo (estrutural). Se
+// aparece pelo menos uma vez, foi janela ruim/timing (o proxy resolve).
+const _champsVistos = {}; // nome -> { li, count, primeiraTs, ultimaTs, matched }
+function getChampsVistos() { return _champsVistos; }
+
 // Passo 1: quais pistas de galgo estao ao vivo agora. SEM champs, o feed
 // devolve o esporte 68 com a lista `L` de champs (pista) ao vivo — so os IDs.
 async function descobrirChampsAoVivo() {
   const data = await fetchFeed('/LiveFeed/GetSportsShortZip?sports=68&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true', true);
   const sport = ((data && data.Value) || []).find(s => s.I === 68);
-  return ((sport && sport.L) || []).map(c => c.LI).filter(Boolean);
+  const L = (sport && sport.L) || [];
+  for (const c of L) { // registra TODA pista exposta (diagnostico de cobertura)
+    const nome = c.L || c.LE || String(c.LI || '?');
+    const v = _champsVistos[nome] || { li: c.LI, count: 0, primeiraTs: Date.now(), matched: !!pistaPorNome(nome) };
+    v.count++; v.ultimaTs = Date.now(); v.li = c.LI;
+    _champsVistos[nome] = v;
+  }
+  return L.map(c => c.LI).filter(Boolean);
 }
 
 // Passo 2: com os champs ao vivo, busca as corridas de cada pista. Casa a pista
@@ -402,5 +416,6 @@ function getSnapshots() { return Object.values(status.porCorrida); }
 module.exports = {
   pistaPorNome, descobrirChampsAoVivo, listarCorridasAoVivo, buscarMercados,
   snapshotCorrida, marcarTendencia, sugerirAvbs, iniciar, parar, getStatus, getSnapshots,
+  getChampsVistos,
   _status: status
 };
