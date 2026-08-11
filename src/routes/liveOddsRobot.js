@@ -13,7 +13,7 @@
 const https = require('https');
 const zlib = require('zlib');
 const {
-  parseLiveRaces, parseRaceMarkets, crossWithEngine, sugerirAvbs
+  parseLiveRaces, parseRaceMarkets, crossWithEngine, sugerirAvbs, scoreToPct
 } = require('../utils/betwinnerFeed');
 const reanalise = require('../utils/reanaliseEngine');
 
@@ -184,6 +184,10 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
   if (histFull && histFull.length && race.avbs && race.avbs.length) {
     const dogsByTrap = {};
     for (const g of histFull) dogsByTrap[g.trap] = g;
+    // scores globais da analise ORIGINAL (motor 1) -> pra mostrar o "motor original"
+    // ao lado da reanalise (motor 2), orientado pro mesmo favorito da reanalise.
+    const scoreByTrap = {};
+    for (const s of (dados && dados.scores) || []) scoreByTrap[s.trap] = s.score;
     const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, config: {} };
     const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, MAX_AVBS);
     avbs = ranked.map(a => {
@@ -196,9 +200,14 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
         else { odd = par.oddBvenceA; marketPct = (par.marketPct != null ? Math.round((100 - par.marketPct) * 10) / 10 : null); }
       }
       const edge = (a.avaliacao != null && marketPct != null) ? Math.round((a.avaliacao - marketPct) * 10) / 10 : null;
+      // motor ORIGINAL (motor 1) para o MESMO par, orientado pro favorito da reanalise (a.aTrap)
+      const sa = scoreByTrap[a.aTrap], sb = scoreByTrap[a.bTrap];
+      const motorOrigPct = (sa != null && sb != null) ? Math.max(5, Math.min(95, scoreToPct(sa - sb))) : null;
       return {
         aTrap: a.aTrap, aNome: a.aNome, bTrap: a.bTrap, bNome: a.bNome,
-        avaliacao: a.avaliacao, enginePct: a.avaliacao,
+        avaliacao: a.avaliacao, enginePct: a.avaliacao, // enginePct mantido p/ retrocompat
+        reanalisePct: a.avaliacao,                      // motor 2 (reanalise par-a-par)
+        motorOrigPct,                                   // motor 1 (analise global original)
         oddAvenceB: odd, marketPct, edge, pos: a.pos,
         valor: (edge != null && edge >= LIMITE_EDGE_VALOR),
         flags: a.flags, obs: a.obs
@@ -209,7 +218,9 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     avbs = crossWithEngine(race.avbs || [], (dados && dados.scores) || []);
     avbs.sort((a, b) => (b.edge == null ? -999 : b.edge) - (a.edge == null ? -999 : a.edge));
     avbs = avbs.slice(0, MAX_AVBS).map((a, i) => Object.assign({}, a, {
-      pos: i + 1, valor: (a.edge != null && a.edge >= LIMITE_EDGE_VALOR)
+      pos: i + 1, valor: (a.edge != null && a.edge >= LIMITE_EDGE_VALOR),
+      reanalisePct: null,             // sem reanalise nesta analise antiga
+      motorOrigPct: (a.enginePct != null ? a.enginePct : null) // motor 1 = o proprio score
     }));
   }
   avbs = marcarTendencia(avbs, prevAvbs);
