@@ -254,6 +254,11 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT",
   "ALTER TABLE races ADD COLUMN hist_full TEXT", // 11/08 — historico dos 6 galgos (nao so os elegiveis), p/ a reanalise par-a-par ao vivo
   "ALTER TABLE races ADD COLUMN avb_fechamento TEXT", // 11/08 — foto da principal (pos 1) da reanalise no instante da largada, gravada pelo robo (objetivo, compartilhado)
+  // 11/08 — Config do Robo de Odds (Painel Admin): intervalo, nº de AvBs, edge minimo, proxy
+  "ALTER TABLE analysis_config ADD COLUMN odds_intervalo_seg INTEGER DEFAULT 5",
+  "ALTER TABLE analysis_config ADD COLUMN odds_max_avbs INTEGER DEFAULT 3",
+  "ALTER TABLE analysis_config ADD COLUMN odds_edge_min INTEGER DEFAULT 5",
+  "ALTER TABLE analysis_config ADD COLUMN odds_proxy_url TEXT DEFAULT ''",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

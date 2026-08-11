@@ -34,15 +34,21 @@ let _hostBom = null; // dominio que funcionou por ultimo (tentado primeiro no pr
 // env, TUDO continua direto como hoje (custo zero). As odds (gameEvents) nunca usam
 // o proxy. Pra ligar: setar BETWINNER_PROXY_URL no Railway. Nada mais.
 let _proxyAgent = null;
-(function initProxy() {
-  const url = process.env.BETWINNER_PROXY_URL;
-  if (!url) return;
+let _proxyUrlAtual = '';
+// (Re)configura o proxy de descoberta. url vazia = desliga. Chamado no load com a
+// env e de novo pelo iniciar() com a URL da config (a config vence a env).
+function setProxy(url) {
+  url = url || '';
+  _proxyUrlAtual = url;
+  _proxyAgent = null;
+  if (!url) { console.log('[ODDS] proxy de descoberta desligado'); return; }
   try {
     const { HttpsProxyAgent } = require('https-proxy-agent');
     _proxyAgent = new HttpsProxyAgent(url);
     console.log('[ODDS] proxy de descoberta ATIVO');
-  } catch (e) { console.error('[ODDS] BETWINNER_PROXY_URL setado mas https-proxy-agent indisponivel:', e.message); }
-})();
+  } catch (e) { console.error('[ODDS] proxy setado mas https-proxy-agent indisponivel:', e.message); }
+}
+setProxy(process.env.BETWINNER_PROXY_URL || '');
 
 // Casamento de pista por NOME: o feed do betwinner traz o nome da pista (ex.
 // "Nottingham"), e a gente reverte pelo nomesPistas do sistema. Zero ID
@@ -62,8 +68,13 @@ function bwUrlCorrida(li, gameId, track) {
 }
 
 // Provisorios ate virem de Configuracoes (Etapa D):
-const LIMITE_EDGE_VALOR = 5; // edge minimo p/ o selo "valor"
-const MAX_AVBS = 3;          // quantos AvBs mostrar na tela
+const LIMITE_EDGE_VALOR = 5; // default do edge minimo p/ o selo "valor"
+const MAX_AVBS = 3;          // default de quantos AvBs mostrar na tela
+// Valores EFETIVOS — a config (Painel Admin) sobrescreve os defaults via o
+// callback getOddsCfg, lido a cada ciclo. Sem config, ficam nos defaults acima.
+let _edgeMin = LIMITE_EDGE_VALOR;
+let _maxAvbs = MAX_AVBS;
+let _getOddsCfg = null; // () => { maxAvbs, edgeMin } (setado por iniciar)
 
 const status = {
   running: false,
@@ -222,7 +233,7 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     const scoreByTrap = {};
     for (const s of (dados && dados.scores) || []) scoreByTrap[s.trap] = s.score;
     const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, config: {} };
-    const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, MAX_AVBS);
+    const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, _maxAvbs);
     avbs = ranked.map(a => {
       // casa com o par do betwinner p/ pegar odd + % mercado, orientados pro FAVORITO da reanalise
       const par = race.avbs.find(p =>
@@ -242,7 +253,7 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
         reanalisePct: a.avaliacao,                      // motor 2 (reanalise par-a-par)
         motorOrigPct,                                   // motor 1 (analise global original)
         oddAvenceB: odd, marketPct, edge, pos: a.pos,
-        valor: (edge != null && edge >= LIMITE_EDGE_VALOR),
+        valor: (edge != null && edge >= _edgeMin),
         flags: a.flags, obs: a.obs
       };
     });
@@ -250,8 +261,8 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     // fallback: sem os 6 historicos (analise antiga) -> cruzamento simples com score global
     avbs = crossWithEngine(race.avbs || [], (dados && dados.scores) || []);
     avbs.sort((a, b) => (b.edge == null ? -999 : b.edge) - (a.edge == null ? -999 : a.edge));
-    avbs = avbs.slice(0, MAX_AVBS).map((a, i) => Object.assign({}, a, {
-      pos: i + 1, valor: (a.edge != null && a.edge >= LIMITE_EDGE_VALOR),
+    avbs = avbs.slice(0, _maxAvbs).map((a, i) => Object.assign({}, a, {
+      pos: i + 1, valor: (a.edge != null && a.edge >= _edgeMin),
       reanalisePct: null,             // sem reanalise nesta analise antiga
       motorOrigPct: (a.enginePct != null ? a.enginePct : null) // motor 1 = o proprio score
     }));
@@ -336,6 +347,10 @@ async function obterCorridas() {
 }
 
 async function umCiclo(getScores) {
+  // Refresca os valores efetivos da config (Painel Admin) a cada ciclo.
+  if (typeof _getOddsCfg === 'function') {
+    try { const c = _getOddsCfg() || {}; if (c.maxAvbs > 0) _maxAvbs = c.maxAvbs; if (c.edgeMin != null) _edgeMin = c.edgeMin; } catch (e) {}
+  }
   const races = await obterCorridas();
 
   status.corridasAoVivo = races.length;
@@ -397,6 +412,11 @@ function iniciar(getScores, opts) {
   opts = opts || {};
   const intervaloMs = opts.intervaloMs || 5000;
   _onClose = (typeof opts.onClose === 'function') ? opts.onClose : null; // grava o fechamento no banco
+  _getOddsCfg = (typeof opts.getOddsCfg === 'function') ? opts.getOddsCfg : null; // config viva (maxAvbs/edgeMin)
+  if (opts.proxyUrl !== undefined) setProxy(opts.proxyUrl || process.env.BETWINNER_PROXY_URL || ''); // config vence env
+  if (opts.maxAvbs > 0) _maxAvbs = opts.maxAvbs;
+  if (opts.edgeMin != null) _edgeMin = opts.edgeMin;
+  status.intervaloMs = intervaloMs;
   if (status.running) { addLog('warn', 'ja esta rodando'); return; }
   status.running = true; status.stopRequested = false;
   addLog('ok', 'robo de odds ao vivo iniciado (loop ' + Math.round(intervaloMs / 1000) + 's)');
@@ -409,8 +429,19 @@ function iniciar(getScores, opts) {
   timer = setInterval(tick, intervaloMs);
 }
 
-function parar() { status.stopRequested = true; }
-function getStatus() { return Object.assign({}, status, { porCorrida: undefined, descoberta: saudeDescoberta() }); }
+function parar() {
+  status.stopRequested = true;
+  if (timer) { clearInterval(timer); timer = null; }
+  status.running = false;
+  addLog('info', 'parado');
+}
+function getStatus() {
+  return Object.assign({}, status, {
+    porCorrida: undefined,
+    descoberta: saudeDescoberta(),
+    config: { intervaloSeg: Math.round((status.intervaloMs || 5000) / 1000), maxAvbs: _maxAvbs, edgeMin: _edgeMin, proxyDefinido: !!_proxyUrlAtual }
+  });
+}
 function getSnapshots() { return Object.values(status.porCorrida); }
 
 module.exports = {

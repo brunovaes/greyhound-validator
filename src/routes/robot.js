@@ -421,7 +421,34 @@ function _gravarFechamentoAvb(fech){
   }catch(e){ console.error('[ODDS-FECHAMENTO] erro:', e.message); }
 }
 
-try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds, onClose: _gravarFechamentoAvb }); }
+// Config do Robo de Odds (Painel Admin -> analysis_config, user_id=1). Defaults
+// se a coluna vier nula. Lido no start e a cada ciclo (maxAvbs/edge sao vivos).
+function getOddsConfig(){
+  try{
+    const { db } = require('../db/database');
+    const c = db.prepare('SELECT odds_intervalo_seg, odds_max_avbs, odds_edge_min, odds_proxy_url FROM analysis_config WHERE user_id=1').get() || {};
+    return {
+      intervaloSeg: (c.odds_intervalo_seg > 0) ? c.odds_intervalo_seg : 5,
+      maxAvbs: (c.odds_max_avbs > 0) ? c.odds_max_avbs : 3,
+      edgeMin: (c.odds_edge_min != null) ? c.odds_edge_min : 5,
+      proxyUrl: c.odds_proxy_url || ''
+    };
+  }catch(e){ return { intervaloSeg:5, maxAvbs:3, edgeMin:5, proxyUrl:'' }; }
+}
+// Inicia o robo lendo a config atual. Usado no boot e ao salvar config (restart).
+function _iniciarOdds(){
+  const c = getOddsConfig();
+  liveOddsModule.iniciar(_scoresParaCorridaAoVivo, {
+    intervaloMs: c.intervaloSeg * 1000,
+    podeRodar: _dentroJanelaOdds,
+    onClose: _gravarFechamentoAvb,
+    getOddsCfg: () => { const x = getOddsConfig(); return { maxAvbs: x.maxAvbs, edgeMin: x.edgeMin }; },
+    proxyUrl: c.proxyUrl,
+    maxAvbs: c.maxAvbs, edgeMin: c.edgeMin
+  });
+}
+
+try { _iniciarOdds(); }
 catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
 
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
@@ -924,7 +951,32 @@ ${navBar(req.user, 'robot')}
 
 <div class="robot-panel" id="panel-odds">
   <h1 style="display:flex;align-items:center;gap:10px">${icon('alertTriangle',{size:22})} Odds ao Vivo (betwinner)</h1>
-  <p class="sub">Saúde da descoberta de corridas no betwinner. Se o site passar a bloquear de forma constante, este painel avisa que é hora de ligar o proxy residencial.</p>
+  <p class="sub">Puxa os AvBs "Frente a frente" do betwinner ao vivo, cruza com a reanálise e grava o fechamento. Aqui você controla e configura o robô, e acompanha a saúde da descoberta.</p>
+
+  <div class="card">
+    <div class="card-title">Controle</div>
+    <div class="form-row">
+      <button class="btn" onclick="oddsStart()" style="white-space:nowrap">&#x25B6; Ligar</button>
+      <button class="btn btn-red" onclick="oddsStop()" style="white-space:nowrap">&#x25A0; Desligar</button>
+      <span id="odds-run-state" style="font-size:12px;color:#94a3b8;align-self:center"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Configuração</div>
+    <div class="form-row">
+      <div class="field"><label>Intervalo (s)</label><input type="number" id="odds-intervalo" min="3" max="60" style="width:80px"></div>
+      <div class="field"><label>Nº de AvBs</label><input type="number" id="odds-maxavbs" min="1" max="6" style="width:80px"></div>
+      <div class="field"><label>Edge mínimo (%)</label><input type="number" id="odds-edgemin" min="0" max="50" style="width:90px"></div>
+      <button class="btn" onclick="oddsSaveConfig()" style="white-space:nowrap;align-self:flex-end">Salvar</button>
+    </div>
+    <div class="form-row" style="margin-top:8px">
+      <div class="field" style="flex:1;min-width:280px"><label>Proxy residencial (opcional) — deixa vazio p/ direto</label><input type="text" id="odds-proxy" placeholder="http://usuario:senha@host:porta" style="width:100%"></div>
+    </div>
+    <div id="odds-cfg-msg" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Intervalo e proxy reiniciam o robô ao salvar; nº de AvBs e edge valem no próximo ciclo.</div>
+  </div>
+
   <div class="card">
     <div class="card-title">Saúde da descoberta (últimos 15 / 60 min)</div>
     <div id="odds-health"><div class="lin">Carregando…</div></div>
@@ -1236,9 +1288,35 @@ function showPanel(id) {
   var fr = panel.querySelector('iframe.admin-embed');
   if (fr && !fr.getAttribute('src') && fr.dataset.src) fr.setAttribute('src', fr.dataset.src);
   // Odds BW: liga o poll de saude so quando a aba esta aberta
-  if (id === 'odds') { pollOddsHealth(); if (oddsPolling) clearInterval(oddsPolling); oddsPolling = setInterval(pollOddsHealth, 8000); }
+  if (id === 'odds') { loadOddsConfig(); pollOddsHealth(); if (oddsPolling) clearInterval(oddsPolling); oddsPolling = setInterval(pollOddsHealth, 8000); }
   else if (oddsPolling) { clearInterval(oddsPolling); oddsPolling = null; }
 }
+
+// ── Odds BW: config + controle ───────────────────────────────────────────────
+async function loadOddsConfig() {
+  try {
+    const r = await fetch(BASE + '/robot/odds/config');
+    const c = await r.json();
+    var g = function(id){ return document.getElementById(id); };
+    if (g('odds-intervalo')) g('odds-intervalo').value = c.intervaloSeg;
+    if (g('odds-maxavbs')) g('odds-maxavbs').value = c.maxAvbs;
+    if (g('odds-edgemin')) g('odds-edgemin').value = c.edgeMin;
+    if (g('odds-proxy')) g('odds-proxy').value = c.proxyUrl || '';
+  } catch (e) {}
+}
+async function oddsSaveConfig() {
+  var g = function(id){ return document.getElementById(id); };
+  var el = g('odds-cfg-msg'); el.style.color = '#94a3b8'; el.textContent = 'Salvando…';
+  var body = { intervaloSeg: g('odds-intervalo').value, maxAvbs: g('odds-maxavbs').value, edgeMin: g('odds-edgemin').value, proxyUrl: g('odds-proxy').value };
+  try {
+    var r = await fetch(BASE + '/robot/odds/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var d = await r.json();
+    if (d.ok) { el.style.color = '#22c55e'; el.textContent = 'Salvo. Robô reiniciado com as novas configurações.'; setTimeout(pollOddsHealth, 800); }
+    else { el.style.color = '#ef4444'; el.textContent = 'Erro: ' + (d.erro || '?'); }
+  } catch (e) { el.style.color = '#ef4444'; el.textContent = 'Erro: ' + e.message; }
+}
+async function oddsStart() { try { await fetch(BASE + '/robot/odds/start', { method:'POST' }); setTimeout(pollOddsHealth, 500); } catch (e) {} }
+async function oddsStop() { try { await fetch(BASE + '/robot/odds/stop', { method:'POST' }); setTimeout(pollOddsHealth, 500); } catch (e) {} }
 
 // ── Odds BW: saude da descoberta ─────────────────────────────────────────────
 var oddsPolling = null;
@@ -1261,6 +1339,8 @@ async function pollOddsHealth() {
       + '</div>'
       + (s.alertaProxy ? '<div style="margin-top:12px;padding:9px 11px;background:rgba(239,68,68,.12);border:1px solid #ef4444;border-radius:6px;color:#fca5a5;font-size:12px">&#9888; Bloqueio constante detectado. Hora de ligar o proxy: defina <b>BETWINNER_PROXY_URL</b> nas Variables do Railway.</div>' : '')
       + '<div style="margin-top:10px;font-size:11px;color:#64748b">Robô: ' + (d.running ? 'rodando' : 'parado') + ' &middot; ciclos ' + (d.ciclos || 0) + '</div>';
+    var rs = document.getElementById('odds-run-state');
+    if (rs) rs.textContent = (d.running ? '● rodando' : '○ parado') + ((d.config && d.config.intervaloSeg) ? ' · intervalo ' + d.config.intervaloSeg + 's' : '') + (s.proxyAtivo ? ' · proxy ativo' : '');
   } catch (e) {
     var el2 = document.getElementById('odds-health'); if (el2) el2.innerHTML = '<div class="lin">Erro ao buscar status.</div>';
   }
@@ -2268,8 +2348,28 @@ router.get('/diag/skips', requireAdmin, async (req, res) => {
 });
 router.post('/odds/stop', requireAdmin, (req, res) => { liveOddsModule.parar(); res.json({ ok: true }); });
 router.post('/odds/start', requireAdmin, (req, res) => {
-  try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds, onClose: _gravarFechamentoAvb }); res.json({ ok: true }); }
+  try { _iniciarOdds(); res.json({ ok: true }); }
   catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+// Config do Robo de Odds — ler e salvar (Painel Admin)
+router.get('/odds/config', requireAdmin, (req, res) => { res.json(getOddsConfig()); });
+router.post('/odds/config', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const b = req.body || {};
+    const intervalo = Math.max(3, Math.min(60, parseInt(b.intervaloSeg) || 5));
+    const maxAvbs = Math.max(1, Math.min(6, parseInt(b.maxAvbs) || 3));
+    const edgeRaw = parseInt(b.edgeMin);
+    const edgeMin = Math.max(0, Math.min(50, isNaN(edgeRaw) ? 5 : edgeRaw));
+    const proxyUrl = String(b.proxyUrl || '').trim();
+    db.prepare('UPDATE analysis_config SET odds_intervalo_seg=?, odds_max_avbs=?, odds_edge_min=?, odds_proxy_url=? WHERE user_id=1')
+      .run(intervalo, maxAvbs, edgeMin, proxyUrl);
+    // reinicia o robo pra aplicar intervalo/proxy na hora (parar() e' imediato)
+    try { liveOddsModule.parar(); } catch (e) {}
+    setTimeout(() => { try { _iniciarOdds(); } catch (e) { console.error('[ODDS] restart pos-config:', e.message); } }, 400);
+    res.json({ ok: true, config: getOddsConfig() });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
 router.get('/final-check/status', requireAdmin, (req, res) => {
