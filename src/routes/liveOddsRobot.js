@@ -16,8 +16,16 @@ const {
 } = require('../utils/betwinnerFeed');
 const reanalise = require('../utils/reanaliseEngine');
 
-const BASE = 'https://betwinner1.com/service-api';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+// Dominios-espelho do betwinner. O bloqueio (406) e' por IP no dominio principal,
+// mas os espelhos costumam ter WAF diferente — a gente tenta em ordem e "gruda" no
+// primeiro que responder. Da pra sobrescrever a lista via env BETWINNER_HOSTS
+// (dominios separados por virgula) sem mexer no codigo nem redeployar via git.
+const HOSTS = (process.env.BETWINNER_HOSTS
+  ? process.env.BETWINNER_HOSTS.split(',').map(s => s.trim()).filter(Boolean)
+  : ['betwinner1.com', 'betwinner.com', 'betwinner2.com', 'betwinner3.com', 'betwinner6.com', 'betwinner9.com', 'betwinnersport.com']);
+let _hostBom = null; // dominio que funcionou por ultimo (tentado primeiro no proximo ciclo)
 
 // Casamento de pista por NOME: o feed do betwinner traz o nome da pista (ex.
 // "Nottingham"), e a gente reverte pelo nomesPistas do sistema. Zero ID
@@ -59,18 +67,20 @@ function addLog(type, msg) {
 }
 
 // Headers "de navegador" — o betwinner responde 406 pra requisicao "seca". O
-// Referer/Origin/Accept amplo faz a chamada parecer o proprio site.
-const HEADERS = {
-  'User-Agent': UA,
-  'Accept': 'application/json, text/plain, */*',
-  'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-  'Referer': 'https://betwinner1.com/br/live/greyhound-racing',
-  'Origin': 'https://betwinner1.com',
-  'X-Requested-With': 'XMLHttpRequest'
-};
-function httpGetJson(url) {
+// Referer/Origin batendo com o DOMINIO tentado faz a chamada parecer o proprio site.
+function headersPara(host) {
+  return {
+    'User-Agent': UA,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+    'Referer': `https://${host}/br/live/greyhound-racing`,
+    'Origin': `https://${host}`,
+    'X-Requested-With': 'XMLHttpRequest'
+  };
+}
+function httpGetJson(url, host) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: HEADERS }, res => {
+    const req = https.get(url, { headers: headersPara(host || 'betwinner1.com') }, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       let data = ''; res.setEncoding('utf8');
       res.on('data', c => data += c);
@@ -81,11 +91,29 @@ function httpGetJson(url) {
   });
 }
 
+// Busca um path do feed tentando os dominios-espelho em ordem. Gruda no primeiro
+// que responder (2xx) e o usa primeiro no proximo ciclo; so re-varre a lista se ele
+// voltar a falhar. Assim, quando um espelho funciona, nao fica testando os outros a toa.
+async function fetchFeed(path) {
+  const ordem = _hostBom ? [_hostBom].concat(HOSTS.filter(h => h !== _hostBom)) : HOSTS.slice();
+  let ultimoErro;
+  for (const host of ordem) {
+    try {
+      const json = await httpGetJson(`https://${host}/service-api${path}`, host);
+      if (host !== _hostBom) { _hostBom = host; addLog('ok', 'dominio ativo: ' + host); }
+      return json;
+    } catch (e) {
+      ultimoErro = e;
+      if (_hostBom === host) _hostBom = null; // o "bom" caiu — libera a re-varredura
+    }
+  }
+  throw ultimoErro || new Error('todos os dominios falharam');
+}
+
 // Passo 1: quais pistas de galgo estao ao vivo agora. SEM champs, o feed
 // devolve o esporte 68 com a lista `L` de champs (pista) ao vivo — so os IDs.
 async function descobrirChampsAoVivo() {
-  const url = `${BASE}/LiveFeed/GetSportsShortZip?sports=68&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`;
-  const data = await httpGetJson(url);
+  const data = await fetchFeed('/LiveFeed/GetSportsShortZip?sports=68&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true');
   const sport = ((data && data.Value) || []).find(s => s.I === 68);
   return ((sport && sport.L) || []).map(c => c.LI).filter(Boolean);
 }
@@ -96,8 +124,7 @@ async function listarCorridasAoVivo(champsIds) {
   let champs = (champsIds && champsIds.length) ? champsIds : null;
   if (!champs) { try { champs = await descobrirChampsAoVivo(); } catch (e) { champs = []; } }
   if (!champs || !champs.length) return [];
-  const url = `${BASE}/LiveFeed/GetSportsShortZip?sports=68&champs=${champs.join(',')}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`;
-  const disc = await httpGetJson(url);
+  const disc = await fetchFeed(`/LiveFeed/GetSportsShortZip?sports=68&champs=${champs.join(',')}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`);
   return parseLiveRaces(disc).map(r => {
     const pista = pistaPorNome(r.track);
     if (!pista && r.track) status.pistasNovas[r.track] = (r.li || '?'); // nome que nao casou no nomesPistas
@@ -106,8 +133,7 @@ async function listarCorridasAoVivo(champsIds) {
 }
 
 async function buscarMercados(gameId) {
-  const url = `${BASE}/main-live-feed/v3/gameEvents?cfView=3&countEvents=250&fcountry=31&gameId=${gameId}&gr=495&grMode=4&lng=pt&marketType=1&ref=152`;
-  return parseRaceMarkets(await httpGetJson(url));
+  return parseRaceMarkets(await fetchFeed(`/main-live-feed/v3/gameEvents?cfView=3&countEvents=250&fcountry=31&gameId=${gameId}&gr=495&grMode=4&lng=pt&marketType=1&ref=152`));
 }
 
 function marcarTendencia(avbs, prevAvbs) {
@@ -186,15 +212,18 @@ let _listaCache = { races: [], ts: 0, ok: false };
 
 async function obterCorridas() {
   const agora = Date.now();
-  const fresco = _listaCache.ok && (agora - _listaCache.ts) < DISCOVERY_TTL_MS;
-  if (fresco) return _listaCache.races;
+  // Respeita o TTL mesmo quando a ultima descoberta FALHOU. O gate e' puramente
+  // pelo timestamp (ts): apos qualquer tentativa — deu certo ou 406 — espera
+  // DISCOVERY_TTL_MS antes de bater de novo. Antes, o gate exigia ok=true, entao
+  // com o betwinner em 406 continuo ele nunca ficava "fresco" e martelava a cada 5s.
+  if (_listaCache.ts && (agora - _listaCache.ts) < DISCOVERY_TTL_MS) return _listaCache.races;
   try {
     const races = await listarCorridasAoVivo();
     _listaCache = { races, ts: agora, ok: true };
     return races;
   } catch (e) {
-    // mantem a ultima lista boa e ADIA a proxima tentativa (nao martela de 5 em 5s)
-    _listaCache.ts = agora;
+    _listaCache.ts = agora;   // adia a proxima tentativa por DISCOVERY_TTL_MS
+    _listaCache.ok = false;
     addLog('warn', 'descoberta falhou (' + e.message + ') — mantendo ultima lista (' + _listaCache.races.length + ')');
     return _listaCache.races;
   }
