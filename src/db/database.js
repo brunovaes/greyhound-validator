@@ -252,6 +252,7 @@ const migrations = [
   // e Harlow A5. Com regras, cada linha e' uma combinacao fechada.
   // Vazio/nulo = cai no filtro antigo, entao nada quebra em quem ja usava.
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT",
+  "ALTER TABLE races ADD COLUMN hist_full TEXT", // 11/08 — historico dos 6 galgos (nao so os elegiveis), p/ a reanalise par-a-par ao vivo
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

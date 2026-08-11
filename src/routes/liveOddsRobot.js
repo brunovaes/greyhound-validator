@@ -14,6 +14,7 @@ const https = require('https');
 const {
   parseLiveRaces, parseRaceMarkets, crossWithEngine, sugerirAvbs
 } = require('../utils/betwinnerFeed');
+const reanalise = require('../utils/reanaliseEngine');
 
 const BASE = 'https://betwinner1.com/service-api';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -111,18 +112,50 @@ function marcarTendencia(avbs, prevAvbs) {
   });
 }
 
-// Snapshot ao vivo de uma corrida: mercado + cruzamento com o motor + tendencia.
-async function snapshotCorrida(gameId, scores, prevAvbs) {
+// Snapshot ao vivo: mercado (betwinner) + REANALISE par-a-par (motor novo) + tendencia.
+// dados (da analise casada) = { scores, histFull:[{trap,nome,brtClasse,ssnDate,historico}],
+//   dataCard, corrida, hora } ou null. Quando ha histFull, roda a reanalise par-a-par
+// (categoria->tempo->split/bends->podios + trap vazia/cio/trial). Sem histFull (analise
+// antiga), cai no cruzamento simples com o score global.
+async function snapshotCorrida(gameId, dados, prevAvbs) {
   const race = await buscarMercados(gameId);
-  let avbs = crossWithEngine(race.avbs, scores || []);
+  const presentes = new Set((race.dogs || []).map(d => d.trap));
+  const trapsVazias = [1, 2, 3, 4, 5, 6].filter(t => !presentes.has(t));
+  const histFull = dados && dados.histFull;
+
+  let avbs;
+  if (histFull && histFull.length && race.avbs && race.avbs.length) {
+    const dogsByTrap = {};
+    for (const g of histFull) dogsByTrap[g.trap] = g;
+    const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, config: {} };
+    const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, MAX_AVBS);
+    avbs = ranked.map(a => {
+      // casa com o par do betwinner p/ pegar odd + % mercado, orientados pro FAVORITO da reanalise
+      const par = race.avbs.find(p =>
+        (p.aTrap === a.aTrap && p.bTrap === a.bTrap) || (p.aTrap === a.bTrap && p.bTrap === a.aTrap));
+      let odd = null, marketPct = null;
+      if (par) {
+        if (par.aTrap === a.aTrap) { odd = par.oddAvenceB; marketPct = par.marketPct; }
+        else { odd = par.oddBvenceA; marketPct = (par.marketPct != null ? Math.round((100 - par.marketPct) * 10) / 10 : null); }
+      }
+      const edge = (a.avaliacao != null && marketPct != null) ? Math.round((a.avaliacao - marketPct) * 10) / 10 : null;
+      return {
+        aTrap: a.aTrap, aNome: a.aNome, bTrap: a.bTrap, bNome: a.bNome,
+        avaliacao: a.avaliacao, enginePct: a.avaliacao,
+        oddAvenceB: odd, marketPct, edge, pos: a.pos,
+        valor: (edge != null && edge >= LIMITE_EDGE_VALOR),
+        flags: a.flags, obs: a.obs
+      };
+    });
+  } else {
+    // fallback: sem os 6 historicos (analise antiga) -> cruzamento simples com score global
+    avbs = crossWithEngine(race.avbs || [], (dados && dados.scores) || []);
+    avbs.sort((a, b) => (b.edge == null ? -999 : b.edge) - (a.edge == null ? -999 : a.edge));
+    avbs = avbs.slice(0, MAX_AVBS).map((a, i) => Object.assign({}, a, {
+      pos: i + 1, valor: (a.edge != null && a.edge >= LIMITE_EDGE_VALOR)
+    }));
+  }
   avbs = marcarTendencia(avbs, prevAvbs);
-  avbs.sort((a, b) => (b.edge == null ? -999 : b.edge) - (a.edge == null ? -999 : a.edge));
-  // pos (ranking 1..N) + selo valor; limita a MAX_AVBS. Obs: quando o robo de
-  // reanalise entrar, ele passa a ditar a ordem/avaliacao — estes campos ficam.
-  avbs = avbs.slice(0, MAX_AVBS).map((a, i) => Object.assign({}, a, {
-    pos: i + 1,
-    valor: (a.edge != null && a.edge >= LIMITE_EDGE_VALOR)
-  }));
   return Object.assign({}, race, { avbs });
 }
 
@@ -142,19 +175,19 @@ async function umCiclo(getScores) {
 
   for (const r of abertas) {
     const chave = r.gameId;
-    // getScores(r) devolve { scores, corrida, hora } da analise casada, ou null.
+    // getScores(r) devolve { scores, histFull, dataCard, corrida, hora } da analise
+    // casada, ou null. histFull alimenta a reanalise; scores alimenta os sugeridos.
     const analise = (typeof getScores === 'function') ? (getScores(r) || null) : null;
-    const scores = analise ? (analise.scores || null) : null;
     let snap;
-    try { snap = await snapshotCorrida(r.gameId, scores, (status.porCorrida[chave] || {}).avbs); }
+    try { snap = await snapshotCorrida(r.gameId, analise, (status.porCorrida[chave] || {}).avbs); }
     catch (e) { addLog('warn', `${r.track} ${r.raceNum}: ${e.message}`); continue; }
     status.porCorrida[chave] = {
       gameId: r.gameId, li: r.li, track: r.track, pista: r.pista, raceNum: r.raceNum,
       statusLine: r.statusLine, startTs: r.startTs,
       bwUrl: bwUrlCorrida(r.li, r.gameId, r.track),
       avbs: snap.avbs,
-      sugeridos: scores ? sugerirAvbs(scores) : [],
-      temAnalise: !!scores,
+      sugeridos: (analise && analise.scores) ? sugerirAvbs(analise.scores) : [],
+      temAnalise: !!(analise && (analise.histFull || analise.scores)),
       analiseCorrida: analise ? (analise.corrida || null) : null, // casa com o front
       updatedAt: Date.now()
     };

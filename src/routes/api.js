@@ -879,6 +879,7 @@ function processarCorrida(corridaRaw, config) {
     histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})),
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})),
     raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,ssnDate:g.ssnDate||null})),
+    histFull:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,brtClasse:g.brtClasse,ssnDate:g.ssnDate||null,historico:mapHistLinhas(g.historico||[])})),
     eliminados,
     postPick:postPick||'',
     dataCard,
@@ -1146,7 +1147,7 @@ async function rodarAnaliseAutomatica(date, userId) {
 
   const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(CANONICO, sessionName, allRaces.length, allRaces.filter(r=>r.nivel!=='skip').length);
   const sessionId = result.lastInsertRowid;
-  const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json,hist_full) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (const r of allRaces) {
     const p = (r.hora||'').split(':');
     let h = parseInt(p[0]||0);
@@ -1154,7 +1155,7 @@ async function rodarAnaliseAutomatica(date, userId) {
     h = h-4; if (h<0) h+=24;
     const horaBr = p.length>=2 ? h+':'+p[1] : '';
     const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-    ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
+    ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null,r.histFull?JSON.stringify(r.histFull):null);
   }
   db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(userId);
 
@@ -1219,7 +1220,7 @@ router.post('/session', express.json(), (req, res) => {
     // propria sessao paralela e voltariamos ao problema que a 2.x resolve.
     const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(CANONICO, name||'Sessao', races.length, races.filter(r=>r.nivel!=='skip').length);
     const sessionId = result.lastInsertRowid;
-    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json,hist_full) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for(const r of races) {
       const p=(r.hora||'').split(':');
       let h=parseInt(p[0]||0);
@@ -1227,7 +1228,7 @@ router.post('/session', express.json(), (req, res) => {
       h=h-4; if(h<0)h+=24; // UK→BRT
       const horaBr=p.length>=2?h+':'+p[1]:'';
       const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-      const info = ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,r.videoUrl||null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null);
+      const info = ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,r.r1||null,r.r2||null,r.r3||null,r.hit||null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,r.videoUrl||null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null,r.histFull?JSON.stringify(r.histFull):null);
       // Os campos pessoais NAO vao mais na races (que agora e' compartilhada):
       // vao pra race_user_data, amarrados ao usuario que salvou a sessao.
       const novoId = Number(info && info.lastInsertRowid);

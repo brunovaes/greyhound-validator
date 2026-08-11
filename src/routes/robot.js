@@ -356,16 +356,25 @@ scheduleMonitorCron();
 const liveOddsModule = require('./liveOddsRobot');
 function _convDbHoraUk24(hora){ const p=String(hora||'').split(':'); if(p.length<2) return null; let h=parseInt(p[0]); const m=parseInt(p[1])||0; if(h>=1&&h<=9) h+=12; return h*60+m; }
 function _tsToUk24Min(ts){ try{ const s=new Date(ts*1000).toLocaleString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit',hour12:false}); const p=s.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }catch(e){ return null; } }
-// Casa a corrida do betwinner (pista + horario UK) com a analise do dia e
-// devolve os scores do motor (scores_json). null = sem analise casada ainda.
+// Casa a corrida do betwinner (pista + horario UK) com a analise do dia e devolve
+// os dados p/ a reanalise: scores (sugeridos), histFull (os 6 historicos, p/ a
+// reanalise par-a-par) e dataCard. null = sem analise casada ainda.
 function _scoresParaCorridaAoVivo(liveRace){
   if(!liveRace || !liveRace.pista || !liveRace.startTs) return null;
   const alvo=_tsToUk24Min(liveRace.startTs); if(alvo==null) return null;
   try{
     const { db } = require('../db/database');
     const date=getTodayDate();
-    const rows=db.prepare("SELECT r.hora, r.corrida, r.scores_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
-    for(const row of rows){ const dm=_convDbHoraUk24(row.hora); if(dm!=null && Math.abs(dm-alvo)<=2){ try{ return { scores: JSON.parse(row.scores_json), corrida: row.corrida, hora: row.hora }; }catch(e){ return null; } } }
+    const rows=db.prepare("SELECT r.hora, r.corrida, r.scores_json, r.hist_full, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
+    for(const row of rows){
+      const dm=_convDbHoraUk24(row.hora);
+      if(dm!=null && Math.abs(dm-alvo)<=2){
+        let scores=null, histFull=null;
+        try{ scores = row.scores_json ? JSON.parse(row.scores_json) : null; }catch(e){}
+        try{ histFull = row.hist_full ? JSON.parse(row.hist_full) : null; }catch(e){}
+        return { scores, histFull, dataCard: row.data_card||null, corrida: row.corrida, hora: row.hora };
+      }
+    }
   }catch(e){}
   return null;
 }
