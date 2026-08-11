@@ -861,8 +861,13 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
     + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
-    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    // ESCOLHIDO e a logo de apostar ficam numa coluna de largura FIXA, com os
+    // dois esticados (width:100%). Sem isso o botao tinha a largura do texto e
+    // a imagem a largura dela — ficavam desalinhados um sobre o outro.
+    + '<div style="display:flex;flex-direction:column;align-items:stretch;gap:4px;width:104px;margin:5px auto 0">'
+    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="width:100%;font-size:10px;font-weight:700;padding:3px 0;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
+    + '</div>'
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
@@ -934,7 +939,7 @@ function _botaoApostar(r){
   // Se o arquivo faltar, o onerror troca por um rotulo — link invisivel numa
   // acao que envolve dinheiro seria pior que um rotulo feio.
   return '<a href="'+link+'" target="_blank" rel="noopener" title="Apostar na casa" '
-    + 'style="display:flex;align-items:center;justify-content:center;margin-top:4px;'
+    + 'style="display:flex;align-items:center;justify-content:center;'
     + 'width:100%;height:22px;border-radius:4px;background:#1d4ed8;overflow:hidden;text-decoration:none">'
     + '<img src="'+BASE+'/static/img/apostar_bw.png" alt="Apostar" '
     +   'style="max-width:100%;max-height:100%;object-fit:contain;display:block" '
