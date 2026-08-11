@@ -348,6 +348,22 @@ function filtrarLinhasValidas(historico, corridaDist, corridaClasse, corridaPist
   });
 }
 
+// A ULTIMA corrida real do galgo (ignorando trial/solo/HP/OR) foi nesta mesma
+// pista+distancia? Regra do Bruno: so aceita galgo que esta correndo AQUI agora
+// — a corrida de verdade mais recente dele tem que ter sido nesta pista E
+// distancia. O historico vem do mais recente pro mais antigo, entao a 1a linha
+// "de corrida" que aparecer e' a ultima corrida do galgo.
+function ultimaCorridaNaPistaDist(historico, corridaDist, corridaPista) {
+  const pistaAlvo = (corridaPista||'').trim().toLowerCase();
+  const invalida = ['HP','T1','T2','T3','T4','T5','T6','OR','Mdn','Trial','Solo','T','S1','S2','S3','S4','S5','S6'];
+  for (const linha of (historico||[])) {
+    if (invalida.some(c => (linha.classe||'').toUpperCase().includes(c.toUpperCase()))) continue; // pula trial/solo
+    return !!(linha.dist && linha.dist === corridaDist &&
+              (!pistaAlvo || (linha.pista||'').trim().toLowerCase() === pistaAlvo));
+  }
+  return false; // sem corrida real no historico
+}
+
 // CAMADA 2: Ajustar CalTm de cada linha com contexto
 // Decide, POR GALGO (uma vez so, nao linha a linha), se o ajuste de classe
 // (CAMADA 2 abaixo) deve ser pulado pra esse galgo — regra definida com o
@@ -663,7 +679,7 @@ function processarCorrida(corridaRaw, config) {
   const eliminados = [];
 
   const pistaAtual = (corrida||'').split(' ')[0] || '';
-  const minCorridasUteis = config.min_corridas_uteis || 3;
+  const minCorridasUteis = config.min_corridas_uteis || 2; // Bruno 11/08: 3->2 (+ regra da ultima corrida ser aqui)
 
   // "Media da pista" (o BRT medio do campo de hoje) — soma o BRT de TODOS os
   // galgos do PDF (o card inteiro, nao so os elegiveis) e divide pela
@@ -710,6 +726,12 @@ function processarCorrida(corridaRaw, config) {
       eliminados.push({ trap:galgo.trap, motivo:`${linhasValidas.length} linha(s) na pista/distancia exata (min. ${minCorridasUteis})` });
       continue;
     }
+    // Alem do minimo, a ULTIMA corrida real do galgo tem que ter sido nesta
+    // pista+distancia (galgo tem que estar correndo AQUI agora — regra do Bruno).
+    if (!ultimaCorridaNaPistaDist(galgo.historico||[], distNum, pistaAtual)) {
+      eliminados.push({ trap:galgo.trap, motivo:`Ultima corrida nao foi nesta pista/distancia` });
+      continue;
+    }
     const pularAjusteClasse = decidirPularAjusteClasse(linhasValidas, classe);
     const calTmsAjustados = linhasValidas.map(l=>ajustarCaltm(l, classe, config, pularAjusteClasse));
     const caltmAgregado = agregarCaltm(calTmsAjustados, config);
@@ -721,8 +743,8 @@ function processarCorrida(corridaRaw, config) {
     elegiveis.push({ trap:galgo.trap, nome:galgo.nome, brt:galgo.brt, brtClasse:galgo.brtClasse, histClasse, linhasValidas, caltmAgregado, splitMedio, posicoes, perfil:calcularPerfil(linhasValidas) });
   }
 
-  if (elegiveis.length < 4) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Galgos insuficientes com histórico válido para esta corrida.`, motivoSkip:'historico_insuficiente', elegiveisCount:elegiveis.length, minCorridasUteis, trapsCard:trapsCard||[], trapsConfiaveis, eliminados, dataCard, trackFull };
+  if (elegiveis.length < 3) { // Bruno 11/08: min galgos elegiveis 4->3
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, top3:[], obs:`Galgos insuficientes com histórico válido para esta corrida.`, motivoSkip:'historico_insuficiente', elegiveisCount:elegiveis.length, minCorridasUteis, minElegiveis:3, trapsCard:trapsCard||[], trapsConfiaveis, eliminados, dataCard, trackFull };
   }
 
   // Calcular scores com todos os elegiveis como referencia
@@ -784,7 +806,7 @@ function processarCorrida(corridaRaw, config) {
 
   const diffAvB = melhor.scoreFinal - pior.scoreFinal;
   const diffBack = melhor.scoreFinal - segundo.scoreFinal;
-  const thresholdSkip = config.threshold_skip_avb||10;
+  const thresholdSkip = config.threshold_skip_avb||8; // Bruno 11/08: 10->8
   const thresholdBack = config.threshold_back||25;
 
   // obsElim mantido apenas internamente para debug no console
