@@ -928,9 +928,12 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 function _botaoApostar(r){
   var link = _linkBetwinner(r && r._snapAoVivo);
   if(!link) return '';
+  // Mesma tipografia do botao ESCOLHIDO (10px / 700), em verde — o verde e' a
+  // cor de acao primaria do app (btn-save), entao o "ir apostar" fica
+  // visualmente separado do "escolhido", que e' azul.
   return '<a href="'+link+'" target="_blank" rel="noopener" '
-    + 'style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:800;padding:5px;border-radius:4px;'
-    + 'background:#1d4ed8;color:#fff;text-decoration:none;letter-spacing:.3px">APOSTAR NA CASA &#8599;</a>';
+    + 'style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:700;padding:4px;border-radius:4px;'
+    + 'background:#22c55e;color:#000;text-decoration:none">Entre na BW</a>';
 }
 
 function _cardAlternativa(r, a, escolhidoAtual){
