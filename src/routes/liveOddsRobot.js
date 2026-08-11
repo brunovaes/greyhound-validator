@@ -240,26 +240,36 @@ let _onClose = null; // callback(fechamento) — grava a principal no banco no p
 // Ele muda pouco (corridas entram/saem a cada ~1min), entao descobrimos so a cada
 // ~30s e mantemos a ultima lista boa quando a descoberta falha — enquanto as ODDS
 // de cada corrida (gameEvents, outro endpoint) continuam de 5 em 5s.
-const DISCOVERY_TTL_MS = 30000;
+const DISCOVERY_TTL_MS = 30000;       // quando DA CERTO, cacheia a lista por 30s
+const DISCOVERY_COOLDOWN_MS = 10000;  // quando FALHA, tenta de novo em ~10s (nao 30s)
+const DISCOVERY_TENTATIVAS = 3;       // betwinner bloqueia INTERMITENTE — retry na hora
 let _listaCache = { races: [], ts: 0, ok: false };
+let _descobrindo = false;
 
 async function obterCorridas() {
   const agora = Date.now();
-  // Respeita o TTL mesmo quando a ultima descoberta FALHOU. O gate e' puramente
-  // pelo timestamp (ts): apos qualquer tentativa — deu certo ou 406 — espera
-  // DISCOVERY_TTL_MS antes de bater de novo. Antes, o gate exigia ok=true, entao
-  // com o betwinner em 406 continuo ele nunca ficava "fresco" e martelava a cada 5s.
-  if (_listaCache.ts && (agora - _listaCache.ts) < DISCOVERY_TTL_MS) return _listaCache.races;
+  // Gate por timestamp: se DEU CERTO, segura 30s; se FALHOU, tenta de novo em 10s.
+  const janela = _listaCache.ok ? DISCOVERY_TTL_MS : DISCOVERY_COOLDOWN_MS;
+  if (_listaCache.ts && (agora - _listaCache.ts) < janela) return _listaCache.races;
+  if (_descobrindo) return _listaCache.races; // ja tem uma descoberta em andamento (nao sobrepoe)
+  _descobrindo = true;
   try {
-    const races = await listarCorridasAoVivo();
-    _listaCache = { races, ts: agora, ok: true };
-    return races;
-  } catch (e) {
-    _listaCache.ts = agora;   // adia a proxima tentativa por DISCOVERY_TTL_MS
-    _listaCache.ok = false;
-    addLog('warn', 'descoberta falhou (' + e.message + ') — mantendo ultima lista (' + _listaCache.races.length + ')');
+    // O betwinner responde de forma INTERMITENTE: ora o JSON certo, ora uma pagina
+    // HTML anti-bot, ora timeout. Como ~metade das batidas passa, algumas tentativas
+    // seguidas (com um pequeno intervalo) sobem a taxa de sucesso pra ~90% e a gente
+    // deixa de perder corridas que largam durante uma janela ruim.
+    let ultimoErro;
+    for (let i = 0; i < DISCOVERY_TENTATIVAS; i++) {
+      try {
+        const races = await listarCorridasAoVivo();
+        _listaCache = { races, ts: Date.now(), ok: true };
+        return races;
+      } catch (e) { ultimoErro = e; if (i < DISCOVERY_TENTATIVAS - 1) await new Promise(r => setTimeout(r, 1500)); }
+    }
+    _listaCache.ts = Date.now(); _listaCache.ok = false; // mantem a ultima lista boa; retry em ~10s
+    addLog('warn', 'descoberta falhou ' + DISCOVERY_TENTATIVAS + 'x (' + String((ultimoErro && ultimoErro.message) || '').slice(0, 40) + ') — mantendo lista (' + _listaCache.races.length + '), novo retry em ~' + (DISCOVERY_COOLDOWN_MS / 1000) + 's');
     return _listaCache.races;
-  }
+  } finally { _descobrindo = false; }
 }
 
 async function umCiclo(getScores) {
