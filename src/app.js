@@ -861,13 +861,8 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
     + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
-    // ESCOLHIDO e a logo de apostar ficam numa coluna de largura FIXA, com os
-    // dois esticados (width:100%). Sem isso o botao tinha a largura do texto e
-    // a imagem a largura dela — ficavam desalinhados um sobre o outro.
-    + '<div style="display:flex;flex-direction:column;align-items:stretch;gap:5px;width:130px;margin:6px auto 0">'
-    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="width:100%;font-size:10px;font-weight:700;padding:3px 0;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
-    + '</div>'
     + '</div>'
     // Dog und (direita, espelhado — corre para esquerda)
     + '<div class="fp-dog-side fp-dog-und">'
@@ -933,18 +928,9 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 function _botaoApostar(r){
   var link = _linkBetwinner(r && r._snapAoVivo);
   if(!link) return '';
-  // A IMAGEM e' o botao: sem caixa de fundo, largura total do container e
-  // altura proporcional (height:auto). A tentativa anterior punha a arte
-  // dentro de um retangulo azul de altura fixa, e ela ficava espremida no
-  // meio de um fundo que nao era dela.
-  // Se o arquivo faltar, o onerror troca por um rotulo — link invisivel numa
-  // acao que envolve dinheiro seria pior que um rotulo feio.
-  return '<a href="'+link+'" target="_blank" rel="noopener" title="Apostar na casa" '
-    + 'style="display:block;width:100%;line-height:0;text-decoration:none">'
-    + '<img src="'+BASE+'/static/img/apostar_bw.png" alt="Apostar" '
-    +   'style="width:100%;height:auto;display:block" '
-    +   'onerror="this.outerHTML=\'<span style=&quot;display:block;padding:5px;background:#1d4ed8;color:#fff;font-size:10px;font-weight:800;text-align:center;border-radius:5px&quot;>APOSTAR</span>\'">'
-    + '</a>';
+  return '<a href="'+link+'" target="_blank" rel="noopener" '
+    + 'style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:800;padding:5px;border-radius:4px;'
+    + 'background:#1d4ed8;color:#fff;text-decoration:none;letter-spacing:.3px">APOSTAR NA CASA &#8599;</a>';
 }
 
 function _cardAlternativa(r, a, escolhidoAtual){
