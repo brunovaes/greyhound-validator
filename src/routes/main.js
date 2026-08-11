@@ -1200,6 +1200,54 @@ router.post('/sessao/:id/deletar', (req, res) => {
   res.redirect(BASE + '/historico');
 });
 
+// ── AvB Motor x AvB BW ──────────────────────────────────────────────────────
+// AvB Motor : o par da analise global (trap_fav x trap_und). Sempre existe.
+// AvB BW    : o par que de fato valia na hora de apostar, com prioridade
+//             1) a SUA escolha (race_user_data.avb_escolhido)
+//             2) senao, a principal da reanalise (races.avb_fechamento)
+//             3) senao, vazio — a corrida nao abriu no ao vivo, ou nenhum AvB
+//                aberto tinha valor.
+//
+// O "bateu" e a "odd" seguem o BW quando ele existe; sem BW, seguem o Motor.
+// E' a regra que reflete a aposta que realmente valeu.
+function _parBW(r){
+  var esc = _jsonOuNull(r.avb_escolhido);
+  if (esc) { esc._origem = 'sua escolha'; return esc; }
+  var fec = _jsonOuNull(r.avb_fechamento);
+  if (fec) { fec._origem = 'reanálise'; return fec; }
+  return null;
+}
+// Celula do AvB BW, no MESMO formato visual da coluna do Motor: badge do trap,
+// nome embaixo, "vs" no meio. Se nao ha BW, celula vazia com um traco.
+function _celulaBW(r){
+  var av = _parBW(r);
+  if(!av){
+    return '<td style="text-align:center;vertical-align:middle;color:#444;font-size:11px">—</td>';
+  }
+  var lado = function(trap, nome){
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
+      + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
+      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(nome||'')+'</div>'
+      + '</div>';
+  };
+  var nums = [];
+  if (av.reanalisePct != null) nums.push('rean ' + av.reanalisePct + '%');
+  if (av.marketPct != null) nums.push('mkt ' + av.marketPct + '%');
+  if (av.odd != null) nums.push('odd ' + av.odd);
+  var e = av.edge;
+  var edgeStr = (e == null) ? '' : ' <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'#666'))+';font-weight:700">'+(e>0?'+':'')+e+'</span>';
+
+  return '<td style="text-align:center;vertical-align:middle">'
+    + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
+    +   lado(av.aTrap, av.aNome)
+    +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
+    +   lado(av.bTrap, av.bNome)
+    + '</div>'
+    + '<div style="font-size:8px;color:#1d4ed8;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-top:3px">'+av._origem+'</div>'
+    + '<div style="font-size:8.5px;color:#777">'+nums.join(' &middot; ')+edgeStr+'</div>'
+    + '</td>';
+}
+
 // ── AvB do Historico: fechamento (objetivo) x escolha (pessoal) ─────────────
 // races.avb_fechamento  -> foto da principal da reanalise no instante da
 //                          largada. Escrita SO pelo robo, igual pra todos.
@@ -1253,6 +1301,24 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(sess.id);
   // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
   aplicarPessoais(db, races, user.id);
+
+  // "Bateu" e "Odd" passam a refletir o AvB que REALMENTE valia: o BW quando
+  // existe (sua escolha, senao a principal da reanalise), e o do Motor quando
+  // nao existe. Sem isto a tela mostraria o acerto de uma disputa e o par de
+  // outra — a reanalise troca o par com frequencia.
+  // O bateu e' DERIVADO da chegada (finishing_order_json) com bateuPar, a
+  // mesma funcao usada nos KPIs, pra os dois numeros nunca discordarem.
+  // null (trap fora da chegada) fica como "-", nem acerto nem erro.
+  {
+    const { bateuPar } = require('../utils/avbResultado');
+    for (const r of races) {
+      const bw = _parBW(r);
+      if (!bw) continue;
+      const b = bateuPar(r.finishing_order_json, bw.aTrap, bw.bTrap);
+      r.bateu = (b === null) ? '' : (b ? 'sim' : 'nao');
+      if (bw.odd != null && (r.odd == null || r.odd === '')) r.odd = bw.odd;
+    }
+  }
   const racesValidas = races.filter(r=>r.nivel!=='skip');
   const skipCount = races.length - racesValidas.length;
   const resolvidas = racesValidas.filter(r=>r.bateu).length;
@@ -1293,7 +1359,7 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:105px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:150px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:140px">AvB</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:150px">Resultado</th><th style="width:60px">🚩</th><th>Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:105px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:150px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:140px">AvB Motor</th><th style="width:140px">AvB BW</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:150px">Resultado</th><th style="width:60px">🚩</th><th style="width:150px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -1315,8 +1381,8 @@ ${r.perfil_fav?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_und||'').split(' ')[0]}</div>
 ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perfil_und}</div>`:''}
 </div></div>
-${_avbsDoHistorico(r)}
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
+${_celulaBW(r)}
 <td style="text-align:center"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>
 <option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
