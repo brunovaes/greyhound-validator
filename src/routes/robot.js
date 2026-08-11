@@ -2102,6 +2102,35 @@ router.get('/odds/diag/champs', requireAdmin, (req, res) => {
   res.json({ total: lista.length, encontrou: q ? filtradas.length : undefined, pistas: filtradas });
 });
 
+// DIAGNOSTICO (somente leitura): lista os PDFs salvos no disco hoje e, pra cada
+// corrida SKIP, mostra os candidatos (arquivos com o mesmo horario) e se o
+// casamento por pista achou o PDF. Serve pra descobrir por que algumas corridas
+// (Pelaw, CPark) aparecem como "sem PDF": arquivo nao existe? horario diferente?
+// nome que nao casa? Nao altera nada.
+router.get('/diag/pdfs', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = req.query.date || getTodayDate();
+    const dir = getPdfDir(date);
+    let arquivos = [];
+    try { arquivos = fs.readdirSync(dir); }
+    catch (e) { return res.json({ date, dir, erro: 'pasta inacessivel: ' + e.message, total_pdfs: 0, pdfs: [] }); }
+    const pdfs = arquivos.filter(f => /\.pdf$/i.test(f)).sort();
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.nivel FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.nivel='skip' ORDER BY r.hora"
+    ).all(date);
+    const corridas_skip = rows.map(r => {
+      const tf = formatTime(r.hora);
+      const trackAbbr = (r.corrida || '').split(' ')[0].toLowerCase();
+      const candidatos = pdfs.filter(f => f.startsWith(tf));
+      const achado = encontrarPdfDaCorrida(pdfs, tf, trackAbbr) || null;
+      return { hora: r.hora, corrida: r.corrida, timeFormatted: tf, trackAbbr, candidatos, achado };
+    });
+    res.json({ date, dir, total_pdfs: pdfs.length, pdfs, corridas_skip });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // DIAGNOSTICO (somente leitura): das corridas de HOJE que estao no sistema
 // (carregadas), quantas entram no perfil A1-A12 + 400-500m — e quais ficam de
 // fora e por que. Ajuda a entender "poucas corridas apresentadas". Nao altera nada.
