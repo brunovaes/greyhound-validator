@@ -253,6 +253,7 @@ const migrations = [
   // Vazio/nulo = cai no filtro antigo, entao nada quebra em quem ja usava.
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT",
   "ALTER TABLE races ADD COLUMN hist_full TEXT", // 11/08 — historico dos 6 galgos (nao so os elegiveis), p/ a reanalise par-a-par ao vivo
+  "ALTER TABLE races ADD COLUMN avb_fechamento TEXT", // 11/08 — foto da principal (pos 1) da reanalise no instante da largada, gravada pelo robo (objetivo, compartilhado)
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

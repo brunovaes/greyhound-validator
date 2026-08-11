@@ -233,6 +233,7 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
 // O casamento analise<->corrida do betwinner (por pista+horario) fica no chamador
 // (robot.js), que tem acesso ao banco.
 let timer = null;
+let _onClose = null; // callback(fechamento) — grava a principal no banco no post (setado por iniciar)
 
 // Cache da DESCOBERTA de pistas/corridas. O GetSportsShortZip (a lista de quais
 // corridas estao ao vivo) e' o endpoint que toma 406 quando batido de 5 em 5s.
@@ -272,8 +273,9 @@ async function umCiclo(getScores) {
     // getScores(r) devolve { scores, histFull, dataCard, corrida, hora } da analise
     // casada, ou null. histFull alimenta a reanalise; scores alimenta os sugeridos.
     const analise = (typeof getScores === 'function') ? (getScores(r) || null) : null;
+    const prev = status.porCorrida[chave] || {};
     let snap;
-    try { snap = await snapshotCorrida(r.gameId, analise, (status.porCorrida[chave] || {}).avbs); }
+    try { snap = await snapshotCorrida(r.gameId, analise, prev.avbs); }
     catch (e) { addLog('warn', `${r.track} ${r.raceNum}: ${e.message}`); continue; }
     status.porCorrida[chave] = {
       gameId: r.gameId, li: r.li, track: r.track, pista: r.pista, raceNum: r.raceNum,
@@ -283,9 +285,29 @@ async function umCiclo(getScores) {
       sugeridos: (analise && analise.scores) ? sugerirAvbs(analise.scores) : [],
       temAnalise: !!(analise && (analise.histFull || analise.scores)),
       analiseCorrida: analise ? (analise.corrida || null) : null, // casa com o front
+      hora: (analise && analise.hora) || prev.hora || null,       // p/ casar a linha no banco no fechamento
+      fechado: prev.fechado || false,                             // ja gravou o fechamento? (persiste entre ciclos)
       updatedAt: Date.now()
     };
   }
+
+  // FECHAMENTO: no instante em que a corrida larga (agora >= startTs), grava a
+  // principal (pos 1) da reanalise no historico — AUTOMATICO, sem depender de tela
+  // nem de login. O _onClose (robot.js) casa a linha e grava so uma vez (guarda no
+  // proprio SQL), entao disparar de novo e' inofensivo.
+  const agoraS = Math.floor(Date.now() / 1000);
+  for (const id of Object.keys(status.porCorrida)) {
+    const e = status.porCorrida[id];
+    if (e.fechado || !e.startTs || agoraS < e.startTs) continue;
+    e.fechado = true; // marca sempre (mesmo sem ter o que gravar) p/ nao reprocessar
+    if (!e.temAnalise || !e.avbs || !e.avbs.length) continue; // sem principal p/ gravar
+    if (typeof _onClose === 'function') {
+      try {
+        _onClose({ corrida: e.analiseCorrida, hora: e.hora, gameId: e.gameId, track: e.track, principal: e.avbs[0], fechadoEm: agoraS });
+      } catch (err) { addLog('warn', 'onClose ' + (e.analiseCorrida || e.gameId) + ': ' + err.message); }
+    }
+  }
+
   // limpa corridas que sairam de cena (nao estao mais abertas)
   const abertasIds = new Set(abertas.map(r => r.gameId));
   for (const id of Object.keys(status.porCorrida)) {
@@ -301,6 +323,7 @@ async function umCiclo(getScores) {
 function iniciar(getScores, opts) {
   opts = opts || {};
   const intervaloMs = opts.intervaloMs || 5000;
+  _onClose = (typeof opts.onClose === 'function') ? opts.onClose : null; // grava o fechamento no banco
   if (status.running) { addLog('warn', 'ja esta rodando'); return; }
   status.running = true; status.stopRequested = false;
   addLog('ok', 'robo de odds ao vivo iniciado (loop ' + Math.round(intervaloMs / 1000) + 's)');

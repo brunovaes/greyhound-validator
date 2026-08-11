@@ -388,7 +388,34 @@ function _dentroJanelaOdds(){
     return brt>=(s[0]*60+s[1]) && brt<=(e[0]*60+e[1]);
   }catch(e){ return true; }
 }
-try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds }); }
+// Grava a foto da principal (pos 1) da reanalise no instante da largada, na
+// coluna COMPARTILHADA avb_fechamento. Objetivo (igual p/ todos), automatico,
+// SEM depender de tela nem de login — quem dispara e' o robo (servidor). Grava
+// so UMA vez (guarda "avb_fechamento IS NULL"), entao repetir e' inofensivo.
+function _gravarFechamentoAvb(fech){
+  try{
+    if(!fech || !fech.corrida || !fech.principal) return;
+    const { db } = require('../db/database');
+    const date=getTodayDate();
+    const p=fech.principal;
+    const registro={
+      aTrap:p.aTrap, aNome:p.aNome, bTrap:p.bTrap, bNome:p.bNome,
+      odd:p.oddAvenceB, marketPct:p.marketPct,
+      reanalisePct:p.reanalisePct, motorOrigPct:p.motorOrigPct, edge:p.edge,
+      origem:(p.reanalisePct!=null?'reanalise':'fallback'),
+      gameId:fech.gameId, ts:fech.fechadoEm
+    };
+    const row = fech.hora
+      ? db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.hora=? AND r.avb_fechamento IS NULL LIMIT 1").get(date, fech.corrida, fech.hora)
+      : db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.avb_fechamento IS NULL LIMIT 1").get(date, fech.corrida);
+    if(row){
+      db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?').run(JSON.stringify(registro), row.id);
+      console.log('[ODDS-FECHAMENTO] '+fech.corrida+' '+(fech.hora||'')+' -> T'+registro.aTrap+'xT'+registro.bTrap+' odd '+registro.odd+' ('+registro.origem+')');
+    }
+  }catch(e){ console.error('[ODDS-FECHAMENTO] erro:', e.message); }
+}
+
+try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds, onClose: _gravarFechamentoAvb }); }
 catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
 
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
@@ -2024,7 +2051,7 @@ router.get('/odds/live', requireAdmin, (req, res) => {
 });
 router.post('/odds/stop', requireAdmin, (req, res) => { liveOddsModule.parar(); res.json({ ok: true }); });
 router.post('/odds/start', requireAdmin, (req, res) => {
-  try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds }); res.json({ ok: true }); }
+  try { liveOddsModule.iniciar(_scoresParaCorridaAoVivo, { intervaloMs: 5000, podeRodar: _dentroJanelaOdds, onClose: _gravarFechamentoAvb }); res.json({ ok: true }); }
   catch(e){ res.status(500).json({ error: e.message }); }
 });
 
