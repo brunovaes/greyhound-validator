@@ -28,6 +28,22 @@ const HOSTS = (process.env.BETWINNER_HOSTS
   : ['betwinner1.com', 'betwinner.com', 'betwinner2.com', 'betwinner3.com', 'betwinner6.com', 'betwinner9.com', 'betwinnersport.com']);
 let _hostBom = null; // dominio que funcionou por ultimo (tentado primeiro no proximo ciclo)
 
+// Proxy OPCIONAL, so pra DESCOBERTA. Se BETWINNER_PROXY_URL estiver setado (ex.:
+// "http://user:pass@gate.decodo.com:7000"), a descoberta sai por um IP residencial
+// limpo — contorna o anti-bot intermitente do betwinner no IP do Railway. Sem a
+// env, TUDO continua direto como hoje (custo zero). As odds (gameEvents) nunca usam
+// o proxy. Pra ligar: setar BETWINNER_PROXY_URL no Railway. Nada mais.
+let _proxyAgent = null;
+(function initProxy() {
+  const url = process.env.BETWINNER_PROXY_URL;
+  if (!url) return;
+  try {
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    _proxyAgent = new HttpsProxyAgent(url);
+    console.log('[ODDS] proxy de descoberta ATIVO');
+  } catch (e) { console.error('[ODDS] BETWINNER_PROXY_URL setado mas https-proxy-agent indisponivel:', e.message); }
+})();
+
 // Casamento de pista por NOME: o feed do betwinner traz o nome da pista (ex.
 // "Nottingham"), e a gente reverte pelo nomesPistas do sistema. Zero ID
 // hardcodado — funciona pra qualquer pista que exista no nomesPistas.
@@ -79,10 +95,12 @@ function headersPara(host) {
     'X-Requested-With': 'XMLHttpRequest'
   };
 }
-function httpGetJson(url, host) {
+function httpGetJson(url, host, agent) {
   return new Promise((resolve, reject) => {
     const headers = Object.assign(headersPara(host || 'betwinner1.com'), { 'Accept-Encoding': 'gzip, deflate, br' });
-    const req = https.get(url, { headers }, res => {
+    const opts = { headers };
+    if (agent) opts.agent = agent; // proxy residencial (so na descoberta, se ligado)
+    const req = https.get(url, opts, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       // Descomprime conforme o Content-Encoding (o endpoint "...Zip" costuma vir gzip).
       const enc = String(res.headers['content-encoding'] || '').toLowerCase();
@@ -115,12 +133,13 @@ function httpGetJson(url, host) {
 // Busca um path do feed tentando os dominios-espelho em ordem. Gruda no primeiro
 // que responder (2xx) e o usa primeiro no proximo ciclo; so re-varre a lista se ele
 // voltar a falhar. Assim, quando um espelho funciona, nao fica testando os outros a toa.
-async function fetchFeed(path) {
+async function fetchFeed(path, useProxy) {
+  const agent = (useProxy && _proxyAgent) ? _proxyAgent : null; // proxy so na descoberta
   const ordem = _hostBom ? [_hostBom].concat(HOSTS.filter(h => h !== _hostBom)) : HOSTS.slice();
   let ultimoErro;
   for (const host of ordem) {
     try {
-      const json = await httpGetJson(`https://${host}/service-api${path}`, host);
+      const json = await httpGetJson(`https://${host}/service-api${path}`, host, agent);
       if (host !== _hostBom) { _hostBom = host; addLog('ok', 'dominio ativo: ' + host); }
       return json;
     } catch (e) {
@@ -134,7 +153,7 @@ async function fetchFeed(path) {
 // Passo 1: quais pistas de galgo estao ao vivo agora. SEM champs, o feed
 // devolve o esporte 68 com a lista `L` de champs (pista) ao vivo — so os IDs.
 async function descobrirChampsAoVivo() {
-  const data = await fetchFeed('/LiveFeed/GetSportsShortZip?sports=68&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true');
+  const data = await fetchFeed('/LiveFeed/GetSportsShortZip?sports=68&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true', true);
   const sport = ((data && data.Value) || []).find(s => s.I === 68);
   return ((sport && sport.L) || []).map(c => c.LI).filter(Boolean);
 }
@@ -145,7 +164,7 @@ async function listarCorridasAoVivo(champsIds) {
   let champs = (champsIds && champsIds.length) ? champsIds : null;
   if (!champs) { try { champs = await descobrirChampsAoVivo(); } catch (e) { champs = []; } }
   if (!champs || !champs.length) return [];
-  const disc = await fetchFeed(`/LiveFeed/GetSportsShortZip?sports=68&champs=${champs.join(',')}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`);
+  const disc = await fetchFeed(`/LiveFeed/GetSportsShortZip?sports=68&champs=${champs.join(',')}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`, true);
   return parseLiveRaces(disc).map(r => {
     const pista = pistaPorNome(r.track);
     if (!pista && r.track) status.pistasNovas[r.track] = (r.li || '?'); // nome que nao casou no nomesPistas
