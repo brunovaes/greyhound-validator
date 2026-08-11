@@ -1200,6 +1200,52 @@ router.post('/sessao/:id/deletar', (req, res) => {
   res.redirect(BASE + '/historico');
 });
 
+// ── AvB do Historico: fechamento (objetivo) x escolha (pessoal) ─────────────
+// races.avb_fechamento  -> foto da principal da reanalise no instante da
+//                          largada. Escrita SO pelo robo, igual pra todos.
+// race_user_data.avb_escolhido -> o par em que ESTE usuario entrou.
+//
+// Regra de exibicao: sem escolha, mostra so o fechamento; escolha igual ao
+// fechamento, mostra um so (nao duplica); divergiram, mostra os DOIS lado a
+// lado — e' o que permite comparar, ao longo do tempo, se escolher na mao
+// esta ajudando ou atrapalhando.
+function _jsonOuNull(txt){
+  if(!txt) return null;
+  try { var o = typeof txt === 'string' ? JSON.parse(txt) : txt; return (o && o.aTrap != null) ? o : null; }
+  catch(e){ return null; }
+}
+function _mesmoPar(x, y){
+  return x && y && String(x.aTrap)===String(y.aTrap) && String(x.bTrap)===String(y.bTrap);
+}
+// Bloco compacto de um par, pro Histórico. rotulo identifica a origem.
+function _blocoAvb(av, rotulo, cor){
+  if(!av) return '';
+  var nums = [];
+  if(av.reanalisePct != null) nums.push('rean ' + av.reanalisePct + '%');
+  if(av.motorOrigPct != null) nums.push('motor ' + av.motorOrigPct + '%');
+  if(av.marketPct != null) nums.push('mkt ' + av.marketPct + '%');
+  if(av.odd != null) nums.push('odd ' + av.odd);
+  var e = av.edge;
+  var edgeStr = (e == null) ? '' : ' <span style="color:' + (e > 0 ? '#22c55e' : (e < 0 ? '#ef4444' : '#666')) + ';font-weight:700">' + (e > 0 ? '+' : '') + e + '</span>';
+  var semRean = (av.origem === 'fallback' || av.reanalisePct == null)
+    ? '<span title="a reanalise nao rodou nesta corrida" style="font-size:8px;color:#eab308;margin-left:4px">sem reanálise</span>' : '';
+  return '<div style="border-left:2px solid ' + cor + ';padding-left:6px;margin-top:4px;text-align:left">'
+    + '<div style="font-size:8px;color:' + cor + ';font-weight:800;text-transform:uppercase;letter-spacing:.4px">' + rotulo + semRean + '</div>'
+    + '<div style="font-size:10px;color:#cbd5e1;font-weight:700">T' + av.aTrap + ' &times; T' + av.bTrap + '</div>'
+    + '<div style="font-size:8.5px;color:#777">' + nums.join(' &middot; ') + edgeStr + '</div>'
+    + '</div>';
+}
+// Devolve o HTML dos blocos conforme a regra de prioridade.
+function _avbsDoHistorico(r){
+  var fech = _jsonOuNull(r.avb_fechamento);
+  var esc  = _jsonOuNull(r.avb_escolhido);
+  if(!fech && !esc) return '';
+  if(esc && !fech) return _blocoAvb(esc, 'sua escolha', '#1d4ed8');
+  if(fech && !esc) return _blocoAvb(fech, 'fechamento', '#22c55e');
+  if(_mesmoPar(esc, fech)) return _blocoAvb(esc, 'escolha = fechamento', '#22c55e');
+  return _blocoAvb(esc, 'sua escolha', '#1d4ed8') + _blocoAvb(fech, 'fechamento do motor', '#22c55e');
+}
+
 router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
   const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
@@ -1269,6 +1315,7 @@ ${r.perfil_fav?`<div style="font-size:9px;color:#666;text-align:center">${r.perf
 <div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_und||'').split(' ')[0]}</div>
 ${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perfil_und}</div>`:''}
 </div></div>
+${_avbsDoHistorico(r)}
 <a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
 <td style="text-align:center"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>

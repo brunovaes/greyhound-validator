@@ -521,7 +521,12 @@ async function syncFromServer() {
       cur.cardSuspect = !!r.card_suspect;
       cur.betEntrou = !!r.bet_entrou;
       cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:2.5;
-      cur.scores = r.scores || cur.scores; // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
+      cur.scores = r.scores || cur.scores;
+      // Escolha vinda do banco (campo pessoal). So adota se o cliente ainda
+      // nao tem uma: o que esta na tela e' mais recente que o que veio.
+      if (!cur.avbEscolhido && r.avb_escolhido) {
+        try { var _e = JSON.parse(r.avb_escolhido); if(_e && _e.aTrap!=null) cur.avbEscolhido = { a:_e.aTrap, b:_e.bTrap, odd:_e.odd||null, em:(_e.ts||0)*1000 }; } catch(e){}
+      } // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
       try { cur.eliminados = r.eliminados?JSON.parse(r.eliminados):[]; } catch(e){ cur.eliminados = cur.eliminados||[]; }
       cur.flagAtrasada = !!r.flag_atrasada;
       cur.id = r.id;
@@ -1050,6 +1055,38 @@ function _aplicarOdd(valor){
   updateFocusField('odd', v);
 }
 
+// Persiste o AvB escolhido no banco, como campo PESSOAL. Ate agora ele vivia
+// so em memoria/sessionStorage: recarregar a pagina perdia a escolha e o
+// Historico nao tinha o que ler.
+// Guarda o snapshot inteiro (par + odd + percentuais) porque a odd e os % do
+// momento da escolha sao o que importa depois — daqui a uma hora o mercado ja
+// mudou e nao da mais pra reconstruir.
+function _persistirEscolha(r, escolha){
+  if(!r || !r.id) return;                       // corrida ainda nao salva
+  var txt = escolha ? JSON.stringify(escolha) : '';
+  fetch(BASE+'/api/race/'+r.id, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ avb_escolhido: txt })
+  }).catch(function(e){ console.error('[avb] falhou ao salvar a escolha', e); });
+}
+
+// Monta o snapshot a partir do AvB ao vivo daquele par, pra guardar os
+// numeros do momento junto com a escolha.
+function _snapshotDoPar(r, ta, tb, odd){
+  var l=(r&&r._avbsAoVivo)||[];
+  var a=l.find(function(x){ return String(x.aTrap)===String(ta) && String(x.bTrap)===String(tb); }) || {};
+  return {
+    aTrap: ta, aNome: _nomeDoTrap(r, ta),
+    bTrap: tb, bNome: _nomeDoTrap(r, tb),
+    odd: (odd!=null && odd!=='') ? parseFloat(odd) : (_avbOdd(a)||null),
+    marketPct: a.marketPct!=null ? a.marketPct : null,
+    reanalisePct: _avbRean(a),
+    motorOrigPct: _avbMotorOrig(a),
+    edge: a.edge!=null ? a.edge : null,
+    ts: Math.round(Date.now()/1000)
+  };
+}
+
 function escolherAvb(trapA, trapB, odd){
   var idx=focusRaceIdx, r=results[idx];
   if(!r) return;
@@ -1062,6 +1099,7 @@ function escolherAvb(trapA, trapB, odd){
       'Desfazer',
       function(){
         r.avbEscolhido = null;
+        _persistirEscolha(r, null);
         // A odd tem que acompanhar o par que fica na arena. Sem isto o campo
         // guardava a odd do AvB desfeito — dado errado, e silencioso.
         var p = _parEmFoco(r);
