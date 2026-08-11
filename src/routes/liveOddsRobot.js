@@ -11,6 +11,7 @@
 // A decodificacao fica em ../utils/betwinnerFeed (testado offline e ao vivo).
 
 const https = require('https');
+const zlib = require('zlib');
 const {
   parseLiveRaces, parseRaceMarkets, crossWithEngine, sugerirAvbs
 } = require('../utils/betwinnerFeed');
@@ -80,11 +81,31 @@ function headersPara(host) {
 }
 function httpGetJson(url, host) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: headersPara(host || 'betwinner1.com') }, res => {
+    const headers = Object.assign(headersPara(host || 'betwinner1.com'), { 'Accept-Encoding': 'gzip, deflate, br' });
+    const req = https.get(url, { headers }, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
-      let data = ''; res.setEncoding('utf8');
-      res.on('data', c => data += c);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(new Error('JSON invalido')); } });
+      // Descomprime conforme o Content-Encoding (o endpoint "...Zip" costuma vir gzip).
+      const enc = String(res.headers['content-encoding'] || '').toLowerCase();
+      let stream = res;
+      try {
+        if (enc === 'gzip') stream = res.pipe(zlib.createGunzip());
+        else if (enc === 'deflate') stream = res.pipe(zlib.createInflate());
+        else if (enc === 'br') stream = res.pipe(zlib.createBrotliDecompress());
+      } catch (e) { res.resume(); return reject(new Error('descomprimir: ' + e.message)); }
+      const chunks = [];
+      stream.on('data', c => chunks.push(c));
+      stream.on('error', e => reject(new Error('stream: ' + e.message)));
+      stream.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        try { resolve(JSON.parse(body)); }
+        catch (e) {
+          // Corpo nao-JSON: mostra content-type/encoding + amostra pra diagnosticar
+          // (pagina de desafio anti-bot? outra compressao?). So no log, nao quebra nada.
+          const ct = String(res.headers['content-type'] || '?');
+          const amostra = body.slice(0, 160).replace(/\s+/g, ' ');
+          reject(new Error('JSON invalido [ct=' + ct + ' enc=' + (enc || '-') + ' len=' + body.length + ']: ' + amostra));
+        }
+      });
     });
     req.on('error', reject);
     req.setTimeout(12000, () => req.destroy(new Error('timeout')));
