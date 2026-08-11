@@ -785,7 +785,17 @@ function _parOddAtual(r, ta, tb){
   return null;
 }
 function _avbOdd(a){ return a && (a.oddAvenceB != null ? a.oddAvenceB : a.odd); }
-function _avbMotor(a){ return a && (a.enginePct != null ? a.enginePct : a.avaliacao); }
+// Dois percentuais distintos, entregues pelo robo:
+//   reanalisePct  = motor 2, reanalise par-a-par (pode vir null em analise antiga)
+//   motorOrigPct  = motor 1, analise global original, ja orientada pro favorito do par
+// Mantemos enginePct/avaliacao como fallback pra nao quebrar com dado antigo.
+function _avbRean(a){ return a && a.reanalisePct != null ? a.reanalisePct : null; }
+function _avbMotorOrig(a){
+  if(!a) return null;
+  if(a.motorOrigPct != null) return a.motorOrigPct;
+  return a.enginePct != null ? a.enginePct : (a.avaliacao != null ? a.avaliacao : null);
+}
+function _avbMotor(a){ return _avbRean(a) != null ? _avbRean(a) : _avbMotorOrig(a); }
 
 function renderFocusPanel(r, idx) {
   var focusCol = document.getElementById('focus-col');
@@ -946,10 +956,14 @@ function _cardAlternativa(r, a, escolhidoAtual){
   var edge = a.edge;
   var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'%</span>';
   var selo = a.valor ? '<span style="font-size:9px;color:#eab308;font-weight:800">&#9733; valor</span>' : '';
+  // Ordem: reanalise, motor original, mercado, odd, edge. Quando nao ha
+  // reanalise (analise antiga), some a "rean" e fica so o motor original.
+  var rean=_avbRean(a), motorOrig=_avbMotorOrig(a);
   var nums=[];
-  if(odd!=null) nums.push('odd <strong style="color:#cbd5e1">'+odd+'</strong>');
+  if(rean!=null) nums.push('rean <strong style="color:#22c55e">'+rean+'%</strong>');
+  if(motorOrig!=null) nums.push('motor '+motorOrig+'%');
   if(a.marketPct!=null) nums.push('mkt '+a.marketPct+'%');
-  if(motor!=null) nums.push('motor '+motor+'%');
+  if(odd!=null) nums.push('odd <strong style="color:#cbd5e1">'+odd+'</strong>');
 
   return '<div class="fp-alt-card" style="'+opaco+'background:var(--sur2);border:1px solid '+borda+';border-radius:8px;padding:7px 8px">'
     + '<div style="display:flex;align-items:center;justify-content:center;gap:4px">'
@@ -1152,7 +1166,9 @@ function _pintaOddsLive(r, d){
           // avbs[0] do robo, entao escolher uma alternativa deixava o topo da
           // tela exibindo par e odd de OUTRA disputa — dado errado no lugar
           // mais visivel.
-          var top = avbs[0];
+          // A principal e' a de pos===1 (o robo ja rankeia). Cai no primeiro da
+          // lista se o campo pos ainda nao vier.
+          var top = avbs.find(function(x){ return x.pos === 1; }) || avbs[0];
           if (r.avbEscolhido) {
             var _ach = avbs.find(function(x){
               return String(x.aTrap)===String(r.avbEscolhido.a) && String(x.bTrap)===String(r.avbEscolhido.b);
@@ -1163,7 +1179,10 @@ function _pintaOddsLive(r, d){
           var edgeH = (e==null)?'':' &middot; <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'var(--mut)'))+';font-weight:700">edge '+(e>0?'+':'')+e+'</span>';
           hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>'
             + '<div style="font-size:12px;color:#cbd5e1;font-weight:700;white-space:nowrap">T'+top.aTrap+'&times;T'+top.bTrap+' &middot; '+top.oddAvenceB+'</div>'
-            + '<div style="font-size:9px;color:var(--mut);white-space:nowrap">mkt '+top.marketPct+'%'+edgeH+'</div>';
+            + '<div style="font-size:9px;color:var(--mut);white-space:nowrap">'
+            +   (_avbRean(top)!=null ? 'rean <span style="color:#22c55e;font-weight:700">'+_avbRean(top)+'%</span> &middot; ' : '')
+            +   (_avbMotorOrig(top)!=null ? 'motor '+_avbMotorOrig(top)+'% &middot; ' : '')
+            +   'mkt '+top.marketPct+'%'+edgeH+'</div>';
         } else if(sug.length){
           var s0 = sug[0];
           hb.innerHTML = '<div style="font-size:9px;color:#f59e0b;font-weight:800;letter-spacing:.5px">&#9889; SUGERIDO</div>'
@@ -1178,8 +1197,12 @@ function _pintaOddsLive(r, d){
       r._snapAoVivo = snap;   // guarda o snapshot pro link da casa
       var box3 = document.getElementById('fp-alts');
       var lista3 = avbs.length ? avbs : sug;
+      // Depois da hora exata da largada, as alternativas somem e fica so a
+      // principal: nao ha mais o que escolher, e manter 3 opcoes na tela
+      // convida a clicar em algo que ja nao vale.
+      var _largou = snap.startTs && (Date.now()/1000 >= snap.startTs);
       if(box3){
-        if(lista3.length > 1){
+        if(lista3.length > 1 && !_largou){
           box3.innerHTML = lista3.slice(1,3).map(function(a){ return _cardAlternativa(r, a, r.avbEscolhido); }).join('');
           box3.style.display = 'flex';   // so ocupa espaco quando ha alternativa
         } else { box3.innerHTML=''; box3.style.display='none'; }
