@@ -18,6 +18,12 @@ const cardMonitorModule = require('./cardMonitorRobot');
 const { runCardMonitorRobot, getMonitorStatus } = cardMonitorModule;
 const finalCheckModule = require('./finalCheckRobot');
 const { trackAbbrMatches } = require('./cardMonitorRobot');
+const { NOMES_PISTAS } = require('../utils/nomesPistas');
+// Mapa CODIGO(lower) -> nome completo, p/ casar PDF cujo arquivo guarda so UMA
+// palavra do nome (o coletor salva "Star Pelaw" como "Star", "Central Park" como
+// "Central"). Ex.: 'pelaw' -> 'Star Pelaw'.
+const NOME_COMPLETO_POR_CODIGO = {};
+for (const cod in NOMES_PISTAS) NOME_COMPLETO_POR_CODIGO[cod.toLowerCase()] = NOMES_PISTAS[cod];
 const { runFinalCheckRobot, getFinalCheckStatus } = finalCheckModule;
 const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
@@ -589,9 +595,18 @@ function getPdfDir(date) {
 // automatico nem pelo reprocessamento do dia).
 function encontrarPdfDaCorrida(arquivos, timeFormatted, trackAbbr) {
   const candidatos = arquivos.filter(f => f.startsWith(timeFormatted));
+  // Nome completo da pista (ex.: 'pelaw' -> 'Star Pelaw') p/ casar quando o
+  // arquivo guarda so UMA palavra do nome. Casa pelo nome inteiro OU por
+  // qualquer palavra dele — cobre "Star" de "Star Pelaw", "Central" de "Central
+  // Park", "Dunstall" de "Dunstall Park", "Shelbourne" de "Shelbourne Park".
+  const nomeCompleto = NOME_COMPLETO_POR_CODIGO[(trackAbbr || '').toLowerCase()] || '';
+  const fullNorm = nomeCompleto.toLowerCase().replace(/[^a-z]/g, '');
+  const palavrasNorm = nomeCompleto ? nomeCompleto.toLowerCase().split(/\s+/).map(p => p.replace(/[^a-z]/g, '')).filter(Boolean) : [];
   for (const f of candidatos) {
     const nomeArquivo = f.replace(timeFormatted, '').replace(/^_/, '').replace(/\.pdf$/i, '').replace(/_refeito$/i, '');
     if (trackAbbrMatches(trackAbbr, nomeArquivo)) return f;
+    const tok = nomeArquivo.toLowerCase().replace(/[^a-z]/g, '');
+    if (tok && nomeCompleto && (tok === fullNorm || palavrasNorm.indexOf(tok) >= 0)) return f;
   }
   return null;
 }
