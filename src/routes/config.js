@@ -518,6 +518,26 @@ function showTab(id){
 }
 // ===== Dashboard de Desempenho (HR) =====
 function dashHrColor(hr){ return hr>=0.65?'#22c55e':(hr<0.5?'#ef4444':'#eab308'); }
+// KPIs das tres taxas. So aparecem quando o backend devolve resumo.tres —
+// assim a tela nao quebra se rodar contra uma versao anterior do servidor.
+// A "minha" fica vazia enquanto nao houver AvB escolhido: e' o esperado, e o
+// rotulo diz isso em vez de mostrar um traco sem explicacao.
+function dashKpi3(t){
+  if(!t) return '';
+  var bloco=function(rot,o,dica){
+    var pct = (o && o.hr!=null) ? Math.round(o.hr*100)+'%' : '-';
+    var cor = (o && o.hr!=null) ? dashHrColor(o.hr) : '#666';
+    var sub = (o && o.total) ? o.acertos+'/'+o.total : (rot==='Sua escolha' ? 'sem escolhas' : 'sem dados');
+    return '<div title="'+dica+'" style="background:#0D1117;border:1px solid #222;border-radius:8px;padding:12px 16px;min-width:110px;flex:1">'
+      +'<div style="font-size:22px;font-weight:800;color:'+cor+'">'+pct+'</div>'
+      +'<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-top:2px">'+rot+'</div>'
+      +'<div style="font-size:9px;color:#555;margin-top:1px">'+sub+'</div></div>';
+  };
+  return bloco('Sua escolha', t.minha, 'AvBs em que voce entrou')
+       + bloco('Reanalise',   t.rean,  'principal da reanalise no fechamento')
+       + bloco('Motor',       t.motor, 'AvB da analise global original');
+}
+
 function dashKpi(label,val,col){
   return '<div style="background:#0D1117;border:1px solid #222;border-radius:8px;padding:12px 16px;min-width:110px;flex:1">'
     +'<div style="font-size:22px;font-weight:800;color:'+col+'">'+val+'</div>'
@@ -744,7 +764,8 @@ async function carregarDashboard(){
       +dashKpi('HR corrigido',rz.total?Math.round(rz.hr*100)+'%':'-',dashHrColor(rz.hr))
       +dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
       +dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e')
-      +'</div>';
+      +'</div>'
+      + (rz.tres ? '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">'+dashKpi3(rz.tres)+'</div>' : '');
     var pistaRows=(d.porPista||[]).map(function(x){ return {chave:nomePistaCli(x.chave), n:x.n, ac:x.ac, hr:x.hr, hrCru:x.hrCru, err:x.err, amostra:x.amostra}; });
     var corpo = rz.total? (dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',pistaRows)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma corrida nesse recorte.</div>';
     cont.innerHTML=recorte+aviso+kpi+corpo
@@ -1062,7 +1083,8 @@ async function carregarGraf(){
     host.innerHTML = dashKpi('AvBs resolvidos',rz.total,'#f0f0f0')
       + dashKpi('HR corrigido',rz.total?Math.round(rz.hr*100)+'%':'-',dashHrColor(rz.hr))
       + dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
-      + dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e');
+      + dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e')
+      + (rz.tres ? dashKpi3(rz.tres) : '');
     desenharCurvaS(d.serieDiaria);
     desenharPizza(d.porPista, 'graf-pizza', 'n');
     desenharPizza(d.porPista, 'graf-pizza-vit', 'ac');

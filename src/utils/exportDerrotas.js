@@ -244,13 +244,23 @@ function buildDerrotasWorkbook(userId, fromISO, toISO, dbOverride) {
 
 // Coleta todos os AvBs resolvidos (favorito e underdog definidos + resultado
 // que permite derivar o bateu). Se from/to forem nulos, pega tudo (all-time).
+const { bateuPar } = require('./avbResultado');   // fonte unica da regra de "bateu"
+
+// Le o JSON de um par (avb_fechamento / avb_escolhido) sem estourar em dado ruim.
+function _parJson(txt){
+  if(!txt) return null;
+  try { const o = typeof txt==='string' ? JSON.parse(txt) : txt; return (o && o.aTrap!=null) ? o : null; }
+  catch(e){ return null; }
+}
+
 function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
   const db = getDb(dbOverride);
   const rows = db.prepare(
-    `SELECT r.*, s.name AS sessao
+    `SELECT r.*, s.name AS sessao,
+            (SELECT rud.avb_escolhido FROM race_user_data rud WHERE rud.race_id=r.id AND rud.user_id=?) AS avb_escolhido
        FROM races r JOIN race_sessions s ON s.id = r.session_id
       WHERE r.user_id = ?  /* CANONICO: corridas sao do sistema */ AND r.trap_fav > 0 AND r.trap_und > 0`
-  ).all(CANONICO);
+  ).all(userId, CANONICO);
   aplicarPessoais(db, rows, userId);   // odd/valor/aposta do usuario que pediu
   const from = fromISO ? new Date(fromISO + 'T00:00:00') : null;
   const to = toISO ? new Date(toISO + 'T23:59:59') : null;
@@ -282,7 +292,15 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
       hora: r.hora || '',
       dia,
       ord: (dt ? dt.getTime() : 0) + hhmin * 60000,
-      der, raw: r.bateu
+      der, raw: r.bateu,
+      // Tres resultados sobre a MESMA chegada, todos via bateuPar (fonte unica):
+      //   derMotor = AvB da analise global (fav x und)
+      //   derRean  = principal da reanalise no fechamento
+      //   derMinha = o AvB que ESTE usuario escolheu
+      // null = indefinido (trap fora da chegada) -> fica fora do denominador.
+      derMotor: bateuPar(r.finishing_order_json, r.trap_fav, r.trap_und),
+      derRean:  (function(){ const o=_parJson(r.avb_fechamento); return o ? bateuPar(r.finishing_order_json,o.aTrap,o.bTrap) : null; })(),
+      derMinha: (function(){ const o=_parJson(r.avb_escolhido);  return o ? bateuPar(r.finishing_order_json,o.aTrap,o.bTrap) : null; })()
     });
   }
   return out;
@@ -432,7 +450,25 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
       total, acertos: ac,
       hr: total ? ac / total : 0,
       hrCru: rawItems.length ? acRaw / rawItems.length : null,
-      erros: err
+      erros: err,
+      // Tres taxas comparaveis, calculadas sobre a MESMA chegada e com a
+      // MESMA funcao (bateuPar). Cada uma tem o proprio denominador: o
+      // indefinido (null) fica de fora, e a "minha" so conta as corridas em
+      // que houve escolha.
+      tres: (function(){
+        const z = () => ({ total:0, acertos:0, hr:null });
+        const o = { motor:z(), rean:z(), minha:z() };
+        for (const it of items) {
+          [['motor','derMotor'],['rean','derRean'],['minha','derMinha']].forEach(function(par){
+            const v = it[par[1]];
+            if (v === null || v === undefined) return;
+            o[par[0]].total++;
+            if (v) o[par[0]].acertos++;
+          });
+        }
+        ['motor','rean','minha'].forEach(function(k){ o[k].hr = o[k].total ? o[k].acertos/o[k].total : null; });
+        return o;
+      })()
     },
     porTurno: grupoParaArray(agrupaPor(items, x => x.turno), 'none'),
     porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr').filter(r => passaQtd(r.n)),

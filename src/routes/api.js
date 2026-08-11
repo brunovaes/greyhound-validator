@@ -1197,11 +1197,7 @@ router.put('/race/:id', express.json(), (req, res) => {
   // Update PARCIAL: so mexe nos campos que vieram no body, pra nao apagar
   // resultado_1/2/3/bateu (escritos pelo robo de resultados) quando o front
   // manda so odd/valor/avb_nao_aberto, ou vice-versa.
-  // avb_escolhido: JSON com o AvB que o usuario escolheu (par + odd + %).
-  // E' campo PESSOAL — o ehCampoPessoal manda ele pra race_user_data sozinho,
-  // sem endpoint novo. Nao confundir com races.avb_fechamento, que e' objetivo
-  // e escrito so pelo robo.
-  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada', 'avb_escolhido'];
+  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada'];
   const body = { ...req.body };
   // Se a Odd esta sendo preenchida (nao vazia) e nao veio bet_unidades junto,
   // usa o valor padrao configurado — Odd preenchida ja conta como aposta
@@ -1338,30 +1334,76 @@ router.get('/sessions', (req, res) => {
 // Pedido do Bruno em 14/07/2026.
 // Acertos do dia / do mes — pra sidebar da Analisar. Pedido do Bruno em
 // 14/07/2026. 'bateu' preenchido = corrida ja resolvida (tem resultado).
+// Tres taxas de acerto sobre a MESMA chegada, comparaveis entre si:
+//   motor  = o AvB da analise global (trap_fav x trap_und)
+//   rean   = a principal da reanalise no fechamento (races.avb_fechamento)
+//   minha  = o AvB que ESTE usuario escolheu (race_user_data.avb_escolhido)
+//
+// Todas usam bateuPar() — a mesma funcao — de proposito: se cada taxa viesse
+// de um calculo diferente, uma divergencia entre elas seria ambigua (foi a
+// estrategia que e' melhor, ou so o metodo de contagem?).
+// Resultado null (trap fora da chegada) fica FORA do denominador: nao conta
+// nem como acerto nem como erro.
 router.get('/acertos-resumo', (req, res) => {
   try {
+    const { bateuPar } = require('../utils/avbResultado');
     const now = new Date();
-    const todayStr = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
     const todayISO = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
     const yearMonth = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
 
-    const dia = db.prepare(
-      "SELECT COUNT(*) as total, SUM(CASE WHEN r.bateu='sim' THEN 1 ELSE 0 END) as acertos " +
+    // As corridas sao COMPARTILHADAS (canonicas) desde a etapa 2.3. Filtrar
+    // por req.user.id aqui zerava os cards pra qualquer usuario que nao fosse
+    // o 1 — bug que passou batido na virada.
+    const linhas = (filtroSql, valor) => db.prepare(
+      "SELECT r.id, r.trap_fav, r.trap_und, r.bateu, r.finishing_order_json, r.avb_fechamento, " +
+      "       (SELECT rud.avb_escolhido FROM race_user_data rud WHERE rud.race_id=r.id AND rud.user_id=?) AS avb_escolhido " +
       "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-      "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.bateu IS NOT NULL AND r.bateu!=''"
-    ).get(todayISO, req.user.id);
+      "WHERE " + filtroSql + " AND r.user_id=? AND r.nivel!='skip' AND r.trap_fav>0"
+    ).all(req.user.id, valor, CANONICO);
 
-    const mes = db.prepare(
-      "SELECT COUNT(*) as total, SUM(CASE WHEN r.bateu='sim' THEN 1 ELSE 0 END) as acertos " +
-      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-      "WHERE strftime('%Y-%m', s.created_at, '-3 hours')=? AND r.user_id=? AND r.bateu IS NOT NULL AND r.bateu!=''"
-    ).get(yearMonth, req.user.id);
+    const parDe = (txt) => {
+      if(!txt) return null;
+      try { const o = typeof txt==='string' ? JSON.parse(txt) : txt; return (o && o.aTrap!=null) ? o : null; } catch(e){ return null; }
+    };
+
+    const apurar = (rows) => {
+      const z = () => ({ total:0, acertos:0, pct:null });
+      const out = { motor:z(), rean:z(), minha:z() };
+      for (const r of rows) {
+        const ordem = r.finishing_order_json;
+        const pares = {
+          motor: (r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null,
+          rean:  parDe(r.avb_fechamento),
+          minha: parDe(r.avb_escolhido)
+        };
+        for (const k of ['motor','rean','minha']) {
+          const p = pares[k];
+          if (!p) continue;
+          const b = bateuPar(ordem, p.aTrap, p.bTrap);
+          if (b === null) continue;          // indefinido: fora do denominador
+          out[k].total++;
+          if (b) out[k].acertos++;
+        }
+      }
+      for (const k of ['motor','rean','minha']) {
+        out[k].pct = out[k].total ? Math.round(out[k].acertos/out[k].total*100) : null;
+      }
+      return out;
+    };
+
+    const dia = apurar(linhas("date(s.created_at,'-3 hours')=?", todayISO));
+    const mes = apurar(linhas("strftime('%Y-%m', s.created_at, '-3 hours')=?", yearMonth));
 
     res.json({
-      dia: { total: dia.total||0, acertos: dia.acertos||0, pct: dia.total ? Math.round(dia.acertos/dia.total*100) : null },
-      mes: { total: mes.total||0, acertos: mes.acertos||0, pct: mes.total ? Math.round(mes.acertos/mes.total*100) : null }
+      // compatibilidade: os campos antigos continuam existindo e apontam pra
+      // taxa do motor, pra nada quebrar enquanto a tela nao for atualizada.
+      dia: Object.assign({}, dia.motor, { tres: dia }),
+      mes: Object.assign({}, mes.motor, { tres: mes })
     });
-  } catch(e) { res.json({ dia:{total:0,acertos:0,pct:null}, mes:{total:0,acertos:0,pct:null} }); }
+  } catch(e) {
+    console.error('[acertos-resumo]', e.message);
+    res.json({ dia:{total:0,acertos:0,pct:null}, mes:{total:0,acertos:0,pct:null} });
+  }
 });
 
 router.get('/proxima-corrida', (req, res) => {

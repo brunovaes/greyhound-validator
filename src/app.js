@@ -133,20 +133,48 @@ function registrarAvisoGlobal(key){
   } catch(e){}
 }
 
+// Tres taxas sobre a MESMA chegada, todas via bateuPar no servidor:
+//   minha = os AvBs que voce escolheu   (numero grande, e' o que voce apostou)
+//   rean  = a principal da reanalise
+//   motor = o AvB da analise global original
+// A "minha" e' a principal porque reflete o que de fato foi jogado. As outras
+// duas ficam menores embaixo, como referencia — no card ha pouco espaco e ele
+// e' olhado de relance, no meio da operacao.
+// Enquanto voce nao escolher AvBs, "minha" vem vazia: e' o esperado, nao bug.
+function _pintaAcertos(el, bloco){
+  if(!el || !bloco) return;
+  var t = bloco.tres || null;
+  var principal = t && t.minha && t.minha.pct != null ? t.minha : { pct: bloco.pct, total: bloco.total };
+  var cor = principal.pct==null ? '#666' : (principal.pct>=50 ? '#22c55e' : '#ef4444');
+  el.textContent = principal.pct==null ? '-' : principal.pct + '%';
+  el.style.color = cor;
+
+  // Linha de referencia logo abaixo do numero, criada uma vez e reaproveitada.
+  var id = el.id + '-ref';
+  var ref = document.getElementById(id);
+  if(!t){ if(ref) ref.remove(); return; }
+  if(!ref){
+    ref = document.createElement('div');
+    ref.id = id;
+    ref.style.cssText = 'font-size:8.5px;color:#666;line-height:1.5;margin-top:2px';
+    el.parentNode.insertBefore(ref, el.nextSibling);
+  }
+  var linha = function(rot, o){
+    if(!o || o.pct==null) return rot+' <span style="color:#555">-</span>';
+    return rot+' <span style="color:'+(o.pct>=50?'#22c55e':'#ef4444')+'">'+o.pct+'%</span>';
+  };
+  var suaTem = t.minha && t.minha.pct!=null;
+  ref.innerHTML = (suaTem ? '' : '<span style="color:#555">sem escolhas ainda</span><br>')
+    + linha('rean', t.rean) + ' &middot; ' + linha('motor', t.motor)
+    + (suaTem ? '<br><span style="color:#555">sua: '+t.minha.acertos+'/'+t.minha.total+'</span>' : '');
+}
+
 async function loadAcertosResumo() {
   try {
     var r = await fetch(BASE + '/api/acertos-resumo');
     var d = await r.json();
-    var elDia = document.getElementById('acertos-dia');
-    var elMes = document.getElementById('acertos-mes');
-    if (elDia) {
-      elDia.textContent = d.dia.pct==null ? '-' : d.dia.pct + '%';
-      elDia.style.color = d.dia.pct==null ? '#666' : (d.dia.pct>=50 ? '#22c55e' : '#ef4444');
-    }
-    if (elMes) {
-      elMes.textContent = d.mes.pct==null ? '-' : d.mes.pct + '%';
-      elMes.style.color = d.mes.pct==null ? '#666' : (d.mes.pct>=50 ? '#22c55e' : '#ef4444');
-    }
+    _pintaAcertos(document.getElementById('acertos-dia'), d.dia);
+    _pintaAcertos(document.getElementById('acertos-mes'), d.mes);
   } catch(e) {}
 }
 
