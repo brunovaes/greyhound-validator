@@ -265,6 +265,34 @@ const DISCOVERY_TENTATIVAS = 3;       // betwinner bloqueia INTERMITENTE — ret
 let _listaCache = { races: [], ts: 0, ok: false };
 let _descobrindo = false;
 
+// ── Saude da descoberta (monitoramento do bloqueio) ──────────────────────────
+// Registra cada refresh de descoberta (deu certo / falhou apos os retries) numa
+// janela de 60min, pra medir se o betwinner esta bloqueando de forma constante e
+// avisar quando vale a pena ligar o proxy. So medicao — nao muda comportamento.
+let _healthDesc = []; // [{ ts, ok }]
+function registrarDescoberta(ok) {
+  const agora = Date.now();
+  _healthDesc.push({ ts: agora, ok: !!ok });
+  const corte = agora - 60 * 60 * 1000;
+  while (_healthDesc.length && _healthDesc[0].ts < corte) _healthDesc.shift();
+}
+function saudeDescoberta() {
+  const agora = Date.now();
+  const calc = mins => {
+    const arr = _healthDesc.filter(h => h.ts >= agora - mins * 60000);
+    const t = arr.length, ok = arr.filter(h => h.ok).length;
+    return { tentativas: t, ok, falha: t - ok, taxaSucesso: t ? Math.round((ok / t) * 100) : null };
+  };
+  const q = calc(15), h = calc(60);
+  let diagnostico = 'sem dados suficientes', alertaProxy = false;
+  if (q.tentativas >= 4) {
+    if (q.taxaSucesso >= 70) diagnostico = 'OK';
+    else if (q.taxaSucesso >= 30) diagnostico = 'degradado (intermitente) — retry segurando';
+    else { diagnostico = 'BLOQUEIO CONSTANTE — hora de ligar o BETWINNER_PROXY_URL'; alertaProxy = true; }
+  }
+  return { ultimos15min: q, ultimos60min: h, diagnostico, alertaProxy, proxyAtivo: !!_proxyAgent };
+}
+
 async function obterCorridas() {
   const agora = Date.now();
   // Gate por timestamp: se DEU CERTO, segura 30s; se FALHOU, tenta de novo em 10s.
@@ -282,10 +310,12 @@ async function obterCorridas() {
       try {
         const races = await listarCorridasAoVivo();
         _listaCache = { races, ts: Date.now(), ok: true };
+        registrarDescoberta(true);
         return races;
       } catch (e) { ultimoErro = e; if (i < DISCOVERY_TENTATIVAS - 1) await new Promise(r => setTimeout(r, 1500)); }
     }
     _listaCache.ts = Date.now(); _listaCache.ok = false; // mantem a ultima lista boa; retry em ~10s
+    registrarDescoberta(false);
     addLog('warn', 'descoberta falhou ' + DISCOVERY_TENTATIVAS + 'x (' + String((ultimoErro && ultimoErro.message) || '').slice(0, 40) + ') — mantendo lista (' + _listaCache.races.length + '), novo retry em ~' + (DISCOVERY_COOLDOWN_MS / 1000) + 's');
     return _listaCache.races;
   } finally { _descobrindo = false; }
@@ -366,7 +396,7 @@ function iniciar(getScores, opts) {
 }
 
 function parar() { status.stopRequested = true; }
-function getStatus() { return Object.assign({}, status, { porCorrida: undefined }); }
+function getStatus() { return Object.assign({}, status, { porCorrida: undefined, descoberta: saudeDescoberta() }); }
 function getSnapshots() { return Object.values(status.porCorrida); }
 
 module.exports = {

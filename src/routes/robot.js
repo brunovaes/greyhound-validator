@@ -776,6 +776,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
   <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
   <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
+  <button class="robot-menu-item" id="mb-odds" onclick="showPanel('odds')"><span class="icon">${icon('alertTriangle',{size:16})}</span> Odds BW</button>
   <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
   <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Automação</button>
   <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
@@ -905,6 +906,15 @@ ${navBar(req.user, 'robot')}
     <div class="res-log" id="mon-log"></div>
   </div>
 </div><!-- fim panel-monitor -->
+
+<div class="robot-panel" id="panel-odds">
+  <h1 style="display:flex;align-items:center;gap:10px">${icon('alertTriangle',{size:22})} Odds ao Vivo (betwinner)</h1>
+  <p class="sub">Saúde da descoberta de corridas no betwinner. Se o site passar a bloquear de forma constante, este painel avisa que é hora de ligar o proxy residencial.</p>
+  <div class="card">
+    <div class="card-title">Saúde da descoberta (últimos 15 / 60 min)</div>
+    <div id="odds-health"><div class="lin">Carregando…</div></div>
+  </div>
+</div><!-- fim panel-odds -->
 
 <div class="robot-panel" id="panel-audit">
   <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('scroll',{size:20})} Trilha de Auditoria</h1>
@@ -1210,6 +1220,35 @@ function showPanel(id) {
   // Carrega o iframe (Usuários/Acessos) só na 1a vez que a aba abre.
   var fr = panel.querySelector('iframe.admin-embed');
   if (fr && !fr.getAttribute('src') && fr.dataset.src) fr.setAttribute('src', fr.dataset.src);
+  // Odds BW: liga o poll de saude so quando a aba esta aberta
+  if (id === 'odds') { pollOddsHealth(); if (oddsPolling) clearInterval(oddsPolling); oddsPolling = setInterval(pollOddsHealth, 8000); }
+  else if (oddsPolling) { clearInterval(oddsPolling); oddsPolling = null; }
+}
+
+// ── Odds BW: saude da descoberta ─────────────────────────────────────────────
+var oddsPolling = null;
+async function pollOddsHealth() {
+  try {
+    const r = await fetch(BASE + '/robot/odds/status');
+    const d = await r.json();
+    const el = document.getElementById('odds-health'); if (!el) return;
+    const s = d.descoberta || {}, q = s.ultimos15min || {}, h = s.ultimos60min || {};
+    const degradado = String(s.diagnostico || '').indexOf('degradado') >= 0;
+    const cor = s.alertaProxy ? '#ef4444' : (degradado ? '#eab308' : '#22c55e');
+    const pct = v => (v == null ? '—' : v + '%');
+    el.innerHTML =
+      '<div style="font-size:19px;font-weight:800;color:' + cor + ';margin-bottom:8px">' + (s.diagnostico || 'sem dados') + '</div>'
+      + '<div style="display:flex;gap:26px;flex-wrap:wrap;font-size:13px;color:#cbd5e1">'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Últimos 15 min</div><b style="font-size:16px">' + pct(q.taxaSucesso) + '</b> <span style="color:#94a3b8">(' + (q.ok || 0) + ' ok / ' + (q.falha || 0) + ' falha)</span></div>'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Última hora</div><b style="font-size:16px">' + pct(h.taxaSucesso) + '</b> <span style="color:#94a3b8">(' + (h.ok || 0) + ' ok / ' + (h.falha || 0) + ' falha)</span></div>'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Corridas ao vivo</div><b style="font-size:16px">' + (d.corridasAoVivo != null ? d.corridasAoVivo : '—') + '</b></div>'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Proxy</div><b style="font-size:16px;color:' + (s.proxyAtivo ? '#22c55e' : '#94a3b8') + '">' + (s.proxyAtivo ? 'ATIVO' : 'desligado') + '</b></div>'
+      + '</div>'
+      + (s.alertaProxy ? '<div style="margin-top:12px;padding:9px 11px;background:rgba(239,68,68,.12);border:1px solid #ef4444;border-radius:6px;color:#fca5a5;font-size:12px">&#9888; Bloqueio constante detectado. Hora de ligar o proxy: defina <b>BETWINNER_PROXY_URL</b> nas Variables do Railway.</div>' : '')
+      + '<div style="margin-top:10px;font-size:11px;color:#64748b">Robô: ' + (d.running ? 'rodando' : 'parado') + ' &middot; ciclos ' + (d.ciclos || 0) + '</div>';
+  } catch (e) {
+    var el2 = document.getElementById('odds-health'); if (el2) el2.innerHTML = '<div class="lin">Erro ao buscar status.</div>';
+  }
 }
 // Ajusta a altura do iframe embutido ao conteudo (mesma origem).
 function resizeEmbed(f) {
