@@ -1224,27 +1224,21 @@ function _celulaBW(r){
   if(!av){
     return '<td style="text-align:center;vertical-align:middle;color:#444;font-size:11px">—</td>';
   }
+  // Mesmo tratamento visual da coluna AvB Motor: badge + primeiro nome apenas.
+  // Os numeros (rean/mkt/odd/edge) ficam de fora de proposito — a coluna e' de
+  // identificacao do par, e a odd ja tem coluna propria.
   var lado = function(trap, nome){
     return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
       + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
-      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(nome||'')+'</div>'
+      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
       + '</div>';
   };
-  var nums = [];
-  if (av.reanalisePct != null) nums.push('rean ' + av.reanalisePct + '%');
-  if (av.marketPct != null) nums.push('mkt ' + av.marketPct + '%');
-  if (av.odd != null) nums.push('odd ' + av.odd);
-  var e = av.edge;
-  var edgeStr = (e == null) ? '' : ' <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'#666'))+';font-weight:700">'+(e>0?'+':'')+e+'</span>';
-
   return '<td style="text-align:center;vertical-align:middle">'
     + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
     +   lado(av.aTrap, av.aNome)
     +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
     +   lado(av.bTrap, av.bNome)
     + '</div>'
-    + '<div style="font-size:8px;color:#1d4ed8;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-top:3px">'+av._origem+'</div>'
-    + '<div style="font-size:8.5px;color:#777">'+nums.join(' &middot; ')+edgeStr+'</div>'
     + '</td>';
 }
 
