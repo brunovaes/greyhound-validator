@@ -1239,6 +1239,15 @@ function _celulaBW(r){
     +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
     +   lado(av.bTrap, av.bNome)
     + '</div>'
+    // So os dois numeros que dizem se valeu a pena: a avaliacao da reanalise e
+    // o que o mercado achava. Odd e edge ficam de fora — a odd ja tem coluna
+    // propria e o edge e' a diferenca entre estes dois, da pra ler de olho.
+    + (function(){
+        var n = [];
+        if (av.reanalisePct != null) n.push('rean ' + av.reanalisePct + '%');
+        if (av.marketPct != null) n.push('mkt ' + av.marketPct + '%');
+        return n.length ? '<div style="font-size:8.5px;color:#777;margin-top:3px">' + n.join(' &middot; ') + '</div>' : '';
+      })()
     + '</td>';
 }
 
@@ -1353,7 +1362,7 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:80px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:120px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:130px">AvB Motor</th><th style="width:130px">AvB BW</th><th style="width:70px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:130px">Resultado</th><th style="width:60px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:79px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:110px">AvB Motor</th><th style="width:110px">AvB BW</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:60px">🚩</th><th style="width:230px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
