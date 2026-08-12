@@ -903,7 +903,7 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-center">'
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
-    + '<button onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
+    + '<button type="button" class="alt-analisar" data-a="'+tf+'" data-b="'+tu+'" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
     + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
     + '</div>'
