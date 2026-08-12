@@ -894,6 +894,8 @@ function renderFocusPanel(r, idx) {
     // console em vez de desenhar dois galgos iguais em silencio.
     console.warn('[arena] par ' + _par.a + 'x' + _par.b + ' sem dados nesta corrida; mantendo ' + tf + 'x' + tu);
   }
+
+  focusCol.innerHTML =
     oldBanner
     + suspectBanner
     + '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
