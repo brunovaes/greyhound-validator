@@ -190,12 +190,30 @@ async function listarCorridasAoVivo(champsIds) {
   let champs = (champsIds && champsIds.length) ? champsIds : null;
   if (!champs) { try { champs = await descobrirChampsAoVivo(); } catch (e) { champs = []; } }
   if (!champs || !champs.length) return [];
-  const disc = await fetchFeed(`/LiveFeed/GetSportsShortZip?sports=68&champs=${champs.join(',')}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`, true);
-  return parseLiveRaces(disc).map(r => {
-    const pista = pistaPorNome(r.track);
-    if (!pista && r.track) status.pistasNovas[r.track] = (r.li || '?'); // nome que nao casou no nomesPistas
-    return Object.assign({}, r, { pista });
-  });
+  // IMPORTANTE: o betwinner passou a REJEITAR (406) a chamada com VARIOS champs de
+  // uma vez (a lista separada por virgula `champs=A,B,C`). Confirmado no diag
+  // /odds/diag/variantes: multi-champ -> 406; UMA liga por vez -> 200 JSON normal.
+  // Entao a gente busca champ A CHAMP e junta. Cada corrida ainda casa a pista por
+  // nome via nomesPistas, igual antes. (O proxy rotativo faz cada chamada sair de um
+  // IP brasileiro diferente, o que ajuda a nao parecer varredura.)
+  const races = [];
+  let algumOk = false, ultimoErro = null;
+  for (const champ of champs) {
+    try {
+      const disc = await fetchFeed(`/LiveFeed/GetSportsShortZip?sports=68&champs=${champ}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true`, true);
+      algumOk = true;
+      for (const r of parseLiveRaces(disc)) {
+        const pista = pistaPorNome(r.track);
+        if (!pista && r.track) status.pistasNovas[r.track] = (r.li || '?'); // nome que nao casou no nomesPistas
+        races.push(Object.assign({}, r, { pista }));
+      }
+    } catch (e) { ultimoErro = e; } // um champ falhou -> segue os outros
+  }
+  // Se NENHUM champ respondeu, propaga o erro pra o retry do obterCorridas agir
+  // (ele tenta 3x e mantem a ultima lista boa). Se ao menos um respondeu, devolve
+  // o que veio — melhor uma lista parcial do que nenhuma.
+  if (!algumOk && ultimoErro) throw ultimoErro;
+  return races;
 }
 
 async function buscarMercados(gameId) {
