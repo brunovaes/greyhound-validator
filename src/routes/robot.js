@@ -2197,6 +2197,26 @@ router.get('/odds/diag/champs', requireAdmin, (req, res) => {
   res.json({ total: lista.length, encontrou: q ? filtradas.length : undefined, pistas: filtradas });
 });
 
+// PROBE (somente leitura): roda a descoberta AGORA, pelo caminho atual (proxy se
+// ligado), e devolve o que o betwinner respondeu de fato — nº de champs, nº de
+// corridas + amostra com statusLine, ou o erro. Mata a duvida de "proxy traz vazio?
+// geo-bloqueia? statusLine nao casa 'Inicia'?". Gasta um pouquinho da banda do proxy.
+router.get('/odds/diag/probe', requireAdmin, async (req, res) => {
+  const out = { proxyAtivo: ((liveOddsModule.getStatus() || {}).descoberta || {}).proxyAtivo };
+  try {
+    const champs = await liveOddsModule.descobrirChampsAoVivo();
+    out.champs = { ok: true, total: (champs || []).length, amostra: (champs || []).slice(0, 8) };
+  } catch (e) { out.champs = { ok: false, erro: String(e.message).slice(0, 160) }; }
+  try {
+    const races = await liveOddsModule.listarCorridasAoVivo();
+    out.corridas = {
+      ok: true, total: (races || []).length,
+      amostra: (races || []).slice(0, 12).map(r => ({ track: r.track, pista: r.pista, raceNum: r.raceNum, statusLine: r.statusLine, abertaFilter: /Inicia/i.test(r.statusLine || '') }))
+    };
+  } catch (e) { out.corridas = { ok: false, erro: String(e.message).slice(0, 160) }; }
+  res.json(out);
+});
+
 // DIAGNOSTICO (somente leitura): lista os PDFs salvos no disco hoje e, pra cada
 // corrida SKIP, mostra os candidatos (arquivos com o mesmo horario) e se o
 // casamento por pista achou o PDF. Serve pra descobrir por que algumas corridas
