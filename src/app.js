@@ -779,8 +779,41 @@ function _parEmFoco(r){
   if (r && r._parAoVivo && r._parAoVivo.a)     return { a:r._parAoVivo.a, b:r._parAoVivo.b, aoVivo:true };
   return { a: r && r.trapFav || 1, b: r && r.trapUnd || 2 };
 }
-function _nomeDoTrap(r, trap){
+// ── Fonte do historico: aHist/bHist do robo, com fallback pro histAll ───────
+// O robo passou a mandar, em cada avb, o historico completo dos dois galgos do
+// par (aHist/bHist). E' a fonte CERTA por dois motivos:
+//   1) a reanalise pareia sobre histFull (todos os galgos) e o histAll so tem
+//      os que receberam score no motor 1 — um galgo pode existir num e nao no
+//      outro, e ai a arena nao conseguia desenhar o par sugerido;
+//   2) mesmo pros galgos presentes nos dois, o histAll traz linhasValidas e a
+//      reanalise usa o historico completo. A tela mostrava um conjunto de
+//      linhas diferente do que gerou a recomendacao — divergencia silenciosa,
+//      pior que o painel vazio, porque ninguem percebe.
+// O fallback pro histAll fica pras analises antigas e pra janela entre deploys.
+// Convencao do robo: A e' sempre o favorito da reanalise.
+function _avbDoPar(r, ta, tb){
+  var l = (r && r._avbsAoVivo) || [];
+  return l.find(function(x){ return String(x.aTrap)===String(ta) && String(x.bTrap)===String(tb); })
+      || l.find(function(x){ return String(x.aTrap)===String(tb) && String(x.bTrap)===String(ta); })
+      || null;
+}
+// Devolve {nome, perfil, historico} do trap, preferindo o que veio no avb.
+function _dadosDoTrap(r, trap, parA, parB){
+  var avb = (parA != null) ? _avbDoPar(r, parA, parB) : null;
+  if (avb) {
+    if (avb.aHist && String(avb.aHist.trap)===String(trap)) return avb.aHist;
+    if (avb.bHist && String(avb.bHist.trap)===String(trap)) return avb.bHist;
+    // sem aHist/bHist (robo antigo): usa ao menos nome e perfil do avb
+    if (String(avb.aTrap)===String(trap)) return { trap:trap, nome:avb.aNome, perfil:avb.aPerfil, historico:null };
+    if (String(avb.bTrap)===String(trap)) return { trap:trap, nome:avb.bNome, perfil:avb.bPerfil, historico:null };
+  }
+  return null;
+}
+
+function _nomeDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return '';
+  var _d = _dadosDoTrap(r, trap, parA, parB);
+  if (_d && _d.nome != null && _d.nome !== '') return _d.nome;
   if(String(trap)===String(r.trapFav)) return r.nameFav||'';
   if(String(trap)===String(r.trapUnd)) return r.nameUnd||'';
   var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
@@ -788,15 +821,19 @@ function _nomeDoTrap(r, trap){
   var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
   return (sc && sc.nome) || '';
 }
-function _histDoTrap(r, trap){
+function _histDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return null;
+  var _d = _dadosDoTrap(r, trap, parA, parB);
+  if (_d && _d.historico && _d.historico.length) return _d.historico;
   if(String(trap)===String(r.trapFav) && r.histFav) return r.histFav;
   if(String(trap)===String(r.trapUnd) && r.histUnd) return r.histUnd;
   var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
   return g ? (g.historico||[]) : null;
 }
-function _perfilDoTrap(r, trap){
+function _perfilDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return '';
+  var _d = _dadosDoTrap(r, trap, parA, parB);
+  if (_d && _d.perfil != null && _d.perfil !== '') return _d.perfil;
   if(String(trap)===String(r.trapFav)) return r.perfilFav||'';
   if(String(trap)===String(r.trapUnd)) return r.perfilUnd||'';
   var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
@@ -877,16 +914,16 @@ function renderFocusPanel(r, idx) {
   // novo NAO era encontrado o || caia no nome do galgo ORIGINAL — resultado:
   // os dois lados da arena mostravam o mesmo galgo, sem nenhum erro visivel.
   // Agora so troca o par se os DOIS lados forem encontrados de verdade.
-  var _achouA = _nomeDoTrap(r, _par.a) !== '' || _histDoTrap(r, _par.a) !== null;
-  var _achouB = _nomeDoTrap(r, _par.b) !== '' || _histDoTrap(r, _par.b) !== null;
+  var _achouA = _nomeDoTrap(r, _par.a, _par.a, _par.b) !== '' || _histDoTrap(r, _par.a, _par.a, _par.b) !== null;
+  var _achouB = _nomeDoTrap(r, _par.b, _par.a, _par.b) !== '' || _histDoTrap(r, _par.b, _par.a, _par.b) !== null;
   if (_achouA && _achouB) {
     tf = _par.a; tu = _par.b;
-    nf = _nomeDoTrap(r, tf);
-    nu = _nomeDoTrap(r, tu);
-    histF = _histDoTrap(r, tf) || [];
-    histU = _histDoTrap(r, tu) || [];
-    perfF = _perfilDoTrap(r, tf) || '';
-    perfU = _perfilDoTrap(r, tu) || '';
+    nf = _nomeDoTrap(r, tf, tf, tu);
+    nu = _nomeDoTrap(r, tu, tf, tu);
+    histF = _histDoTrap(r, tf, tf, tu) || [];
+    histU = _histDoTrap(r, tu, tf, tu) || [];
+    perfF = _perfilDoTrap(r, tf, tf, tu) || '';
+    perfU = _perfilDoTrap(r, tu, tf, tu) || '';
     perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
     perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
     imgF = getDogImg(tf, r.corrida||'');
@@ -1055,8 +1092,8 @@ function _cardAlternativa(r, a, escolhidoAtual){
 function openValModalPar(key, trapA, trapB){
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[VAL-PAR] nao achou:',key);return;}
-  var nA=_nomeDoTrap(r,trapA), nB=_nomeDoTrap(r,trapB);
-  var hA=_histDoTrap(r,trapA), hB=_histDoTrap(r,trapB);
+  var nA=_nomeDoTrap(r,trapA,trapA,trapB), nB=_nomeDoTrap(r,trapB,trapA,trapB);
+  var hA=_histDoTrap(r,trapA,trapA,trapB), hB=_histDoTrap(r,trapB,trapA,trapB);
   document.getElementById('val-title').textContent='T'+trapA+' '+(nA||'?')+' vs T'+trapB+' '+(nB||'?');
   var body=document.getElementById('val-body');
   body.classList.remove('val-compact');
@@ -1064,7 +1101,7 @@ function openValModalPar(key, trapA, trapB){
   // lugar da tabela vazia. Antes o lado simplesmente vinha em branco, e nao
   // dava pra saber se o galgo era ruim ou se o dado nao existia.
   var cardOuAviso = function(trap, nome, hist){
-    if (hist && hist.length) return buildDogCard(trap, nome, _perfilDoTrap(r,trap), hist);
+    if (hist && hist.length) return buildDogCard(trap, nome, _perfilDoTrap(r,trap,trapA,trapB), hist);
     return '<div style="padding:18px;text-align:center;color:rgba(255,255,255,.45);font-size:12px">'
       + '<strong style="color:#eab308">T'+trap+(nome?' '+nome:'')+'</strong><br>'
       + 'sem histórico disponível nesta corrida.<br>'
@@ -1145,8 +1182,8 @@ function _snapshotDoPar(r, ta, tb, odd){
   var l=(r&&r._avbsAoVivo)||[];
   var a=l.find(function(x){ return String(x.aTrap)===String(ta) && String(x.bTrap)===String(tb); }) || {};
   return {
-    aTrap: ta, aNome: _nomeDoTrap(r, ta),
-    bTrap: tb, bNome: _nomeDoTrap(r, tb),
+    aTrap: ta, aNome: _nomeDoTrap(r, ta, ta, tb),
+    bTrap: tb, bNome: _nomeDoTrap(r, tb, ta, tb),
     odd: (odd!=null && odd!=='') ? parseFloat(odd) : (_avbOdd(a)||null),
     marketPct: a.marketPct!=null ? a.marketPct : null,
     reanalisePct: _avbRean(a),
