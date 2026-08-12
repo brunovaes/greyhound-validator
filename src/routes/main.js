@@ -372,6 +372,23 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
 <link rel="apple-touch-icon" sizes="180x180" href="${BASE}/static/img/icon-180.png">
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+
+/* ── Avisos globais no RODAPE (so nesta tela) ──────────────────────────────
+   Resultados atualizados, monitor, resultados suspeitos e stop de banca sao
+   avisos PERSISTENTES: ficam ate voce fechar no ×. No topo eles empurravam a
+   arena pra baixo o tempo todo, e esta e' a tela onde cada pixel vertical
+   conta. Nas outras telas continuam onde estavam — la nao atrapalham.
+   Empilham a partir da base; o z-index fica abaixo dos modais (que usam 1000+). */
+#res-banner,#mon-banner,#suspicious-banner,#stop-banner{
+  position:fixed;left:0;right:0;bottom:0;z-index:900;
+  border-top:1px solid rgba(255,255,255,.06);border-bottom:none;
+  box-shadow:0 -4px 16px rgba(0,0,0,.5);
+}
+/* Quando mais de um aparece, o seguinte sobe pra nao cobrir o anterior. */
+#res-banner ~ #mon-banner{bottom:38px}
+#res-banner ~ #suspicious-banner{bottom:76px}
+#res-banner ~ #stop-banner{bottom:114px}
+
 ${designTokensCSS()}
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
 .main.focus-mode{grid-template-columns:250px 170px 1fr}
