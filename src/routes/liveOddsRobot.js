@@ -353,8 +353,8 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     for (const g of histFull) dogsByTrap[g.trap] = g;
     // scores globais da analise ORIGINAL (motor 1) -> pra mostrar o "motor original"
     // ao lado da reanalise (motor 2), orientado pro mesmo favorito da reanalise.
-    const scoreByTrap = {};
-    for (const s of (dados && dados.scores) || []) scoreByTrap[s.trap] = s.score;
+    const scoreByTrap = {}, perfilByTrap = {};
+    for (const s of (dados && dados.scores) || []) { scoreByTrap[s.trap] = s.score; perfilByTrap[s.trap] = s.perfil || null; }
     const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, config: {} };
     const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, _maxAvbs);
     avbs = ranked.map(a => {
@@ -370,8 +370,17 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
       // motor ORIGINAL (motor 1) para o MESMO par, orientado pro favorito da reanalise (a.aTrap)
       const sa = scoreByTrap[a.aTrap], sb = scoreByTrap[a.bTrap];
       const motorOrigPct = (sa != null && sb != null) ? Math.max(5, Math.min(95, scoreToPct(sa - sb))) : null;
+      // FONTE UNICA p/ a arena: manda o historico EXATO que a reanalise usou
+      // (dogsByTrap = histFull), pra a tela nao cair no histAll (que so tem os cães
+      // COM score e usa linhasValidas). Assim a tela mostra a mesma base da decisao.
+      const dogA = dogsByTrap[a.aTrap] || {}, dogB = dogsByTrap[a.bTrap] || {};
+      const aPerfil = perfilByTrap[a.aTrap] || null, bPerfil = perfilByTrap[a.bTrap] || null;
       return {
         aTrap: a.aTrap, aNome: a.aNome, bTrap: a.bTrap, bNome: a.bNome,
+        aPerfil, bPerfil,
+        // aHist/bHist.historico ja vem no shape do mapHistLinhas (14 campos, <=5 linhas)
+        aHist: { trap: a.aTrap, nome: a.aNome, perfil: aPerfil, brtClasse: dogA.brtClasse || null, ssnDate: dogA.ssnDate || null, historico: dogA.historico || [] },
+        bHist: { trap: a.bTrap, nome: a.bNome, perfil: bPerfil, brtClasse: dogB.brtClasse || null, ssnDate: dogB.ssnDate || null, historico: dogB.historico || [] },
         avaliacao: a.avaliacao, enginePct: a.avaliacao, // enginePct mantido p/ retrocompat
         reanalisePct: a.avaliacao,                      // motor 2 (reanalise par-a-par)
         motorOrigPct,                                   // motor 1 (analise global original)
