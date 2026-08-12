@@ -1339,7 +1339,17 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
-.tw{overflow-x:auto;border:1px solid var(--bdr);border-radius:8px}
+/* Cabecalho fixo: o container ganha altura maxima e rolagem propria, e o
+   thead cola no topo dele. Sem o max-height quem rola e' a PAGINA inteira,
+   e ai o sticky nao tem em relacao a que grudar. */
+.tw{overflow:auto;max-height:calc(100vh - 260px);border:1px solid var(--bdr);border-radius:8px}
+.tw thead th{position:sticky;top:0;z-index:5}
+/* O sticky nao herda o fundo da linha: sem cor solida no th, o conteudo
+   rolando aparece POR TRAS do cabecalho. */
+.tw thead th{background:#1a1a1a}
+/* A borda de baixo some no sticky (a borda rola junto), entao usamos
+   box-shadow, que fica pintada na posicao fixa. */
+.tw thead th{box-shadow:inset 0 -1px 0 #333}
 table{width:100%;border-collapse:collapse;background:#111;min-width:900px}
 @media(max-width:768px){
   .content{padding:12px 10px}
