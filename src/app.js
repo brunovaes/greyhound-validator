@@ -854,7 +854,10 @@ function renderFocusPanel(r, idx) {
   var imgF = getDogImg(tf, r.corrida||'');
   var imgU = getDogImg(tu, r.corrida||'x');
 
-  var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');
+  // Sem uso no painel desde que a linha de analise saiu do rodape. Mantida
+  // porque r.obs continua alimentando a tabela e o Historico — e' so esta
+  // variavel local que ficou ociosa.
+  var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');   // eslint-disable-line no-unused-vars
   var oldBanner = isOldRaceCard(r) ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+') — apenas para consulta/estudo, não é uma corrida ao vivo.</div>' : '';
   var suspectBanner = r.cardSuspect ? '<div class="fp-suspect-banner">&#9888; Essa corrida sumiu da lista ao vivo antes do horário — a pista pode ter sido cancelada hoje. Confira manualmente antes de confiar nesse AvB.</div>' : '';
 
@@ -896,9 +899,11 @@ function renderFocusPanel(r, idx) {
   }
 
   focusCol.innerHTML =
-    oldBanner
-    + suspectBanner
-    + '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
+    // Os banners (corrida antiga / card suspeito) foram pro RODAPE. Eles sao
+    // persistentes — ficam ate voce trocar de corrida — e no topo empurravam
+    // a arena pra baixo o tempo todo. La embaixo ocupam o espaco que sobrou
+    // da linha de analise e da faixa do ao vivo, que sairam.
+    '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
     + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
@@ -944,8 +949,15 @@ function renderFocusPanel(r, idx) {
     + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '</div>'
-    + (obs ? '<div class="fp-obs">'+obs+'</div>' : '')
-    + '<div id="fp-odds-live" style="margin-top:8px"></div>';
+    // RODAPE do painel. Substitui a linha de analise (obs) e a faixa "AvBs ao
+    // vivo — betwinner", que saíram: a arena e os cards de alternativa ja
+    // mostram par, odd, mercado e edge, entao as duas so repetiam informacao.
+    // No lugar entram os banners persistentes (corrida antiga / card suspeito),
+    // que antes ficavam no topo empurrando a arena pra baixo.
+    + ((oldBanner || suspectBanner)
+        ? '<div style="margin-top:8px">' + oldBanner + suspectBanner + '</div>'
+        : '')
+    + '<div id="fp-odds-live" style="display:none"></div>';
 
   startOddsLive(r);
 }
