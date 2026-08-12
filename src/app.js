@@ -870,19 +870,30 @@ function renderFocusPanel(r, idx) {
   // ciclos) ou pela escolha do usuario. So a ARENA muda — podio, gauges de
   // contexto e o resto do painel continuam do original.
   var _par = _parEmFoco(r);
-  tf = _par.a; tu = _par.b;
-  nf = _nomeDoTrap(r, tf) || nf;
-  nu = _nomeDoTrap(r, tu) || nu;
-  histF = _histDoTrap(r, tf) || histF;
-  histU = _histDoTrap(r, tu) || histU;
-  perfF = _perfilDoTrap(r, tf) || perfF;
-  perfU = _perfilDoTrap(r, tu) || perfU;
-  perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
-  perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
-  imgF = getDogImg(tf, r.corrida||'');
-  imgU = getDogImg(tu, r.corrida||'x');
-
-  focusCol.innerHTML =
+  // ATENCAO ao fallback: antes era "_nomeDoTrap(r,tf) || nf", e quando o trap
+  // novo NAO era encontrado o || caia no nome do galgo ORIGINAL — resultado:
+  // os dois lados da arena mostravam o mesmo galgo, sem nenhum erro visivel.
+  // Agora so troca o par se os DOIS lados forem encontrados de verdade.
+  var _achouA = _nomeDoTrap(r, _par.a) !== '' || _histDoTrap(r, _par.a) !== null;
+  var _achouB = _nomeDoTrap(r, _par.b) !== '' || _histDoTrap(r, _par.b) !== null;
+  if (_achouA && _achouB) {
+    tf = _par.a; tu = _par.b;
+    nf = _nomeDoTrap(r, tf);
+    nu = _nomeDoTrap(r, tu);
+    histF = _histDoTrap(r, tf) || [];
+    histU = _histDoTrap(r, tu) || [];
+    perfF = _perfilDoTrap(r, tf) || '';
+    perfU = _perfilDoTrap(r, tu) || '';
+    perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
+    perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
+    imgF = getDogImg(tf, r.corrida||'');
+    imgU = getDogImg(tu, r.corrida||'x');
+  } else if (_par.escolhido || _par.aoVivo) {
+    // Par novo veio do robo mas os galgos nao estao no histAll/scores desta
+    // corrida (analise antiga, card trocado). Mantem o par original e avisa no
+    // console em vez de desenhar dois galgos iguais em silencio.
+    console.warn('[arena] par ' + _par.a + 'x' + _par.b + ' sem dados nesta corrida; mantendo ' + tf + 'x' + tu);
+  }
     oldBanner
     + suspectBanner
     + '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
@@ -1026,11 +1037,22 @@ function openValModalPar(key, trapA, trapB){
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[VAL-PAR] nao achou:',key);return;}
   var nA=_nomeDoTrap(r,trapA), nB=_nomeDoTrap(r,trapB);
-  var hA=_histDoTrap(r,trapA)||[], hB=_histDoTrap(r,trapB)||[];
-  document.getElementById('val-title').textContent='T'+trapA+' '+nA+' vs T'+trapB+' '+nB;
+  var hA=_histDoTrap(r,trapA), hB=_histDoTrap(r,trapB);
+  document.getElementById('val-title').textContent='T'+trapA+' '+(nA||'?')+' vs T'+trapB+' '+(nB||'?');
   var body=document.getElementById('val-body');
   body.classList.remove('val-compact');
-  body.innerHTML=buildDogCard(trapA,nA,_perfilDoTrap(r,trapA),hA)+'<div class="val-sep"></div>'+buildDogCard(trapB,nB,_perfilDoTrap(r,trapB),hB);
+  // Quando um dos galgos nao tem historico nesta corrida, mostra um aviso no
+  // lugar da tabela vazia. Antes o lado simplesmente vinha em branco, e nao
+  // dava pra saber se o galgo era ruim ou se o dado nao existia.
+  var cardOuAviso = function(trap, nome, hist){
+    if (hist && hist.length) return buildDogCard(trap, nome, _perfilDoTrap(r,trap), hist);
+    return '<div style="padding:18px;text-align:center;color:rgba(255,255,255,.45);font-size:12px">'
+      + '<strong style="color:#eab308">T'+trap+(nome?' '+nome:'')+'</strong><br>'
+      + 'sem histórico disponível nesta corrida.<br>'
+      + '<span style="font-size:11px;color:rgba(255,255,255,.3)">O robô sugeriu este galgo, mas ele não está na análise carregada '
+      + '(card trocado ou análise anterior à reanálise).</span></div>';
+  };
+  body.innerHTML = cardOuAviso(trapA,nA,hA) + '<div class="val-sep"></div>' + cardOuAviso(trapB,nB,hB);
   document.getElementById('val-modal').classList.add('open');
 }
 
