@@ -28,11 +28,12 @@ const HOSTS = (process.env.BETWINNER_HOSTS
   : ['betwinner1.com', 'betwinner.com', 'betwinner2.com', 'betwinner3.com', 'betwinner6.com', 'betwinner9.com', 'betwinnersport.com']);
 let _hostBom = null; // dominio que funcionou por ultimo (tentado primeiro no proximo ciclo)
 
-// Proxy OPCIONAL, so pra DESCOBERTA. Se BETWINNER_PROXY_URL estiver setado (ex.:
-// "http://user:pass@gate.decodo.com:7000"), a descoberta sai por um IP residencial
-// limpo — contorna o anti-bot intermitente do betwinner no IP do Railway. Sem a
-// env, TUDO continua direto como hoje (custo zero). As odds (gameEvents) nunca usam
-// o proxy. Pra ligar: setar BETWINNER_PROXY_URL no Railway. Nada mais.
+// Proxy OPCIONAL — cobre descoberta E odds. Se BETWINNER_PROXY_URL (ou o campo
+// Proxy do Painel Admin) estiver setado, as chamadas ao betwinner saem por um IP
+// residencial limpo — contorna o anti-bot no IP do Railway (que passou a bloquear
+// tanto a descoberta quanto o gameEvents das odds). Sem proxy setado, TUDO segue
+// direto como hoje (custo zero). Como o robo so puxa odds de corridas do seu perfil,
+// o volume pelo proxy fica baixo.
 let _proxyAgent = null;
 let _proxyUrlAtual = '';
 // (Re)configura o proxy de descoberta. url vazia = desliga. Chamado no load com a
@@ -198,7 +199,72 @@ async function listarCorridasAoVivo(champsIds) {
 }
 
 async function buscarMercados(gameId) {
-  return parseRaceMarkets(await fetchFeed(`/main-live-feed/v3/gameEvents?cfView=3&countEvents=250&fcountry=31&gameId=${gameId}&gr=495&grMode=4&lng=pt&marketType=1&ref=152`));
+  // Usa o proxy tambem (2o arg true): o betwinner passou a bloquear o endpoint de
+  // odds no IP do Railway, nao so a descoberta. Sem proxy setado, segue direto.
+  return parseRaceMarkets(await fetchFeed(`/main-live-feed/v3/gameEvents?cfView=3&countEvents=250&fcountry=31&gameId=${gameId}&gr=495&grMode=4&lng=pt&marketType=1&ref=152`, true));
+}
+
+// ── DIAGNOSTICO: qual formato da chamada de jogos NAO e' desafiado ────────────
+// A descoberta SEM champs= volta JSON, mas a COM champs= (que traz os jogos G[])
+// volta a pagina HTML anti-bot, de qualquer IP. Aqui a gente bate a mesma familia
+// de URL em varias VARIACOES (via proxy) e captura ct/len/isJson/jogos de cada uma,
+// SEM quebrar em corpo nao-JSON, pra descobrir qual variacao o betwinner libera.
+function httpGetRaw(url, host, agent) {
+  return new Promise((resolve) => {
+    const headers = Object.assign(headersPara(host || 'betwinner1.com'), { 'Accept-Encoding': 'gzip, deflate, br' });
+    const opts = { headers };
+    if (agent) opts.agent = agent;
+    const req = https.get(url, opts, res => {
+      const enc = String(res.headers['content-encoding'] || '').toLowerCase();
+      let stream = res;
+      try {
+        if (enc === 'gzip') stream = res.pipe(zlib.createGunzip());
+        else if (enc === 'deflate') stream = res.pipe(zlib.createInflate());
+        else if (enc === 'br') stream = res.pipe(zlib.createBrotliDecompress());
+      } catch (e) {}
+      const chunks = [];
+      stream.on('data', c => chunks.push(c));
+      stream.on('error', e => resolve({ status: res.statusCode, erro: 'stream: ' + e.message }));
+      stream.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        const ct = String(res.headers['content-type'] || '?');
+        let isJson = false, jogos = null, sampleGameId = null;
+        try {
+          const j = JSON.parse(body);
+          isJson = true;
+          try { const r = parseLiveRaces(j); jogos = r.length; sampleGameId = (r[0] && r[0].gameId) || null; } catch (e) {}
+        } catch (e) {}
+        resolve({ status: res.statusCode, ct, enc: enc || '-', len: body.length, isJson, jogos, sampleGameId });
+      });
+    });
+    req.on('error', e => resolve({ erro: String(e.message).slice(0, 80) }));
+    req.setTimeout(9000, () => req.destroy(new Error('timeout')));
+  });
+}
+
+async function diagVariantes() {
+  let champs;
+  try { champs = await descobrirChampsAoVivo(); } catch (e) { return { erro: 'descoberta (sem champs) falhou: ' + e.message }; }
+  if (!champs || !champs.length) return { erro: 'sem champs de galgo ao vivo agora — tenta durante uma janela com corrida aberta' };
+  const all = champs.join(',');
+  const first = champs[0];
+  const host = _hostBom || HOSTS[0];
+  const agent = _proxyAgent || null;
+  const base = q => `https://${host}/service-api/LiveFeed/GetSportsShortZip?${q}`;
+  const variantes = [
+    { nome: 'A) todos + groupChamps (ATUAL)', q: `sports=68&champs=${all}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true` },
+    { nome: 'B) todos SEM groupChamps',        q: `sports=68&champs=${all}&lng=pt&gr=495&country=31&partner=152&virtualSports=true` },
+    { nome: 'C) 1 liga + groupChamps',         q: `sports=68&champs=${first}&lng=pt&gr=495&country=31&partner=152&virtualSports=true&groupChamps=true` },
+    { nome: 'D) 1 liga SEM groupChamps',       q: `sports=68&champs=${first}&lng=pt&gr=495&country=31&partner=152&virtualSports=true` },
+    { nome: 'E) 1 liga minimo (so lng)',       q: `sports=68&champs=${first}&lng=pt` },
+  ];
+  const out = { host, proxyAtivo: !!_proxyAgent, champsTotal: champs.length, champsAmostra: champs.slice(0, 5), resultados: [] };
+  for (const v of variantes) {
+    const r = await httpGetRaw(base(v.q), host, agent);
+    out.resultados.push(Object.assign({ variante: v.nome }, r));
+    await new Promise(res => setTimeout(res, 700));
+  }
+  return out;
 }
 
 function marcarTendencia(avbs, prevAvbs) {
@@ -452,6 +518,6 @@ function getSnapshots() { return Object.values(status.porCorrida); }
 module.exports = {
   pistaPorNome, descobrirChampsAoVivo, listarCorridasAoVivo, buscarMercados,
   snapshotCorrida, marcarTendencia, sugerirAvbs, iniciar, parar, getStatus, getSnapshots,
-  getChampsVistos,
+  getChampsVistos, diagVariantes,
   _status: status
 };

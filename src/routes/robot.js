@@ -2217,6 +2217,15 @@ router.get('/odds/diag/probe', requireAdmin, async (req, res) => {
   res.json(out);
 });
 
+// DIAGNOSTICO: testa varias VARIACOES da chamada de jogos (com champs=) via proxy
+// e mostra, pra cada uma, ct/len/isJson/jogos. Serve pra achar qual formato o
+// betwinner NAO desafia (1 liga por vez? sem groupChamps? params minimos?). A
+// variacao que voltar isJson:true com jogos>0 vira a implementacao definitiva.
+router.get('/odds/diag/variantes', requireAdmin, async (req, res) => {
+  try { res.json(await liveOddsModule.diagVariantes()); }
+  catch (e) { res.json({ erro: String(e.message).slice(0, 200) }); }
+});
+
 // DIAGNOSTICO (somente leitura): lista os PDFs salvos no disco hoje e, pra cada
 // corrida SKIP, mostra os candidatos (arquivos com o mesmo horario) e se o
 // casamento por pista achou o PDF. Serve pra descobrir por que algumas corridas
