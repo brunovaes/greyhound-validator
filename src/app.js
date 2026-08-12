@@ -897,6 +897,11 @@ function renderFocusPanel(r, idx) {
     // console em vez de desenhar dois galgos iguais em silencio.
     console.warn('[arena] par ' + _par.a + 'x' + _par.b + ' sem dados nesta corrida; mantendo ' + tf + 'x' + tu);
   }
+  // Guarda o par que a arena DE FATO desenhou. O chip do topo e o botao
+  // "Analisar disputa" leem daqui, e nao do _parEmFoco: quando os galgos do
+  // par sugerido nao existem na analise, a arena mantem o original — sem este
+  // registro o chip anunciava T1xT2 enquanto a arena mostrava T3xT5.
+  r._parNaTela = { a: tf, b: tu };
 
   focusCol.innerHTML =
     // Os banners (corrida antiga / card suspeito) foram pro RODAPE. Eles sao
@@ -1271,12 +1276,35 @@ function _pintaOddsLive(r, d){
           // A principal e' a de pos===1 (o robo ja rankeia). Cai no primeiro da
           // lista se o campo pos ainda nao vier.
           var top = avbs.find(function(x){ return x.pos === 1; }) || avbs[0];
-          if (r.avbEscolhido) {
+          // O chip tem que refletir o par QUE ESTA NA ARENA. Se a arena nao
+          // conseguiu trocar (galgo fora do histAll), procura o avb daquele
+          // par; nao achando, o chip nao mostra par nenhum em vez de anunciar
+          // uma disputa que a tela nao esta exibindo.
+          if (r._parNaTela) {
+            var _naTela = avbs.find(function(x){
+              return String(x.aTrap)===String(r._parNaTela.a) && String(x.bTrap)===String(r._parNaTela.b);
+            });
+            if (_naTela) top = _naTela;
+            else if (top && (String(top.aTrap)!==String(r._parNaTela.a) || String(top.bTrap)!==String(r._parNaTela.b))) {
+              top = null;   // divergiu e nao ha avb do par exibido
+            }
+          }
+          if (top && r.avbEscolhido) {
             var _ach = avbs.find(function(x){
               return String(x.aTrap)===String(r.avbEscolhido.a) && String(x.bTrap)===String(r.avbEscolhido.b);
             });
             if (_ach) top = _ach;
           }
+          // top pode ser null quando a arena nao conseguiu trocar o par: nesse
+          // caso o chip mostra so "AO VIVO", sem numeros, em vez de anunciar
+          // uma disputa diferente da que esta na tela.
+          if (!top) {
+            // Chip sem numeros: a arena nao conseguiu trocar o par, e anunciar
+            // uma disputa diferente da que esta na tela seria pior que nao
+            // anunciar nada. Sem "return" aqui de proposito — o resto do
+            // poller (alternativas, rodape) tem que continuar rodando.
+            hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>';
+          } else {
           var e = top.edge;
           var edgeH = (e==null)?'':' &middot; <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'var(--mut)'))+';font-weight:700">edge '+(e>0?'+':'')+e+'</span>';
           hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>'
@@ -1285,6 +1313,7 @@ function _pintaOddsLive(r, d){
             +   (_avbRean(top)!=null ? 'rean <span style="color:#22c55e;font-weight:700">'+_avbRean(top)+'%</span> &middot; ' : '')
             +   (_avbMotorOrig(top)!=null ? 'motor '+_avbMotorOrig(top)+'% &middot; ' : '')
             +   'mkt '+top.marketPct+'%'+edgeH+'</div>';
+                  }
         } else if(sug.length){
           var s0 = sug[0];
           hb.innerHTML = '<div style="font-size:9px;color:#f59e0b;font-weight:800;letter-spacing:.5px">&#9889; SUGERIDO</div>'
