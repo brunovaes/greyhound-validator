@@ -137,7 +137,7 @@ function httpGetJson(url, host, agent) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(12000, () => req.destroy(new Error('timeout')));
+    req.setTimeout(8000, () => req.destroy(new Error('timeout')));
   });
 }
 
@@ -361,6 +361,11 @@ async function umCiclo(getScores) {
     // getScores(r) devolve { scores, histFull, dataCard, corrida, hora } da analise
     // casada, ou null. histFull alimenta a reanalise; scores alimenta os sugeridos.
     const analise = (typeof getScores === 'function') ? (getScores(r) || null) : null;
+    // So gasta requisicao de odds em corrida que CASOU com uma analise sua. Corrida
+    // sem analise (pista fora do perfil, ou australiana nao mapeada tipo Richmond/
+    // The Meadows) nao gera cruzamento util e ainda entope o ciclo com timeout
+    // quando o betwinner trava. Pular reduz carga no betwinner e evita perder as suas.
+    if (!analise) continue;
     const prev = status.porCorrida[chave] || {};
     let snap;
     try { snap = await snapshotCorrida(r.gameId, analise, prev.avbs); }
