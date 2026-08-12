@@ -375,15 +375,24 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
 
 /* ── Avisos globais no RODAPE (so nesta tela) ──────────────────────────────
    Resultados atualizados, monitor, resultados suspeitos e stop de banca sao
-   avisos PERSISTENTES: ficam ate voce fechar no ×. No topo eles empurravam a
-   arena pra baixo o tempo todo, e esta e' a tela onde cada pixel vertical
-   conta. Nas outras telas continuam onde estavam — la nao atrapalham.
-   Empilham a partir da base; o z-index fica abaixo dos modais (que usam 1000+). */
+   avisos PERSISTENTES: ficam ate voce fechar no ×. No topo empurravam a arena
+   pra baixo o tempo todo, e esta e' a tela onde cada pixel vertical conta.
+
+   O "left" NAO e' zero de proposito: o banner tem que comecar depois da
+   sidebar (250px) e, no modo foco, depois da lista de proximas (mais 170px).
+   Com left:0 ele passava por cima da coluna da esquerda e cobria os cards de
+   acertos — feio e escondendo informacao.
+   Nas outras telas os banners continuam no topo, onde nao atrapalham. */
 #res-banner,#mon-banner,#suspicious-banner,#stop-banner{
-  position:fixed;left:0;right:0;bottom:0;z-index:900;
+  position:fixed;left:250px;right:0;bottom:0;z-index:900;
   border-top:1px solid rgba(255,255,255,.06);border-bottom:none;
   box-shadow:0 -4px 16px rgba(0,0,0,.5);
 }
+/* Modo foco: a lista de proximas ocupa mais 170px a esquerda. */
+body:has(.main.focus-mode) #res-banner,
+body:has(.main.focus-mode) #mon-banner,
+body:has(.main.focus-mode) #suspicious-banner,
+body:has(.main.focus-mode) #stop-banner{left:420px}
 /* Quando mais de um aparece, o seguinte sobe pra nao cobrir o anterior. */
 #res-banner ~ #mon-banner{bottom:38px}
 #res-banner ~ #suspicious-banner{bottom:76px}
