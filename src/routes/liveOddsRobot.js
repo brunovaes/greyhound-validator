@@ -349,12 +349,21 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
 
   let avbs;
   if (histFull && histFull.length && race.avbs && race.avbs.length) {
-    const dogsByTrap = {};
-    for (const g of histFull) dogsByTrap[g.trap] = g;
-    // scores globais da analise ORIGINAL (motor 1) -> pra mostrar o "motor original"
-    // ao lado da reanalise (motor 2), orientado pro mesmo favorito da reanalise.
+    // scores globais da analise ORIGINAL (motor 1): usados pra (1) mostrar o "motor
+    // original" ao lado da reanalise e (2) RESTRINGIR a reanalise aos ELEGIVEIS.
+    // Decisao do Bruno (opcao b): a reanalise so pareia galgos que o motor 1
+    // aceitou/pontuou, pra nao promover galgo que foi descartado pela regra de
+    // pista+distancia (a reanalise ignora pista; o motor 1 nao). Assim os dois
+    // motores nunca se contradizem em QUEM entra — o ganho de categoria segue
+    // valendo ENTRE os elegiveis.
     const scoreByTrap = {}, perfilByTrap = {};
     for (const s of (dados && dados.scores) || []) { scoreByTrap[s.trap] = s.score; perfilByTrap[s.trap] = s.perfil || null; }
+    const temScores = Object.keys(scoreByTrap).length > 0;
+    const dogsByTrap = {};
+    for (const g of histFull) {
+      if (temScores && !(g.trap in scoreByTrap)) continue; // so elegiveis; sem scores no cadastro, nao filtra
+      dogsByTrap[g.trap] = g;
+    }
     const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, config: {} };
     const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, _maxAvbs);
     avbs = ranked.map(a => {
