@@ -981,6 +981,12 @@ ${navBar(req.user, 'robot')}
     <div class="card-title">Saúde da descoberta (últimos 15 / 60 min)</div>
     <div id="odds-health"><div class="lin">Carregando…</div></div>
   </div>
+
+  <div class="card">
+    <div class="card-title">Tráfego do proxy (estimado) — compare com o USED TRAFFIC da Decodo</div>
+    <div id="odds-trafego"><div class="lin">Carregando…</div></div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Conta os bytes comprimidos que trafegam + overhead por requisição. É estimativa: a Decodo costuma marcar um pouco mais (handshake/TLS).</div>
+  </div>
 </div><!-- fim panel-odds -->
 
 <div class="robot-panel" id="panel-audit">
@@ -1341,6 +1347,22 @@ async function pollOddsHealth() {
       + '<div style="margin-top:10px;font-size:11px;color:#64748b">Robô: ' + (d.running ? 'rodando' : 'parado') + ' &middot; ciclos ' + (d.ciclos || 0) + '</div>';
     var rs = document.getElementById('odds-run-state');
     if (rs) rs.textContent = (d.running ? '● rodando' : '○ parado') + ((d.config && d.config.intervaloSeg) ? ' · intervalo ' + d.config.intervaloSeg + 's' : '') + (s.proxyAtivo ? ' · proxy ativo' : '');
+    // ── Tráfego do proxy ──
+    var elt = document.getElementById('odds-trafego');
+    if (elt) {
+      var t = d.trafego || {}, hoje = t.hoje || {}, dias = t.porDia || [];
+      var linhas = dias.slice(0, 7).map(function (x) {
+        return '<tr><td style="padding:2px 10px 2px 0;color:#cbd5e1">' + x.dia + '</td>'
+          + '<td style="padding:2px 14px;text-align:right;color:#e2e8f0;font-weight:600">' + (x.mb >= 1000 ? (x.gb + ' GB') : (x.mb + ' MB')) + '</td>'
+          + '<td style="padding:2px 0;text-align:right;color:#94a3b8">' + x.reqs + ' req</td></tr>';
+      }).join('');
+      elt.innerHTML =
+        '<div style="display:flex;gap:26px;flex-wrap:wrap;font-size:13px;color:#cbd5e1;margin-bottom:8px">'
+        +   '<div><div style="color:#94a3b8;font-size:11px">Hoje</div><b style="font-size:18px;color:#38bdf8">' + (hoje.mb != null ? hoje.mb + ' MB' : '—') + '</b> <span style="color:#94a3b8">(' + (hoje.reqs || 0) + ' req)</span></div>'
+        +   '<div><div style="color:#94a3b8;font-size:11px">Projeção 30 dias</div><b style="font-size:18px">' + (t.projecaoMensalGb != null ? t.projecaoMensalGb + ' GB' : '—') + '</b></div>'
+        + '</div>'
+        + (linhas ? '<table style="border-collapse:collapse;font-size:12px"><tbody>' + linhas + '</tbody></table>' : '<div class="lin" style="color:#64748b">Sem tráfego registrado ainda.</div>');
+    }
   } catch (e) {
     var el2 = document.getElementById('odds-health'); if (el2) el2.innerHTML = '<div class="lin">Erro ao buscar status.</div>';
   }

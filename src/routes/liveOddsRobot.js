@@ -107,26 +107,65 @@ function headersPara(host) {
     'X-Requested-With': 'XMLHttpRequest'
   };
 }
+// ── Medidor de trafego do proxy (pra comparar com o USED TRAFFIC da Decodo) ──
+// Soma os bytes COMPRIMIDOS que trafegam (o que a Decodo cobra) por dia (fuso BR),
+// mais um overhead fixo por requisicao (headers + framing TLS, que a Decodo tambem
+// conta mas o Node nao ve). E' ESTIMATIVA — a Decodo tende a marcar um pouco mais
+// (handshake TLS, reconexoes). Serve pra ordem de grandeza e projecao mensal.
+const TRAFEGO_OVERHEAD_REQ = 550; // bytes/req aprox (req headers + resp headers + TLS)
+const _trafego = { porDia: {} };  // 'YYYY-MM-DD'(BR) -> { bytes, reqs }
+function _diaBR() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }
+function registrarTrafego(bytesComprimidos) {
+  const dia = _diaBR();
+  const d = _trafego.porDia[dia] || { bytes: 0, reqs: 0 };
+  d.bytes += (bytesComprimidos || 0) + TRAFEGO_OVERHEAD_REQ;
+  d.reqs += 1;
+  _trafego.porDia[dia] = d;
+  const dias = Object.keys(_trafego.porDia).sort();
+  while (dias.length > 14) delete _trafego.porDia[dias.shift()]; // mantem 14 dias
+}
+function getTrafego() {
+  const dia = _diaBR();
+  const hoje = _trafego.porDia[dia] || { bytes: 0, reqs: 0 };
+  const porDia = Object.keys(_trafego.porDia).sort().reverse().map(k => ({
+    dia: k, mb: +(_trafego.porDia[k].bytes / 1e6).toFixed(2),
+    gb: +(_trafego.porDia[k].bytes / 1e9).toFixed(3), reqs: _trafego.porDia[k].reqs
+  }));
+  // media diaria dos dias COM trafego -> projecao de 30 dias
+  const comUso = porDia.filter(d => d.mb > 0);
+  const mediaMb = comUso.length ? comUso.reduce((a, b) => a + b.mb, 0) / comUso.length : 0;
+  return {
+    hoje: { dia, mb: +(hoje.bytes / 1e6).toFixed(2), gb: +(hoje.bytes / 1e9).toFixed(3), reqs: hoje.reqs },
+    porDia,
+    projecaoMensalGb: +((mediaMb * 30) / 1000).toFixed(2) // media/dia x 30
+  };
+}
+
 function httpGetJson(url, host, agent) {
   return new Promise((resolve, reject) => {
     const headers = Object.assign(headersPara(host || 'betwinner1.com'), { 'Accept-Encoding': 'gzip, deflate, br' });
     const opts = { headers };
     if (agent) opts.agent = agent; // proxy residencial (so na descoberta, se ligado)
     const req = https.get(url, opts, res => {
-      if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
-      // Descomprime conforme o Content-Encoding (o endpoint "...Zip" costuma vir gzip).
       const enc = String(res.headers['content-encoding'] || '').toLowerCase();
-      let stream = res;
-      try {
-        if (enc === 'gzip') stream = res.pipe(zlib.createGunzip());
-        else if (enc === 'deflate') stream = res.pipe(zlib.createInflate());
-        else if (enc === 'br') stream = res.pipe(zlib.createBrotliDecompress());
-      } catch (e) { res.resume(); return reject(new Error('descomprimir: ' + e.message)); }
-      const chunks = [];
-      stream.on('data', c => chunks.push(c));
-      stream.on('error', e => reject(new Error('stream: ' + e.message)));
-      stream.on('end', () => {
-        const body = Buffer.concat(chunks).toString('utf8');
+      // Junta os chunks CRUS (comprimidos = o que trafega na rede/proxy) pra:
+      // (1) medir o trafego real e comparar com o USED TRAFFIC da Decodo, e
+      // (2) descomprimir de uma vez. Conta o trafego SEMPRE (inclusive respostas
+      // de erro tipo 406), porque a Decodo tambem cobra esses bytes.
+      const rawChunks = [];
+      res.on('data', c => rawChunks.push(c));
+      res.on('error', e => reject(new Error('stream: ' + e.message)));
+      res.on('end', () => {
+        const comp = Buffer.concat(rawChunks);
+        registrarTrafego(comp.length); // bytes comprimidos na rede (+ overhead fixo por req)
+        if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error('HTTP ' + res.statusCode));
+        let buf = comp;
+        try {
+          if (enc === 'gzip') buf = zlib.gunzipSync(comp);
+          else if (enc === 'deflate') buf = zlib.inflateSync(comp);
+          else if (enc === 'br') buf = zlib.brotliDecompressSync(comp);
+        } catch (e) { return reject(new Error('descomprimir: ' + e.message)); }
+        const body = buf.toString('utf8');
         try { resolve(JSON.parse(body)); }
         catch (e) {
           // Corpo nao-JSON: mostra content-type/encoding + amostra pra diagnosticar
@@ -528,6 +567,7 @@ function getStatus() {
   return Object.assign({}, status, {
     porCorrida: undefined,
     descoberta: saudeDescoberta(),
+    trafego: getTrafego(),
     config: { intervaloSeg: Math.round((status.intervaloMs || 5000) / 1000), maxAvbs: _maxAvbs, edgeMin: _edgeMin, proxyDefinido: !!_proxyUrlAtual }
   });
 }
@@ -536,6 +576,6 @@ function getSnapshots() { return Object.values(status.porCorrida); }
 module.exports = {
   pistaPorNome, descobrirChampsAoVivo, listarCorridasAoVivo, buscarMercados,
   snapshotCorrida, marcarTendencia, sugerirAvbs, iniciar, parar, getStatus, getSnapshots,
-  getChampsVistos, diagVariantes,
+  getChampsVistos, diagVariantes, getTrafego,
   _status: status
 };
