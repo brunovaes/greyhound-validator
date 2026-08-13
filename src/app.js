@@ -601,10 +601,16 @@ async function syncFromServer() {
         // faixa de baixo. O toast serve pra chamar atencao na hora; o ticker
         // guarda o historico do dia, pra quem estava olhando outra coisa nao
         // perder o que mudou.
+        // Os avisos de mudanca vao SO pro ticker da faixa de baixo. O toast
+        // flutuante foi removido daqui: ele cobria os gauges da arena e, agora
+        // que o ticker guarda o historico do dia, era informacao duplicada.
+        // O showToast segue existindo pra confirmacoes de acao (salvar etc).
         if (typeof window.ghTicker === 'function') {
           changes.forEach(function(c){ try { window.ghTicker(c.txt); } catch(e){} });
+        } else {
+          var _hasSkip2 = changes.some(function(c){ return c.tipo==='skip'; });
+          showToast((_hasSkip2?'\u26A0\uFE0F ':'\uD83D\uDD04 ') + changes.map(function(c){ return c.txt; }).join(' \u00B7 '), !_hasSkip2);
         }
-        showToast((_hasSkip?'\u26A0\uFE0F ':'\uD83D\uDD04 ') + changes.map(function(c){ return c.txt; }).join(' \u00B7 '), !_hasSkip);
       } else {
         showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
       }
@@ -797,6 +803,17 @@ function _parEmFoco(r){
 //      pior que o painel vazio, porque ninguem percebe.
 // O fallback pro histAll fica pras analises antigas e pra janela entre deploys.
 // Convencao do robo: A e' sempre o favorito da reanalise.
+// O nome que vem no aHist/bHist as vezes traz a linha de pedigree inteira do
+// card ("Airfield Thunder (M) bebdw b Out Of Range ASB-Airfield Biddy Jul21").
+// Cortamos no marcador de sexo, que fecha o nome. Sem isso o nome estoura a
+// largura e empurra o layout da arena.
+// Isto e' defesa na tela: o certo e' o motor mandar o nome ja limpo.
+function _limpaNome(n){
+  if(!n) return '';
+  var m = String(n).match(/^(.*?\((?:M|W)\))/);
+  return (m ? m[1] : String(n)).trim();
+}
+
 function _avbDoPar(r, ta, tb){
   var l = (r && r._avbsAoVivo) || [];
   return l.find(function(x){ return String(x.aTrap)===String(ta) && String(x.bTrap)===String(tb); })
@@ -819,7 +836,7 @@ function _dadosDoTrap(r, trap, parA, parB){
 function _nomeDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return '';
   var _d = _dadosDoTrap(r, trap, parA, parB);
-  if (_d && _d.nome != null && _d.nome !== '') return _d.nome;
+  if (_d && _d.nome != null && _d.nome !== '') return _limpaNome(_d.nome);
   if(String(trap)===String(r.trapFav)) return r.nameFav||'';
   if(String(trap)===String(r.trapUnd)) return r.nameUnd||'';
   var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
