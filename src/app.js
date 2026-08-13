@@ -597,7 +597,13 @@ async function syncFromServer() {
       }
       if (changes.length) {
         var _hasSkip = changes.some(function(c){ return c.tipo==='skip'; });
-        try { playBellSound(); } catch(e){}
+        // Alem do toast (que some em 2,6s), manda cada aviso pro ticker da
+        // faixa de baixo. O toast serve pra chamar atencao na hora; o ticker
+        // guarda o historico do dia, pra quem estava olhando outra coisa nao
+        // perder o que mudou.
+        if (typeof window.ghTicker === 'function') {
+          changes.forEach(function(c){ try { window.ghTicker(c.txt); } catch(e){} });
+        }
         showToast((_hasSkip?'\u26A0\uFE0F ':'\uD83D\uDD04 ') + changes.map(function(c){ return c.txt; }).join(' \u00B7 '), !_hasSkip);
       } else {
         showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);

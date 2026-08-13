@@ -52,6 +52,7 @@ function navBar(user, active) {
        Analisar a exibe (o CSS dela liga o display). Nas outras telas estes
        avisos so ocupavam espaco — sao sobre o dia de corridas, e o Painel
        Admin ou o Configuracoes nao tem o que fazer com eles. -->
+  <div id="gf-ticker"><div class="gf-tk-mov"></div></div>
   <div id="gf-avisos" style="display:none">
   <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
     <span class="gf-rotulo" style="color:#f97316">Robô de Resultados</span><span class="gf-txt gf-completo" style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
@@ -113,6 +114,8 @@ function navBar(user, active) {
   // Painel Admin ou no Configuracoes.
   var col = document.querySelector('.focus-col');
   if(!col) return;
+  var ticker = document.getElementById('gf-ticker');
+  if(ticker) col.appendChild(ticker);
   // Move a faixa pro fim da coluna de foco: assim ela fica colada no que vem
   // antes (a barra de Odd) em qualquer zoom, em vez de ancorada na janela.
   col.appendChild(faixa);
@@ -127,6 +130,8 @@ function navBar(user, active) {
     faixa.style.display = v.length ? 'flex' : 'none';
     faixa.classList.toggle('solo',  v.length === 1);
     faixa.classList.toggle('multi', v.length > 1);
+    // Banner na tela = ticker sai. Faixa livre = ticker volta, se houver aviso.
+    if (ticker) ticker.classList.toggle('on', v.length === 0 && _tkItens.length > 0);
     // Um aviso que sumiu nao pode continuar "aberto" segurando a faixa.
     if (faixa.classList.contains('expandido')) {
       var ab = faixa.querySelector('.aberto');
@@ -150,6 +155,24 @@ function navBar(user, active) {
     box.classList.add('aberto');
     faixa.classList.add('expandido');
   });
+
+  // ── Alimentacao do ticker ────────────────────────────────────────────────
+  // O app.js empurra os avisos do monitoramento aqui (reanalise, skip, cio).
+  // Antes eles viravam um toast que sumia em 2,6s — se voce estivesse olhando
+  // outra coisa, perdia. Agora ficam rolando ate o fim do dia.
+  var _tkItens = [];
+  var _TK_MAX = 30;   // teto: evita a faixa virar um log infinito
+  window.ghTicker = function(txt){
+    if(!txt) return;
+    var agora = new Date();
+    var hh = String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
+    _tkItens.unshift('<span class="gf-tk-item"><span class="gf-tk-hora">' + hh + '</span> ' + txt + '</span>');
+    if(_tkItens.length > _TK_MAX) _tkItens.length = _TK_MAX;
+    var mov = ticker && ticker.querySelector('.gf-tk-mov');
+    // Duplica a lista pra a volta do loop nao deixar um buraco na faixa.
+    if(mov) mov.innerHTML = _tkItens.join('') + _tkItens.join('');
+    atualizar();
+  };
 
   // Observa mudancas de style nos 4 banners — e' assim que sabemos que um
   // apareceu ou sumiu, sem precisar alterar o codigo de cada robo.
@@ -470,6 +493,31 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
 #gf-avisos .gf-rotulo{display:none;font-weight:800;font-size:10px;letter-spacing:.3px;white-space:nowrap;cursor:pointer}
 #gf-avisos.multi .gf-rotulo{display:inline}
 #gf-avisos.multi:not(.expandido) .gf-completo{display:none}
+
+
+/* ── Ticker: avisos do monitoramento rolando na faixa ──────────────────────
+   So aparece quando a faixa esta LIVRE. Assim que qualquer banner surge, ele
+   sai de cena — banners tem prioridade porque exigem acao (tem botao) e ficam
+   ate voce fechar, enquanto texto em movimento e' dificil de ler sob pressao,
+   justo quando faltam minutos pra corrida. */
+#gf-ticker{
+  display:none;overflow:hidden;white-space:nowrap;
+  background:rgba(96,165,250,.05);border-top:1px solid rgba(96,165,250,.15);
+  padding:6px 0;font-size:11px;color:#9aa4b2;
+}
+#gf-ticker.on{display:block}
+#gf-ticker .gf-tk-mov{
+  display:inline-block;padding-left:100%;
+  animation:gfTicker 30s linear infinite;
+}
+/* Pausa no hover: da pra ler um aviso especifico sem esperar dar a volta. */
+#gf-ticker:hover .gf-tk-mov{animation-play-state:paused}
+#gf-ticker .gf-tk-item{margin-right:44px}
+#gf-ticker .gf-tk-hora{color:#60a5fa;font-weight:700}
+@keyframes gfTicker{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-100%)}
+}
 
 ${designTokensCSS()}
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
