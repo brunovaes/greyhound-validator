@@ -1534,6 +1534,33 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
     return o;
   })();
 
+  // ── Grafico por turno: motor x reanalise, acerto x erro ──────────────────
+  // Mesmo corte de turno do dashboard de HR (6h e 13h BR) de proposito: se as
+  // duas telas usassem cortes diferentes, os numeros discordariam sem motivo
+  // aparente. Conta TODAS as corridas analisadas, nao so as apostadas.
+  const _turnos = (function(){
+    const { bateuPar } = require('../utils/avbResultado');
+    const vazio = () => ({ motor:{ok:0,err:0}, bw:{ok:0,err:0} });
+    const g = { 'Manhã':vazio(), 'Tarde':vazio() };
+    for (const r of racesValidas) {
+      const h = parseInt(String(r.hora_br||'').split(':')[0], 10);
+      if (isNaN(h)) continue;
+      const t = h < 13 ? 'Manhã' : 'Tarde';
+      const bw = _parBW(r);
+      const pares = {
+        motor: (r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null,
+        bw: bw
+      };
+      for (const k of ['motor','bw']) {
+        if (!pares[k]) continue;
+        const v = bateuPar(r.finishing_order_json, pares[k].aTrap, pares[k].bTrap);
+        if (v === null) continue;      // indefinido fica fora
+        if (v) g[t][k].ok++; else g[t][k].err++;
+      }
+    }
+    return g;
+  })();
+
   const logoB64 = getLogo();
   const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
@@ -1548,6 +1575,20 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 .tx3 .tx3-rot{font-size:10px;color:#888;white-space:nowrap}
 .tx3 .tx3-num{font-size:19px;font-weight:800;line-height:1.1;white-space:nowrap}
 .tx3 .tx3-cnt{font-size:9px;color:#555;white-space:nowrap}
+
+/* Grafico por turno: uma barra empilhada (verde=acerto, vermelho=erro) pra
+   cada origem, dentro de cada turno. Ocupa o espaco que sobrava a direita dos
+   KPIs. Sem biblioteca: sao divs com largura percentual — mais leve e sem
+   dependencia nova pra um grafico de 4 barras. */
+.gtn{flex:1;min-width:230px}
+.gtn-lin{display:flex;align-items:center;gap:8px;margin-top:5px}
+.gtn-rot{font-size:9px;color:#888;width:74px;flex-shrink:0;text-align:right;white-space:nowrap}
+.gtn-bar{flex:1;height:13px;border-radius:3px;overflow:hidden;display:flex;background:rgba(255,255,255,.04)}
+.gtn-ok{background:#22C65E}
+.gtn-err{background:#ef4444}
+.gtn-pct{font-size:10px;font-weight:700;width:34px;flex-shrink:0;white-space:nowrap}
+.gtn-turno{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-top:8px}
+.gtn-turno:first-child{margin-top:2px}
 
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
@@ -1600,6 +1641,25 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
+
+<div class="kpi gtn">
+  <div class="kpi-label">Acerto por turno</div>
+  ${['Manhã','Tarde'].map(function(t){
+    var d=_turnos[t];
+    var linha=function(rot,o){
+      var tot=o.ok+o.err;
+      if(!tot) return '<div class="gtn-lin"><span class="gtn-rot">'+rot+'</span>'
+        + '<span class="gtn-bar"></span><span class="gtn-pct" style="color:#555">—</span></div>';
+      var pct=Math.round(o.ok/tot*100);
+      return '<div class="gtn-lin" title="'+rot+' '+t+': '+o.ok+' acerto(s), '+o.err+' erro(s)">'
+        + '<span class="gtn-rot">'+rot+'</span>'
+        + '<span class="gtn-bar"><span class="gtn-ok" style="width:'+pct+'%"></span>'
+        +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
+        + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
+    };
+    return '<div class="gtn-turno">'+t+'</div>' + linha('Motor',d.motor) + linha('Reanálise',d.bw);
+  }).join('')}
+</div>
 </div>
 <div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:50px">AvB Motor</th><th style="width:50px">AvB BW</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
