@@ -108,12 +108,14 @@ function navBar(user, active) {
 (function(){
   var faixa = document.getElementById('gf-avisos');
   if(!faixa) return;
-  // So a tela Analisar mostra a faixa. Ela e' quem tem a regra de CSS
-  // #gf-avisos{position:fixed...} — nas outras telas essa regra nao existe,
-  // entao usamos isso como deteccao, em vez de checar a URL (que muda de
-  // caminho conforme o BASE_PATH).
-  var ehAnalisar = getComputedStyle(faixa).position === 'fixed';
-  if(!ehAnalisar) return;   // fica oculta, como nasceu
+  // So a tela Analisar tem a coluna de foco. Nas outras a faixa fica oculta,
+  // como nasceu — sao avisos sobre o dia de corridas, nao tem o que fazer no
+  // Painel Admin ou no Configuracoes.
+  var col = document.querySelector('.focus-col');
+  if(!col) return;
+  // Move a faixa pro fim da coluna de foco: assim ela fica colada no que vem
+  // antes (a barra de Odd) em qualquer zoom, em vez de ancorada na janela.
+  col.appendChild(faixa);
 
   function visiveis(){
     return Array.prototype.filter.call(faixa.children, function(d){
@@ -437,22 +439,19 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 
-/* ── Faixa de avisos no RODAPE, LADO A LADO (so nesta tela) ────────────────
-   Antes empilhavam com "bottom" chutado em multiplos de 38px; como a altura
-   real varia (texto que quebra em duas linhas), um cobria o outro — chegou a
-   cobrir a linha da Odd.
-   Agora sao itens de um flex numa faixa unica: 1 ocupa tudo, 2 dividem ao
-   meio, 3 dividem em tres. Sem empilhamento, nao ha o que se sobrepor.
+/* ── Faixa de avisos, LADO A LADO, colada abaixo da barra de Odd ───────────
+   NAO usa position:fixed de proposito. Fixed ancora na JANELA, entao com zoom
+   o conteudo terminava mais acima e sobrava um vao entre a barra de Odd e a
+   faixa. Aqui ela entra no fluxo normal da coluna de foco: fica sempre colada
+   no que vem antes, em qualquer zoom, e ocupa a largura toda da area util.
 
-   O "left" nao e' zero: a faixa comeca depois da sidebar (250px) e, no modo
-   foco, depois da lista de proximas (mais 170px) — senao cobre os cards de
-   acertos da coluna esquerda. */
+   1 aviso ocupa tudo; 2 dividem ao meio; 3 dividem em tres. Sem empilhamento,
+   nao ha o que se sobrepor (antes o "bottom" era chutado em multiplos de 38px
+   e um cobria o outro — chegou a cobrir a propria barra de Odd). */
 #gf-avisos{
-  position:fixed;left:250px;right:0;bottom:0;z-index:900;
   display:none;gap:1px;background:rgba(255,255,255,.06);
-  box-shadow:0 -4px 16px rgba(0,0,0,.5);
+  border-top:1px solid rgba(255,255,255,.06);
 }
-body:has(.main.focus-mode) #gf-avisos{left:420px}
 #gf-avisos > div{
   flex:1 1 0;min-width:0;                 /* min-width:0 permite truncar o texto */
   align-items:center;justify-content:space-between;gap:8px;
