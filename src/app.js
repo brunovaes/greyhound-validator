@@ -141,32 +141,42 @@ function registrarAvisoGlobal(key){
 // duas ficam menores embaixo, como referencia — no card ha pouco espaco e ele
 // e' olhado de relance, no meio da operacao.
 // Enquanto voce nao escolher AvBs, "minha" vem vazia: e' o esperado, nao bug.
+// Dois valores lado a lado no card: Motor e Reanálise, com o rótulo pequeno
+// embaixo de cada um. A versão anterior repetia a informação — o número grande
+// era o mesmo "motor" que aparecia na linha de baixo, e o "sem escolhas ainda"
+// ocupava espaço sem dizer nada útil.
+// A taxa da SUA escolha não entra aqui de propósito: ela só ganha significado
+// depois de dezenas de corridas escolhidas, e num card pequeno um número que
+// fica vazio por semanas atrapalha mais do que ajuda. Ela vive no Histórico,
+// onde há espaço pra explicar.
 function _pintaAcertos(el, bloco){
   if(!el || !bloco) return;
-  var t = bloco.tres || null;
-  var principal = t && t.minha && t.minha.pct != null ? t.minha : { pct: bloco.pct, total: bloco.total };
-  var cor = principal.pct==null ? '#666' : (principal.pct>=50 ? '#22c55e' : '#ef4444');
-  el.textContent = principal.pct==null ? '-' : principal.pct + '%';
-  el.style.color = cor;
-
-  // Linha de referencia logo abaixo do numero, criada uma vez e reaproveitada.
-  var id = el.id + '-ref';
-  var ref = document.getElementById(id);
-  if(!t){ if(ref) ref.remove(); return; }
-  if(!ref){
-    ref = document.createElement('div');
-    ref.id = id;
-    ref.style.cssText = 'font-size:8.5px;color:#666;line-height:1.5;margin-top:2px';
-    el.parentNode.insertBefore(ref, el.nextSibling);
-  }
-  var linha = function(rot, o){
-    if(!o || o.pct==null) return rot+' <span style="color:#555">-</span>';
-    return rot+' <span style="color:'+(o.pct>=50?'#22c55e':'#ef4444')+'">'+o.pct+'%</span>';
+  var t = bloco.tres;
+  var cor = function(p){ return p==null ? '#666' : (p>=50 ? '#22c55e' : '#ef4444'); };
+  var lado = function(rot, o){
+    var pct = (o && o.pct!=null) ? o.pct+'%' : '—';
+    return '<div style="flex:1;text-align:center;min-width:0">'
+      + '<div style="font-size:19px;font-weight:800;line-height:1.1;color:'+cor(o&&o.pct)+'">'+pct+'</div>'
+      + '<div style="font-size:8.5px;color:#777;margin-top:1px;white-space:nowrap">'+rot+'</div>'
+      + '</div>';
   };
-  var suaTem = t.minha && t.minha.pct!=null;
-  ref.innerHTML = (suaTem ? '' : '<span style="color:#555">sem escolhas ainda</span><br>')
-    + linha('rean', t.rean) + ' &middot; ' + linha('motor', t.motor)
-    + (suaTem ? '<br><span style="color:#555">sua: '+t.minha.acertos+'/'+t.minha.total+'</span>' : '');
+
+  // Sem o bloco das três taxas (servidor antigo), mantém o número único.
+  if(!t){
+    el.textContent = bloco.pct==null ? '-' : bloco.pct+'%';
+    el.style.color = cor(bloco.pct);
+    return;
+  }
+  el.style.display = 'flex';
+  el.style.gap = '10px';
+  el.style.alignItems = 'flex-start';
+  el.style.justifyContent = 'center';
+  el.innerHTML = lado('Motor', t.motor) + lado('Reanálise', t.rean);
+
+  // A linha de referência antiga vira desnecessária: os dois valores já estão
+  // no card. Remove pra não sobrar resíduo de render anterior.
+  var ref = document.getElementById(el.id + '-ref');
+  if(ref) ref.remove();
 }
 
 async function loadAcertosResumo() {
