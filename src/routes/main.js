@@ -1576,19 +1576,21 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 .tx3 .tx3-num{font-size:19px;font-weight:800;line-height:1.1;white-space:nowrap}
 .tx3 .tx3-cnt{font-size:9px;color:#555;white-space:nowrap}
 
-/* Grafico por turno: uma barra empilhada (verde=acerto, vermelho=erro) pra
-   cada origem, dentro de cada turno. Ocupa o espaco que sobrava a direita dos
-   KPIs. Sem biblioteca: sao divs com largura percentual — mais leve e sem
-   dependencia nova pra um grafico de 4 barras. */
-.gtn{flex:1;min-width:230px}
-.gtn-lin{display:flex;align-items:center;gap:8px;margin-top:5px}
-.gtn-rot{font-size:9px;color:#888;width:74px;flex-shrink:0;text-align:right;white-space:nowrap}
-.gtn-bar{flex:1;height:13px;border-radius:3px;overflow:hidden;display:flex;background:rgba(255,255,255,.04)}
+/* Grafico por turno: manha e tarde LADO A LADO dentro do mesmo card, cada
+   turno com duas barras (motor e reanalise). Empilhar os turnos jogava o card
+   pra linha de baixo e deixava a faixa dos KPIs pela metade.
+   Sem biblioteca de grafico: sao divs com largura percentual — pra 4 barras,
+   trazer dependencia nova nao se justifica. */
+.gtn{flex:2 1 400px;min-width:380px}
+.gtn-cols{display:flex;gap:18px;margin-top:2px}
+.gtn-col{flex:1;min-width:0}
+.gtn-lin{display:flex;align-items:center;gap:6px;margin-top:4px}
+.gtn-rot{font-size:9px;color:#888;width:58px;flex-shrink:0;text-align:right;white-space:nowrap}
+.gtn-bar{flex:1;height:12px;border-radius:3px;overflow:hidden;display:flex;background:rgba(255,255,255,.04);min-width:50px}
 .gtn-ok{background:#22C65E}
 .gtn-err{background:#ef4444}
-.gtn-pct{font-size:10px;font-weight:700;width:34px;flex-shrink:0;white-space:nowrap}
-.gtn-turno{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-top:8px}
-.gtn-turno:first-child{margin-top:2px}
+.gtn-pct{font-size:10px;font-weight:700;width:32px;flex-shrink:0;white-space:nowrap}
+.gtn-turno{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
 
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
@@ -1644,6 +1646,7 @@ ${navBar(user, 'historico')}
 
 <div class="kpi gtn">
   <div class="kpi-label">Acerto por turno</div>
+  <div class="gtn-cols">
   ${['Manhã','Tarde'].map(function(t){
     var d=_turnos[t];
     var linha=function(rot,o){
@@ -1657,8 +1660,10 @@ ${navBar(user, 'historico')}
         +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
         + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
     };
-    return '<div class="gtn-turno">'+t+'</div>' + linha('Motor',d.motor) + linha('Reanálise',d.bw);
+    return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'
+      + linha('Motor',d.motor) + linha('Reanálise',d.bw) + '</div>';
   }).join('')}
+  </div>
 </div>
 </div>
 <div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:50px">AvB Motor</th><th style="width:50px">AvB BW</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
