@@ -1547,20 +1547,25 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 <div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
-<div class="kpi" style="min-width:190px">
+<div class="kpi" style="min-width:200px">
   <div class="kpi-label">Taxa de acerto</div>
+  <!-- display:block em cada linha e' explicito de proposito: o container pai
+       alinha os filhos em linha, e sem isso as tres taxas ficavam lado a lado
+       dentro do card em vez de empilhadas. -->
+  <div style="display:block;margin-top:4px">
   ${[['Geral','geral','o AvB que valeu: BW quando há, motor quando não há'],
      ['Pré-análise','motor','só o AvB do motor (análise global)'],
      ['Análise BW','bw','só o AvB do fechamento da reanálise']]
     .map(function(l){
       var o=_tx[l[1]];
       var cor = o.pct==null ? '#666' : (o.pct>=50 ? '#22C65E' : '#ef4444');
-      return '<div title="'+l[2]+'" style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:3px">'
-        + '<span style="font-size:10px;color:#888">'+l[0]+'</span>'
-        + '<span style="font-size:17px;font-weight:800;color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')
-        + '<span style="font-size:9px;color:#555;font-weight:400;margin-left:4px">'+(o.tot?o.ok+'/'+o.tot:'')+'</span></span>'
+      return '<div title="'+l[2]+'" style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:1px 0">'
+        + '<span style="font-size:10px;color:#888;white-space:nowrap">'+l[0]+'</span>'
+        + '<span style="white-space:nowrap"><span style="font-size:16px;font-weight:800;color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')+'</span>'
+        + '<span style="font-size:9px;color:#555;margin-left:5px">'+(o.tot?o.ok+'/'+o.tot:'')+'</span></span>'
         + '</div>';
     }).join('')}
+  </div>
 </div>
 <div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
