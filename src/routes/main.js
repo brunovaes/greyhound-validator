@@ -1582,10 +1582,10 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
    Sem biblioteca de grafico: sao divs com largura percentual — pra 4 barras,
    trazer dependencia nova nao se justifica. */
 .gtn{min-width:0}   /* a largura vem do grid do .kpis */
-.gtn-cols{display:flex;gap:18px;margin-top:2px}
+.gtn-cols{display:flex;gap:12px;margin-top:2px}
 .gtn-col{flex:1;min-width:0}
 .gtn-lin{display:flex;align-items:center;gap:6px;margin-top:4px}
-.gtn-rot{font-size:9px;color:#888;width:58px;flex-shrink:0;text-align:right;white-space:nowrap}
+.gtn-rot{font-size:9px;color:#888;width:52px;flex-shrink:0;text-align:right;white-space:nowrap}
 .gtn-bar{flex:1;height:12px;border-radius:3px;overflow:hidden;display:flex;background:rgba(255,255,255,.04);min-width:50px}
 .gtn-ok{background:#22C65E}
 .gtn-err{background:#ef4444}
@@ -1605,11 +1605,9 @@ ${designTokensCSS()}
   grid-template-columns:0.62fr 0.62fr 1.15fr 0.62fr 0.62fr 0.62fr 1.75fr;
   gap:8px;margin-bottom:16px;
 }
-/* Telas menores: volta a duas fileiras em vez de espremer tudo. */
-@media(max-width:1400px){
-  .kpis{grid-template-columns:repeat(3,1fr)}
-  .kpis .gtn{grid-column:1/-1}
-}
+/* Sem ponto de quebra por largura: um valor chutado (1400px) jogava tudo em
+   3 colunas em monitor comum. Se ficar apertado, o proprio grid encolhe as
+   colunas — os numeros sao curtos e aguentam. */
 /* Cabecalho fixo: o container ganha altura maxima e rolagem propria, e o
    thead cola no topo dele. Sem o max-height quem rola e' a PAGINA inteira,
    e ai o sticky nao tem em relacao a que grudar. */
