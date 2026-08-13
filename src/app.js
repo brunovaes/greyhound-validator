@@ -1059,14 +1059,20 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
 // Botao "Apostar" que leva pra corrida na casa. Quando o robo passar a
 // entregar URL por AvB (hoje e' por corrida), basta o _linkBetwinner mudar.
 function _botaoApostar(r){
-  var link = _linkBetwinner(r && r._snapAoVivo);
+  var snap = r && r._snapAoVivo;
+  var link = _linkBetwinner(snap);
   if(!link) return '';
-  // Mesma tipografia do botao ESCOLHIDO (10px / 700), em verde — o verde e' a
-  // cor de acao primaria do app (btn-save), entao o "ir apostar" fica
-  // visualmente separado do "escolhido", que e' azul.
-  return '<a href="'+link+'" target="_blank" rel="noopener" '
-    + 'style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:700;padding:4px;border-radius:4px;'
-    + 'background:#22c55e;color:#000;text-decoration:none">Entre na BW</a>';
+  // O _linkBetwinner agora sempre devolve algo: com bwUrl abre a CORRIDA, sem
+  // ele cai na secao ao vivo de galgo. Sao coisas diferentes e o rotulo diz
+  // qual e' — clicar esperando a corrida e cair numa lista, sem aviso, e' o
+  // tipo de surpresa ruim numa acao que envolve dinheiro.
+  var direto = !!(snap && (snap.bwUrl || snap.urlBetwinner));
+  return '<a href="'+link+'" target="_blank" rel="noopener"'
+    + ' title="'+(direto ? 'Abre esta corrida na BetWinner' : 'Abre a seção ao vivo de galgos (a corrida exata não foi mapeada)')+'"'
+    + ' style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:700;padding:4px;border-radius:4px;'
+    + 'background:'+(direto ? '#22c55e' : 'transparent')+';color:'+(direto ? '#000' : '#22c55e')+';'
+    + (direto ? '' : 'border:1px solid rgba(34,197,94,.45);')
+    + 'text-decoration:none">'+(direto ? 'Entre na BW' : 'Ao vivo na BW')+'</a>';
 }
 
 function _cardAlternativa(r, a, escolhidoAtual){
