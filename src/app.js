@@ -2117,6 +2117,13 @@ function buildResumoHumanizado(r){
 
   return partes.join(' ');
 }
+// Odd media do galgo (2 ultimas SPs na pista/dist), vinda do motor. Pode ser
+// null quando o galgo nao tem SP registrado — nesse caso mostra travessao em
+// vez de zero, que seria lido como "odd 0" e nao como "sem dado".
+function _fmtOdd(v){
+  return (v == null || v === '') ? '—' : Number(v).toFixed(2);
+}
+
 function buildRelatorioHtml(r){
   var sec = 'padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)';
   var title = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#22c55e;margin-bottom:10px';
@@ -2148,7 +2155,7 @@ function buildRelatorioHtml(r){
   // Tabela de scores
   html += '<div style="'+sec+'"><div style="'+title+'">Scores calculados (motor fixo/configurado)</div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#888;text-align:left">'
-    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Categoria</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Split</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
+    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Categoria</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Split</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center" title="Odd decimal média das 2 últimas SPs na pista/distância">Odd méd</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
   html += r.scores.map(function(g){
     var s = g.scores||{};
     var isFav = g.trap===r.trapFav, isUnd = g.trap===r.trapUnd;
@@ -2161,6 +2168,10 @@ function buildRelatorioHtml(r){
       +'<td style="padding:5px 6px;text-align:center">'+(s.split!=null?s.split:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.remarks!=null?s.remarks:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.sp!=null?s.sp:'-')+'</td>'
+      // Odd media vem no galgo (g.oddMedia), nao no bloco de scores: e' dado de
+      // mercado, nao criterio de pontuacao. Null vira travessao — mostrar 0
+      // seria lido como "odd zero" em vez de "sem dado".
+      +'<td style="padding:5px 6px;text-align:center;color:#cbd5e1">'+_fmtOdd(g.oddMedia)+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.brt!=null?s.brt:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.postPick!=null?s.postPick:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center;font-weight:700">'+g.score+'</td></tr>';
@@ -2187,7 +2198,10 @@ function buildRelatorioHtml(r){
     html += '<div style="font-size:12px;color:#f97316;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:12px">Corrida marcada como <strong>Skip</strong> — margem insuficiente pra indicação confiável.</div>';
   } else {
     html += '<div style="font-size:13px;color:#fff;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:14px">'
-      + 'Favorito: <strong style="color:#22c55e">T'+r.trapFav+' '+(r.nameFav||'')+'</strong> vs Underdog: <strong style="color:#ef4444">T'+r.trapUnd+' '+(r.nameUnd||'')+'</strong><br>'
+      // Odd media de cada lado ao lado do nome. Com o modo avb_parelho o
+      // trapFav/trapUnd ja e' o par de odds mais proximas, entao ver as duas
+      // juntas mostra na hora o quao equilibrada e' a disputa.
+      + 'Favorito: <strong style="color:#22c55e">T'+r.trapFav+' '+(r.nameFav||'')+'</strong> <span style="color:#9aa4b2">('+_fmtOdd(r.oddFav)+')</span> vence Underdog: <strong style="color:#ef4444">T'+r.trapUnd+' '+(r.nameUnd||'')+'</strong> <span style="color:#9aa4b2">('+_fmtOdd(r.oddUnd)+')</span><br>'
       + 'Confiança: <strong>'+r.pct+'% ('+r.nivel+')</strong>'
       + (r.vencedor ? '<br><span style="color:#22c55e;font-weight:700">★ Recomendação de Back</span>' : '')
       + '</div>';
