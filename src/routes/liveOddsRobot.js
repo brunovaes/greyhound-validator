@@ -112,7 +112,12 @@ function headersPara(host) {
 // mais um overhead fixo por requisicao (headers + framing TLS, que a Decodo tambem
 // conta mas o Node nao ve). E' ESTIMATIVA — a Decodo tende a marcar um pouco mais
 // (handshake TLS, reconexoes). Serve pra ordem de grandeza e projecao mensal.
-const TRAFEGO_OVERHEAD_REQ = 550; // bytes/req aprox (req headers + resp headers + TLS)
+// Overhead por requisicao que a Decodo conta (download+upload) mas o Node nao ve no
+// corpo: handshake TLS (no proxy ROTATIVO cada request = conexao nova = handshake
+// completo, ~4-6KB com certificados), headers de request (upload) e de resposta,
+// framing TLS. Calibrado ~5KB pelo dado da Decodo (~10.6KB/req vs ~4KB de corpo).
+// Ajustavel: quando tivermos um dia inteiro batido com a Decodo, travo o valor exato.
+const TRAFEGO_OVERHEAD_REQ = 5000; // bytes/req (handshake TLS rotativo + headers 2 vias)
 const _trafego = { porDia: {} };  // fallback em memoria se o banco falhar
 function _diaBR() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }
 function _dbTrafego() { try { return require('../db/database').db; } catch (e) { return null; } }
