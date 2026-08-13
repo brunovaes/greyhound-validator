@@ -83,7 +83,7 @@ db.exec(`
     -- Filtros de corrida
     dist_min INTEGER DEFAULT 400,
     dist_max INTEGER DEFAULT 575,
-    classes_aceitas TEXT DEFAULT 'A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12',
+    classes_aceitas TEXT DEFAULT 'A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12,OR,OR1,OR2,OR3',
     min_corridas_uteis INTEGER DEFAULT 3,
     -- Thresholds de confianca
     pct_alta INTEGER DEFAULT 65,
@@ -277,6 +277,9 @@ const migrations = [
   // ago/2026 — modo AvB parelho (motor 1 pareia por SP colada em vez de melhor x pior)
   "ALTER TABLE analysis_config ADD COLUMN avb_parelho INTEGER DEFAULT 1",
   "ALTER TABLE analysis_config ADD COLUMN avb_parelho_limiar REAL DEFAULT 0.10",
+  // ago/2026 — passa a aceitar corridas Open (OR). Adiciona OR,OR1,OR2,OR3 na lista
+  // de classes aceitas do config EXISTENTE (idempotente: so mexe se ainda nao tem OR).
+  "UPDATE analysis_config SET classes_aceitas = classes_aceitas || ',OR,OR1,OR2,OR3' WHERE classes_aceitas IS NOT NULL AND classes_aceitas NOT LIKE '%OR%'",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

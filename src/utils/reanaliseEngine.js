@@ -24,8 +24,11 @@ const DEFAULTS = {
 };
 
 // nivel numerico da categoria: A1=1 ... A9=9 (menor = mais forte). Nao-A -> null.
+// Open Race (OR/OR1/OR2/OR3) = topo, nivel 1 (= A1), consistente com o motor 1.
 function nivelCat(classe) {
-  const m = String(classe || '').match(/^A(\d+)$/i);
+  const c = String(classe || '').trim().toUpperCase();
+  if (/^OR\d?$/.test(c)) return 1;
+  const m = c.match(/^A(\d+)$/);
   return m ? parseInt(m[1]) : null;
 }
 // trial? grade comeca com T (UK marca trial assim) ou remark Solo/Trial.

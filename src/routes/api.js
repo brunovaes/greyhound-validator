@@ -105,7 +105,10 @@ const CLASS_HIERARCHY = {
   'B1':1,'B2':2,'B3':3,'B4':4,'B5':5,'B6':6,
   'C1':1,'C2':2,'C3':3,'C4':4,'C5':5,'C6':6,
   'D1':1,'D2':2,'D3':3,'D4':4,'D5':5,'D6':6,
-  'S1':1,'S2':2,'S3':3,'S4':4,'S5':5,'S6':6
+  'S1':1,'S2':2,'S3':3,'S4':4,'S5':5,'S6':6,
+  // Open Race (topo, acima do graduado). Mapeado no nivel 1 (= A1) — nao usar 0,
+  // que quebraria as checagens `if(!nivel)`. Graduar OR1/OR2/OR3 depois, se preciso.
+  'OR':1,'OR1':1,'OR2':1,'OR3':1
 };
 
 function getClassLevel(classe) {
