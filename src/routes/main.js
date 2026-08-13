@@ -48,7 +48,11 @@ function navBar(user, active) {
     </div>
   </nav>
   <script src="${BASE}/static/js/alertaGlobal.js" defer></script>
-  <div id="gf-avisos">
+  <!-- Faixa de avisos dos robos. Nasce OCULTA de proposito: so a tela
+       Analisar a exibe (o CSS dela liga o display). Nas outras telas estes
+       avisos so ocupavam espaco — sao sobre o dia de corridas, e o Painel
+       Admin ou o Configuracoes nao tem o que fazer com eles. -->
+  <div id="gf-avisos" style="display:none">
   <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
     <span class="gf-rotulo" style="color:#f97316">Robô de Resultados</span><span class="gf-txt gf-completo" style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
     <div style="display:flex;align-items:center;gap:10px">
@@ -104,6 +108,12 @@ function navBar(user, active) {
 (function(){
   var faixa = document.getElementById('gf-avisos');
   if(!faixa) return;
+  // So a tela Analisar mostra a faixa. Ela e' quem tem a regra de CSS
+  // #gf-avisos{position:fixed...} — nas outras telas essa regra nao existe,
+  // entao usamos isso como deteccao, em vez de checar a URL (que muda de
+  // caminho conforme o BASE_PATH).
+  var ehAnalisar = getComputedStyle(faixa).position === 'fixed';
+  if(!ehAnalisar) return;   // fica oculta, como nasceu
 
   function visiveis(){
     return Array.prototype.filter.call(faixa.children, function(d){
