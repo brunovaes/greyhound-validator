@@ -1357,6 +1357,29 @@ router.post('/sessao/:id/deletar', (req, res) => {
 //
 // O "bateu" e a "odd" seguem o BW quando ele existe; sem BW, seguem o Motor.
 // E' a regra que reflete a aposta que realmente valeu.
+// Observacoes: mostra os primeiros 150 caracteres e um "leia mais" que
+// expande a linha. Nada e' cortado no banco — o texto inteiro fica no HTML,
+// so escondido, entao o relatorio e o export continuam completos.
+// O corte respeita a palavra: cortar no meio de uma deixa a leitura estranha.
+function _celulaObs(r){
+  var txt = String(r.obs || '').trim();
+  if (!txt) return '<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">-</td>';
+  var LIM = 150;
+  if (txt.length <= LIM) {
+    return '<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">' + txt + '</td>';
+  }
+  var corte = txt.lastIndexOf(' ', LIM);
+  if (corte < LIM * 0.6) corte = LIM;      // palavra gigante: corta no limite mesmo
+  var ini = txt.slice(0, corte);
+  var resto = txt.slice(corte);
+  return '<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">'
+    + '<span>' + ini + '</span>'
+    + '<span class="obs-resto" style="display:none">' + resto + '</span>'
+    + '<span class="obs-elip">…</span> '
+    + '<a class="obs-mais" style="color:#60a5fa;cursor:pointer;font-size:10px;white-space:nowrap">leia mais</a>'
+    + '</td>';
+}
+
 function _parBW(r){
   var esc = _jsonOuNull(r.avb_escolhido);
   if (esc) { esc._origem = 'sua escolha'; return esc; }
@@ -1609,7 +1632,7 @@ ${_celulaBW(r)}
 </select></td>
 <td style="text-align:center">${(function(){var tc=["","t1","t2","t3","t4","t5","t6"];var html="";[r.resultado_1,r.resultado_2,r.resultado_3].forEach(function(v){if(!v)return;var n=parseInt(v);if(n>=1&&n<=6){html+='<span class="trap-badge '+tc[n]+'" style="width:20px;height:20px;font-size:11px;margin:0 1px">'+n+'</span>';}else{var name=String(v).split(" ")[0].slice(0,10);html+='<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">'+name+'</span>';}});if(r.video_url){html+='<div style="margin-top:5px"><button onclick="openReplay('+r.id+')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px">&#9654; Replay</button></div>';}return html||"-";})()}</td>
 <td style="text-align:center">${!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':'')}</td>
-<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">${r.obs||'-'}</td>
+${_celulaObs(r)}
 <td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
 <td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:default"><input type="checkbox" class="hist-inp" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" disabled> Não aberto</label></td>
 <td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
@@ -1693,6 +1716,21 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script>
+
+// "leia mais" das Observacoes: um listener so pra tabela inteira, em vez de
+// onclick por linha (aspas dentro de onclick em template literal ja quebraram
+// tela neste projeto).
+document.addEventListener('click', function(ev){
+  var a = ev.target;
+  if(!a || !a.classList || !a.classList.contains('obs-mais')) return;
+  var td = a.closest('td'); if(!td) return;
+  var resto = td.querySelector('.obs-resto'), elip = td.querySelector('.obs-elip');
+  var aberto = resto && resto.style.display !== 'none';
+  if(resto) resto.style.display = aberto ? 'none' : 'inline';
+  if(elip)  elip.style.display  = aberto ? 'inline' : 'none';
+  a.textContent = aberto ? 'leia mais' : 'leia menos';
+});
+
 var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida)}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
