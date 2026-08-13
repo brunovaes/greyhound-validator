@@ -2279,6 +2279,38 @@ router.get('/odds/diag/variantes', requireAdmin, async (req, res) => {
   catch (e) { res.json({ erro: String(e.message).slice(0, 200) }); }
 });
 
+// DIAGNOSTICO: USO do proxy Decodo — cruza o medidor de trafego (proxy_trafego)
+// com o captador de AvBs abertos (avb_abertos) pra dizer, por dia e no total:
+// quantas corridas o robo puxou, quantos pares de AvB, quantas requisicoes e MB.
+// Comeca a contar a partir do deploy do captador/medidor — dias anteriores nao
+// tem esse detalhe (so o total de MB que a Decodo mostra).
+router.get('/odds/diag/uso', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const trafego = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego ORDER BY dia DESC LIMIT 30').all();
+    const avbDia = db.prepare("SELECT data AS dia, COUNT(*) corridas, COALESCE(SUM(n_pares),0) pares FROM avb_abertos GROUP BY data ORDER BY data DESC LIMIT 30").all();
+    const dias = {};
+    for (const t of trafego) dias[t.dia] = { dia: t.dia, mb: +(t.bytes / 1e6).toFixed(2), reqs: t.reqs, corridas: 0, pares: 0 };
+    for (const a of avbDia) dias[a.dia] = Object.assign(dias[a.dia] || { dia: a.dia, mb: 0, reqs: 0 }, { corridas: a.corridas, pares: a.pares });
+    const por_dia = Object.values(dias).sort((x, y) => String(y.dia).localeCompare(String(x.dia)));
+    const totCorridas = db.prepare('SELECT COUNT(*) n FROM avb_abertos').get().n;
+    const totPares = db.prepare('SELECT COALESCE(SUM(n_pares),0) s FROM avb_abertos').get().s;
+    const totReqs = trafego.reduce((a, b) => a + b.reqs, 0);
+    const totBytes = trafego.reduce((a, b) => a + b.bytes, 0);
+    const totMb = +(totBytes / 1e6).toFixed(2);
+    res.json({
+      resumo: {
+        corridas: totCorridas, avbs_pares: totPares, requisicoes: totReqs,
+        mb_total: totMb, gb_total: +(totBytes / 1e9).toFixed(3),
+        mb_por_corrida: totCorridas ? +(totMb / totCorridas).toFixed(3) : null,
+        mb_por_avb: totPares ? +(totMb / totPares).toFixed(3) : null
+      },
+      por_dia,
+      obs: 'Contagem comeca no deploy do captador/medidor — dias anteriores nao entram (so o total de MB no painel da Decodo).'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // DIAGNOSTICO (somente leitura): lista os PDFs salvos no disco hoje e, pra cada
 // corrida SKIP, mostra os candidatos (arquivos com o mesmo horario) e se o
 // casamento por pista achou o PDF. Serve pra descobrir por que algumas corridas
