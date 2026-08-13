@@ -169,6 +169,21 @@ db.exec(`
     b INTEGER NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- ago/2026 — captador dos AvBs que o betwinner ABRE por corrida (so o feed ao
+  -- vivo tem isso). Serve pra CALIBRAR o limiar do modo avb_parelho: cruzando
+  -- estes pares com as SPs dos PDFs medimos a distancia de odd que o betwinner
+  -- realmente costuma abrir. Uma linha por corrida (gameId), pares em JSON.
+  CREATE TABLE IF NOT EXISTS avb_abertos (
+    game_id INTEGER PRIMARY KEY,
+    data TEXT,
+    corrida TEXT,
+    hora TEXT,
+    track TEXT,
+    pares_json TEXT,
+    n_pares INTEGER DEFAULT 0,
+    capturado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migracoes seguras para banco existente
@@ -259,6 +274,9 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN odds_max_avbs INTEGER DEFAULT 3",
   "ALTER TABLE analysis_config ADD COLUMN odds_edge_min INTEGER DEFAULT 5",
   "ALTER TABLE analysis_config ADD COLUMN odds_proxy_url TEXT DEFAULT ''",
+  // ago/2026 — modo AvB parelho (motor 1 pareia por SP colada em vez de melhor x pior)
+  "ALTER TABLE analysis_config ADD COLUMN avb_parelho INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN avb_parelho_limiar REAL DEFAULT 0.10",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

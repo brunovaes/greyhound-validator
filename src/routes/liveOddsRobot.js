@@ -409,7 +409,10 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     }));
   }
   avbs = marcarTendencia(avbs, prevAvbs);
-  return Object.assign({}, race, { avbs });
+  // pares BRUTOS do betwinner (TODOS os AvB abertos, antes do filtro da reanalise)
+  // — usados pelo captador de calibracao do modo avb_parelho.
+  const avbsBrutos = (race.avbs || []).map(p => ({ aTrap: p.aTrap, bTrap: p.bTrap, oddAvenceB: p.oddAvenceB, oddBvenceA: p.oddBvenceA, marketPct: p.marketPct }));
+  return Object.assign({}, race, { avbs, _avbsBrutos: avbsBrutos });
 }
 
 // ── Loop principal ───────────────────────────────────────────────────────────
@@ -419,6 +422,7 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
 // (robot.js), que tem acesso ao banco.
 let timer = null;
 let _onClose = null; // callback(fechamento) — grava a principal no banco no post (setado por iniciar)
+let _onPairs = null; // callback(pares abertos) — captador de calibracao do avb_parelho (setado por iniciar)
 
 // Cache da DESCOBERTA de pistas/corridas. O GetSportsShortZip (a lista de quais
 // corridas estao ao vivo) e' o endpoint que toma 406 quando batido de 5 em 5s.
@@ -511,6 +515,12 @@ async function umCiclo(getScores) {
     let snap;
     try { snap = await snapshotCorrida(r.gameId, analise, prev.avbs); }
     catch (e) { addLog('warn', `${r.track} ${r.raceNum}: ${e.message}`); continue; }
+    // Captador de calibracao: grava os pares que o betwinner ABRIU nesta corrida
+    // (todos, nao so os da reanalise). Nunca derruba o ciclo.
+    if (typeof _onPairs === 'function' && snap && snap._avbsBrutos && snap._avbsBrutos.length) {
+      try { _onPairs({ gameId: r.gameId, track: r.track, corrida: (analise && analise.corrida) || null, hora: (analise && analise.hora) || null, pares: snap._avbsBrutos }); }
+      catch (err) { /* silencioso — captacao nunca pode afetar o robo */ }
+    }
     status.porCorrida[chave] = {
       gameId: r.gameId, li: r.li, track: r.track, pista: r.pista, raceNum: r.raceNum,
       statusLine: r.statusLine, startTs: r.startTs,
@@ -558,6 +568,7 @@ function iniciar(getScores, opts) {
   opts = opts || {};
   const intervaloMs = opts.intervaloMs || 5000;
   _onClose = (typeof opts.onClose === 'function') ? opts.onClose : null; // grava o fechamento no banco
+  _onPairs = (typeof opts.onPairs === 'function') ? opts.onPairs : null; // captador de pares abertos (calibracao)
   _getOddsCfg = (typeof opts.getOddsCfg === 'function') ? opts.getOddsCfg : null; // config viva (maxAvbs/edgeMin)
   if (opts.proxyUrl !== undefined) setProxy(opts.proxyUrl || process.env.BETWINNER_PROXY_URL || ''); // config vence env
   if (opts.maxAvbs > 0) _maxAvbs = opts.maxAvbs;

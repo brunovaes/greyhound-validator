@@ -421,6 +421,27 @@ function _gravarFechamentoAvb(fech){
   }catch(e){ console.error('[ODDS-FECHAMENTO] erro:', e.message); }
 }
 
+// Captador dos AvBs que o betwinner ABRE por corrida (todos os pares, nao so os
+// da reanalise). Grava na tabela avb_abertos, uma linha por game_id, guardando o
+// conjunto MAIS COMPLETO visto (upsert quando aparecem mais pares). Serve pra
+// CALIBRAR o limiar do avb_parelho: depois cruzamos estes pares com as SPs dos
+// PDFs (races.hist_all) e medimos a distancia de odd que o betwinner realmente
+// abre. Puramente aditivo — nunca pode afetar o robo (try/catch total).
+function _gravarParesAbertos(info){
+  try{
+    if(!info || !info.gameId || !Array.isArray(info.pares) || !info.pares.length) return;
+    const { db } = require('../db/database');
+    const existe = db.prepare('SELECT n_pares FROM avb_abertos WHERE game_id=?').get(info.gameId);
+    if (existe && existe.n_pares >= info.pares.length) return; // ja temos igual/mais pares
+    db.prepare(
+      'INSERT INTO avb_abertos (game_id,data,corrida,hora,track,pares_json,n_pares,capturado_em) '
+      + 'VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP) '
+      + 'ON CONFLICT(game_id) DO UPDATE SET data=excluded.data,corrida=excluded.corrida,hora=excluded.hora,'
+      + 'track=excluded.track,pares_json=excluded.pares_json,n_pares=excluded.n_pares,capturado_em=CURRENT_TIMESTAMP'
+    ).run(info.gameId, getTodayDate(), info.corrida||null, info.hora||null, info.track||null, JSON.stringify(info.pares), info.pares.length);
+  }catch(e){ /* captacao nunca derruba o robo */ }
+}
+
 // Config do Robo de Odds (Painel Admin -> analysis_config, user_id=1). Defaults
 // se a coluna vier nula. Lido no start e a cada ciclo (maxAvbs/edge sao vivos).
 function getOddsConfig(){
@@ -442,6 +463,7 @@ function _iniciarOdds(){
     intervaloMs: c.intervaloSeg * 1000,
     podeRodar: _dentroJanelaOdds,
     onClose: _gravarFechamentoAvb,
+    onPairs: _gravarParesAbertos,
     getOddsCfg: () => { const x = getOddsConfig(); return { maxAvbs: x.maxAvbs, edgeMin: x.edgeMin }; },
     proxyUrl: c.proxyUrl,
     maxAvbs: c.maxAvbs, edgeMin: c.edgeMin
@@ -973,8 +995,13 @@ ${navBar(req.user, 'robot')}
     <div class="form-row" style="margin-top:8px">
       <div class="field" style="flex:1;min-width:280px"><label>Proxy residencial (opcional) — deixa vazio p/ direto</label><input type="text" id="odds-proxy" placeholder="http://usuario:senha@host:porta" style="width:100%"></div>
     </div>
+    <div class="form-row" style="margin-top:8px;border-top:1px solid #1f2937;padding-top:10px">
+      <div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="odds-parelho" style="width:auto">Motor 1: AvB parelho</label></div>
+      <div class="field"><label>Limiar parelho (ΔSP, 0–1)</label><input type="number" id="odds-parelho-limiar" min="0.01" max="1" step="0.01" style="width:110px"></div>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-top:2px">AvB parelho: o motor pareia os galgos mais colados de odd (SP das 2 últimas na pista) com favorito claro, em vez de melhor×pior — pra o par quase sempre abrir ao vivo. Vale na próxima análise. Desligado = volta ao melhor×pior.</div>
     <div id="odds-cfg-msg" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
-    <div style="font-size:11px;color:#64748b;margin-top:4px">Intervalo e proxy reiniciam o robô ao salvar; nº de AvBs e edge valem no próximo ciclo.</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Intervalo e proxy reiniciam o robô ao salvar; nº de AvBs, edge e AvB parelho valem no próximo ciclo/análise.</div>
   </div>
 
   <div class="card">
@@ -1308,12 +1335,16 @@ async function loadOddsConfig() {
     if (g('odds-maxavbs')) g('odds-maxavbs').value = c.maxAvbs;
     if (g('odds-edgemin')) g('odds-edgemin').value = c.edgeMin;
     if (g('odds-proxy')) g('odds-proxy').value = c.proxyUrl || '';
+    if (g('odds-parelho')) g('odds-parelho').checked = (c.avbParelho == null ? true : !!c.avbParelho);
+    if (g('odds-parelho-limiar')) g('odds-parelho-limiar').value = (c.avbParelhoLimiar != null ? c.avbParelhoLimiar : 0.10);
   } catch (e) {}
 }
 async function oddsSaveConfig() {
   var g = function(id){ return document.getElementById(id); };
   var el = g('odds-cfg-msg'); el.style.color = '#94a3b8'; el.textContent = 'Salvando…';
-  var body = { intervaloSeg: g('odds-intervalo').value, maxAvbs: g('odds-maxavbs').value, edgeMin: g('odds-edgemin').value, proxyUrl: g('odds-proxy').value };
+  var body = { intervaloSeg: g('odds-intervalo').value, maxAvbs: g('odds-maxavbs').value, edgeMin: g('odds-edgemin').value, proxyUrl: g('odds-proxy').value,
+    avbParelho: g('odds-parelho') ? (g('odds-parelho').checked ? 1 : 0) : 1,
+    avbParelhoLimiar: g('odds-parelho-limiar') ? g('odds-parelho-limiar').value : 0.10 };
   try {
     var r = await fetch(BASE + '/robot/odds/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     var d = await r.json();
@@ -2404,7 +2435,16 @@ router.post('/odds/start', requireAdmin, (req, res) => {
 });
 
 // Config do Robo de Odds — ler e salvar (Painel Admin)
-router.get('/odds/config', requireAdmin, (req, res) => { res.json(getOddsConfig()); });
+router.get('/odds/config', requireAdmin, (req, res) => {
+  const out = getOddsConfig();
+  try {
+    const { db } = require('../db/database');
+    const c = db.prepare('SELECT avb_parelho, avb_parelho_limiar FROM analysis_config WHERE user_id=1').get() || {};
+    out.avbParelho = (c.avb_parelho == null) ? 1 : c.avb_parelho;               // 1 = ligado
+    out.avbParelhoLimiar = (c.avb_parelho_limiar != null) ? c.avb_parelho_limiar : 0.10;
+  } catch (e) {}
+  res.json(out);
+});
 router.post('/odds/config', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
@@ -2414,8 +2454,12 @@ router.post('/odds/config', requireAdmin, (req, res) => {
     const edgeRaw = parseInt(b.edgeMin);
     const edgeMin = Math.max(0, Math.min(50, isNaN(edgeRaw) ? 5 : edgeRaw));
     const proxyUrl = String(b.proxyUrl || '').trim();
-    db.prepare('UPDATE analysis_config SET odds_intervalo_seg=?, odds_max_avbs=?, odds_edge_min=?, odds_proxy_url=? WHERE user_id=1')
-      .run(intervalo, maxAvbs, edgeMin, proxyUrl);
+    // Motor 1 — modo AvB parelho (afeta a ANALISE, nao o robo ao vivo)
+    const avbParelho = [true, 1, '1', 'true', 'on'].includes(b.avbParelho) ? 1 : 0;
+    let avbLimiar = parseFloat(b.avbParelhoLimiar);
+    if (!(avbLimiar > 0 && avbLimiar <= 1)) avbLimiar = 0.10;
+    db.prepare('UPDATE analysis_config SET odds_intervalo_seg=?, odds_max_avbs=?, odds_edge_min=?, odds_proxy_url=?, avb_parelho=?, avb_parelho_limiar=? WHERE user_id=1')
+      .run(intervalo, maxAvbs, edgeMin, proxyUrl, avbParelho, avbLimiar);
     // reinicia o robo pra aplicar intervalo/proxy na hora (parar() e' imediato)
     try { liveOddsModule.parar(); } catch (e) {}
     setTimeout(() => { try { _iniciarOdds(); } catch (e) { console.error('[ODDS] restart pos-config:', e.message); } }, 400);

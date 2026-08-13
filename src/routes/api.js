@@ -649,6 +649,16 @@ function mapHistLinhas(linhasValidas) {
   return (linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)}));
 }
 
+// Odd MEDIA (decimal) das 2 ultimas SPs na pista/dist — mesma fonte do pareamento
+// parelho. Ex.: 2/1 e 3/1 -> (3.0 + 4.0)/2 = 3.5. Serve pra coluna do Relatorio
+// e pra mostrar a odd de cada galgo no par escolhido. null se nao houver SP.
+function oddMediaUltimas2(linhasValidas) {
+  const ds = (linhasValidas||[]).slice(0,2)
+    .map(l => { const p = probImplicita(String(l.sp||'').replace(/[A-Za-z]+$/,'')); return (p && p>0) ? 1/p : null; })
+    .filter(v => v != null);
+  return ds.length ? Math.round((ds.reduce((a,b)=>a+b,0)/ds.length)*100)/100 : null;
+}
+
 // Datas em ISO "YYYY-MM-DD" -> diferenca em dias (usa Date.UTC pra nao pegar
 // fuso). diasEntre(cio, corrida) > 0 quando o cio foi ANTES da corrida.
 function isoParaUTC(s) {
@@ -812,7 +822,8 @@ function processarCorrida(corridaRaw, config) {
   // score = favorito). Assim o par sugerido quase sempre abre ao vivo, com um
   // favorito claro. Config: avb_parelho (liga/desliga, default ON) e
   // avb_parelho_limiar (distancia max de prob. implicita p/ ser "parelho", 0.10).
-  const modoParelho = config.avb_parelho !== false;
+  // liga/desliga: default LIGADO. Trata o 0/false do SQLite como desligado.
+  const modoParelho = ![0, false, '0', 'false'].includes(config.avb_parelho);
   let avbParelhoAplicado = false;
   if (modoParelho) {
     const limiar = config.avb_parelho_limiar || 0.10;
@@ -921,7 +932,7 @@ function processarCorrida(corridaRaw, config) {
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
 
   if (!avbParelhoAplicado && diffAvB < thresholdSkip) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, motivoSkip:'margem_insuficiente', diffAvB:Math.round(diffAvB*10)/10, thresholdSkip, diffBack:Math.round(diffBack*10)/10, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, motivoSkip:'margem_insuficiente', diffAvB:Math.round(diffAvB*10)/10, thresholdSkip, diffBack:Math.round(diffBack*10)/10, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,oddMedia:oddMediaUltimas2(g.linhasValidas),scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
   }
 
   const pct = scoreToPct(diffAvB);
@@ -932,12 +943,13 @@ function processarCorrida(corridaRaw, config) {
     trapUnd:pior.trap, nameUnd:pior.nome,
     pct, nivel,
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
+    oddFav:oddMediaUltimas2(melhor.linhasValidas), oddUnd:oddMediaUltimas2(pior.linhasValidas), // odd media do par escolhido (quadro Favorito x Underdog)
     top3, trapsCard:trapsCard||[], trapsConfiaveis,
     obs:`${ranking} | ${narrativa}${notaReanalise}`,
     histFav:mapHistLinhas(melhor.linhasValidas),
     histUnd:mapHistLinhas(pior.linhasValidas),
     histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})),
-    scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})),
+    scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,oddMedia:oddMediaUltimas2(g.linhasValidas),scores:g.scores})),
     raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,ssnDate:g.ssnDate||null})),
     histFull:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,brtClasse:g.brtClasse,ssnDate:g.ssnDate||null,historico:mapHistLinhas(g.historico||[])})),
     eliminados,
