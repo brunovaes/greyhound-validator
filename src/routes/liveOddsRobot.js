@@ -113,32 +113,39 @@ function headersPara(host) {
 // conta mas o Node nao ve). E' ESTIMATIVA — a Decodo tende a marcar um pouco mais
 // (handshake TLS, reconexoes). Serve pra ordem de grandeza e projecao mensal.
 const TRAFEGO_OVERHEAD_REQ = 550; // bytes/req aprox (req headers + resp headers + TLS)
-const _trafego = { porDia: {} };  // 'YYYY-MM-DD'(BR) -> { bytes, reqs }
+const _trafego = { porDia: {} };  // fallback em memoria se o banco falhar
 function _diaBR() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }
+function _dbTrafego() { try { return require('../db/database').db; } catch (e) { return null; } }
 function registrarTrafego(bytesComprimidos) {
   const dia = _diaBR();
+  const inc = (bytesComprimidos || 0) + TRAFEGO_OVERHEAD_REQ;
+  // PERSISTE no banco (sobrevive aos deploys do Railway). Nunca derruba o robo.
+  const db = _dbTrafego();
+  if (db) {
+    try {
+      db.prepare('INSERT INTO proxy_trafego (dia,bytes,reqs) VALUES (?,?,1) ON CONFLICT(dia) DO UPDATE SET bytes=bytes+?, reqs=reqs+1').run(dia, inc, inc);
+      return;
+    } catch (e) { /* cai no fallback em memoria */ }
+  }
   const d = _trafego.porDia[dia] || { bytes: 0, reqs: 0 };
-  d.bytes += (bytesComprimidos || 0) + TRAFEGO_OVERHEAD_REQ;
-  d.reqs += 1;
+  d.bytes += inc; d.reqs += 1;
   _trafego.porDia[dia] = d;
   const dias = Object.keys(_trafego.porDia).sort();
-  while (dias.length > 14) delete _trafego.porDia[dias.shift()]; // mantem 14 dias
+  while (dias.length > 14) delete _trafego.porDia[dias.shift()];
 }
 function getTrafego() {
   const dia = _diaBR();
-  const hoje = _trafego.porDia[dia] || { bytes: 0, reqs: 0 };
-  const porDia = Object.keys(_trafego.porDia).sort().reverse().map(k => ({
-    dia: k, mb: +(_trafego.porDia[k].bytes / 1e6).toFixed(2),
-    gb: +(_trafego.porDia[k].bytes / 1e9).toFixed(3), reqs: _trafego.porDia[k].reqs
-  }));
-  // media diaria dos dias COM trafego -> projecao de 30 dias
+  let rows = null;
+  const db = _dbTrafego();
+  if (db) { try { rows = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego ORDER BY dia DESC LIMIT 14').all(); } catch (e) { rows = null; } }
+  if (!rows) { // fallback em memoria
+    rows = Object.keys(_trafego.porDia).sort().reverse().map(k => ({ dia: k, bytes: _trafego.porDia[k].bytes, reqs: _trafego.porDia[k].reqs }));
+  }
+  const porDia = rows.map(r => ({ dia: r.dia, mb: +(r.bytes / 1e6).toFixed(2), gb: +(r.bytes / 1e9).toFixed(3), reqs: r.reqs }));
+  const hoje = porDia.find(d => d.dia === dia) || { dia, mb: 0, gb: 0, reqs: 0 };
   const comUso = porDia.filter(d => d.mb > 0);
   const mediaMb = comUso.length ? comUso.reduce((a, b) => a + b.mb, 0) / comUso.length : 0;
-  return {
-    hoje: { dia, mb: +(hoje.bytes / 1e6).toFixed(2), gb: +(hoje.bytes / 1e9).toFixed(3), reqs: hoje.reqs },
-    porDia,
-    projecaoMensalGb: +((mediaMb * 30) / 1000).toFixed(2) // media/dia x 30
-  };
+  return { hoje, porDia, projecaoMensalGb: +((mediaMb * 30) / 1000).toFixed(2) };
 }
 
 function httpGetJson(url, host, agent) {

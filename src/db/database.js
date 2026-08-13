@@ -184,6 +184,15 @@ db.exec(`
     n_pares INTEGER DEFAULT 0,
     capturado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- ago/2026 — trafego do proxy por dia (fuso BR), PERSISTIDO pra sobreviver aos
+  -- deploys do Railway (o contador em memoria zerava a cada restart). Comparar com
+  -- o USED TRAFFIC da Decodo. bytes = comprimidos na rede + overhead por requisicao.
+  CREATE TABLE IF NOT EXISTS proxy_trafego (
+    dia TEXT PRIMARY KEY,
+    bytes INTEGER DEFAULT 0,
+    reqs INTEGER DEFAULT 0
+  );
 `);
 
 // Migracoes seguras para banco existente
