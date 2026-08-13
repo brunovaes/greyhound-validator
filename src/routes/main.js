@@ -1478,6 +1478,39 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const ap = apostadas.length;
   const green = apostadas.filter(r=>r.bateu==='sim').length;
   const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
+  // ── Tres taxas sobre a MESMA chegada ─────────────────────────────────────
+  // Geral      = o AvB que REALMENTE valia: BW quando existe (sua escolha ou a
+  //              principal da reanalise), motor quando nao existe. E' a mesma
+  //              regra da coluna "Bateu", entao este numero e a tabela sempre
+  //              concordam.
+  // Pre-Analise= so o AvB do motor (analise global), pra medir o motor sozinho.
+  // Analise BW = so o AvB do fechamento da reanalise.
+  // Todas usam bateuPar sobre finishing_order_json: mesma funcao, mesmo
+  // criterio. Resultado indefinido (trap fora da chegada) fica FORA do
+  // denominador de cada uma — nao conta como acerto nem como erro.
+  const _tx = (function(){
+    const { bateuPar } = require('../utils/avbResultado');
+    const z = () => ({ ok:0, tot:0, pct:null });
+    const o = { geral:z(), motor:z(), bw:z() };
+    for (const r of racesValidas) {
+      const ordem = r.finishing_order_json;
+      const bw = _parBW(r);
+      const par = {
+        motor: (r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null,
+        bw:    bw,
+        geral: bw || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null)
+      };
+      for (const k of ['geral','motor','bw']) {
+        if (!par[k]) continue;
+        const v = bateuPar(ordem, par[k].aTrap, par[k].bTrap);
+        if (v === null) continue;
+        o[k].tot++; if (v) o[k].ok++;
+      }
+    }
+    for (const k of ['geral','motor','bw']) o[k].pct = o[k].tot ? Math.round(o[k].ok/o[k].tot*100) : null;
+    return o;
+  })();
+
   const logoB64 = getLogo();
   const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
@@ -1514,8 +1547,22 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 <div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
-<div class="kpi"><div class="kpi-label">Taxa</div><div class="kpi-val" id="kpi-taxa" style="color:${resolvidas>0&&ac/resolvidas>=.5?'#22C65E':'#ef4444'}">${taxa}%</div></div>
-<div class="kpi"><div class="kpi-label">Apostas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
+<div class="kpi" style="min-width:190px">
+  <div class="kpi-label">Taxa de acerto</div>
+  ${[['Geral','geral','o AvB que valeu: BW quando há, motor quando não há'],
+     ['Pré-análise','motor','só o AvB do motor (análise global)'],
+     ['Análise BW','bw','só o AvB do fechamento da reanálise']]
+    .map(function(l){
+      var o=_tx[l[1]];
+      var cor = o.pct==null ? '#666' : (o.pct>=50 ? '#22C65E' : '#ef4444');
+      return '<div title="'+l[2]+'" style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:3px">'
+        + '<span style="font-size:10px;color:#888">'+l[0]+'</span>'
+        + '<span style="font-size:17px;font-weight:800;color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')
+        + '<span style="font-size:9px;color:#555;font-weight:400;margin-left:4px">'+(o.tot?o.ok+'/'+o.tot:'')+'</span></span>'
+        + '</div>';
+    }).join('')}
+</div>
+<div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
 </div>
