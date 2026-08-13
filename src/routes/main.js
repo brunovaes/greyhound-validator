@@ -48,33 +48,35 @@ function navBar(user, active) {
     </div>
   </nav>
   <script src="${BASE}/static/js/alertaGlobal.js" defer></script>
+  <div id="gf-avisos">
   <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
-    <span style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
+    <span class="gf-rotulo" style="color:#f97316">Robô de Resultados</span><span class="gf-txt gf-completo" style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
     <div style="display:flex;align-items:center;gap:10px">
       <a href="${BASE}/historico" style="font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Histórico →</a>
       <button onclick="dismissResBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
   <div id="mon-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(96,165,250,.06);border-bottom:1px solid rgba(96,165,250,.15)">
-    <span style="font-size:12px;color:#60a5fa">🔎 <strong><span id="mon-banner-cnt">0</span> mudança(s) no card</strong> detectada(s) às <strong><span id="mon-banner-time">--:--</span></strong> — <span id="mon-banner-reanalyzed"></span></span>
+    <span class="gf-rotulo" style="color:#60a5fa">Robô de Monitoramento</span><span class="gf-txt gf-completo" style="font-size:12px;color:#60a5fa">🔎 <strong><span id="mon-banner-cnt">0</span> mudança(s) no card</strong> detectada(s) às <strong><span id="mon-banner-time">--:--</span></strong> — <span id="mon-banner-reanalyzed"></span></span>
     <div style="display:flex;align-items:center;gap:10px">
       <a href="${BASE}/robot" style="font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
       <button onclick="dismissMonBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
     </div>
   </div>
   <div id="suspicious-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.1);border-bottom:1px solid rgba(239,68,68,.3)">
-    <span style="font-size:12px;color:#ef4444">⚠️ <strong>Rodada suspeita</strong> — <span id="suspicious-banner-msg"></span></span>
+    <span class="gf-rotulo" style="color:#ef4444">Checagem Final</span><span class="gf-txt gf-completo" style="font-size:12px;color:#ef4444">⚠️ <strong>Rodada suspeita</strong> — <span id="suspicious-banner-msg"></span></span>
     <div style="display:flex;align-items:center;gap:10px">
       <a href="${BASE}/robot" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
       <button onclick="dismissSuspiciousBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece se continuar suspeito depois)">×</button>
     </div>
   </div>
   <div id="stop-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.12);border-bottom:1px solid rgba(239,68,68,.35)">
-    <span style="font-size:12px;color:#ef4444">&#128721; <strong>Stop do dia atingido</strong> — <span id="stop-banner-msg"></span></span>
+    <span class="gf-rotulo" style="color:#ef4444">Stop de Banca</span><span class="gf-txt gf-completo" style="font-size:12px;color:#ef4444">&#128721; <strong>Stop do dia atingido</strong> — <span id="stop-banner-msg"></span></span>
     <div style="display:flex;align-items:center;gap:10px">
       <a href="${BASE}/banca" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Banca →</a>
       <button onclick="dismissStopBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece amanha se acontecer de novo)">×</button>
     </div>
+  </div>
   </div>
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
@@ -94,6 +96,58 @@ function navBar(user, active) {
     }
   </style>
   <script>
+
+// ── Faixa de avisos: 1 ocupa tudo, 2 dividem ao meio, 3 dividem em tres ───
+// Os banners mudam de display por JS espalhado pelo arquivo (cada robo mexe no
+// seu). Em vez de caçar cada ponto, observamos a faixa e reagimos: sempre que
+// um aparece ou some, recalculamos as classes que o CSS usa pra dividir.
+(function(){
+  var faixa = document.getElementById('gf-avisos');
+  if(!faixa) return;
+
+  function visiveis(){
+    return Array.prototype.filter.call(faixa.children, function(d){
+      return d.style.display && d.style.display !== 'none';
+    });
+  }
+  function atualizar(){
+    var v = visiveis();
+    faixa.style.display = v.length ? 'flex' : 'none';
+    faixa.classList.toggle('solo',  v.length === 1);
+    faixa.classList.toggle('multi', v.length > 1);
+    // Um aviso que sumiu nao pode continuar "aberto" segurando a faixa.
+    if (faixa.classList.contains('expandido')) {
+      var ab = faixa.querySelector('.aberto');
+      if (!ab || ab.style.display === 'none') fechar();
+    }
+  }
+  function fechar(){
+    faixa.classList.remove('expandido');
+    var ab = faixa.querySelector('.aberto');
+    if (ab) ab.classList.remove('aberto');
+  }
+  // Clique no TEXTO expande. O botao de acao e o × continuam funcionando
+  // normalmente porque nao estao na area clicavel.
+  faixa.addEventListener('click', function(ev){
+    var txt = ev.target.closest && ev.target.closest('.gf-txt');
+    if(!txt) return;
+    var box = txt.closest('div[id$="-banner"]');
+    if(!box) return;
+    if (box.classList.contains('aberto')) { fechar(); return; }
+    fechar();
+    box.classList.add('aberto');
+    faixa.classList.add('expandido');
+  });
+
+  // Observa mudancas de style nos 4 banners — e' assim que sabemos que um
+  // apareceu ou sumiu, sem precisar alterar o codigo de cada robo.
+  var obs = new MutationObserver(atualizar);
+  Array.prototype.forEach.call(faixa.children, function(d){
+    obs.observe(d, { attributes:true, attributeFilter:['style'] });
+  });
+  atualizar();
+})();
+
   function toggleNav(){var m=document.getElementById('nav-links'); if(m) m.classList.toggle('open');}
   (function() {
     var BASE = '${BASE}';
@@ -373,30 +427,40 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 
-/* ── Avisos globais no RODAPE (so nesta tela) ──────────────────────────────
-   Resultados atualizados, monitor, resultados suspeitos e stop de banca sao
-   avisos PERSISTENTES: ficam ate voce fechar no ×. No topo empurravam a arena
-   pra baixo o tempo todo, e esta e' a tela onde cada pixel vertical conta.
+/* ── Faixa de avisos no RODAPE, LADO A LADO (so nesta tela) ────────────────
+   Antes empilhavam com "bottom" chutado em multiplos de 38px; como a altura
+   real varia (texto que quebra em duas linhas), um cobria o outro — chegou a
+   cobrir a linha da Odd.
+   Agora sao itens de um flex numa faixa unica: 1 ocupa tudo, 2 dividem ao
+   meio, 3 dividem em tres. Sem empilhamento, nao ha o que se sobrepor.
 
-   O "left" NAO e' zero de proposito: o banner tem que comecar depois da
-   sidebar (250px) e, no modo foco, depois da lista de proximas (mais 170px).
-   Com left:0 ele passava por cima da coluna da esquerda e cobria os cards de
-   acertos — feio e escondendo informacao.
-   Nas outras telas os banners continuam no topo, onde nao atrapalham. */
-#res-banner,#mon-banner,#suspicious-banner,#stop-banner{
+   O "left" nao e' zero: a faixa comeca depois da sidebar (250px) e, no modo
+   foco, depois da lista de proximas (mais 170px) — senao cobre os cards de
+   acertos da coluna esquerda. */
+#gf-avisos{
   position:fixed;left:250px;right:0;bottom:0;z-index:900;
-  border-top:1px solid rgba(255,255,255,.06);border-bottom:none;
+  display:none;gap:1px;background:rgba(255,255,255,.06);
   box-shadow:0 -4px 16px rgba(0,0,0,.5);
 }
-/* Modo foco: a lista de proximas ocupa mais 170px a esquerda. */
-body:has(.main.focus-mode) #res-banner,
-body:has(.main.focus-mode) #mon-banner,
-body:has(.main.focus-mode) #suspicious-banner,
-body:has(.main.focus-mode) #stop-banner{left:420px}
-/* Quando mais de um aparece, o seguinte sobe pra nao cobrir o anterior. */
-#res-banner ~ #mon-banner{bottom:38px}
-#res-banner ~ #suspicious-banner{bottom:76px}
-#res-banner ~ #stop-banner{bottom:114px}
+body:has(.main.focus-mode) #gf-avisos{left:420px}
+#gf-avisos > div{
+  flex:1 1 0;min-width:0;                 /* min-width:0 permite truncar o texto */
+  align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 12px;border:none!important;
+}
+/* Expandido: o clicado toma a faixa e os outros somem. */
+#gf-avisos.expandido > div{display:none!important}
+#gf-avisos.expandido > div.aberto{display:flex!important;flex:1 1 100%}
+/* Texto cortado quando divide a faixa, inteiro quando sozinho ou expandido. */
+#gf-avisos .gf-txt{
+  flex:1;min-width:0;cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;
+}
+#gf-avisos.expandido .gf-txt,#gf-avisos.solo .gf-txt{white-space:normal;font-size:12px}
+/* Nome do robo: so aparece quando ha mais de um aviso dividindo a faixa. */
+#gf-avisos .gf-rotulo{display:none;font-weight:800;font-size:10px;letter-spacing:.3px;white-space:nowrap;cursor:pointer}
+#gf-avisos.multi .gf-rotulo{display:inline}
+#gf-avisos.multi:not(.expandido) .gf-completo{display:none}
 
 ${designTokensCSS()}
 .main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
