@@ -14,8 +14,8 @@ const NOMES_PISTAS = {
   Kinsly: 'Kinsley', Lffrd: 'Lifford', Limrk: 'Limerick', Monmr: 'Monmore',
   Mulgr: 'Mullingar', Newc: 'Newcastle', Notts: 'Nottingham', Pelaw: 'Star Pelaw',
   Romfd: 'Romford', Sheff: 'Sheffield', ShelPk: 'Shelbourne Park', Sland: 'Sunderland',
-  Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley', Yrmth: 'Yarmouth',
-  Youghl: 'Youghal'
+  Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley', Wtrfd: 'Waterford',
+  Yrmth: 'Yarmouth', Youghl: 'Youghal'
 };
 
 // Codigo -> nome completo (ou o proprio codigo se nao mapeado).
