@@ -1250,9 +1250,11 @@ function escolherAvb(trapA, trapB, odd){
 // entregar (ex.: snap.urlBetwinner ou montada pelo gameId), troca so aqui.
 function _linkBetwinner(snap){
   if(!snap) return null;
+  if(snap.bwUrl) return snap.bwUrl;            // deep-link real do robo (/br/live/...-slug/...-slug) — abre a corrida
   if(snap.urlBetwinner) return snap.urlBetwinner;
-  if(snap.gameId) return 'https://betwinner.com/pt/line/greyhound-racing/' + snap.gameId;  // provisorio
-  return null;
+  // Fallback: sem deep-link, abre a SECAO ao vivo de galgo (o gameId sozinho nao
+  // monta URL valida — precisa do segmento da liga). Bruno clica na corrida ativa.
+  return 'https://betwinner1.com/br/live/greyhound-racing/';
 }
 
 // ── SIMULADOR (so pra testar a tela sem depender do robo) ───────────────────
