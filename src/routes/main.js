@@ -1581,7 +1581,7 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
    pra linha de baixo e deixava a faixa dos KPIs pela metade.
    Sem biblioteca de grafico: sao divs com largura percentual — pra 4 barras,
    trazer dependencia nova nao se justifica. */
-.gtn{flex:2 1 400px;min-width:380px}
+.gtn{min-width:0}   /* a largura vem do grid do .kpis */
 .gtn-cols{display:flex;gap:18px;margin-top:2px}
 .gtn-col{flex:1;min-width:0}
 .gtn-lin{display:flex;align-items:center;gap:6px;margin-top:4px}
@@ -1594,7 +1594,22 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
-.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+/* 7 cartoes numa linha so. Os cinco simples (Corridas, Acertos, Entradas,
+   Green, % de Green) tem um numero curto e nao precisam de 1fr cada — com
+   colunas iguais o setimo card (o grafico) nao cabia e caia pra linha de
+   baixo, deixando a faixa pela metade.
+   Aqui os simples ficam estreitos, a Taxa (3 valores) um pouco maior, e o
+   grafico leva todo o resto. */
+.kpis{
+  display:grid;
+  grid-template-columns:0.62fr 0.62fr 1.15fr 0.62fr 0.62fr 0.62fr 1.75fr;
+  gap:8px;margin-bottom:16px;
+}
+/* Telas menores: volta a duas fileiras em vez de espremer tudo. */
+@media(max-width:1400px){
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  .kpis .gtn{grid-column:1/-1}
+}
 /* Cabecalho fixo: o container ganha altura maxima e rolagem propria, e o
    thead cola no topo dele. Sem o max-height quem rola e' a PAGINA inteira,
    e ai o sticky nao tem em relacao a que grudar. */
