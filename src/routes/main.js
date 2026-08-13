@@ -1517,17 +1517,14 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 
-/* As tres taxas empilhadas. Usa classe propria com !important porque o
-   container dos KPIs alinha os filhos em linha e as tentativas anteriores
-   (display:block inline no elemento) foram sobrescritas. */
-.tx3{display:block!important}
-.tx3 .tx3-l{
-  display:flex!important;align-items:baseline;justify-content:space-between;
-  gap:12px;padding:2px 0;width:100%;
-}
+/* As tres taxas LADO A LADO, cada uma como uma mini-coluna: rotulo em cima,
+   percentual no meio, contagem embaixo. Usa !important porque o container dos
+   KPIs tem regras proprias pros filhos do card. */
+.tx3{display:flex!important;gap:14px;justify-content:space-between;margin-top:4px}
+.tx3 .tx3-l{display:flex!important;flex-direction:column;align-items:center;gap:1px;flex:1}
 .tx3 .tx3-rot{font-size:10px;color:#888;white-space:nowrap}
-.tx3 .tx3-num{font-size:16px;font-weight:800;white-space:nowrap}
-.tx3 .tx3-cnt{font-size:9px;color:#555;margin-left:5px}
+.tx3 .tx3-num{font-size:19px;font-weight:800;line-height:1.1;white-space:nowrap}
+.tx3 .tx3-cnt{font-size:9px;color:#555;white-space:nowrap}
 
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
@@ -1560,7 +1557,7 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 <div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
-<div class="kpi" style="min-width:200px">
+<div class="kpi" style="min-width:250px">
   <div class="kpi-label">Taxa de acerto</div>
   <div class="tx3">
   ${[['Geral','geral','o AvB que valeu: BW quando há, motor quando não há'],
@@ -1571,8 +1568,8 @@ ${navBar(user, 'historico')}
       var cor = o.pct==null ? '#666' : (o.pct>=50 ? '#22C65E' : '#ef4444');
       return '<div class="tx3-l" title="'+l[2]+'">'
         + '<span class="tx3-rot">'+l[0]+'</span>'
-        + '<span><span class="tx3-num" style="color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')+'</span>'
-        + '<span class="tx3-cnt">'+(o.tot?o.ok+'/'+o.tot:'')+'</span></span>'
+        + '<span class="tx3-num" style="color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')+'</span>'
+        + '<span class="tx3-cnt">'+(o.tot?o.ok+'/'+o.tot:'')+'</span>'
         + '</div>';
     }).join('')}
   </div>
