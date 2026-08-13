@@ -1516,6 +1516,19 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
+
+/* As tres taxas empilhadas. Usa classe propria com !important porque o
+   container dos KPIs alinha os filhos em linha e as tentativas anteriores
+   (display:block inline no elemento) foram sobrescritas. */
+.tx3{display:block!important}
+.tx3 .tx3-l{
+  display:flex!important;align-items:baseline;justify-content:space-between;
+  gap:12px;padding:2px 0;width:100%;
+}
+.tx3 .tx3-rot{font-size:10px;color:#888;white-space:nowrap}
+.tx3 .tx3-num{font-size:16px;font-weight:800;white-space:nowrap}
+.tx3 .tx3-cnt{font-size:9px;color:#555;margin-left:5px}
+
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
@@ -1549,20 +1562,17 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
 <div class="kpi" style="min-width:200px">
   <div class="kpi-label">Taxa de acerto</div>
-  <!-- display:block em cada linha e' explicito de proposito: o container pai
-       alinha os filhos em linha, e sem isso as tres taxas ficavam lado a lado
-       dentro do card em vez de empilhadas. -->
-  <div style="display:block;margin-top:4px">
+  <div class="tx3">
   ${[['Geral','geral','o AvB que valeu: BW quando há, motor quando não há'],
      ['Pré-análise','motor','só o AvB do motor (análise global)'],
      ['Análise BW','bw','só o AvB do fechamento da reanálise']]
     .map(function(l){
       var o=_tx[l[1]];
       var cor = o.pct==null ? '#666' : (o.pct>=50 ? '#22C65E' : '#ef4444');
-      return '<div title="'+l[2]+'" style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:1px 0">'
-        + '<span style="font-size:10px;color:#888;white-space:nowrap">'+l[0]+'</span>'
-        + '<span style="white-space:nowrap"><span style="font-size:16px;font-weight:800;color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')+'</span>'
-        + '<span style="font-size:9px;color:#555;margin-left:5px">'+(o.tot?o.ok+'/'+o.tot:'')+'</span></span>'
+      return '<div class="tx3-l" title="'+l[2]+'">'
+        + '<span class="tx3-rot">'+l[0]+'</span>'
+        + '<span><span class="tx3-num" style="color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')+'</span>'
+        + '<span class="tx3-cnt">'+(o.tot?o.ok+'/'+o.tot:'')+'</span></span>'
         + '</div>';
     }).join('')}
   </div>
