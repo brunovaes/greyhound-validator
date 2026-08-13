@@ -1010,9 +1010,9 @@ ${navBar(req.user, 'robot')}
   </div>
 
   <div class="card">
-    <div class="card-title">Tráfego do proxy (estimado) — compare com o USED TRAFFIC da Decodo</div>
+    <div class="card-title">Consumo do proxy (Decodo) — reflete o gasto sem entrar no painel deles</div>
     <div id="odds-trafego"><div class="lin">Carregando…</div></div>
-    <div style="font-size:11px;color:#64748b;margin-top:4px">Conta os bytes comprimidos que trafegam + overhead por requisição. É estimativa: a Decodo costuma marcar um pouco mais (handshake/TLS).</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Bytes comprimidos que trafegam + overhead por requisição, cruzado com as corridas/AvBs capturados. É estimativa: a Decodo marca um pouco mais (handshake/TLS). Contagem desde o deploy do medidor.</div>
   </div>
 </div><!-- fim panel-odds -->
 
@@ -1378,21 +1378,38 @@ async function pollOddsHealth() {
       + '<div style="margin-top:10px;font-size:11px;color:#64748b">Robô: ' + (d.running ? 'rodando' : 'parado') + ' &middot; ciclos ' + (d.ciclos || 0) + '</div>';
     var rs = document.getElementById('odds-run-state');
     if (rs) rs.textContent = (d.running ? '● rodando' : '○ parado') + ((d.config && d.config.intervaloSeg) ? ' · intervalo ' + d.config.intervaloSeg + 's' : '') + (s.proxyAtivo ? ' · proxy ativo' : '');
-    // ── Tráfego do proxy ──
+    // ── Consumo do proxy (Decodo): resumo + por dia, via /odds/diag/uso ──
     var elt = document.getElementById('odds-trafego');
     if (elt) {
-      var t = d.trafego || {}, hoje = t.hoje || {}, dias = t.porDia || [];
-      var linhas = dias.slice(0, 7).map(function (x) {
-        return '<tr><td style="padding:2px 10px 2px 0;color:#cbd5e1">' + x.dia + '</td>'
-          + '<td style="padding:2px 14px;text-align:right;color:#e2e8f0;font-weight:600">' + (x.mb >= 1000 ? (x.gb + ' GB') : (x.mb + ' MB')) + '</td>'
-          + '<td style="padding:2px 0;text-align:right;color:#94a3b8">' + x.reqs + ' req</td></tr>';
-      }).join('');
-      elt.innerHTML =
-        '<div style="display:flex;gap:26px;flex-wrap:wrap;font-size:13px;color:#cbd5e1;margin-bottom:8px">'
-        +   '<div><div style="color:#94a3b8;font-size:11px">Hoje</div><b style="font-size:18px;color:#38bdf8">' + (hoje.mb != null ? hoje.mb + ' MB' : '—') + '</b> <span style="color:#94a3b8">(' + (hoje.reqs || 0) + ' req)</span></div>'
-        +   '<div><div style="color:#94a3b8;font-size:11px">Projeção 30 dias</div><b style="font-size:18px">' + (t.projecaoMensalGb != null ? t.projecaoMensalGb + ' GB' : '—') + '</b></div>'
-        + '</div>'
-        + (linhas ? '<table style="border-collapse:collapse;font-size:12px"><tbody>' + linhas + '</tbody></table>' : '<div class="lin" style="color:#64748b">Sem tráfego registrado ainda.</div>');
+      try {
+        var ur = await fetch(BASE + '/robot/odds/diag/uso');
+        var uso = await ur.json();
+        var re = uso.resumo || {}, pd = uso.por_dia || [];
+        var proj = (d.trafego && d.trafego.projecaoMensalGb != null) ? d.trafego.projecaoMensalGb + ' GB' : '—';
+        var fmtMb = function (mb) { return (mb >= 1000) ? ((mb / 1000).toFixed(2) + ' GB') : (mb + ' MB'); };
+        var linhas = pd.slice(0, 10).map(function (x) {
+          return '<tr>'
+            + '<td style="padding:3px 12px 3px 0;color:#cbd5e1">' + x.dia + '</td>'
+            + '<td style="padding:3px 12px;text-align:right;color:#e2e8f0;font-weight:600">' + fmtMb(x.mb) + '</td>'
+            + '<td style="padding:3px 12px;text-align:right;color:#94a3b8">' + (x.corridas || 0) + '</td>'
+            + '<td style="padding:3px 12px;text-align:right;color:#94a3b8">' + (x.pares || 0) + '</td>'
+            + '<td style="padding:3px 0;text-align:right;color:#64748b">' + (x.reqs || 0) + '</td>'
+            + '</tr>';
+        }).join('');
+        var tile = function (rot, val, cor) { return '<div><div style="color:#94a3b8;font-size:11px">' + rot + '</div><b style="font-size:18px' + (cor ? ';color:' + cor : '') + '">' + val + '</b></div>'; };
+        elt.innerHTML =
+          '<div style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:#cbd5e1;margin-bottom:8px">'
+          + tile('Total consumido', (re.gb_total >= 1 ? re.gb_total + ' GB' : (re.mb_total != null ? re.mb_total + ' MB' : '—')), '#38bdf8')
+          + tile('Corridas', (re.corridas != null ? re.corridas : '—'))
+          + tile('AvBs', (re.avbs_pares != null ? re.avbs_pares : '—'))
+          + tile('Requisições', (re.requisicoes != null ? re.requisicoes : '—'))
+          + tile('Projeção 30d', proj)
+          + '</div>'
+          + '<div style="font-size:11px;color:#64748b;margin-bottom:6px">Média: ' + (re.mb_por_corrida != null ? re.mb_por_corrida + ' MB/corrida' : '—') + ' &middot; ' + (re.mb_por_avb != null ? re.mb_por_avb + ' MB/AvB' : '—') + '</div>'
+          + (linhas
+            ? '<table style="border-collapse:collapse;font-size:12px"><thead><tr style="color:#64748b;font-size:10px;text-transform:uppercase"><td style="padding:2px 12px 4px 0">Dia</td><td style="padding:2px 12px 4px;text-align:right">Consumo</td><td style="padding:2px 12px 4px;text-align:right">Corr.</td><td style="padding:2px 12px 4px;text-align:right">AvB</td><td style="padding:2px 0 4px;text-align:right">Req</td></tr></thead><tbody>' + linhas + '</tbody></table>'
+            : '<div class="lin" style="color:#64748b">Sem consumo registrado ainda.</div>');
+      } catch (e) { elt.innerHTML = '<div class="lin" style="color:#64748b">Erro ao carregar consumo.</div>'; }
     }
   } catch (e) {
     var el2 = document.getElementById('odds-health'); if (el2) el2.innerHTML = '<div class="lin">Erro ao buscar status.</div>';
