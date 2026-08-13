@@ -1,7 +1,7 @@
 const express = require('express');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
 const { scoreRemarksNovo } = require('../utils/remarksEngine');
-const { calcularSP } = require('../utils/spEngine');
+const { calcularSP, probImplicita } = require('../utils/spEngine');
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
@@ -775,7 +775,7 @@ function processarCorrida(corridaRaw, config) {
       break;
     }
   }
-  const melhor = comScores[idxMelhor];
+  let melhor = comScores[idxMelhor];
   const segundo = comScores[idxMelhor === 0 ? 1 : 0]; // segundo = próximo após melhor
 
   // Regra: se o underdog (pior do ranking) venceu a última corrida válida,
@@ -801,6 +801,44 @@ function processarCorrida(corridaRaw, config) {
         notaReanalise = ` Nota: T${pior.trap} venceu última — reanalise vs T${penultimo.trap}.`;
         pior = penultimo;
       }
+    }
+  }
+
+  // ── MODO AvB PARELHO (Bruno, ago/2026) ───────────────────────────────────
+  // O betwinner abre AvB entre galgos PARELHOS de odd, nao entre o melhor e o
+  // pior — por isso o par melhor x pior quase nunca abria ao vivo (~6,6%). Aqui,
+  // em vez de melhor x pior, escolhemos o par mais COLADO de SP (prob. implicita
+  // media das 2 ultimas corridas na pista/dist) e orientamos pelo motor (maior
+  // score = favorito). Assim o par sugerido quase sempre abre ao vivo, com um
+  // favorito claro. Config: avb_parelho (liga/desliga, default ON) e
+  // avb_parelho_limiar (distancia max de prob. implicita p/ ser "parelho", 0.10).
+  const modoParelho = config.avb_parelho !== false;
+  let avbParelhoAplicado = false;
+  if (modoParelho) {
+    const limiar = config.avb_parelho_limiar || 0.10;
+    const probSP = lv => {
+      const ps = (lv || []).slice(0, 2)
+        .map(l => probImplicita(String(l.sp || '').replace(/[A-Za-z]+$/, '')))
+        .filter(p => p != null);
+      return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : null;
+    };
+    const comProb = comScores.map(g => ({ g, p: probSP(g.linhasValidas) })).filter(x => x.p != null);
+    if (comProb.length >= 2) {
+      const pares = [];
+      for (let i = 0; i < comProb.length; i++)
+        for (let j = i + 1; j < comProb.length; j++)
+          pares.push({ a: comProb[i], b: comProb[j], dProb: Math.abs(comProb[i].p - comProb[j].p), gap: Math.abs(comProb[i].g.scoreFinal - comProb[j].g.scoreFinal) });
+      const parelhos = pares.filter(p => p.dProb <= limiar);
+      // parelhos -> o de MAIOR vantagem do motor (favorito mais claro);
+      // se nenhum dentro do limiar -> o mais colado possivel (best effort, p/ abrir).
+      const esc = parelhos.length
+        ? parelhos.reduce((m, p) => (p.gap > m.gap ? p : m))
+        : pares.reduce((m, p) => (p.dProb < m.dProb ? p : m));
+      const fav = esc.a.g.scoreFinal >= esc.b.g.scoreFinal ? esc.a.g : esc.b.g;
+      const und = esc.a.g.scoreFinal >= esc.b.g.scoreFinal ? esc.b.g : esc.a.g;
+      melhor = fav; pior = und; avbParelhoAplicado = true;
+      notaReanalise += ` [AvB parelho: ΔSP ${(esc.dProb * 100).toFixed(0)}pp, gap motor ${esc.gap.toFixed(1)}${parelhos.length ? '' : ' — nenhum par dentro do limiar, usei o mais colado'}]`;
+      console.log(`[AvB-PARELHO] ${hora} ${corrida}: T${fav.trap} x T${und.trap} (ΔSP ${(esc.dProb * 100).toFixed(0)}pp, gap ${esc.gap.toFixed(1)})`);
     }
   }
 
@@ -882,7 +920,7 @@ function processarCorrida(corridaRaw, config) {
 
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
 
-  if (diffAvB < thresholdSkip) {
+  if (!avbParelhoAplicado && diffAvB < thresholdSkip) {
     return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, motivoSkip:'margem_insuficiente', diffAvB:Math.round(diffAvB*10)/10, thresholdSkip, diffBack:Math.round(diffBack*10)/10, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
   }
 
