@@ -3011,7 +3011,7 @@ router.get('/importar-entradas', requireAdmin, (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Importar entradas</title>
-${designTokensCSS()}
+<style>${designTokensCSS()}</style>
 <style>
   body{padding:0;margin:0}
   .wrap{max-width:1100px;margin:0 auto;padding:20px}
