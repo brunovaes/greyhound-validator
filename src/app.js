@@ -820,10 +820,39 @@ function _parEmFoco(r){
 // Cortamos no marcador de sexo, que fecha o nome. Sem isso o nome estoura a
 // largura e empurra o layout da arena.
 // Isto e' defesa na tela: o certo e' o motor mandar o nome ja limpo.
+// Extrai o NOME do galgo de uma linha que pode vir com o pedigree inteiro do
+// card: "Droopys Kendall bkwtkd b Serene Ace-Droopys Berry Apr23 (Ssn 04Apr26)".
+//
+// A primeira versao cortava so no "(M)"/"(W)" e falhava justamente nos nomes
+// que nao trazem o marcador de sexo. Agora usamos varios sinais de onde o
+// pedigree COMECA, e paramos no primeiro que aparecer:
+//   1) marcador de sexo entre parenteses — "(M)" / "(W)"
+//   2) codigo de cor/pelagem do Racing Post: bk, bd, be, f, wbd, bkw, bebdw,
+//      bkwtkd etc — tokens curtos so de letras dessas, que nunca sao nome
+//   3) "Mes+Ano" da data de nascimento — "Apr23", "Jul21"
+//   4) "(Ssn ...)" do cio
+//
+// Se nada casar, devolve o texto como veio: melhor um nome longo do que um
+// nome cortado no lugar errado.
 function _limpaNome(n){
   if(!n) return '';
-  var m = String(n).match(/^(.*?\((?:M|W)\))/);
-  return (m ? m[1] : String(n)).trim();
+  var txt = String(n).trim();
+
+  // 1) sexo entre parenteses fecha o nome
+  var mSexo = txt.match(/^(.*?\((?:M|W)\))/);
+  if (mSexo) return mSexo[1].trim();
+
+  var toks = txt.split(/\s+/);
+  var CORES = /^(?:bk|bd|be|f|w|bkw|wbk|bdw|wbd|bew|wbe|bebdw|bkwtkd|bkbd|bebd|dkbd|lgbd|bkwbd)$/i;
+  var MESANO = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2}$/i;
+
+  for (var k = 1; k < toks.length; k++) {      // k=1: o 1o token e' sempre parte do nome
+    var t = toks[k];
+    if (CORES.test(t) || MESANO.test(t) || /^\(Ssn/i.test(t)) {
+      return toks.slice(0, k).join(' ').trim();
+    }
+  }
+  return txt;
 }
 
 function _avbDoPar(r, ta, tb){
