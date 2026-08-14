@@ -18,6 +18,12 @@ const cardMonitorModule = require('./cardMonitorRobot');
 const { runCardMonitorRobot, getMonitorStatus } = cardMonitorModule;
 const finalCheckModule = require('./finalCheckRobot');
 const { trackAbbrMatches } = require('./cardMonitorRobot');
+const { NOMES_PISTAS } = require('../utils/nomesPistas');
+// Mapa CODIGO(lower) -> nome completo, p/ casar PDF cujo arquivo guarda so UMA
+// palavra do nome (o coletor salva "Star Pelaw" como "Star", "Central Park" como
+// "Central"). Ex.: 'pelaw' -> 'Star Pelaw'.
+const NOME_COMPLETO_POR_CODIGO = {};
+for (const cod in NOMES_PISTAS) NOME_COMPLETO_POR_CODIGO[cod.toLowerCase()] = NOMES_PISTAS[cod];
 const { runFinalCheckRobot, getFinalCheckStatus } = finalCheckModule;
 const { runResultsRobot, getResultsStatus } = resultsRobotModule;
 
@@ -352,6 +358,121 @@ function scheduleMonitorCron() {
 }
 scheduleMonitorCron();
 
+// ─── ROBÔ DE ODDS AO VIVO (betwinner) — loop de 5s, so dentro da janela ──────
+const liveOddsModule = require('./liveOddsRobot');
+function _convDbHoraUk24(hora){ const p=String(hora||'').split(':'); if(p.length<2) return null; let h=parseInt(p[0]); const m=parseInt(p[1])||0; if(h>=1&&h<=9) h+=12; return h*60+m; }
+function _tsToUk24Min(ts){ try{ const s=new Date(ts*1000).toLocaleString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit',hour12:false}); const p=s.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }catch(e){ return null; } }
+// Casa a corrida do betwinner (pista + horario UK) com a analise do dia e devolve
+// os dados p/ a reanalise: scores (sugeridos), histFull (os 6 historicos, p/ a
+// reanalise par-a-par) e dataCard. null = sem analise casada ainda.
+function _scoresParaCorridaAoVivo(liveRace){
+  if(!liveRace || !liveRace.pista || !liveRace.startTs) return null;
+  const alvo=_tsToUk24Min(liveRace.startTs); if(alvo==null) return null;
+  try{
+    const { db } = require('../db/database');
+    const date=getTodayDate();
+    const rows=db.prepare("SELECT r.hora, r.corrida, r.dist, r.scores_json, r.hist_full, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
+    for(const row of rows){
+      const dm=_convDbHoraUk24(row.hora);
+      if(dm!=null && Math.abs(dm-alvo)<=2){
+        let scores=null, histFull=null;
+        try{ scores = row.scores_json ? JSON.parse(row.scores_json) : null; }catch(e){}
+        try{ histFull = row.hist_full ? JSON.parse(row.hist_full) : null; }catch(e){}
+        return { scores, histFull, dataCard: row.data_card||null, corrida: row.corrida, hora: row.hora, dist: row.dist||null };
+      }
+    }
+  }catch(e){}
+  return null;
+}
+function _dentroJanelaOdds(){
+  try{
+    const { db } = require('../db/database');
+    const cfg=db.prepare('SELECT monitor_window_start, monitor_window_end FROM analysis_config WHERE user_id=1').get()||{};
+    const startBRT=cfg.monitor_window_start||'07:00', endBRT=cfg.monitor_window_end||'20:00';
+    const now=new Date(); const brt=((now.getUTCHours()*60+now.getUTCMinutes())-180+1440)%1440;
+    const s=startBRT.split(':').map(Number), e=endBRT.split(':').map(Number);
+    return brt>=(s[0]*60+s[1]) && brt<=(e[0]*60+e[1]);
+  }catch(e){ return true; }
+}
+// Grava a foto da principal (pos 1) da reanalise no instante da largada, na
+// coluna COMPARTILHADA avb_fechamento. Objetivo (igual p/ todos), automatico,
+// SEM depender de tela nem de login — quem dispara e' o robo (servidor). Grava
+// so UMA vez (guarda "avb_fechamento IS NULL"), entao repetir e' inofensivo.
+function _gravarFechamentoAvb(fech){
+  try{
+    if(!fech || !fech.corrida || !fech.principal) return;
+    const { db } = require('../db/database');
+    const date=getTodayDate();
+    const p=fech.principal;
+    const registro={
+      aTrap:p.aTrap, aNome:p.aNome, bTrap:p.bTrap, bNome:p.bNome,
+      odd:p.oddAvenceB, marketPct:p.marketPct,
+      reanalisePct:p.reanalisePct, motorOrigPct:p.motorOrigPct, edge:p.edge,
+      origem:(p.reanalisePct!=null?'reanalise':'fallback'),
+      gameId:fech.gameId, ts:fech.fechadoEm
+    };
+    const row = fech.hora
+      ? db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.hora=? AND r.avb_fechamento IS NULL LIMIT 1").get(date, fech.corrida, fech.hora)
+      : db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.avb_fechamento IS NULL LIMIT 1").get(date, fech.corrida);
+    if(row){
+      db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?').run(JSON.stringify(registro), row.id);
+      console.log('[ODDS-FECHAMENTO] '+fech.corrida+' '+(fech.hora||'')+' -> T'+registro.aTrap+'xT'+registro.bTrap+' odd '+registro.odd+' ('+registro.origem+')');
+    }
+  }catch(e){ console.error('[ODDS-FECHAMENTO] erro:', e.message); }
+}
+
+// Captador dos AvBs que o betwinner ABRE por corrida (todos os pares, nao so os
+// da reanalise). Grava na tabela avb_abertos, uma linha por game_id, guardando o
+// conjunto MAIS COMPLETO visto (upsert quando aparecem mais pares). Serve pra
+// CALIBRAR o limiar do avb_parelho: depois cruzamos estes pares com as SPs dos
+// PDFs (races.hist_all) e medimos a distancia de odd que o betwinner realmente
+// abre. Puramente aditivo — nunca pode afetar o robo (try/catch total).
+function _gravarParesAbertos(info){
+  try{
+    if(!info || !info.gameId || !Array.isArray(info.pares) || !info.pares.length) return;
+    const { db } = require('../db/database');
+    const existe = db.prepare('SELECT n_pares FROM avb_abertos WHERE game_id=?').get(info.gameId);
+    if (existe && existe.n_pares >= info.pares.length) return; // ja temos igual/mais pares
+    db.prepare(
+      'INSERT INTO avb_abertos (game_id,data,corrida,hora,track,pares_json,n_pares,capturado_em) '
+      + 'VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP) '
+      + 'ON CONFLICT(game_id) DO UPDATE SET data=excluded.data,corrida=excluded.corrida,hora=excluded.hora,'
+      + 'track=excluded.track,pares_json=excluded.pares_json,n_pares=excluded.n_pares,capturado_em=CURRENT_TIMESTAMP'
+    ).run(info.gameId, getTodayDate(), info.corrida||null, info.hora||null, info.track||null, JSON.stringify(info.pares), info.pares.length);
+  }catch(e){ /* captacao nunca derruba o robo */ }
+}
+
+// Config do Robo de Odds (Painel Admin -> analysis_config, user_id=1). Defaults
+// se a coluna vier nula. Lido no start e a cada ciclo (maxAvbs/edge sao vivos).
+function getOddsConfig(){
+  try{
+    const { db } = require('../db/database');
+    const c = db.prepare('SELECT odds_intervalo_seg, odds_max_avbs, odds_edge_min, odds_proxy_url FROM analysis_config WHERE user_id=1').get() || {};
+    return {
+      intervaloSeg: (c.odds_intervalo_seg > 0) ? c.odds_intervalo_seg : 5,
+      maxAvbs: (c.odds_max_avbs > 0) ? c.odds_max_avbs : 3,
+      edgeMin: (c.odds_edge_min != null) ? c.odds_edge_min : 5,
+      proxyUrl: c.odds_proxy_url || ''
+    };
+  }catch(e){ return { intervaloSeg:5, maxAvbs:3, edgeMin:5, proxyUrl:'' }; }
+}
+// Inicia o robo lendo a config atual. Usado no boot e ao salvar config (restart).
+function _iniciarOdds(){
+  const c = getOddsConfig();
+  liveOddsModule.iniciar(_scoresParaCorridaAoVivo, {
+    intervaloMs: c.intervaloSeg * 1000,
+    podeRodar: _dentroJanelaOdds,
+    onClose: _gravarFechamentoAvb,
+    onPairs: _gravarParesAbertos,
+    getOddsCfg: () => { const x = getOddsConfig(); return { maxAvbs: x.maxAvbs, edgeMin: x.edgeMin }; },
+    proxyUrl: c.proxyUrl,
+    maxAvbs: c.maxAvbs, edgeMin: c.edgeMin
+  });
+}
+
+try { _iniciarOdds(); }
+catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
+
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
 // estao dentro da janela de X minutos antes do horario (configuravel,
 // default 15 — ver final_check_min_antes em Configuracoes). Complementa o
@@ -427,20 +548,21 @@ function scheduleFinalCheckCron() {
 }
 scheduleFinalCheckCron();
 
-// ─── PREENCHIMENTO AUTOMATICO DE scores_json — corridas que ficaram sem o
-// campo do Relatorio de Analise (corrida salva antes do fix de scores_json
-// ir pro ar) ganham o dado de volta sozinhas, sem precisar clicar em nada.
-// So le o PDF que ja esta salvo no disco (rapido, sem navegador, sem
-// internet) e so escreve a coluna scores_json — nao mexe em trap_fav,
-// pct, nivel nem em nada que ja decidiu o AvB, entao nao tem risco de
-// mudar uma analise que voce ja viu. Roda de 10 em 10 min.
+// ─── PREENCHIMENTO AUTOMATICO DE scores_json E hist_full — corridas salvas
+// antes destes campos irem pro ar ganham o dado de volta sozinhas, sem clicar
+// em nada. scores_json = Relatorio de Analise; hist_full = historico dos 6
+// galgos (necessario p/ a REANALISE par-a-par ao vivo — sem ele o robo de odds
+// cai na fallback do motor 1). So le o PDF ja salvo no disco (rapido, sem
+// navegador/internet) e SO escreve a coluna que estiver NULL — nao mexe em
+// trap_fav, pct, nivel nem em nada que ja decidiu o AvB. Roda de 10 em 10 min.
 async function preencherScoresJsonFaltando(DATE) {
   const { db } = require('../db/database');
   const { processarCorrida } = require('./api');
 
   const rows = db.prepare(
-    "SELECT r.id, r.hora, r.corrida, r.user_id FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-    "WHERE date(s.created_at,'-3 hours')=? AND r.scores_json IS NULL AND r.nivel != 'skip' AND r.trap_fav > 0"
+    "SELECT r.id, r.hora, r.corrida, r.user_id, (r.scores_json IS NULL) AS semScores, (r.hist_full IS NULL) AS semHist " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at,'-3 hours')=? AND (r.scores_json IS NULL OR r.hist_full IS NULL) AND r.nivel != 'skip' AND r.trap_fav > 0"
   ).all(DATE);
   if (!rows.length) return { total: 0, corrigidas: 0 };
 
@@ -463,9 +585,16 @@ async function preencherScoresJsonFaltando(DATE) {
 
       const config = getUserConfig(row.user_id);
       const novoResultado = processarCorrida(resultParse, config);
-      if (novoResultado && novoResultado.scores) {
-        db.prepare('UPDATE races SET scores_json=? WHERE id=?').run(JSON.stringify(novoResultado.scores), row.id);
-        corrigidas++;
+      if (novoResultado) {
+        // preenche SO o que estiver faltando (nao sobrescreve dado ja salvo)
+        const sets = [], vals = [];
+        if (row.semScores && novoResultado.scores)  { sets.push('scores_json=?'); vals.push(JSON.stringify(novoResultado.scores)); }
+        if (row.semHist   && novoResultado.histFull){ sets.push('hist_full=?');   vals.push(JSON.stringify(novoResultado.histFull)); }
+        if (sets.length) {
+          vals.push(row.id);
+          db.prepare('UPDATE races SET ' + sets.join(',') + ' WHERE id=?').run(...vals);
+          corrigidas++;
+        }
       }
     } catch(e) { /* pula essa corrida, tenta as outras */ }
   }
@@ -515,9 +644,18 @@ function getPdfDir(date) {
 // automatico nem pelo reprocessamento do dia).
 function encontrarPdfDaCorrida(arquivos, timeFormatted, trackAbbr) {
   const candidatos = arquivos.filter(f => f.startsWith(timeFormatted));
+  // Nome completo da pista (ex.: 'pelaw' -> 'Star Pelaw') p/ casar quando o
+  // arquivo guarda so UMA palavra do nome. Casa pelo nome inteiro OU por
+  // qualquer palavra dele — cobre "Star" de "Star Pelaw", "Central" de "Central
+  // Park", "Dunstall" de "Dunstall Park", "Shelbourne" de "Shelbourne Park".
+  const nomeCompleto = NOME_COMPLETO_POR_CODIGO[(trackAbbr || '').toLowerCase()] || '';
+  const fullNorm = nomeCompleto.toLowerCase().replace(/[^a-z]/g, '');
+  const palavrasNorm = nomeCompleto ? nomeCompleto.toLowerCase().split(/\s+/).map(p => p.replace(/[^a-z]/g, '')).filter(Boolean) : [];
   for (const f of candidatos) {
     const nomeArquivo = f.replace(timeFormatted, '').replace(/^_/, '').replace(/\.pdf$/i, '').replace(/_refeito$/i, '');
     if (trackAbbrMatches(trackAbbr, nomeArquivo)) return f;
+    const tok = nomeArquivo.toLowerCase().replace(/[^a-z]/g, '');
+    if (tok && nomeCompleto && (tok === fullNorm || palavrasNorm.indexOf(tok) >= 0)) return f;
   }
   return null;
 }
@@ -733,6 +871,7 @@ ${navBar(req.user, 'robot')}
     <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
     <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
     <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
+    <button class="robot-menu-item" id="mb-odds" onclick="showPanel('odds')"><span class="icon">${icon('alertTriangle',{size:16})}</span> Odds ao Vivo (BW)</button>
     <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
     <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Agendamento dos Robôs</button>
   </div>
@@ -899,6 +1038,51 @@ ${navBar(req.user, 'robot')}
     <div class="res-log" id="mon-log"></div>
   </div>
 </div><!-- fim panel-monitor -->
+
+<div class="robot-panel" id="panel-odds">
+  <h1 style="display:flex;align-items:center;gap:10px">${icon('alertTriangle',{size:22})} Odds ao Vivo (betwinner)</h1>
+  <p class="sub">Puxa os AvBs "Frente a frente" do betwinner ao vivo, cruza com a reanálise e grava o fechamento. Aqui você controla e configura o robô, e acompanha a saúde da descoberta.</p>
+
+  <div class="card">
+    <div class="card-title">Controle</div>
+    <div class="form-row">
+      <button class="btn" onclick="oddsStart()" style="white-space:nowrap">&#x25B6; Ligar</button>
+      <button class="btn btn-red" onclick="oddsStop()" style="white-space:nowrap">&#x25A0; Desligar</button>
+      <span id="odds-run-state" style="font-size:12px;color:#94a3b8;align-self:center"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Configuração</div>
+    <div class="form-row">
+      <div class="field"><label>Intervalo (s)</label><input type="number" id="odds-intervalo" min="3" max="60" style="width:80px"></div>
+      <div class="field"><label>Nº de AvBs</label><input type="number" id="odds-maxavbs" min="1" max="6" style="width:80px"></div>
+      <div class="field"><label>Edge mínimo (%)</label><input type="number" id="odds-edgemin" min="0" max="50" style="width:90px"></div>
+      <button class="btn" onclick="oddsSaveConfig()" style="white-space:nowrap;align-self:flex-end">Salvar</button>
+    </div>
+    <div class="form-row" style="margin-top:8px">
+      <div class="field" style="flex:1;min-width:280px"><label>Proxy residencial (opcional) — deixa vazio p/ direto</label><input type="text" id="odds-proxy" placeholder="http://usuario:senha@host:porta" style="width:100%"></div>
+    </div>
+    <div class="form-row" style="margin-top:8px;border-top:1px solid #1f2937;padding-top:10px">
+      <div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="odds-parelho" style="width:auto">Motor 1: AvB parelho</label></div>
+      <div class="field"><label>Limiar parelho (ΔSP, 0–1)</label><input type="number" id="odds-parelho-limiar" min="0.01" max="1" step="0.01" style="width:110px"></div>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-top:2px">AvB parelho: o motor pareia os galgos mais colados de odd (SP das 2 últimas na pista) com favorito claro, em vez de melhor×pior — pra o par quase sempre abrir ao vivo. Vale na próxima análise. Desligado = volta ao melhor×pior.</div>
+    <div id="odds-cfg-msg" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Intervalo e proxy reiniciam o robô ao salvar; nº de AvBs, edge e AvB parelho valem no próximo ciclo/análise.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Saúde da descoberta (últimos 15 / 60 min)</div>
+    <div id="odds-health"><div class="lin">Carregando…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Consumo do proxy (Decodo) — reflete o gasto sem entrar no painel deles</div>
+    <div id="odds-trafego"><div class="lin">Carregando…</div></div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Bytes comprimidos que trafegam + overhead por requisição, cruzado com as corridas/AvBs capturados. É estimativa: a Decodo marca um pouco mais (handshake/TLS). Contagem desde o deploy do medidor.</div>
+  </div>
+</div><!-- fim panel-odds -->
 
 <div class="robot-panel" id="panel-audit">
   <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('scroll',{size:20})} Trilha de Auditoria</h1>
@@ -1354,6 +1538,100 @@ function showPanel(id) {
   // Carrega o iframe (Usuários/Acessos) só na 1a vez que a aba abre.
   var fr = panel.querySelector('iframe.admin-embed');
   if (fr && !fr.getAttribute('src') && fr.dataset.src) fr.setAttribute('src', fr.dataset.src);
+  // Odds BW: liga o poll de saude so quando a aba esta aberta
+  if (id === 'odds') { loadOddsConfig(); pollOddsHealth(); if (oddsPolling) clearInterval(oddsPolling); oddsPolling = setInterval(pollOddsHealth, 8000); }
+  else if (oddsPolling) { clearInterval(oddsPolling); oddsPolling = null; }
+}
+
+// ── Odds BW: config + controle ───────────────────────────────────────────────
+async function loadOddsConfig() {
+  try {
+    const r = await fetch(BASE + '/robot/odds/config');
+    const c = await r.json();
+    var g = function(id){ return document.getElementById(id); };
+    if (g('odds-intervalo')) g('odds-intervalo').value = c.intervaloSeg;
+    if (g('odds-maxavbs')) g('odds-maxavbs').value = c.maxAvbs;
+    if (g('odds-edgemin')) g('odds-edgemin').value = c.edgeMin;
+    if (g('odds-proxy')) g('odds-proxy').value = c.proxyUrl || '';
+    if (g('odds-parelho')) g('odds-parelho').checked = (c.avbParelho == null ? true : !!c.avbParelho);
+    if (g('odds-parelho-limiar')) g('odds-parelho-limiar').value = (c.avbParelhoLimiar != null ? c.avbParelhoLimiar : 0.10);
+  } catch (e) {}
+}
+async function oddsSaveConfig() {
+  var g = function(id){ return document.getElementById(id); };
+  var el = g('odds-cfg-msg'); el.style.color = '#94a3b8'; el.textContent = 'Salvando…';
+  var body = { intervaloSeg: g('odds-intervalo').value, maxAvbs: g('odds-maxavbs').value, edgeMin: g('odds-edgemin').value, proxyUrl: g('odds-proxy').value,
+    avbParelho: g('odds-parelho') ? (g('odds-parelho').checked ? 1 : 0) : 1,
+    avbParelhoLimiar: g('odds-parelho-limiar') ? g('odds-parelho-limiar').value : 0.10 };
+  try {
+    var r = await fetch(BASE + '/robot/odds/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var d = await r.json();
+    if (d.ok) { el.style.color = '#22c55e'; el.textContent = 'Salvo. Robô reiniciado com as novas configurações.'; setTimeout(pollOddsHealth, 800); }
+    else { el.style.color = '#ef4444'; el.textContent = 'Erro: ' + (d.erro || '?'); }
+  } catch (e) { el.style.color = '#ef4444'; el.textContent = 'Erro: ' + e.message; }
+}
+async function oddsStart() { try { await fetch(BASE + '/robot/odds/start', { method:'POST' }); setTimeout(pollOddsHealth, 500); } catch (e) {} }
+async function oddsStop() { try { await fetch(BASE + '/robot/odds/stop', { method:'POST' }); setTimeout(pollOddsHealth, 500); } catch (e) {} }
+
+// ── Odds BW: saude da descoberta ─────────────────────────────────────────────
+var oddsPolling = null;
+async function pollOddsHealth() {
+  try {
+    const r = await fetch(BASE + '/robot/odds/status');
+    const d = await r.json();
+    const el = document.getElementById('odds-health'); if (!el) return;
+    const s = d.descoberta || {}, q = s.ultimos15min || {}, h = s.ultimos60min || {};
+    const degradado = String(s.diagnostico || '').indexOf('degradado') >= 0;
+    const cor = s.alertaProxy ? '#ef4444' : (degradado ? '#eab308' : '#22c55e');
+    const pct = v => (v == null ? '—' : v + '%');
+    el.innerHTML =
+      '<div style="font-size:19px;font-weight:800;color:' + cor + ';margin-bottom:8px">' + (s.diagnostico || 'sem dados') + '</div>'
+      + '<div style="display:flex;gap:26px;flex-wrap:wrap;font-size:13px;color:#cbd5e1">'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Últimos 15 min</div><b style="font-size:16px">' + pct(q.taxaSucesso) + '</b> <span style="color:#94a3b8">(' + (q.ok || 0) + ' ok / ' + (q.falha || 0) + ' falha)</span></div>'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Última hora</div><b style="font-size:16px">' + pct(h.taxaSucesso) + '</b> <span style="color:#94a3b8">(' + (h.ok || 0) + ' ok / ' + (h.falha || 0) + ' falha)</span></div>'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Corridas ao vivo</div><b style="font-size:16px">' + (d.corridasAoVivo != null ? d.corridasAoVivo : '—') + '</b></div>'
+      +   '<div><div style="color:#94a3b8;font-size:11px">Proxy</div><b style="font-size:16px;color:' + (s.proxyAtivo ? '#22c55e' : '#94a3b8') + '">' + (s.proxyAtivo ? 'ATIVO' : 'desligado') + '</b></div>'
+      + '</div>'
+      + (s.alertaProxy ? '<div style="margin-top:12px;padding:9px 11px;background:rgba(239,68,68,.12);border:1px solid #ef4444;border-radius:6px;color:#fca5a5;font-size:12px">&#9888; Bloqueio constante detectado. Hora de ligar o proxy: defina <b>BETWINNER_PROXY_URL</b> nas Variables do Railway.</div>' : '')
+      + '<div style="margin-top:10px;font-size:11px;color:#64748b">Robô: ' + (d.running ? 'rodando' : 'parado') + ' &middot; ciclos ' + (d.ciclos || 0) + '</div>';
+    var rs = document.getElementById('odds-run-state');
+    if (rs) rs.textContent = (d.running ? '● rodando' : '○ parado') + ((d.config && d.config.intervaloSeg) ? ' · intervalo ' + d.config.intervaloSeg + 's' : '') + (s.proxyAtivo ? ' · proxy ativo' : '');
+    // ── Consumo do proxy (Decodo): resumo + por dia, via /odds/diag/uso ──
+    var elt = document.getElementById('odds-trafego');
+    if (elt) {
+      try {
+        var ur = await fetch(BASE + '/robot/odds/diag/uso');
+        var uso = await ur.json();
+        var re = uso.resumo || {}, pd = uso.por_dia || [];
+        var proj = (d.trafego && d.trafego.projecaoMensalGb != null) ? d.trafego.projecaoMensalGb + ' GB' : '—';
+        var fmtMb = function (mb) { return (mb >= 1000) ? ((mb / 1000).toFixed(2) + ' GB') : (mb + ' MB'); };
+        var linhas = pd.slice(0, 10).map(function (x) {
+          return '<tr>'
+            + '<td style="padding:3px 12px 3px 0;color:#cbd5e1">' + x.dia + '</td>'
+            + '<td style="padding:3px 12px;text-align:right;color:#e2e8f0;font-weight:600">' + fmtMb(x.mb) + '</td>'
+            + '<td style="padding:3px 12px;text-align:right;color:#94a3b8">' + (x.corridas || 0) + '</td>'
+            + '<td style="padding:3px 12px;text-align:right;color:#94a3b8">' + (x.pares || 0) + '</td>'
+            + '<td style="padding:3px 0;text-align:right;color:#64748b">' + (x.reqs || 0) + '</td>'
+            + '</tr>';
+        }).join('');
+        var tile = function (rot, val, cor) { return '<div><div style="color:#94a3b8;font-size:11px">' + rot + '</div><b style="font-size:18px' + (cor ? ';color:' + cor : '') + '">' + val + '</b></div>'; };
+        elt.innerHTML =
+          '<div style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:#cbd5e1;margin-bottom:8px">'
+          + tile('Total consumido', (re.gb_total >= 1 ? re.gb_total + ' GB' : (re.mb_total != null ? re.mb_total + ' MB' : '—')), '#38bdf8')
+          + tile('Corridas', (re.corridas != null ? re.corridas : '—'))
+          + tile('AvBs', (re.avbs_pares != null ? re.avbs_pares : '—'))
+          + tile('Requisições', (re.requisicoes != null ? re.requisicoes : '—'))
+          + tile('Projeção 30d', proj)
+          + '</div>'
+          + '<div style="font-size:11px;color:#64748b;margin-bottom:6px">Média: ' + (re.mb_por_corrida != null ? re.mb_por_corrida + ' MB/corrida' : '—') + ' &middot; ' + (re.mb_por_avb != null ? re.mb_por_avb + ' MB/AvB' : '—') + '</div>'
+          + (linhas
+            ? '<table style="border-collapse:collapse;font-size:12px"><thead><tr style="color:#64748b;font-size:10px;text-transform:uppercase"><td style="padding:2px 12px 4px 0">Dia</td><td style="padding:2px 12px 4px;text-align:right">Consumo</td><td style="padding:2px 12px 4px;text-align:right">Corr.</td><td style="padding:2px 12px 4px;text-align:right">AvB</td><td style="padding:2px 0 4px;text-align:right">Req</td></tr></thead><tbody>' + linhas + '</tbody></table>'
+            : '<div class="lin" style="color:#64748b">Sem consumo registrado ainda.</div>');
+      } catch (e) { elt.innerHTML = '<div class="lin" style="color:#64748b">Erro ao carregar consumo.</div>'; }
+    }
+  } catch (e) {
+    var el2 = document.getElementById('odds-health'); if (el2) el2.innerHTML = '<div class="lin">Erro ao buscar status.</div>';
+  }
 }
 // Ajusta a altura do iframe embutido ao conteudo (mesma origem).
 function resizeEmbed(f) {
@@ -2186,6 +2464,274 @@ router.get('/monitor/status', requireAdmin, (req, res) => {
     if (persisted) return res.json(persisted);
   }
   res.json(st);
+});
+
+// ── Robô de Odds ao Vivo (betwinner) ────────────────────────────────────────
+router.get('/odds/status', requireAdmin, (req, res) => { res.json(liveOddsModule.getStatus()); });
+router.get('/odds/live', requireAdmin, (req, res) => {
+  res.json({ corridas: liveOddsModule.getSnapshots(), pistasNovas: (liveOddsModule._status || {}).pistasNovas || {} });
+});
+
+// DIAGNOSTICO (somente leitura): TODAS as pistas que o betwinner expos ao vivo
+// desde que o robo ligou. Serve pra saber se uma pista (ex.: Sunderland) chega
+// a aparecer no feed de galgo. Se nunca aparece o dia todo => o betwinner nao a
+// lista (estrutural/cobertura). Se aparece => foi janela ruim/timing (proxy resolve).
+router.get('/odds/diag/champs', requireAdmin, (req, res) => {
+  const cv = (liveOddsModule.getChampsVistos && liveOddsModule.getChampsVistos()) || {};
+  const lista = Object.keys(cv).map(nome => Object.assign({ nome }, cv[nome]))
+    .sort((a, b) => (a.nome > b.nome ? 1 : -1));
+  const q = (req.query.q || '').toLowerCase();
+  const filtradas = q ? lista.filter(p => p.nome.toLowerCase().includes(q)) : lista;
+  res.json({ total: lista.length, encontrou: q ? filtradas.length : undefined, pistas: filtradas });
+});
+
+// PROBE (somente leitura): roda a descoberta AGORA, pelo caminho atual (proxy se
+// ligado), e devolve o que o betwinner respondeu de fato — nº de champs, nº de
+// corridas + amostra com statusLine, ou o erro. Mata a duvida de "proxy traz vazio?
+// geo-bloqueia? statusLine nao casa 'Inicia'?". Gasta um pouquinho da banda do proxy.
+router.get('/odds/diag/probe', requireAdmin, async (req, res) => {
+  const out = { proxyAtivo: ((liveOddsModule.getStatus() || {}).descoberta || {}).proxyAtivo };
+  try {
+    const champs = await liveOddsModule.descobrirChampsAoVivo();
+    out.champs = { ok: true, total: (champs || []).length, amostra: (champs || []).slice(0, 8) };
+  } catch (e) { out.champs = { ok: false, erro: String(e.message).slice(0, 160) }; }
+  try {
+    const races = await liveOddsModule.listarCorridasAoVivo();
+    out.corridas = {
+      ok: true, total: (races || []).length,
+      amostra: (races || []).slice(0, 12).map(r => ({ track: r.track, pista: r.pista, raceNum: r.raceNum, statusLine: r.statusLine, abertaFilter: /Inicia/i.test(r.statusLine || '') }))
+    };
+  } catch (e) { out.corridas = { ok: false, erro: String(e.message).slice(0, 160) }; }
+  res.json(out);
+});
+
+// DIAGNOSTICO: testa varias VARIACOES da chamada de jogos (com champs=) via proxy
+// e mostra, pra cada uma, ct/len/isJson/jogos. Serve pra achar qual formato o
+// betwinner NAO desafia (1 liga por vez? sem groupChamps? params minimos?). A
+// variacao que voltar isJson:true com jogos>0 vira a implementacao definitiva.
+router.get('/odds/diag/variantes', requireAdmin, async (req, res) => {
+  try { res.json(await liveOddsModule.diagVariantes()); }
+  catch (e) { res.json({ erro: String(e.message).slice(0, 200) }); }
+});
+
+// DIAGNOSTICO: USO do proxy Decodo — cruza o medidor de trafego (proxy_trafego)
+// com o captador de AvBs abertos (avb_abertos) pra dizer, por dia e no total:
+// quantas corridas o robo puxou, quantos pares de AvB, quantas requisicoes e MB.
+// Comeca a contar a partir do deploy do captador/medidor — dias anteriores nao
+// tem esse detalhe (so o total de MB que a Decodo mostra).
+router.get('/odds/diag/uso', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const trafego = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego ORDER BY dia DESC LIMIT 30').all();
+    const avbDia = db.prepare("SELECT data AS dia, COUNT(*) corridas, COALESCE(SUM(n_pares),0) pares FROM avb_abertos GROUP BY data ORDER BY data DESC LIMIT 30").all();
+    const dias = {};
+    for (const t of trafego) dias[t.dia] = { dia: t.dia, mb: +(t.bytes / 1e6).toFixed(2), reqs: t.reqs, corridas: 0, pares: 0 };
+    for (const a of avbDia) dias[a.dia] = Object.assign(dias[a.dia] || { dia: a.dia, mb: 0, reqs: 0 }, { corridas: a.corridas, pares: a.pares });
+    const por_dia = Object.values(dias).sort((x, y) => String(y.dia).localeCompare(String(x.dia)));
+    const totCorridas = db.prepare('SELECT COUNT(*) n FROM avb_abertos').get().n;
+    const totPares = db.prepare('SELECT COALESCE(SUM(n_pares),0) s FROM avb_abertos').get().s;
+    const totReqs = trafego.reduce((a, b) => a + b.reqs, 0);
+    const totBytes = trafego.reduce((a, b) => a + b.bytes, 0);
+    const totMb = +(totBytes / 1e6).toFixed(2);
+    res.json({
+      resumo: {
+        corridas: totCorridas, avbs_pares: totPares, requisicoes: totReqs,
+        mb_total: totMb, gb_total: +(totBytes / 1e9).toFixed(3),
+        mb_por_corrida: totCorridas ? +(totMb / totCorridas).toFixed(3) : null,
+        mb_por_avb: totPares ? +(totMb / totPares).toFixed(3) : null
+      },
+      por_dia,
+      obs: 'Contagem comeca no deploy do captador/medidor — dias anteriores nao entram (so o total de MB no painel da Decodo).'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAGNOSTICO (somente leitura): lista os PDFs salvos no disco hoje e, pra cada
+// corrida SKIP, mostra os candidatos (arquivos com o mesmo horario) e se o
+// casamento por pista achou o PDF. Serve pra descobrir por que algumas corridas
+// (Pelaw, CPark) aparecem como "sem PDF": arquivo nao existe? horario diferente?
+// nome que nao casa? Nao altera nada.
+router.get('/diag/pdfs', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = req.query.date || getTodayDate();
+    const dir = getPdfDir(date);
+    let arquivos = [];
+    try { arquivos = fs.readdirSync(dir); }
+    catch (e) { return res.json({ date, dir, erro: 'pasta inacessivel: ' + e.message, total_pdfs: 0, pdfs: [] }); }
+    const pdfs = arquivos.filter(f => /\.pdf$/i.test(f)).sort();
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.nivel FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.nivel='skip' ORDER BY r.hora"
+    ).all(date);
+    const corridas_skip = rows.map(r => {
+      const tf = formatTime(r.hora);
+      const trackAbbr = (r.corrida || '').split(' ')[0].toLowerCase();
+      const candidatos = pdfs.filter(f => f.startsWith(tf));
+      const achado = encontrarPdfDaCorrida(pdfs, tf, trackAbbr) || null;
+      return { hora: r.hora, corrida: r.corrida, timeFormatted: tf, trackAbbr, candidatos, achado };
+    });
+    res.json({ date, dir, total_pdfs: pdfs.length, pdfs, corridas_skip });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAGNOSTICO (somente leitura): das corridas de HOJE que estao no sistema
+// (carregadas), quantas entram no perfil A1-A12 + 400-500m — e quais ficam de
+// fora e por que. Ajuda a entender "poucas corridas apresentadas". Nao altera nada.
+router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = getTodayDate();
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.nivel FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? ORDER BY r.hora"
+    ).all(date);
+    const classeDe = c => { const m = String(c || '').match(/A(\d+)/i); return m ? parseInt(m[1]) : null; };
+    const distDe = d => { const m = String(d == null ? '' : d).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+    const noPerfil = [], foraPerfil = [];
+    for (const r of rows) {
+      const cl = classeDe(r.corrida), d = distDe(r.dist);
+      const okCl = cl != null && cl >= 1 && cl <= 12;
+      const okD = d >= 400 && d <= 500;
+      const item = { hora: r.hora, corrida: r.corrida, dist: d, classe: cl, nivel: r.nivel };
+      if (okCl && okD) noPerfil.push(item);
+      else {
+        item.motivo = [!okCl ? (cl == null ? 'sem classe A' : 'classe fora (A' + cl + ')') : null, !okD ? 'dist fora (' + d + 'm)' : null].filter(Boolean).join(' + ');
+        foraPerfil.push(item);
+      }
+    }
+    res.json({
+      data: date,
+      total_carregadas: rows.length,
+      no_perfil_A1a12_400a500: noPerfil.length,
+      dentro_mas_skip: noPerfil.filter(x => x.nivel === 'skip').length,
+      fora_do_perfil: foraPerfil.length,
+      corridas_no_perfil: noPerfil,
+      corridas_fora: foraPerfil
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAGNOSTICO COMPLETO DOS SKIPS (somente leitura): reprocessa cada corrida de
+// HOJE no perfil (A1-A12 + 400-500m) que virou skip e revela o MOTIVO real de
+// cada uma, com numeros: margem favorito×underdog vs o corte (threshold_skip_avb)
+// e galgos elegiveis vs o minimo (min_corridas_uteis). Nao altera nada no banco.
+router.get('/diag/skips', requireAdmin, async (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const { processarCorrida } = require('./api');
+    const date = getTodayDate();
+    const classeDe = c => { const m = String(c || '').match(/A(\d+)/i); return m ? parseInt(m[1]) : null; };
+    const distDe = d => { const m = String(d == null ? '' : d).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.user_id FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.nivel='skip' ORDER BY r.hora"
+    ).all(date);
+    const alvo = rows.filter(r => { const cl = classeDe(r.corrida), dd = distDe(r.dist); return cl != null && cl >= 1 && cl <= 12 && dd >= 400 && dd <= 500; });
+
+    const PDF_DIR = getPdfDir(date);
+    let arquivos = []; try { arquivos = fs.readdirSync(PDF_DIR); } catch (e) {}
+
+    const porMotivo = { margem_insuficiente: 0, historico_insuficiente: 0, distancia_classe: 0, trap_invalido: 0, sem_pdf: 0, reprocessou_sem_skip: 0, outro: 0 };
+    const porPista = {};   // pista -> { total, margem, historico, outro }
+    const margens = [], historico = [], detalhe = [];
+
+    for (const r of alvo) {
+      const pista = (r.corrida || '').split(' ')[0];
+      porPista[pista] = porPista[pista] || { total: 0, margem: 0, historico: 0, outro: 0 };
+      porPista[pista].total++;
+
+      const candidato = encontrarPdfDaCorrida(arquivos, formatTime(r.hora), pista.toLowerCase());
+      if (!candidato) { porMotivo.sem_pdf++; detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'sem PDF salvo p/ reprocessar' }); continue; }
+
+      let resu = null;
+      try {
+        const buf = fs.readFileSync(path.join(PDF_DIR, candidato));
+        const parsed = await parseRacingPostPDF(buf, getTrapBadgeColors() || undefined);
+        resu = processarCorrida(parsed, getUserConfig(r.user_id));
+      } catch (e) { porMotivo.outro++; detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'erro ao reprocessar: ' + e.message }); continue; }
+      if (!resu) { porMotivo.outro++; continue; }
+
+      if (resu.motivoSkip === 'margem_insuficiente') {
+        porMotivo.margem_insuficiente++; porPista[pista].margem++;
+        margens.push({ hora: r.hora, corrida: r.corrida, diffAvB: resu.diffAvB, threshold: resu.thresholdSkip });
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'margem', diffAvB: resu.diffAvB, faltou: Math.round((resu.thresholdSkip - resu.diffAvB) * 10) / 10 });
+      } else if (resu.motivoSkip === 'historico_insuficiente') {
+        porMotivo.historico_insuficiente++; porPista[pista].historico++;
+        const elim = (resu.eliminados || []).map(e => e.motivo);
+        historico.push({ hora: r.hora, corrida: r.corrida, elegiveis: resu.elegiveisCount, min: resu.minCorridasUteis, eliminados: elim });
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'historico', elegiveis: resu.elegiveisCount, eliminados: elim });
+      } else if (resu.nivel === 'skip') {
+        const obs = String(resu.obs || '');
+        if (/fora do range|nao aceita/i.test(obs)) { porMotivo.distancia_classe++; }
+        else if (/trap invalido/i.test(obs)) { porMotivo.trap_invalido++; }
+        else { porMotivo.outro++; }
+        porPista[pista].outro++;
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'outro', obs: obs.slice(0, 90) });
+      } else {
+        // reprocessou e NAO deu mais skip (dado/config mudou desde a analise salva)
+        porMotivo.reprocessou_sem_skip++;
+        detalhe.push({ hora: r.hora, corrida: r.corrida, motivo: 'reprocessou SEM skip agora (nivel=' + resu.nivel + ', pct=' + resu.pct + ')' });
+      }
+    }
+
+    const cfg = getUserConfig(1) || {};
+    const thr = cfg.threshold_skip_avb || 10;
+    const distMargem = {
+      no_corte_0a2: margens.filter(x => x.diffAvB >= thr - 2).length,      // faltou 0-2 pts (recuperaria baixando pouco)
+      medio_2a4: margens.filter(x => x.diffAvB >= thr - 4 && x.diffAvB < thr - 2).length,
+      longe_mais4: margens.filter(x => x.diffAvB < thr - 4).length          // genuinamente equilibradas
+    };
+
+    res.json({
+      data: date,
+      config: { threshold_skip_avb: thr, min_corridas_uteis: cfg.min_corridas_uteis || 3, min_galgos_elegiveis: 4 },
+      total_skips_no_perfil: alvo.length,
+      por_motivo: porMotivo,
+      margem_distribuicao_vs_corte: distMargem,
+      por_pista: porPista,
+      margens, historico, detalhe
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+router.post('/odds/stop', requireAdmin, (req, res) => { liveOddsModule.parar(); res.json({ ok: true }); });
+router.post('/odds/start', requireAdmin, (req, res) => {
+  try { _iniciarOdds(); res.json({ ok: true }); }
+  catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+// Config do Robo de Odds — ler e salvar (Painel Admin)
+router.get('/odds/config', requireAdmin, (req, res) => {
+  const out = getOddsConfig();
+  try {
+    const { db } = require('../db/database');
+    const c = db.prepare('SELECT avb_parelho, avb_parelho_limiar FROM analysis_config WHERE user_id=1').get() || {};
+    out.avbParelho = (c.avb_parelho == null) ? 1 : c.avb_parelho;               // 1 = ligado
+    out.avbParelhoLimiar = (c.avb_parelho_limiar != null) ? c.avb_parelho_limiar : 0.10;
+  } catch (e) {}
+  res.json(out);
+});
+router.post('/odds/config', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const b = req.body || {};
+    const intervalo = Math.max(3, Math.min(60, parseInt(b.intervaloSeg) || 5));
+    const maxAvbs = Math.max(1, Math.min(6, parseInt(b.maxAvbs) || 3));
+    const edgeRaw = parseInt(b.edgeMin);
+    const edgeMin = Math.max(0, Math.min(50, isNaN(edgeRaw) ? 5 : edgeRaw));
+    const proxyUrl = String(b.proxyUrl || '').trim();
+    // Motor 1 — modo AvB parelho (afeta a ANALISE, nao o robo ao vivo)
+    const avbParelho = [true, 1, '1', 'true', 'on'].includes(b.avbParelho) ? 1 : 0;
+    let avbLimiar = parseFloat(b.avbParelhoLimiar);
+    if (!(avbLimiar > 0 && avbLimiar <= 1)) avbLimiar = 0.10;
+    db.prepare('UPDATE analysis_config SET odds_intervalo_seg=?, odds_max_avbs=?, odds_edge_min=?, odds_proxy_url=?, avb_parelho=?, avb_parelho_limiar=? WHERE user_id=1')
+      .run(intervalo, maxAvbs, edgeMin, proxyUrl, avbParelho, avbLimiar);
+    // reinicia o robo pra aplicar intervalo/proxy na hora (parar() e' imediato)
+    try { liveOddsModule.parar(); } catch (e) {}
+    setTimeout(() => { try { _iniciarOdds(); } catch (e) { console.error('[ODDS] restart pos-config:', e.message); } }, 400);
+    res.json({ ok: true, config: getOddsConfig() });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
 router.get('/final-check/status', requireAdmin, (req, res) => {
