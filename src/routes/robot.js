@@ -620,9 +620,12 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 .robot-menu-item .icon{font-size:16px}
 /* ── Menu em grupos ────────────────────────────────────────────────────── */
 .mgrp{border-bottom:1px solid rgba(255,255,255,.04)}
+/* Mesma familia e tamanho dos itens do menu: so o peso e a cor distinguem o
+   titulo do grupo. Antes usava 10px em caixa alta e a troca de fonte pulava
+   aos olhos. */
 .mgrp-tit{display:flex;align-items:center;gap:6px;width:100%;text-align:left;
   padding:9px 12px;background:none;border:none;cursor:pointer;
-  font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#666}
+  font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.2px;color:#7a8496}
 .mgrp-tit:hover{color:#999}
 .mgrp-seta{display:inline-block;transition:transform .15s;font-size:9px}
 .mgrp.aberto .mgrp-seta{transform:rotate(90deg)}
@@ -630,7 +633,7 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 .mgrp.aberto .mgrp-itens{display:block}
 .mgrp .robot-menu-item{padding-left:22px}
 /* Nota "JSON": deixa claro que aquele grupo abre saida tecnica, nao tela. */
-.mgrp-nota{font-size:8px;background:rgba(234,179,8,.15);color:#eab308;
+.mgrp-nota{font-size:9px;background:rgba(234,179,8,.15);color:#eab308;
   padding:1px 5px;border-radius:3px;letter-spacing:.3px}
 .mi-json{font-family:ui-monospace,monospace;font-size:11px!important;color:#7a8496!important}
 @media(max-width:900px){
@@ -997,7 +1000,23 @@ ${navBar(req.user, 'robot')}
   <iframe class="admin-embed" data-src="${BASE}/acessos?embed=1" title="Acessos" onload="window.resizeEmbed&&resizeEmbed(this)"></iframe>
 </div>
 <div class="robot-panel" id="panel-importar">
-  <iframe class="admin-embed" data-src="${BASE}/robot/importar-entradas?embed=1" title="Importar Entradas" onload="window.resizeEmbed&&resizeEmbed(this)"></iframe>
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('download',{size:20})} Importar Entradas</h1>
+  <p class="sub">Lança as apostas de um dia a partir da planilha e ajusta o Histórico e a Banca. Nada é gravado até você conferir e confirmar.</p>
+
+  <div class="card">
+    <div class="card-title">Arquivo</div>
+    <p style="color:#888;font-size:12px;line-height:1.5;margin-bottom:14px">
+      CSV com separador <strong>;</strong> e cabeçalho <code style="color:#cbd5e1">Data;Pista;AVB;Odd;Aposta;Bateu?</code>.
+      A coluna <strong>Bateu?</strong> é ignorada de propósito — o resultado é calculado da chegada real e do par escolhido,
+      pra não criar uma segunda versão da verdade. As corridas do dia que não estiverem na planilha ficam <strong>sem odd</strong>.
+    </p>
+    <div id="imp-drop" style="border:2px dashed var(--bdr2);border-radius:8px;padding:22px;text-align:center;cursor:pointer;color:#888;font-size:12px">
+      Clique aqui ou arraste o arquivo .csv
+    </div>
+    <input type="file" id="imp-arq" accept=".csv,text/csv" style="display:none">
+  </div>
+
+  <div id="imp-res"></div>
 </div>
 
 </div><!-- fim robot-content -->
@@ -1195,6 +1214,111 @@ async function downloadAll() {
 })();
 
 // ── Navegação entre painéis ──────────────────────────────────────────────────
+// ── Importar Entradas ─────────────────────────────────────────────────────
+// Fluxo em dois passos: SIMULAR (mostra o que seria gravado, sem tocar no
+// banco) e depois APLICAR. Importacao que grava direto e' escrever no banco
+// de olhos fechados — uma linha casada com a corrida errada e' dificil de
+// achar depois.
+var impPlano = null, impLimpar = [];
+(function ligarImportar(){
+  var drop = document.getElementById('imp-drop');
+  var arq  = document.getElementById('imp-arq');
+  if(!drop || !arq) return;
+  drop.addEventListener('click', function(){ arq.click(); });
+  drop.addEventListener('dragover', function(e){ e.preventDefault(); drop.style.borderColor = '#22c55e'; });
+  drop.addEventListener('dragleave', function(){ drop.style.borderColor = ''; });
+  drop.addEventListener('drop', function(e){
+    e.preventDefault(); drop.style.borderColor = '';
+    if(e.dataTransfer.files[0]) impLer(e.dataTransfer.files[0]);
+  });
+  arq.addEventListener('change', function(e){ if(e.target.files[0]) impLer(e.target.files[0]); });
+})();
+
+function impLer(f){
+  var fr = new FileReader();
+  // windows-1252 porque o Excel brasileiro exporta assim; ler como UTF-8
+  // quebraria os acentos das pistas e dos nomes.
+  fr.onload = function(){ impSimular(fr.result); };
+  fr.readAsText(f, 'windows-1252');
+}
+
+function impSimular(texto){
+  document.getElementById('imp-res').innerHTML = '<div class="card">Lendo a planilha…</div>';
+  fetch(BASE + '/robot/importar-entradas/simular', {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: texto
+  }).then(function(r){ return r.json(); }).then(impPintar)
+    .catch(function(e){ document.getElementById('imp-res').innerHTML = '<div class="card" style="color:#ef4444">Erro: '+e.message+'</div>'; });
+}
+
+function impPintar(d){
+  var res = document.getElementById('imp-res');
+  if(d.error){ res.innerHTML = '<div class="card" style="color:#ef4444">'+d.error+'</div>'; return; }
+  impPlano = d.plano; impLimpar = d.limpar || [];
+  var c = {ok:0, erro:0, ambiguo:0, agrupada:0};
+  d.plano.forEach(function(p){ c[p.status] = (c[p.status]||0) + 1; });
+
+  var corSt = { ok:'#22c55e', erro:'#ef4444', ambiguo:'#eab308', agrupada:'#eab308' };
+  var linhas = d.plano.map(function(p){
+    return '<tr>'
+      + '<td style="padding:6px 8px;color:#666">'+p.n+'</td>'
+      + '<td style="padding:6px 8px"><span style="font-size:9px;font-weight:800;text-transform:uppercase;color:'+corSt[p.status]+'">'+p.status+'</span></td>'
+      + '<td style="padding:6px 8px">'+(p.horaBr||'—')+'</td>'
+      + '<td style="padding:6px 8px">'+(p.corrida||p.pista||'—')+'</td>'
+      + '<td style="padding:6px 8px;color:#aaa">'+(p.avbTexto||'')+'</td>'
+      + '<td style="padding:6px 8px;text-align:right">'+(p.odd!=null?p.odd:'—')+'</td>'
+      + '<td style="padding:6px 8px;text-align:right">'+(p.stake!=null?p.stake:'—')+'</td>'
+      + '<td style="padding:6px 8px;color:#777;font-size:11px">'+(p.motivo||'')+'</td></tr>';
+  }).join('');
+
+  var html = '<div class="card">'
+    + '<div class="card-title">Confira antes de aplicar</div>'
+    + '<p style="color:#888;font-size:12px;margin-bottom:12px">'
+    +   '<strong style="color:#22c55e">'+c.ok+'</strong> pronta(s) pra gravar &middot; '
+    +   '<strong style="color:#eab308">'+(c.ambiguo+c.agrupada)+'</strong> com observação &middot; '
+    +   '<strong style="color:#ef4444">'+c.erro+'</strong> não casaram</p>'
+    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="border-bottom:1px solid var(--bdr2)">'
+    +   ['#','Status','Hora','Corrida','AvB da planilha','Odd','Stake','Observação']
+        .map(function(h,i){ return '<th style="padding:7px 8px;text-align:'+(i===5||i===6?'right':'left')+';font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#666">'+h+'</th>'; }).join('')
+    + '</tr></thead><tbody>' + linhas + '</tbody></table></div></div>';
+
+  if(impLimpar.length){
+    html += '<div class="card" style="border-color:rgba(239,68,68,.3)">'
+      + '<div class="card-title" style="color:#ef4444">'+impLimpar.length+' entrada(s) ficarão sem odd</div>'
+      + '<p style="color:#888;font-size:12px;line-height:1.5;margin-bottom:12px">Estão no sistema mas não aparecem na planilha. As corridas continuam no Histórico — só deixam de contar como aposta, no Histórico e na Banca.</p>'
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="border-bottom:1px solid var(--bdr2)">'
+      +   ['Hora','Corrida','Odd atual','Stake atual'].map(function(h,i){ return '<th style="padding:7px 8px;text-align:'+(i>1?'right':'left')+';font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#666">'+h+'</th>'; }).join('')
+      + '</tr></thead><tbody>'
+      + impLimpar.map(function(l){ return '<tr><td style="padding:6px 8px">'+(l.horaBr||'—')+'</td><td style="padding:6px 8px">'+(l.corrida||'')+'</td><td style="padding:6px 8px;text-align:right">'+(l.odd||'')+'</td><td style="padding:6px 8px;text-align:right">'+(l.stake||'')+'</td></tr>'; }).join('')
+      + '</tbody></table></div></div>';
+  }
+
+  html += '<div class="card">'
+    + (c.ok
+      ? '<button class="btn" id="imp-aplicar">Aplicar: gravar '+c.ok+' e limpar '+impLimpar.length+'</button>'
+      : '<div style="color:#ef4444;font-size:12px"><strong>Aplicação bloqueada.</strong> Nenhuma linha da planilha casou com uma corrida — '
+        + 'aplicar assim apagaria '+impLimpar.length+' entrada(s) sem colocar nada no lugar. '
+        + 'Confira se a data e as pistas da planilha batem com as corridas analisadas nesse dia.</div>')
+    + '</div>';
+
+  res.innerHTML = html;
+  var b = document.getElementById('imp-aplicar');
+  if(b) b.addEventListener('click', impAplicar);
+}
+
+function impAplicar(){
+  var b = document.getElementById('imp-aplicar');
+  b.disabled = true; b.textContent = 'Gravando…';
+  fetch(BASE + '/robot/importar-entradas/aplicar', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ plano: impPlano, limpar: impLimpar })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(d.error){ alert('Erro: ' + d.error); b.disabled = false; b.textContent = 'Tentar de novo'; return; }
+    b.textContent = '\u2713 ' + d.gravadas + ' gravada(s), ' + d.limpas + ' limpa(s)';
+  }).catch(function(e){ alert('Erro: ' + e.message); b.disabled = false; });
+}
+
 // ── Acordeao do menu ──────────────────────────────────────────────────────
 // Um grupo aberto por vez. Guardamos a escolha no sessionStorage pra o menu
 // nao "fechar sozinho" a cada troca de painel dentro do mesmo grupo.
@@ -3097,131 +3221,9 @@ router.get('/diag-compartilhado', requireAdmin, (req, res) => {
 // gravado, sem tocar no banco) e depois APLICAR.
 // O CSV chega como TEXTO no corpo — o navegador le o arquivo e manda o
 // conteudo. Evita trazer multer so pra isso.
-router.get('/importar-entradas', requireAdmin, (req, res) => {
-  const { getUserConfig } = require('../db/database');
-  let banca = 1000;
-  try { const c = getUserConfig(req.user.id, false); if (c && c.banca_valor_inicial) banca = c.banca_valor_inicial; } catch (e) {}
-
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Importar entradas</title>
-<style>${designTokensCSS()}</style>
-<style>
-  body{padding:0;margin:0}
-  .wrap{max-width:1100px;margin:0 auto;padding:20px}
-  h1{font-size:20px;margin:0 0 4px}
-  .sub{font-size:12px;color:var(--mut);margin-bottom:18px}
-  .box{background:var(--sur);border:1px solid var(--bdr2);border-radius:10px;padding:16px;margin-bottom:14px}
-  .drop{border:2px dashed #2a3140;border-radius:10px;padding:26px;text-align:center;cursor:pointer;color:var(--mut)}
-  .drop:hover{border-color:#22c55e;color:#22c55e}
-  table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:10px}
-  th{text-align:left;padding:7px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);border-bottom:1px solid var(--bdr2)}
-  td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
-  tr.st-ok td{background:rgba(34,197,94,.05)}
-  tr.st-erro td{background:rgba(239,68,68,.07)}
-  tr.st-ambiguo td,tr.st-agrupada td{background:rgba(234,179,8,.07)}
-  .tag{font-size:9px;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:4px}
-  .t-ok{background:rgba(34,197,94,.15);color:#22c55e}
-  .t-erro{background:rgba(239,68,68,.15);color:#ef4444}
-  .t-ambiguo,.t-agrupada{background:rgba(234,179,8,.15);color:#eab308}
-  .btn{padding:9px 20px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none}
-  .btn-go{background:#22c55e;color:#000}
-  .btn-go:disabled{background:#2a3140;color:#666;cursor:not-allowed}
-  .resumo{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-top:12px}
-</style></head><body>
-${req.query.embed ? '' : navBar(req.user, '')}
-<div class="wrap"${req.query.embed ? ' style="padding:0;max-width:none"' : ''}>
-  ${req.query.embed ? '' : '<h1>Importar entradas</h1>'}
-  <div class="sub">Lança as apostas de um dia a partir da planilha. Nada é gravado até você conferir e confirmar.</div>
-
-  <div class="box">
-    <div style="font-size:12px;color:var(--mut);margin-bottom:10px">
-      Formato esperado (separador <strong>;</strong>):
-      <code style="color:#cbd5e1">Data;Pista;AVB;Odd;Aposta;Bateu?</code><br>
-      A coluna <strong>Bateu?</strong> é ignorada de propósito — o resultado é calculado da chegada real e do par escolhido,
-      pra não criar uma segunda versão da verdade.<br>
-      Banca considerada para a stake: <strong style="color:#22c55e">R$ ${banca}</strong> (Configurações → Banca).
-    </div>
-    <div class="drop" id="drop">Clique aqui ou arraste o arquivo .csv</div>
-    <input type="file" id="arq" accept=".csv,text/csv" style="display:none">
-  </div>
-
-  <div id="res"></div>
-</div>
-<script>
-var BASE='${BASE}';
-var planoAtual=null, limparAtual=[];
-document.getElementById('drop').addEventListener('click',function(){document.getElementById('arq').click();});
-document.getElementById('arq').addEventListener('change',function(e){ if(e.target.files[0]) ler(e.target.files[0]); });
-document.getElementById('drop').addEventListener('dragover',function(e){e.preventDefault();});
-document.getElementById('drop').addEventListener('drop',function(e){e.preventDefault(); if(e.dataTransfer.files[0]) ler(e.dataTransfer.files[0]);});
-
-function ler(f){
-  var fr=new FileReader();
-  // latin-1 (windows-1252) porque o Excel brasileiro exporta assim; ler como
-  // UTF-8 quebraria os acentos das pistas e dos nomes.
-  fr.onload=function(){ simular(fr.result); };
-  fr.readAsText(f,'windows-1252');
-}
-function simular(texto){
-  fetch(BASE+'/robot/importar-entradas/simular',{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:texto})
-    .then(function(r){return r.json();}).then(pinta).catch(function(e){ alert('Erro: '+e.message); });
-}
-function pinta(d){
-  if(d.error){ document.getElementById('res').innerHTML='<div class="box" style="color:#ef4444">'+d.error+'</div>'; return; }
-  planoAtual=d.plano; limparAtual=d.limpar||[];
-  var c={ok:0,erro:0,ambiguo:0,agrupada:0};
-  d.plano.forEach(function(p){ c[p.status]=(c[p.status]||0)+1; });
-  var linhas=d.plano.map(function(p){
-    return '<tr class="st-'+p.status+'">'
-      + '<td>'+p.n+'</td>'
-      + '<td><span class="tag t-'+p.status+'">'+p.status+'</span></td>'
-      + '<td>'+(p.horaBr||'—')+'</td>'
-      + '<td>'+(p.corrida||p.pista||'—')+'</td>'
-      + '<td>'+(p.avbTexto||'')+'</td>'
-      + '<td style="text-align:right">'+(p.odd!=null?p.odd:'—')+'</td>'
-      + '<td style="text-align:right">'+(p.stake!=null?p.stake:'—')+'</td>'
-      + '<td style="color:var(--mut)">'+(p.motivo||'')+'</td></tr>';
-  }).join('');
-  document.getElementById('res').innerHTML=
-    '<div class="box"><div style="font-size:13px;font-weight:700;margin-bottom:2px">Confira antes de aplicar</div>'
-    + '<div class="resumo">'
-    +   '<span style="color:#22c55e">'+c.ok+' pronta(s) pra gravar</span>'
-    +   '<span style="color:#eab308">'+(c.ambiguo+c.agrupada)+' com observação</span>'
-    +   '<span style="color:#ef4444">'+c.erro+' não casaram</span>'
-    + '</div>'
-    + '<table><thead><tr><th>#</th><th>Status</th><th>Hora</th><th>Corrida</th><th>AvB da planilha</th><th style="text-align:right">Odd</th><th style="text-align:right">Stake</th><th>Observação</th></tr></thead><tbody>'
-    + linhas + '</tbody></table>'
-    + (limparAtual.length
-        ? '<div class="box" style="border-color:rgba(239,68,68,.3)">'
-          + '<div style="font-size:13px;font-weight:700;color:#ef4444;margin-bottom:2px">'+limparAtual.length+' entrada(s) serão REMOVIDAS</div>'
-          + '<div style="font-size:11px;color:var(--mut);margin-bottom:8px">Estão no sistema mas não aparecem na planilha. Como a planilha é a verdade do dia, elas deixam de contar no Histórico e na Banca.</div>'
-          + '<table><thead><tr><th>Hora</th><th>Corrida</th><th style="text-align:right">Odd atual</th><th style="text-align:right">Stake atual</th></tr></thead><tbody>'
-          + limparAtual.map(function(l){ return '<tr><td>'+(l.horaBr||'—')+'</td><td>'+(l.corrida||'')+'</td><td style="text-align:right">'+(l.odd||'')+'</td><td style="text-align:right">'+(l.stake||'')+'</td></tr>'; }).join('')
-          + '</tbody></table></div>'
-        : '')
-    + '<div class="box">'
-    +   (c.ok
-        ? '<button class="btn btn-go" id="aplicar">Aplicar: gravar '+c.ok+' e remover '+limparAtual.length+'</button>'
-        : '<div style="color:#ef4444;font-size:12px"><strong>Aplicação bloqueada.</strong> Nenhuma linha da planilha casou com uma corrida — '
-          + 'aplicar assim apagaria '+limparAtual.length+' entrada(s) sem colocar nada no lugar. '
-          + 'Confira se a data e as pistas da planilha batem com as corridas analisadas nesse dia.</div>')
-    + '</div>';
-  var b=document.getElementById('aplicar');
-  if(b) b.addEventListener('click',aplicar);
-}
-function aplicar(){
-  var b=document.getElementById('aplicar');
-  b.disabled=true; b.textContent='Gravando…';
-  fetch(BASE+'/robot/importar-entradas/aplicar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plano:planoAtual,limpar:limparAtual})})
-    .then(function(r){return r.json();}).then(function(d){
-      if(d.error){ alert('Erro: '+d.error); b.disabled=false; b.textContent='Tentar de novo'; return; }
-      b.textContent='✓ '+d.gravadas+' gravada(s), '+d.limpas+' removida(s)';
-      b.style.background='#1d4ed8'; b.style.color='#fff';
-    }).catch(function(e){ alert('Erro: '+e.message); b.disabled=false; });
-}
-</script></body></html>`);
-});
+// A tela de importacao agora e' um PAINEL nativo do Painel Admin (nao mais
+// uma rota separada em iframe), entao o GET /importar-entradas foi removido.
+// As duas rotas abaixo continuam: sao o que o painel chama.
 
 router.post('/importar-entradas/simular', requireAdmin, express.text({ type: '*/*', limit: '2mb' }), (req, res) => {
   try {
