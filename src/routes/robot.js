@@ -707,6 +707,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
   <button class="robot-menu-item" id="mb-usuarios" onclick="showPanel('usuarios')"><span class="icon">${icon('list',{size:16})}</span> Usuários</button>
   <button class="robot-menu-item" id="mb-acessos" onclick="showPanel('acessos')"><span class="icon">${icon('gear',{size:16})}</span> Acessos</button>
+  <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/importar-entradas"><span class="icon">${icon('upload',{size:16})}</span> Importar Entradas</a>
   <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
   <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
