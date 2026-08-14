@@ -2030,11 +2030,33 @@ function hideToast(){
 }
 function showToast(msg,ok){
   var t=document.getElementById('ghf-toast');
+  if(!t) return;
   t.innerHTML='<span>'+msg+'</span><button class="ghf-toast-x" onclick="hideToast()" aria-label="Fechar">&#x2715;</button>';
   t.className='ghf-toast '+(ok?'t-ok':'t-err');
+
+  // Encaixa o toast na FAIXA DE AVISOS, abaixo da barra de Odd, em vez de
+  // flutuar sobre a tela. Flutuando ele cobria justamente a barra de Odd e
+  // Stake — o lugar onde voce precisa clicar depois de ler o aviso.
+  // O posicionamento vai por style inline de proposito: o CSS do .ghf-toast
+  // vive em outro arquivo e usa position:fixed; sobrescrever aqui garante o
+  // encaixe sem depender de qual regra vence.
+  var col = document.querySelector('.focus-col');
+  if (col) {
+    if (t.parentNode !== col) col.appendChild(t);
+    t.style.cssText = 'position:static;display:flex;align-items:center;justify-content:space-between;'
+      + 'gap:10px;width:100%;margin:0;padding:7px 12px;border-radius:0;font-size:11px;'
+      + 'box-shadow:none;transform:none;left:auto;right:auto;bottom:auto;top:auto;z-index:auto;'
+      + 'border-top:1px solid rgba(255,255,255,.08);'
+      + (ok ? 'background:rgba(34,197,94,.12);color:#22c55e' : 'background:rgba(239,68,68,.12);color:#ef4444');
+  }
+
   if(toastHideTimer){clearTimeout(toastHideTimer);}
   requestAnimationFrame(function(){t.classList.add('t-show');});
-  toastHideTimer=setTimeout(function(){t.classList.remove('t-show');toastHideTimer=null;},2600);
+  toastHideTimer=setTimeout(function(){
+    t.classList.remove('t-show');
+    if(col && t.parentNode===col) t.style.display='none';   // libera o espaco
+    toastHideTimer=null;
+  },2600);
 }
 async function doSaveSession(){
   var name=document.getElementById('save-inp').value.trim();
