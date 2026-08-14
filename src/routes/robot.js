@@ -3106,7 +3106,13 @@ function pinta(d){
           + limparAtual.map(function(l){ return '<tr><td>'+(l.horaBr||'—')+'</td><td>'+(l.corrida||'')+'</td><td style="text-align:right">'+(l.odd||'')+'</td><td style="text-align:right">'+(l.stake||'')+'</td></tr>'; }).join('')
           + '</tbody></table></div>'
         : '')
-    + '<div class="box"><button class="btn btn-go" id="aplicar" '+((c.ok||limparAtual.length)?'':'disabled')+'>Aplicar: gravar '+c.ok+' e remover '+limparAtual.length+'</button></div>';
+    + '<div class="box">'
+    +   (c.ok
+        ? '<button class="btn btn-go" id="aplicar">Aplicar: gravar '+c.ok+' e remover '+limparAtual.length+'</button>'
+        : '<div style="color:#ef4444;font-size:12px"><strong>Aplicação bloqueada.</strong> Nenhuma linha da planilha casou com uma corrida — '
+          + 'aplicar assim apagaria '+limparAtual.length+' entrada(s) sem colocar nada no lugar. '
+          + 'Confira se a data e as pistas da planilha batem com as corridas analisadas nesse dia.</div>')
+    + '</div>';
   var b=document.getElementById('aplicar');
   if(b) b.addEventListener('click',aplicar);
 }
@@ -3148,6 +3154,15 @@ router.post('/importar-entradas/aplicar', requireAdmin, express.json({ limit: '2
     const imp = require('../utils/importarEntradas');
     const plano = (req.body && req.body.plano) || [];
     const limpar = (req.body && req.body.limpar) || [];
+    // TRAVA: nunca limpar sem gravar nada. "Gravar 0 e remover 14" so acontece
+    // quando o casamento falhou — apagar tudo nesse caso destroi dado bom por
+    // causa de um bug de leitura. A checagem fica no SERVIDOR de proposito:
+    // no cliente daria pra burlar, e aqui o custo do erro e' alto demais.
+    const aGravar = plano.filter(p => p.status === 'ok' && p.raceId).length;
+    if (!aGravar && limpar.length) {
+      return res.json({ error: 'Nenhuma linha da planilha casou com uma corrida, então a remoção foi bloqueada. '
+        + 'Aplicar assim apagaria ' + limpar.length + ' entrada(s) sem colocar nada no lugar.' });
+    }
     const r = imp.aplicar(db, plano, req.user.id, limpar);
     console.log('[importar-entradas] ' + r.gravadas + ' gravada(s), ' + r.limpas + ' limpa(s) — user ' + req.user.id);
     res.json(r);

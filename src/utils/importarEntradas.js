@@ -124,7 +124,7 @@ function simular(db, linhas, userId, banca) {
 
     // Corridas do dia (sessao canonica), com o par de traps informado.
     const cands = db.prepare(
-      "SELECT r.id, r.hora_br, r.corrida, r.name_fav, r.name_und, r.trap_fav, r.trap_und, r.track_full " +
+      "SELECT r.id, r.hora_br, r.corrida, r.name_fav, r.name_und, r.trap_fav, r.trap_und, r.track_full, r.hist_all, r.race_card " +
       "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
       "WHERE s.user_id = ? AND date(s.created_at,'-3 hours') = ?"
     ).all(CANONICO, L.dataISO);
@@ -139,20 +139,51 @@ function simular(db, linhas, userId, banca) {
     // 2o filtro: os nomes dos dois galgos aparecem na corrida. E' o criterio
     // mais forte — dois galgos especificos praticamente identificam a corrida.
     const nA = _chaveNome(L.par.a.nome), nB = _chaveNome(L.par.b.nome);
-    const temNome = (c, n) => {
-      if (!n) return false;
-      return _chaveNome(c.name_fav).includes(n) || _chaveNome(c.name_und).includes(n)
-          || n.includes(_chaveNome(c.name_fav)) || n.includes(_chaveNome(c.name_und));
+    // Compara com TODOS os galgos da corrida, nao so com o favorito e o
+    // underdog. O AvB da planilha e' o que o Bruno apostou (BW), que muitas
+    // vezes e' um par diferente do que o motor elegeu — comparar so com
+    // name_fav/name_und fazia toda linha virar "ambiguo".
+    const nomesDa = (c) => {
+      const set = new Set();
+      const add = (x) => { const k = _chaveNome(x); if (k) set.add(k); };
+      add(c.name_fav); add(c.name_und);
+      // hist_all e race_card trazem os demais galgos; varremos o texto cru
+      // porque o formato varia entre analises antigas e novas.
+      for (const campo of [c.hist_all, c.race_card]) {
+        if (!campo) continue;
+        try {
+          const o = typeof campo === 'string' ? JSON.parse(campo) : campo;
+          const lista = Array.isArray(o) ? o : (o && o.galgos) || [];
+          for (const g of lista) add(g && (g.nome || g.name));
+        } catch (e) {
+          // nao e' JSON: procura o nome como substring no texto do card
+        }
+      }
+      return set;
     };
+    const contem = (set, n, textoCru) => {
+      if (!n) return false;
+      for (const k of set) { if (k.includes(n) || n.includes(k)) return true; }
+      return textoCru ? _chaveNome(textoCru).includes(n) : false;
+    };
+    const temNome = (c, n) => contem(nomesDa(c), n, (c.hist_all || '') + (c.race_card || ''));
     let porNome = poss.filter(c => temNome(c, nA) && temNome(c, nB));
     if (!porNome.length) porNome = poss.filter(c => temNome(c, nA) || temNome(c, nB));
 
     if (porNome.length === 1) {
       poss = porNome;
     } else if (porNome.length > 1) {
+      // Desempate pelo par de traps: mesma pista, mesmo dia e os MESMOS dois
+      // traps e' combinacao rara o bastante pra identificar a corrida.
+      const ta = L.par.a.trap, tb = L.par.b.trap;
+      const porTrap = porNome.filter(c =>
+        (c.trap_fav === ta && c.trap_und === tb) || (c.trap_fav === tb && c.trap_und === ta));
+      if (porTrap.length === 1) { poss = porTrap; }
+      else {
       base.status = 'ambiguo';
       base.motivo = porNome.length + ' corridas possíveis: ' + porNome.map(c => c.hora_br).join(', ');
       resultado.push(base); continue;
+      }
     } else {
       base.status = 'erro';
       base.motivo = 'os galgos não batem com nenhuma corrida de ' + L.pista;
