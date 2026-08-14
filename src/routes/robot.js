@@ -707,7 +707,7 @@ ${navBar(req.user, 'robot')}
   <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
   <button class="robot-menu-item" id="mb-usuarios" onclick="showPanel('usuarios')"><span class="icon">${icon('list',{size:16})}</span> Usuários</button>
   <button class="robot-menu-item" id="mb-acessos" onclick="showPanel('acessos')"><span class="icon">${icon('gear',{size:16})}</span> Acessos</button>
-  <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/importar-entradas"><span class="icon">${icon('upload',{size:16})}</span> Importar Entradas</a>
+  <button class="robot-menu-item" id="mb-importar" onclick="showPanel('importar')"><span class="icon">${icon('download',{size:16})}</span> Importar Entradas</button>
   <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
   <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
 </div>
@@ -931,6 +931,9 @@ ${navBar(req.user, 'robot')}
 </div>
 <div class="robot-panel" id="panel-acessos">
   <iframe class="admin-embed" data-src="${BASE}/acessos?embed=1" title="Acessos" onload="window.resizeEmbed&&resizeEmbed(this)"></iframe>
+</div>
+<div class="robot-panel" id="panel-importar">
+  <iframe class="admin-embed" data-src="${BASE}/robot/importar-entradas?embed=1" title="Importar Entradas" onload="window.resizeEmbed&&resizeEmbed(this)"></iframe>
 </div>
 
 </div><!-- fim robot-content -->
@@ -3036,9 +3039,9 @@ router.get('/importar-entradas', requireAdmin, (req, res) => {
   .btn-go:disabled{background:#2a3140;color:#666;cursor:not-allowed}
   .resumo{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-top:12px}
 </style></head><body>
-${navBar(req.user, '')}
-<div class="wrap">
-  <h1>Importar entradas</h1>
+${req.query.embed ? '' : navBar(req.user, '')}
+<div class="wrap"${req.query.embed ? ' style="padding:0;max-width:none"' : ''}>
+  ${req.query.embed ? '' : '<h1>Importar entradas</h1>'}
   <div class="sub">Lança as apostas de um dia a partir da planilha. Nada é gravado até você conferir e confirmar.</div>
 
   <div class="box">
