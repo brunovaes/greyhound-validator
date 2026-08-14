@@ -618,6 +618,28 @@ nav{background:#0D1117;border-bottom:1px solid #222;padding:0 20px;display:flex;
 .robot-menu-item:hover{background:rgba(34,197,94,.08);color:#ccc}
 .robot-menu-item.active{background:rgba(34,197,94,.12);color:#22c55e}
 .robot-menu-item .icon{font-size:16px}
+/* ── Menu em grupos ────────────────────────────────────────────────────── */
+.mgrp{border-bottom:1px solid rgba(255,255,255,.04)}
+.mgrp-tit{display:flex;align-items:center;gap:6px;width:100%;text-align:left;
+  padding:9px 12px;background:none;border:none;cursor:pointer;
+  font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#666}
+.mgrp-tit:hover{color:#999}
+.mgrp-seta{display:inline-block;transition:transform .15s;font-size:9px}
+.mgrp.aberto .mgrp-seta{transform:rotate(90deg)}
+.mgrp-itens{display:none;padding-bottom:4px}
+.mgrp.aberto .mgrp-itens{display:block}
+.mgrp .robot-menu-item{padding-left:22px}
+/* Nota "JSON": deixa claro que aquele grupo abre saida tecnica, nao tela. */
+.mgrp-nota{font-size:8px;background:rgba(234,179,8,.15);color:#eab308;
+  padding:1px 5px;border-radius:3px;letter-spacing:.3px}
+.mi-json{font-family:ui-monospace,monospace;font-size:11px!important;color:#7a8496!important}
+@media(max-width:900px){
+  /* No mobile o menu ja e horizontal e rolavel: os grupos ficam todos abertos
+     pra nao exigir dois toques pra chegar num item. */
+  .mgrp{border:none}
+  .mgrp-tit{display:none}
+  .mgrp-itens{display:block!important}
+}
 .robot-content{flex:1;padding:24px 0;overflow-y:auto;min-width:0}
 .robot-panel{display:none}.robot-panel.active{display:block}
 .admin-embed{width:100%;min-height:calc(100vh - 240px);border:none;background:#0D1117;display:block}
@@ -699,17 +721,59 @@ ${navBar(req.user, 'robot')}
 <div class="layout">
 <div class="robot-sidebar">
   <h3>Painel Admin</h3>
-  <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
-  <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
-  <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
-  <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
-  <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Automação</button>
-  <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
-  <button class="robot-menu-item" id="mb-usuarios" onclick="showPanel('usuarios')"><span class="icon">${icon('list',{size:16})}</span> Usuários</button>
-  <button class="robot-menu-item" id="mb-acessos" onclick="showPanel('acessos')"><span class="icon">${icon('gear',{size:16})}</span> Acessos</button>
-  <button class="robot-menu-item" id="mb-importar" onclick="showPanel('importar')"><span class="icon">${icon('download',{size:16})}</span> Importar Entradas</button>
-  <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnostico de Traps</a>
-  <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
+  <!-- Menu em grupos (acordeao). Com 11 itens numa lista plana ficava dificil
+     achar as coisas; agrupados por natureza da tarefa, cada grupo tem 2 a 5
+     itens. O grupo do painel ativo abre sozinho; os outros ficam fechados. -->
+<div class="mgrp" data-g="automacao">
+  <button class="mgrp-tit" onclick="toggleGrupo(this)"><span class="mgrp-seta">▸</span> Automação</button>
+  <div class="mgrp-itens">
+    <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
+    <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
+    <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
+    <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
+    <button class="robot-menu-item" id="mb-automacao" onclick="showPanel('automacao')"><span class="icon">${icon('clock',{size:16})}</span> Agendamento dos Robôs</button>
+  </div>
+</div>
+
+<div class="mgrp" data-g="acessos">
+  <button class="mgrp-tit" onclick="toggleGrupo(this)"><span class="mgrp-seta">▸</span> Acessos</button>
+  <div class="mgrp-itens">
+    <button class="robot-menu-item" id="mb-usuarios" onclick="showPanel('usuarios')"><span class="icon">${icon('list',{size:16})}</span> Gestão de Usuários</button>
+    <button class="robot-menu-item" id="mb-acessos" onclick="showPanel('acessos')"><span class="icon">${icon('gear',{size:16})}</span> Gestão de Acessos</button>
+  </div>
+</div>
+
+<div class="mgrp" data-g="manual">
+  <button class="mgrp-tit" onclick="toggleGrupo(this)"><span class="mgrp-seta">▸</span> Ação Manual</button>
+  <div class="mgrp-itens">
+    <button class="robot-menu-item" id="mb-importar" onclick="showPanel('importar')"><span class="icon">${icon('download',{size:16})}</span> Importar Entradas</button>
+    <button class="robot-menu-item" id="mb-export" onclick="showPanel('export')"><span class="icon">${icon('scroll',{size:16})}</span> Exportar Derrotas</button>
+    <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-traps"><span class="icon">${icon('alertTriangle',{size:16})}</span> Diagnóstico de Traps</a>
+  </div>
+</div>
+
+<!-- Diagnósticos separados de proposito por DOIS motivos:
+     1) devolvem JSON cru, nao tela — misturados com os outros itens dariam a
+        impressao de abrir uma interface, e o usuario cairia num muro de texto;
+     2) as rotas NAO estao no robot.js (sao do modulo de odds do motor). Se
+        alguma mudar de caminho la, o link daqui quebra em silencio. Por isso
+        ficam num grupo isolado e marcado. -->
+<div class="mgrp" data-g="diag">
+  <button class="mgrp-tit" onclick="toggleGrupo(this)"><span class="mgrp-seta">▸</span> Diagnóstico <span class="mgrp-nota">JSON</span></button>
+  <div class="mgrp-itens">
+    <a class="robot-menu-item mi-json" href="${BASE}/robot/odds/status" target="_blank" rel="noopener">Status do robô de odds</a>
+    <a class="robot-menu-item mi-json" href="${BASE}/robot/odds/diag/probe" target="_blank" rel="noopener">Probe da BetWinner</a>
+    <a class="robot-menu-item mi-json" href="${BASE}/robot/odds/diag/uso" target="_blank" rel="noopener">Uso do proxy</a>
+    <a class="robot-menu-item mi-json" href="${BASE}/robot/diag/pdfs" target="_blank" rel="noopener">PDFs coletados</a>
+  </div>
+</div>
+
+<div class="mgrp" data-g="gov">
+  <button class="mgrp-tit" onclick="toggleGrupo(this)"><span class="mgrp-seta">▸</span> Governança</button>
+  <div class="mgrp-itens">
+    <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
+  </div>
+</div>
 </div>
 <div class="robot-content">
 <div class="robot-panel active" id="panel-pdfs">
@@ -1131,6 +1195,32 @@ async function downloadAll() {
 })();
 
 // ── Navegação entre painéis ──────────────────────────────────────────────────
+// ── Acordeao do menu ──────────────────────────────────────────────────────
+// Um grupo aberto por vez. Guardamos a escolha no sessionStorage pra o menu
+// nao "fechar sozinho" a cada troca de painel dentro do mesmo grupo.
+function toggleGrupo(btn){
+  var g = btn.parentNode;
+  var abrindo = !g.classList.contains('aberto');
+  document.querySelectorAll('.mgrp').forEach(function(x){ x.classList.remove('aberto'); });
+  if (abrindo) {
+    g.classList.add('aberto');
+    try { sessionStorage.setItem('gf-menu-grupo', g.getAttribute('data-g')); } catch(e){}
+  } else {
+    try { sessionStorage.removeItem('gf-menu-grupo'); } catch(e){}
+  }
+}
+// Na carga, abre o grupo que contem o item ativo (ou o ultimo usado).
+(function abrirGrupoInicial(){
+  var alvo = null;
+  try { alvo = sessionStorage.getItem('gf-menu-grupo'); } catch(e){}
+  var g = alvo ? document.querySelector('.mgrp[data-g="'+alvo+'"]') : null;
+  if (!g) {
+    var ativo = document.querySelector('.robot-menu-item.active');
+    g = ativo ? ativo.closest('.mgrp') : null;
+  }
+  (g || document.querySelector('.mgrp')).classList.add('aberto');
+})();
+
 function showPanel(id) {
   document.querySelectorAll('.robot-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.robot-menu-item').forEach(b => b.classList.remove('active'));
