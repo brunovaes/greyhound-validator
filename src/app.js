@@ -112,6 +112,7 @@ var _SIM_AVB = (function(){
 })();
 
 var RACAS_EM_TELA = 6;
+var STAKE_PADRAO = null;   // unidade padrao vinda da Banca (Configuracoes)
 var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
 var TELA_GRACE_MIN = 0;
@@ -193,6 +194,7 @@ async function loadSystemConfig() {
     var r = await fetch(BASE+'/api/config');
     var c = await r.json();
     if (c.racas_em_tela) RACAS_EM_TELA = parseInt(c.racas_em_tela);
+    if (c.banca_unidade_padrao != null) STAKE_PADRAO = c.banca_unidade_padrao;
     if (c.auto_refresh_min) AUTO_REFRESH_MIN = parseInt(c.auto_refresh_min);
     if (c.alerta_min_antes != null) ALERTA_MIN_ANTES = parseInt(c.alerta_min_antes);
     if (c.tela_grace_min != null) TELA_GRACE_MIN = parseInt(c.tela_grace_min);
@@ -320,7 +322,7 @@ async function autoCheckAndAnalyze() {
                 trackFull: r.track_full||null,
                 cardSuspect: !!r.card_suspect,
                 betEntrou: !!r.bet_entrou,
-                betUnidades: r.bet_unidades!=null?r.bet_unidades:2.5,
+                betUnidades: r.bet_unidades!=null?r.bet_unidades:(STAKE_PADRAO!=null?STAKE_PADRAO:2.5),
                 histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
                 flagAtrasada: !!r.flag_atrasada,
                 scores: r.scores || null,
@@ -558,7 +560,7 @@ async function syncFromServer() {
       cur.trackFull = r.track_full||cur.trackFull;
       cur.cardSuspect = !!r.card_suspect;
       cur.betEntrou = !!r.bet_entrou;
-      cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:2.5;
+      cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:(STAKE_PADRAO!=null?STAKE_PADRAO:2.5);
       cur.scores = r.scores || cur.scores;
       // Escolha vinda do banco (campo pessoal). So adota se o cliente ainda
       // nao tem uma: o que esta na tela e' mais recente que o que veio.
@@ -1018,8 +1020,20 @@ function renderFocusPanel(r, idx) {
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
     // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
     + '<div class="fp-inputs-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="updateFocusField(\'odd\',this.value)" style="width:52px;text-align:center"></span>'
-    + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--mut2);white-space:nowrap"><input type="checkbox" id="fp-avb-nao-aberto" style="cursor:pointer;margin:0" '+(r.avbNaoAberto?'checked':'')+' onchange="updateFocusField(\'avb_nao_aberto\',this.checked?1:0)"> AvB não aberto</label>'
+    // Odd e Stake NAO salvam mais a cada tecla. Antes o "oninput" gravava
+    // direto no banco, entao um numero digitado pela metade ja virava aposta
+    // registrada. Agora ficam locais ate voce apertar "Entrei!", que e' o
+    // unico momento em que a entrada vai pro Historico e pra Banca.
+    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="marcaEntradaSuja()" style="width:52px;text-align:center"></span>'
+    // Stake ja vem com a unidade padrao configurada na Banca; da pra mudar na
+    // hora sem alterar o padrao.
+    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Stake <input type="text" id="fp-stake" placeholder="-" value="'+(r.betUnidades!=null&&r.betUnidades!==''?r.betUnidades:(STAKE_PADRAO!=null?STAKE_PADRAO:''))+'" oninput="marcaEntradaSuja()" style="width:52px;text-align:center"></span>'
+    + '<button type="button" id="fp-entrei" onclick="confirmarEntrada()" style="font-size:11px;font-weight:700;padding:4px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;'
+    +   (r.betEntrou ? 'background:#22c55e;border:1px solid #22c55e;color:#000' : 'background:transparent;border:1px solid #22c55e;color:#22c55e')
+    +   '">'+(r.betEntrou ? '✓ Entrei' : 'Entrei !')+'</button>'
+    // "AvB não aberto" oculto por enquanto (pedido do Bruno). O input continua
+    // no DOM pra nao quebrar quem le o valor; so nao aparece.
+    + '<label style="display:none"><input type="checkbox" id="fp-avb-nao-aberto" '+(r.avbNaoAberto?'checked':'')+'></label>'
     + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> 🚩 Atrasada</label>'
     + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
@@ -1471,6 +1485,53 @@ function saveRaceField(idx, field, value) {
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify(body)
   }).catch(function(e){ console.error('[saveRaceField] erro ao persistir', field, e); });
+}
+
+// ── Entrada na aposta: so grava quando voce confirma ──────────────────────
+// Antes a Odd salvava a cada tecla (oninput -> banco). Um numero digitado pela
+// metade ja virava aposta registrada no Historico e na Banca, e apagar depois
+// nao desfazia direito. Agora Odd e Stake ficam locais ate o "Entrei !".
+function marcaEntradaSuja(){
+  var b = document.getElementById('fp-entrei');
+  if(!b) return;
+  b.style.background = 'transparent';
+  b.style.borderColor = '#eab308';
+  b.style.color = '#eab308';
+  b.textContent = 'Entrei !';
+  b.title = 'Há alteração não confirmada — clique para salvar';
+}
+
+function confirmarEntrada(){
+  var r = results[focusRaceIdx];
+  if(!r) return;
+  var elOdd = document.getElementById('fp-odd');
+  var elStk = document.getElementById('fp-stake');
+  var odd = elOdd ? String(elOdd.value||'').trim().replace(',','.') : '';
+  var stk = elStk ? String(elStk.value||'').trim().replace(',','.') : '';
+
+  if(!odd){
+    // Sem odd nao ha entrada. Avisar e' melhor que gravar uma aposta sem preco.
+    if(elOdd){ elOdd.style.borderColor = '#ef4444'; setTimeout(function(){ elOdd.style.borderColor=''; }, 1500); }
+    showToast('Preencha a Odd antes de confirmar a entrada.', false);
+    return;
+  }
+  if(isNaN(parseFloat(odd))){ showToast('Odd inválida.', false); return; }
+  if(stk && isNaN(parseFloat(stk))){ showToast('Stake inválida.', false); return; }
+
+  // Grava os tres juntos: odd, stake e a marca de que houve entrada. E' o
+  // bet_entrou que faz a corrida contar como aposta no Historico e na Banca.
+  updateFocusField('odd', odd);
+  if(stk) updateFocusField('bet_unidades', stk);
+  updateFocusField('bet_entrou', 1);
+  r.odd = odd; if(stk) r.betUnidades = stk; r.betEntrou = 1;
+
+  var b = document.getElementById('fp-entrei');
+  if(b){
+    b.style.background = '#22c55e'; b.style.borderColor = '#22c55e'; b.style.color = '#000';
+    b.textContent = '✓ Entrei'; b.title = 'Entrada confirmada';
+  }
+  showToast('Entrada confirmada: odd ' + odd + (stk ? ' · stake ' + stk : ''), true);
+  saveSessionState();
 }
 
 function updateFocusField(field, value) {

@@ -1,8 +1,7 @@
 const express = require('express');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
 const { scoreRemarksNovo } = require('../utils/remarksEngine');
-const { calcularSP, probImplicita } = require('../utils/spEngine');
-const { limparHistorico } = require('../utils/reanaliseEngine'); // descarte de linha-problema (regra do Bruno)
+const { calcularSP } = require('../utils/spEngine');
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
@@ -106,10 +105,7 @@ const CLASS_HIERARCHY = {
   'B1':1,'B2':2,'B3':3,'B4':4,'B5':5,'B6':6,
   'C1':1,'C2':2,'C3':3,'C4':4,'C5':5,'C6':6,
   'D1':1,'D2':2,'D3':3,'D4':4,'D5':5,'D6':6,
-  'S1':1,'S2':2,'S3':3,'S4':4,'S5':5,'S6':6,
-  // Open Race (topo, acima do graduado). Mapeado no nivel 1 (= A1) — nao usar 0,
-  // que quebraria as checagens `if(!nivel)`. Graduar OR1/OR2/OR3 depois, se preciso.
-  'OR':1,'OR1':1,'OR2':1,'OR3':1
+  'S1':1,'S2':2,'S3':3,'S4':4,'S5':5,'S6':6
 };
 
 function getClassLevel(classe) {
@@ -653,16 +649,6 @@ function mapHistLinhas(linhasValidas) {
   return (linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)}));
 }
 
-// Odd MEDIA (decimal) das 2 ultimas SPs na pista/dist — mesma fonte do pareamento
-// parelho. Ex.: 2/1 e 3/1 -> (3.0 + 4.0)/2 = 3.5. Serve pra coluna do Relatorio
-// e pra mostrar a odd de cada galgo no par escolhido. null se nao houver SP.
-function oddMediaUltimas2(linhasValidas) {
-  const ds = (linhasValidas||[]).slice(0,2)
-    .map(l => { const p = probImplicita(String(l.sp||'').replace(/[A-Za-z]+$/,'')); return (p && p>0) ? 1/p : null; })
-    .filter(v => v != null);
-  return ds.length ? Math.round((ds.reduce((a,b)=>a+b,0)/ds.length)*100)/100 : null;
-}
-
 // Datas em ISO "YYYY-MM-DD" -> diferenca em dias (usa Date.UTC pra nao pegar
 // fuso). diasEntre(cio, corrida) > 0 quando o cio foi ANTES da corrida.
 function isoParaUTC(s) {
@@ -719,7 +705,7 @@ function processarCorrida(corridaRaw, config) {
       }
     }
 
-    let linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config, mediaBRT);
+    const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config, mediaBRT);
 
     // Verificar retorno de inatividade longa (trial/solo após pausa >= threshold dias)
     const inatividade = detectarRetornoInatividade(galgo.historico||[], config);
@@ -746,11 +732,6 @@ function processarCorrida(corridaRaw, config) {
       eliminados.push({ trap:galgo.trap, motivo:`Ultima corrida nao foi nesta pista/distancia` });
       continue;
     }
-    // Regra do Bruno: descarta as linhas-PROBLEMA (tempo > media dos 2 melhores + 1s)
-    // ANTES de pontuar — independente do remark. linhasValidas ja e' so pista/dist,
-    // entao passa track/dist null (a regua usa o proprio conjunto). Elegibilidade ja
-    // foi checada acima com a lista cheia; aqui limpa so pra pontuacao/exibicao.
-    linhasValidas = limparHistorico(linhasValidas, null, null, config.outlier_seg);
     const pularAjusteClasse = decidirPularAjusteClasse(linhasValidas, classe);
     const calTmsAjustados = linhasValidas.map(l=>ajustarCaltm(l, classe, config, pularAjusteClasse));
     const caltmAgregado = agregarCaltm(calTmsAjustados, config);
@@ -794,7 +775,7 @@ function processarCorrida(corridaRaw, config) {
       break;
     }
   }
-  let melhor = comScores[idxMelhor];
+  const melhor = comScores[idxMelhor];
   const segundo = comScores[idxMelhor === 0 ? 1 : 0]; // segundo = próximo após melhor
 
   // Regra: se o underdog (pior do ranking) venceu a última corrida válida,
@@ -820,45 +801,6 @@ function processarCorrida(corridaRaw, config) {
         notaReanalise = ` Nota: T${pior.trap} venceu última — reanalise vs T${penultimo.trap}.`;
         pior = penultimo;
       }
-    }
-  }
-
-  // ── MODO AvB PARELHO (Bruno, ago/2026) ───────────────────────────────────
-  // O betwinner abre AvB entre galgos PARELHOS de odd, nao entre o melhor e o
-  // pior — por isso o par melhor x pior quase nunca abria ao vivo (~6,6%). Aqui,
-  // em vez de melhor x pior, escolhemos o par mais COLADO de SP (prob. implicita
-  // media das 2 ultimas corridas na pista/dist) e orientamos pelo motor (maior
-  // score = favorito). Assim o par sugerido quase sempre abre ao vivo, com um
-  // favorito claro. Config: avb_parelho (liga/desliga, default ON) e
-  // avb_parelho_limiar (distancia max de prob. implicita p/ ser "parelho", 0.10).
-  // liga/desliga: default LIGADO. Trata o 0/false do SQLite como desligado.
-  const modoParelho = ![0, false, '0', 'false'].includes(config.avb_parelho);
-  let avbParelhoAplicado = false;
-  if (modoParelho) {
-    const limiar = config.avb_parelho_limiar || 0.10;
-    const probSP = lv => {
-      const ps = (lv || []).slice(0, 2)
-        .map(l => probImplicita(String(l.sp || '').replace(/[A-Za-z]+$/, '')))
-        .filter(p => p != null);
-      return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : null;
-    };
-    const comProb = comScores.map(g => ({ g, p: probSP(g.linhasValidas) })).filter(x => x.p != null);
-    if (comProb.length >= 2) {
-      const pares = [];
-      for (let i = 0; i < comProb.length; i++)
-        for (let j = i + 1; j < comProb.length; j++)
-          pares.push({ a: comProb[i], b: comProb[j], dProb: Math.abs(comProb[i].p - comProb[j].p), gap: Math.abs(comProb[i].g.scoreFinal - comProb[j].g.scoreFinal) });
-      const parelhos = pares.filter(p => p.dProb <= limiar);
-      // parelhos -> o de MAIOR vantagem do motor (favorito mais claro);
-      // se nenhum dentro do limiar -> o mais colado possivel (best effort, p/ abrir).
-      const esc = parelhos.length
-        ? parelhos.reduce((m, p) => (p.gap > m.gap ? p : m))
-        : pares.reduce((m, p) => (p.dProb < m.dProb ? p : m));
-      const fav = esc.a.g.scoreFinal >= esc.b.g.scoreFinal ? esc.a.g : esc.b.g;
-      const und = esc.a.g.scoreFinal >= esc.b.g.scoreFinal ? esc.b.g : esc.a.g;
-      melhor = fav; pior = und; avbParelhoAplicado = true;
-      notaReanalise += ` [AvB parelho: ΔSP ${(esc.dProb * 100).toFixed(0)}pp, gap motor ${esc.gap.toFixed(1)}${parelhos.length ? '' : ' — nenhum par dentro do limiar, usei o mais colado'}]`;
-      console.log(`[AvB-PARELHO] ${hora} ${corrida}: T${fav.trap} x T${und.trap} (ΔSP ${(esc.dProb * 100).toFixed(0)}pp, gap ${esc.gap.toFixed(1)})`);
     }
   }
 
@@ -940,8 +882,8 @@ function processarCorrida(corridaRaw, config) {
 
   const narrativa = gerarNarrativaRica(melhor, pior, classe);
 
-  if (!avbParelhoAplicado && diffAvB < thresholdSkip) {
-    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, motivoSkip:'margem_insuficiente', diffAvB:Math.round(diffAvB*10)/10, thresholdSkip, diffBack:Math.round(diffBack*10)/10, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,oddMedia:oddMediaUltimas2(g.linhasValidas),scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
+  if (diffAvB < thresholdSkip) {
+    return { hora, corrida, dist, tipo:'avb', nivel:'skip', pct:0, trapFav:0, trapUnd:0, nameFav:'', nameUnd:'', top3, perfilFav:melhor.perfil, perfilUnd:pior.perfil, obs:`${ranking} | Pontuações muito próximas — margem insuficiente para indicação confiável.${notaReanalise}`, motivoSkip:'margem_insuficiente', diffAvB:Math.round(diffAvB*10)/10, thresholdSkip, diffBack:Math.round(diffBack*10)/10, trapsCard:trapsCard||[], trapsConfiaveis, scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})), histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})), eliminados, postPick:postPick||'', dataCard, trackFull };
   }
 
   const pct = scoreToPct(diffAvB);
@@ -952,13 +894,12 @@ function processarCorrida(corridaRaw, config) {
     trapUnd:pior.trap, nameUnd:pior.nome,
     pct, nivel,
     perfilFav:melhor.perfil, perfilUnd:pior.perfil,
-    oddFav:oddMediaUltimas2(melhor.linhasValidas), oddUnd:oddMediaUltimas2(pior.linhasValidas), // odd media do par escolhido (quadro Favorito x Underdog)
     top3, trapsCard:trapsCard||[], trapsConfiaveis,
     obs:`${ranking} | ${narrativa}${notaReanalise}`,
     histFav:mapHistLinhas(melhor.linhasValidas),
     histUnd:mapHistLinhas(pior.linhasValidas),
     histAll:comScores.map(g=>({trap:g.trap,nome:g.nome,historico:mapHistLinhas(g.linhasValidas)})),
-    scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,oddMedia:oddMediaUltimas2(g.linhasValidas),scores:g.scores})),
+    scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,scores:g.scores})),
     raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,ssnDate:g.ssnDate||null})),
     histFull:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,brtClasse:g.brtClasse,ssnDate:g.ssnDate||null,historico:mapHistLinhas(g.historico||[])})),
     eliminados,
@@ -1341,6 +1282,8 @@ router.get('/config', (req, res) => {
       // lido "c.racas_em_tela" no loadSystemConfig. Sem este campo o cliente
       // ficava preso no default 6 e a configuracao nao surtia efeito nenhum.
       racas_em_tela: config.racas_em_tela || 6,
+      // Stake padrao da Banca: a tela Analisar preenche o campo Stake com ele.
+      banca_unidade_padrao: config.banca_unidade_padrao != null ? config.banca_unidade_padrao : 2.5,
       // Alarme para filtro selecionado: removido daqui por engano, o que deixava
       // a feature configuravel mas muda (o matchAlarmeFiltro recebia tudo vazio).
       alarme_filtro_ativo: config.alarme_filtro_ativo || 0,
