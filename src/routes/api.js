@@ -2,6 +2,7 @@ const express = require('express');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
 const { scoreRemarksNovo } = require('../utils/remarksEngine');
 const { calcularSP, probImplicita } = require('../utils/spEngine');
+const { limparHistorico } = require('../utils/reanaliseEngine'); // descarte de linha-problema (regra do Bruno)
 const router = express.Router();
 const multer = require('multer');
 const https = require('https');
@@ -718,7 +719,7 @@ function processarCorrida(corridaRaw, config) {
       }
     }
 
-    const linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config, mediaBRT);
+    let linhasValidas = filtrarLinhasValidas(galgo.historico||[], distNum, classe, pistaAtual, config, mediaBRT);
 
     // Verificar retorno de inatividade longa (trial/solo após pausa >= threshold dias)
     const inatividade = detectarRetornoInatividade(galgo.historico||[], config);
@@ -745,6 +746,11 @@ function processarCorrida(corridaRaw, config) {
       eliminados.push({ trap:galgo.trap, motivo:`Ultima corrida nao foi nesta pista/distancia` });
       continue;
     }
+    // Regra do Bruno: descarta as linhas-PROBLEMA (tempo > media dos 2 melhores + 1s)
+    // ANTES de pontuar — independente do remark. linhasValidas ja e' so pista/dist,
+    // entao passa track/dist null (a regua usa o proprio conjunto). Elegibilidade ja
+    // foi checada acima com a lista cheia; aqui limpa so pra pontuacao/exibicao.
+    linhasValidas = limparHistorico(linhasValidas, null, null, config.outlier_seg);
     const pularAjusteClasse = decidirPularAjusteClasse(linhasValidas, classe);
     const calTmsAjustados = linhasValidas.map(l=>ajustarCaltm(l, classe, config, pularAjusteClasse));
     const caltmAgregado = agregarCaltm(calTmsAjustados, config);

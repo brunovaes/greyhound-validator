@@ -20,7 +20,8 @@ const DEFAULTS = {
   trialSuperiorSeg: 0.20, // trial "muito superior" = >= 0,20s melhor que a media do galgo
   bonusTrapVazia: 0.10,   // seg-equiv de bonus quando ha trap vazia ao lado
   penalCio: 0.15,         // seg-equiv de penalidade p/ femea em cio recente
-  cioDias: 90             // janela de cio (mesma regra ja feita)
+  cioDias: 90,            // janela de cio (mesma regra ja feita)
+  outlierSeg: 1.0         // linha com tempo > (media 2 melhores) + isto -> descartada (problema)
 };
 
 // nivel numerico da categoria: A1=1 ... A9=9 (menor = mais forte). Nao-A -> null.
@@ -38,6 +39,31 @@ function ehTrial(l) {
 // acidente GRAVE (nao segura a corrida ruim contra o galgo). Crd/Bmp leves NAO entram
 // (o Bruno frisou: Crd1 do #4 nao e grave — foi so split ruim).
 const GRAVE = /(Fll|KO|BdStt|BBlk|SnBlk|Blk1|Stmb|Baulk)/i;
+
+// ── Descarte de linha-PROBLEMA (regra do Bruno, ago/2026) ────────────────────
+// Regua = media dos 2 MELHORES tempos (mais rapidos, NAO-trial) nas corridas de
+// MESMA pista+dist da corrida de hoje. Qualquer corrida com tempo > regua + limiar
+// (1s) e' descartada INTEIRA (some do tempo, split, bends e podio) — independente do
+// remark ser grave ou nao: e' quando o galgo teve algum tipo de problema. Sem track/
+// dist (null) nao filtra por local (usa todas as cronometradas como base). Precisa de
+// >=2 candidatas pra ter regua; senao nao mexe. O descarte de acidente GRAVE continua
+// valendo depois (aditivo), no proprio resumoGalgo.
+function _distNum(d) { return parseInt(String(d || '').replace(/[^0-9]/g, '')) || 0; }
+function _mesmoLocal(l, track, dist) {
+  if (track != null && String(l.pista || '').toUpperCase() !== String(track).toUpperCase()) return false;
+  if (dist != null && _distNum(dist) && _distNum(l.dist) !== _distNum(dist)) return false;
+  return true;
+}
+function limparHistorico(hist, track, dist, limiarS) {
+  const thr = (limiarS > 0) ? limiarS : 1.0;
+  let base = (hist || []).filter(l => l && _mesmoLocal(l, track, dist));
+  const tempos = base.filter(l => l.caltm > 0 && !ehTrial(l)).map(l => l.caltm).sort((a, b) => a - b);
+  if (tempos.length >= 2) {
+    const teto = (tempos[0] + tempos[1]) / 2 + thr;
+    base = base.filter(l => !(l.caltm > 0 && l.caltm > teto)); // linha-problema fora
+  }
+  return base;
+}
 
 // media das posicoes por curva a partir da string de bends ("3222" -> 2.25).
 function bendMedio(l) {
@@ -98,7 +124,13 @@ function montarObs(A, B, R, Rb, vantTempoAbs, flags) {
 // Retorna A orientado como FAVORITO (avaliacao = % de A vencer B).
 function avaliarPar(d1, d2, ctx) {
   const o = Object.assign({}, DEFAULTS, (ctx && ctx.config) || {});
-  const r1 = resumoGalgo(d1.historico, o), r2 = resumoGalgo(d2.historico, o);
+  // Regra do Bruno: antes de avaliar, filtra p/ mesma pista+dist e descarta as
+  // linhas-problema (>1s pior que a media dos 2 melhores tempos do local).
+  const trk = (ctx && ctx.trackCorrida != null) ? ctx.trackCorrida : null;
+  const dst = (ctx && ctx.distCorrida != null) ? ctx.distCorrida : null;
+  const h1 = limparHistorico(d1.historico, trk, dst, o.outlierSeg);
+  const h2 = limparHistorico(d2.historico, trk, dst, o.outlierSeg);
+  const r1 = resumoGalgo(h1, o), r2 = resumoGalgo(h2, o);
 
   if (r1.ultimaTrial || r2.ultimaTrial)
     return { descartar: true, motivo: 'ultima corrida foi trial', aTrap: d1.trap, bTrap: d2.trap };
@@ -156,4 +188,4 @@ function rankearAvbs(pares, dogsByTrap, ctx, topN) {
   return out.slice(0, topN).map((a, i) => Object.assign({}, a, { pos: i + 1 }));
 }
 
-module.exports = { avaliarPar, rankearAvbs, resumoGalgo, nivelCat, ehTrial, bendMedio, DEFAULTS };
+module.exports = { avaliarPar, rankearAvbs, resumoGalgo, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };

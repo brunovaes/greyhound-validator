@@ -371,14 +371,14 @@ function _scoresParaCorridaAoVivo(liveRace){
   try{
     const { db } = require('../db/database');
     const date=getTodayDate();
-    const rows=db.prepare("SELECT r.hora, r.corrida, r.scores_json, r.hist_full, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
+    const rows=db.prepare("SELECT r.hora, r.corrida, r.dist, r.scores_json, r.hist_full, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida LIKE ? AND r.scores_json IS NOT NULL").all(date, liveRace.pista+' %');
     for(const row of rows){
       const dm=_convDbHoraUk24(row.hora);
       if(dm!=null && Math.abs(dm-alvo)<=2){
         let scores=null, histFull=null;
         try{ scores = row.scores_json ? JSON.parse(row.scores_json) : null; }catch(e){}
         try{ histFull = row.hist_full ? JSON.parse(row.hist_full) : null; }catch(e){}
-        return { scores, histFull, dataCard: row.data_card||null, corrida: row.corrida, hora: row.hora };
+        return { scores, histFull, dataCard: row.data_card||null, corrida: row.corrida, hora: row.hora, dist: row.dist||null };
       }
     }
   }catch(e){}

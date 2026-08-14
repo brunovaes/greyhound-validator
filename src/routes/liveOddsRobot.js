@@ -376,7 +376,10 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
       if (temScores && !(g.trap in scoreByTrap)) continue; // so elegiveis; sem scores no cadastro, nao filtra
       dogsByTrap[g.trap] = g;
     }
-    const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, config: {} };
+    // track/dist de hoje p/ a regra de descarte de linha-problema (mesma pista+dist).
+    // track = 1a palavra do corrida ("Newc A8" -> "Newc"); dist vem do casamento.
+    const _trackHoje = (dados && dados.corrida) ? String(dados.corrida).split(' ')[0] : null;
+    const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, trackCorrida: _trackHoje, distCorrida: (dados && dados.dist) || null, config: {} };
     const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, _maxAvbs);
     avbs = ranked.map(a => {
       // casa com o par do betwinner p/ pegar odd + % mercado, orientados pro FAVORITO da reanalise
@@ -396,12 +399,17 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
       // COM score e usa linhasValidas). Assim a tela mostra a mesma base da decisao.
       const dogA = dogsByTrap[a.aTrap] || {}, dogB = dogsByTrap[a.bTrap] || {};
       const aPerfil = perfilByTrap[a.aTrap] || null, bPerfil = perfilByTrap[a.bTrap] || null;
+      // aHist/bHist = a MESMA lista que a reanalise usou (mesma pista+dist, sem as
+      // linhas-problema descartadas) — pra a arena mostrar exatamente a base da decisao.
+      const _lim = reanalise.DEFAULTS ? reanalise.DEFAULTS.outlierSeg : 1.0;
+      const histA = reanalise.limparHistorico(dogA.historico || [], _trackHoje, (dados && dados.dist) || null, _lim);
+      const histB = reanalise.limparHistorico(dogB.historico || [], _trackHoje, (dados && dados.dist) || null, _lim);
       return {
         aTrap: a.aTrap, aNome: a.aNome, bTrap: a.bTrap, bNome: a.bNome,
         aPerfil, bPerfil,
         // aHist/bHist.historico ja vem no shape do mapHistLinhas (14 campos, <=5 linhas)
-        aHist: { trap: a.aTrap, nome: a.aNome, perfil: aPerfil, brtClasse: dogA.brtClasse || null, ssnDate: dogA.ssnDate || null, historico: dogA.historico || [] },
-        bHist: { trap: a.bTrap, nome: a.bNome, perfil: bPerfil, brtClasse: dogB.brtClasse || null, ssnDate: dogB.ssnDate || null, historico: dogB.historico || [] },
+        aHist: { trap: a.aTrap, nome: a.aNome, perfil: aPerfil, brtClasse: dogA.brtClasse || null, ssnDate: dogA.ssnDate || null, historico: histA },
+        bHist: { trap: a.bTrap, nome: a.bNome, perfil: bPerfil, brtClasse: dogB.brtClasse || null, ssnDate: dogB.ssnDate || null, historico: histB },
         avaliacao: a.avaliacao, enginePct: a.avaliacao, // enginePct mantido p/ retrocompat
         reanalisePct: a.avaliacao,                      // motor 2 (reanalise par-a-par)
         motorOrigPct,                                   // motor 1 (analise global original)
