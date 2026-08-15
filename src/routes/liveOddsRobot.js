@@ -118,6 +118,20 @@ function headersPara(host) {
 // framing TLS. Calibrado ~5KB pelo dado da Decodo (~10.6KB/req vs ~4KB de corpo).
 // Ajustavel: quando tivermos um dia inteiro batido com a Decodo, travo o valor exato.
 const TRAFEGO_OVERHEAD_REQ = 5000; // bytes/req (handshake TLS rotativo + headers 2 vias)
+// A Decodo cobra download + UPLOAD. O nosso medidor conta so o que desce (corpo
+// comprimido + overhead), que bate ~certinho com o "download" do painel deles.
+// O upload foi ~26% do download num dia inteiro batido (13.47MB up / 51.47MB down),
+// entao multiplicamos por 1.26 SO NA EXIBICAO pra refletir o total que eles cobram.
+// O byte cru no banco (proxy_trafego) fica intacto p/ calibracao futura.
+const FATOR_UPLOAD = 1.26;
+// Le do config o marco zero do medidor (dias anteriores nao entram no card) e o
+// teto do plano em GB (base dos alarmes). Defaults se o banco/coluna falhar.
+function _medidorCfg() {
+  try {
+    const c = _dbTrafego().prepare('SELECT proxy_medidor_inicio AS inicio, proxy_quota_gb AS quota FROM analysis_config WHERE user_id=1').get() || {};
+    return { inicio: c.inicio || '2026-08-14', quotaGb: (c.quota > 0 ? c.quota : 3) };
+  } catch (e) { return { inicio: '2026-08-14', quotaGb: 3 }; }
+}
 const _trafego = { porDia: {} };  // fallback em memoria se o banco falhar
 function _diaBR() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }
 function _dbTrafego() { try { return require('../db/database').db; } catch (e) { return null; } }
@@ -140,17 +154,32 @@ function registrarTrafego(bytesComprimidos) {
 }
 function getTrafego() {
   const dia = _diaBR();
+  const { inicio, quotaGb } = _medidorCfg();
   let rows = null;
   const db = _dbTrafego();
-  if (db) { try { rows = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego ORDER BY dia DESC LIMIT 14').all(); } catch (e) { rows = null; } }
+  if (db) { try { rows = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego WHERE dia >= ? ORDER BY dia DESC LIMIT 60').all(inicio); } catch (e) { rows = null; } }
   if (!rows) { // fallback em memoria
-    rows = Object.keys(_trafego.porDia).sort().reverse().map(k => ({ dia: k, bytes: _trafego.porDia[k].bytes, reqs: _trafego.porDia[k].reqs }));
+    rows = Object.keys(_trafego.porDia).filter(k => k >= inicio).sort().reverse().map(k => ({ dia: k, bytes: _trafego.porDia[k].bytes, reqs: _trafego.porDia[k].reqs }));
   }
-  const porDia = rows.map(r => ({ dia: r.dia, mb: +(r.bytes / 1e6).toFixed(2), gb: +(r.bytes / 1e9).toFixed(3), reqs: r.reqs }));
+  // mb/gb ja saem COM o fator de upload (o que a Decodo cobra)
+  const porDia = rows.map(r => ({ dia: r.dia, mb: +((r.bytes * FATOR_UPLOAD) / 1e6).toFixed(2), gb: +((r.bytes * FATOR_UPLOAD) / 1e9).toFixed(3), reqs: r.reqs }));
   const hoje = porDia.find(d => d.dia === dia) || { dia, mb: 0, gb: 0, reqs: 0 };
   const comUso = porDia.filter(d => d.mb > 0);
   const mediaMb = comUso.length ? comUso.reduce((a, b) => a + b.mb, 0) / comUso.length : 0;
-  return { hoje, porDia, projecaoMensalGb: +((mediaMb * 30) / 1000).toFixed(2) };
+  const totalGb = +(porDia.reduce((a, b) => a + b.gb, 0)).toFixed(3);
+  const pctPlano = quotaGb > 0 ? +((totalGb / quotaGb) * 100).toFixed(1) : null;
+  return {
+    hoje, porDia, inicio, quotaGb, totalGb, pctPlano,
+    alertaNivel: _nivelAlarme(pctPlano),
+    projecaoMensalGb: +((mediaMb * 30) / 1000).toFixed(2)
+  };
+}
+// Maior degrau de alarme cruzado (70/80/90/95/99%). null = abaixo de 70%.
+function _nivelAlarme(pct) {
+  if (pct == null) return null;
+  const degraus = [99, 95, 90, 80, 70];
+  for (const d of degraus) if (pct >= d) return d;
+  return null;
 }
 
 function httpGetJson(url, host, agent) {
@@ -626,5 +655,6 @@ module.exports = {
   pistaPorNome, descobrirChampsAoVivo, listarCorridasAoVivo, buscarMercados,
   snapshotCorrida, marcarTendencia, sugerirAvbs, iniciar, parar, getStatus, getSnapshots,
   getChampsVistos, diagVariantes, getTrafego,
+  FATOR_UPLOAD, _nivelAlarme, _medidorCfg,
   _status: status
 };

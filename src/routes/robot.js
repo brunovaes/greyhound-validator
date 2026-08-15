@@ -1067,6 +1067,11 @@ ${navBar(req.user, 'robot')}
       <div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="odds-parelho" style="width:auto">Motor 1: AvB parelho</label></div>
       <div class="field"><label>Limiar parelho (ΔSP, 0–1)</label><input type="number" id="odds-parelho-limiar" min="0.01" max="1" step="0.01" style="width:110px"></div>
     </div>
+    <div class="form-row" style="margin-top:8px;border-top:1px solid #1f2937;padding-top:10px">
+      <div class="field"><label>Medidor: início (marco zero)</label><input type="date" id="odds-medidor-inicio" style="width:150px"></div>
+      <div class="field"><label>Plano Decodo (GB) — teto dos alarmes</label><input type="number" id="odds-quota-gb" min="0.5" max="1000" step="0.5" style="width:110px"></div>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-top:2px">Início = a partir de que dia o Consumo conta (dias antes somem do card, sem apagar do banco). Plano = teto em GB; os alarmes de 70/80/90/95/99% são calculados sobre ele. O consumo mostrado já inclui +26% de upload (como a Decodo cobra).</div>
     <div style="font-size:11px;color:#64748b;margin-top:2px">AvB parelho: o motor pareia os galgos mais colados de odd (SP das 2 últimas na pista) com favorito claro, em vez de melhor×pior — pra o par quase sempre abrir ao vivo. Vale na próxima análise. Desligado = volta ao melhor×pior.</div>
     <div id="odds-cfg-msg" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
     <div style="font-size:11px;color:#64748b;margin-top:4px">Intervalo e proxy reiniciam o robô ao salvar; nº de AvBs, edge e AvB parelho valem no próximo ciclo/análise.</div>
@@ -1080,7 +1085,7 @@ ${navBar(req.user, 'robot')}
   <div class="card">
     <div class="card-title">Consumo do proxy (Decodo) — reflete o gasto sem entrar no painel deles</div>
     <div id="odds-trafego"><div class="lin">Carregando…</div></div>
-    <div style="font-size:11px;color:#64748b;margin-top:4px">Bytes comprimidos que trafegam + overhead por requisição, cruzado com as corridas/AvBs capturados. É estimativa: a Decodo marca um pouco mais (handshake/TLS). Contagem desde o deploy do medidor.</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Download + overhead por requisição <b>+26% de upload</b> (como a Decodo cobra), cruzado com as corridas/AvBs capturados. Conta a partir do marco zero configurado; dias antes não entram. Ainda é estimativa (handshake/TLS variam), mas bate ~1% com o painel deles.</div>
   </div>
 </div><!-- fim panel-odds -->
 
@@ -1555,6 +1560,8 @@ async function loadOddsConfig() {
     if (g('odds-proxy')) g('odds-proxy').value = c.proxyUrl || '';
     if (g('odds-parelho')) g('odds-parelho').checked = (c.avbParelho == null ? true : !!c.avbParelho);
     if (g('odds-parelho-limiar')) g('odds-parelho-limiar').value = (c.avbParelhoLimiar != null ? c.avbParelhoLimiar : 0.10);
+    if (g('odds-medidor-inicio')) g('odds-medidor-inicio').value = c.proxyMedidorInicio || '2026-08-14';
+    if (g('odds-quota-gb')) g('odds-quota-gb').value = (c.proxyQuotaGb != null ? c.proxyQuotaGb : 3);
   } catch (e) {}
 }
 async function oddsSaveConfig() {
@@ -1562,7 +1569,9 @@ async function oddsSaveConfig() {
   var el = g('odds-cfg-msg'); el.style.color = '#94a3b8'; el.textContent = 'Salvando…';
   var body = { intervaloSeg: g('odds-intervalo').value, maxAvbs: g('odds-maxavbs').value, edgeMin: g('odds-edgemin').value, proxyUrl: g('odds-proxy').value,
     avbParelho: g('odds-parelho') ? (g('odds-parelho').checked ? 1 : 0) : 1,
-    avbParelhoLimiar: g('odds-parelho-limiar') ? g('odds-parelho-limiar').value : 0.10 };
+    avbParelhoLimiar: g('odds-parelho-limiar') ? g('odds-parelho-limiar').value : 0.10,
+    proxyMedidorInicio: g('odds-medidor-inicio') ? g('odds-medidor-inicio').value : '2026-08-14',
+    proxyQuotaGb: g('odds-quota-gb') ? g('odds-quota-gb').value : 3 };
   try {
     var r = await fetch(BASE + '/robot/odds/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     var d = await r.json();
@@ -1615,15 +1624,24 @@ async function pollOddsHealth() {
             + '</tr>';
         }).join('');
         var tile = function (rot, val, cor) { return '<div><div style="color:#94a3b8;font-size:11px">' + rot + '</div><b style="font-size:18px' + (cor ? ';color:' + cor : '') + '">' + val + '</b></div>'; };
+        // Plano + alarmes: cor por degrau (verde <70, amarelo 70-89, laranja 90-94, vermelho >=95)
+        var pct = re.pct_plano, alerta = re.alerta_nivel;
+        var corPct = (pct == null) ? '#94a3b8' : (pct >= 95 ? '#ef4444' : (pct >= 90 ? '#f97316' : (pct >= 70 ? '#eab308' : '#22c55e')));
+        var planoVal = (re.consumo_gb != null ? re.consumo_gb : '—') + ' / ' + (re.quota_gb != null ? re.quota_gb : '—') + ' GB' + (pct != null ? ' (' + pct + '%)' : '');
+        var banner = alerta
+          ? '<div style="margin:2px 0 10px;padding:9px 12px;border-radius:6px;font-size:13px;font-weight:600;background:' + (alerta >= 95 ? 'rgba(239,68,68,.14);border:1px solid #ef4444;color:#fca5a5' : (alerta >= 90 ? 'rgba(249,115,22,.14);border:1px solid #f97316;color:#fdba74' : 'rgba(234,179,8,.14);border:1px solid #eab308;color:#fde047')) + '">&#9888; Consumo atingiu ' + alerta + '% do plano (' + (re.consumo_gb != null ? re.consumo_gb : '?') + ' de ' + (re.quota_gb != null ? re.quota_gb : '?') + ' GB).</div>'
+          : '';
         elt.innerHTML =
-          '<div style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:#cbd5e1;margin-bottom:8px">'
+          banner
+          + '<div style="display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:#cbd5e1;margin-bottom:8px">'
+          + tile('Plano usado', planoVal, corPct)
           + tile('Total consumido', (re.gb_total >= 1 ? re.gb_total + ' GB' : (re.mb_total != null ? re.mb_total + ' MB' : '—')), '#38bdf8')
           + tile('Corridas', (re.corridas != null ? re.corridas : '—'))
           + tile('AvBs', (re.avbs_pares != null ? re.avbs_pares : '—'))
           + tile('Requisições', (re.requisicoes != null ? re.requisicoes : '—'))
           + tile('Projeção 30d', proj)
           + '</div>'
-          + '<div style="font-size:11px;color:#64748b;margin-bottom:6px">Média: ' + (re.mb_por_corrida != null ? re.mb_por_corrida + ' MB/corrida' : '—') + ' &middot; ' + (re.mb_por_avb != null ? re.mb_por_avb + ' MB/AvB' : '—') + '</div>'
+          + '<div style="font-size:11px;color:#64748b;margin-bottom:6px">Desde ' + (re.medidor_inicio || '—') + ' &middot; já com +26% upload &middot; Média: ' + (re.mb_por_corrida != null ? re.mb_por_corrida + ' MB/corrida' : '—') + ' &middot; ' + (re.mb_por_avb != null ? re.mb_por_avb + ' MB/AvB' : '—') + '</div>'
           + (linhas
             ? '<table style="border-collapse:collapse;font-size:12px"><thead><tr style="color:#64748b;font-size:10px;text-transform:uppercase"><td style="padding:2px 12px 4px 0">Dia</td><td style="padding:2px 12px 4px;text-align:right">Consumo</td><td style="padding:2px 12px 4px;text-align:right">Corr.</td><td style="padding:2px 12px 4px;text-align:right">AvB</td><td style="padding:2px 0 4px;text-align:right">Req</td></tr></thead><tbody>' + linhas + '</tbody></table>'
             : '<div class="lin" style="color:#64748b">Sem consumo registrado ainda.</div>');
@@ -2522,26 +2540,36 @@ router.get('/odds/diag/variantes', requireAdmin, async (req, res) => {
 router.get('/odds/diag/uso', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
-    const trafego = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego ORDER BY dia DESC LIMIT 30').all();
-    const avbDia = db.prepare("SELECT data AS dia, COUNT(*) corridas, COALESCE(SUM(n_pares),0) pares FROM avb_abertos GROUP BY data ORDER BY data DESC LIMIT 30").all();
+    const F = liveOddsModule.FATOR_UPLOAD || 1.26;         // +26% upload (Decodo cobra download+upload)
+    const { inicio, quotaGb } = liveOddsModule._medidorCfg(); // marco zero + teto do plano
+    // Filtra pelo marco zero: dias antes do "inicio" nao entram no card (limpa
+    // dias de teste sem apagar o byte cru no banco). mb/gb ja saem COM upload.
+    const trafego = db.prepare('SELECT dia, bytes, reqs FROM proxy_trafego WHERE dia >= ? ORDER BY dia DESC LIMIT 60').all(inicio);
+    const avbDia = db.prepare("SELECT data AS dia, COUNT(*) corridas, COALESCE(SUM(n_pares),0) pares FROM avb_abertos WHERE data >= ? GROUP BY data ORDER BY data DESC LIMIT 60").all(inicio);
     const dias = {};
-    for (const t of trafego) dias[t.dia] = { dia: t.dia, mb: +(t.bytes / 1e6).toFixed(2), reqs: t.reqs, corridas: 0, pares: 0 };
+    for (const t of trafego) dias[t.dia] = { dia: t.dia, mb: +((t.bytes * F) / 1e6).toFixed(2), reqs: t.reqs, corridas: 0, pares: 0 };
     for (const a of avbDia) dias[a.dia] = Object.assign(dias[a.dia] || { dia: a.dia, mb: 0, reqs: 0 }, { corridas: a.corridas, pares: a.pares });
     const por_dia = Object.values(dias).sort((x, y) => String(y.dia).localeCompare(String(x.dia)));
-    const totCorridas = db.prepare('SELECT COUNT(*) n FROM avb_abertos').get().n;
-    const totPares = db.prepare('SELECT COALESCE(SUM(n_pares),0) s FROM avb_abertos').get().s;
+    const totCorridas = db.prepare('SELECT COUNT(*) n FROM avb_abertos WHERE data >= ?').get(inicio).n;
+    const totPares = db.prepare('SELECT COALESCE(SUM(n_pares),0) s FROM avb_abertos WHERE data >= ?').get(inicio).s;
     const totReqs = trafego.reduce((a, b) => a + b.reqs, 0);
     const totBytes = trafego.reduce((a, b) => a + b.bytes, 0);
-    const totMb = +(totBytes / 1e6).toFixed(2);
+    const totMb = +((totBytes * F) / 1e6).toFixed(2);           // com upload
+    const totGb = +((totBytes * F) / 1e9).toFixed(3);           // com upload
+    const pctPlano = (quotaGb > 0) ? +((totGb / quotaGb) * 100).toFixed(1) : null;
     res.json({
       resumo: {
         corridas: totCorridas, avbs_pares: totPares, requisicoes: totReqs,
-        mb_total: totMb, gb_total: +(totBytes / 1e9).toFixed(3),
+        mb_total: totMb, gb_total: totGb,
         mb_por_corrida: totCorridas ? +(totMb / totCorridas).toFixed(3) : null,
-        mb_por_avb: totPares ? +(totMb / totPares).toFixed(3) : null
+        mb_por_avb: totPares ? +(totMb / totPares).toFixed(3) : null,
+        // ── plano + alarmes (base p/ a tela Analisar, feita pelo UI) ──
+        quota_gb: quotaGb, consumo_gb: totGb, pct_plano: pctPlano,
+        alerta_nivel: liveOddsModule._nivelAlarme(pctPlano),   // 70|80|90|95|99|null
+        medidor_inicio: inicio
       },
       por_dia,
-      obs: 'Contagem comeca no deploy do captador/medidor — dias anteriores nao entram (so o total de MB no painel da Decodo).'
+      obs: 'Consumo COM upload (+26%, como a Decodo cobra). Conta a partir de ' + inicio + ' (dias antes nao entram). Teto do plano: ' + quotaGb + ' GB. Alarmes em 70/80/90/95/99%.'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -2706,9 +2734,11 @@ router.get('/odds/config', requireAdmin, (req, res) => {
   const out = getOddsConfig();
   try {
     const { db } = require('../db/database');
-    const c = db.prepare('SELECT avb_parelho, avb_parelho_limiar FROM analysis_config WHERE user_id=1').get() || {};
+    const c = db.prepare('SELECT avb_parelho, avb_parelho_limiar, proxy_medidor_inicio, proxy_quota_gb FROM analysis_config WHERE user_id=1').get() || {};
     out.avbParelho = (c.avb_parelho == null) ? 1 : c.avb_parelho;               // 1 = ligado
     out.avbParelhoLimiar = (c.avb_parelho_limiar != null) ? c.avb_parelho_limiar : 0.10;
+    out.proxyMedidorInicio = c.proxy_medidor_inicio || '2026-08-14';            // marco zero do medidor
+    out.proxyQuotaGb = (c.proxy_quota_gb > 0) ? c.proxy_quota_gb : 3;           // teto do plano (GB)
   } catch (e) {}
   res.json(out);
 });
@@ -2725,8 +2755,13 @@ router.post('/odds/config', requireAdmin, (req, res) => {
     const avbParelho = [true, 1, '1', 'true', 'on'].includes(b.avbParelho) ? 1 : 0;
     let avbLimiar = parseFloat(b.avbParelhoLimiar);
     if (!(avbLimiar > 0 && avbLimiar <= 1)) avbLimiar = 0.10;
-    db.prepare('UPDATE analysis_config SET odds_intervalo_seg=?, odds_max_avbs=?, odds_edge_min=?, odds_proxy_url=?, avb_parelho=?, avb_parelho_limiar=? WHERE user_id=1')
-      .run(intervalo, maxAvbs, edgeMin, proxyUrl, avbParelho, avbLimiar);
+    // Medidor de consumo Decodo — marco zero (data) e teto do plano (GB)
+    let medidorInicio = String(b.proxyMedidorInicio || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(medidorInicio)) medidorInicio = '2026-08-14';
+    let quotaGb = parseFloat(b.proxyQuotaGb);
+    if (!(quotaGb > 0)) quotaGb = 3;
+    db.prepare('UPDATE analysis_config SET odds_intervalo_seg=?, odds_max_avbs=?, odds_edge_min=?, odds_proxy_url=?, avb_parelho=?, avb_parelho_limiar=?, proxy_medidor_inicio=?, proxy_quota_gb=? WHERE user_id=1')
+      .run(intervalo, maxAvbs, edgeMin, proxyUrl, avbParelho, avbLimiar, medidorInicio, quotaGb);
     // reinicia o robo pra aplicar intervalo/proxy na hora (parar() e' imediato)
     try { liveOddsModule.parar(); } catch (e) {}
     setTimeout(() => { try { _iniciarOdds(); } catch (e) { console.error('[ODDS] restart pos-config:', e.message); } }, 400);

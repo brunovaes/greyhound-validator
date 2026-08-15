@@ -286,6 +286,11 @@ const migrations = [
   // ago/2026 — modo AvB parelho (motor 1 pareia por SP colada em vez de melhor x pior)
   "ALTER TABLE analysis_config ADD COLUMN avb_parelho INTEGER DEFAULT 1",
   "ALTER TABLE analysis_config ADD COLUMN avb_parelho_limiar REAL DEFAULT 0.10",
+  // 15/08 — medidor de consumo Decodo: marco zero (dias antes nao entram no card)
+  // e teto do plano em GB (base dos alarmes de %). O upload (+26%) e' constante no
+  // codigo (FATOR_UPLOAD), nao coluna, porque o Bruno pediu "sempre 26%".
+  "ALTER TABLE analysis_config ADD COLUMN proxy_medidor_inicio TEXT DEFAULT '2026-08-14'",
+  "ALTER TABLE analysis_config ADD COLUMN proxy_quota_gb REAL DEFAULT 3",
   // ago/2026 — passa a aceitar corridas Open (OR). Adiciona OR,OR1,OR2,OR3 na lista
   // de classes aceitas do config EXISTENTE (idempotente: so mexe se ainda nao tem OR).
   "UPDATE analysis_config SET classes_aceitas = classes_aceitas || ',OR,OR1,OR2,OR3' WHERE classes_aceitas IS NOT NULL AND classes_aceitas NOT LIKE '%OR%'",
