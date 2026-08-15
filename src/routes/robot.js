@@ -1625,9 +1625,14 @@ async function pollOddsHealth() {
         }).join('');
         var tile = function (rot, val, cor) { return '<div><div style="color:#94a3b8;font-size:11px">' + rot + '</div><b style="font-size:18px' + (cor ? ';color:' + cor : '') + '">' + val + '</b></div>'; };
         // Plano + alarmes: cor por degrau (verde <70, amarelo 70-89, laranja 90-94, vermelho >=95)
-        var pct = re.pct_plano, alerta = re.alerta_nivel;
-        var corPct = (pct == null) ? '#94a3b8' : (pct >= 95 ? '#ef4444' : (pct >= 90 ? '#f97316' : (pct >= 70 ? '#eab308' : '#22c55e')));
-        var planoVal = (re.consumo_gb != null ? re.consumo_gb : '—') + ' / ' + (re.quota_gb != null ? re.quota_gb : '—') + ' GB' + (pct != null ? ' (' + pct + '%)' : '');
+        // Renomeado de "pct" pra "pctPlano": ja existe um "const pct" (o
+        // formatador de percentual) no topo desta MESMA funcao, e um "var pct"
+        // aqui embaixo sobe pro topo por hoisting e colide com ele. Isso e'
+        // SyntaxError, e derruba o script INTEIRO da pagina — o menu do Painel
+        // Admin parou de abrir por causa disto.
+        var pctPlano = re.pct_plano, alerta = re.alerta_nivel;
+        var corPct = (pctPlano == null) ? '#94a3b8' : (pctPlano >= 95 ? '#ef4444' : (pctPlano >= 90 ? '#f97316' : (pctPlano >= 70 ? '#eab308' : '#22c55e')));
+        var planoVal = (re.consumo_gb != null ? re.consumo_gb : '—') + ' / ' + (re.quota_gb != null ? re.quota_gb : '—') + ' GB' + (pctPlano != null ? ' (' + pctPlano + '%)' : '');
         var banner = alerta
           ? '<div style="margin:2px 0 10px;padding:9px 12px;border-radius:6px;font-size:13px;font-weight:600;background:' + (alerta >= 95 ? 'rgba(239,68,68,.14);border:1px solid #ef4444;color:#fca5a5' : (alerta >= 90 ? 'rgba(249,115,22,.14);border:1px solid #f97316;color:#fdba74' : 'rgba(234,179,8,.14);border:1px solid #eab308;color:#fde047')) + '">&#9888; Consumo atingiu ' + alerta + '% do plano (' + (re.consumo_gb != null ? re.consumo_gb : '?') + ' de ' + (re.quota_gb != null ? re.quota_gb : '?') + ' GB).</div>'
           : '';
