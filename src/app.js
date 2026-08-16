@@ -513,8 +513,10 @@ async function refreshSidebarSessions() {
     }
     var sessSlot = document.getElementById('sessoes-recentes-slot');
     if (sessSlot && d.sessions) {
+      // slice(0,7): o servidor renderiza 7 na carga inicial, mas o endpoint do
+      // refresh devolve mais — a lista crescia sozinha depois do 1o ciclo.
       sessSlot.innerHTML = d.sessions.length
-        ? d.sessions.map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
+        ? d.sessions.slice(0,7).map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
         : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>';
     }
   } catch(e) { /* falha silenciosa - nao atrapalha o resto da tela */ }
@@ -777,7 +779,8 @@ function enterFocusMode() {
   // recarregar a página na mão. syncFromServer() já existia pronta, só
   // faltava ser chamada de algum lugar.
   if (syncFromServerInterval) clearInterval(syncFromServerInterval);
-  syncFromServerInterval = setInterval(function(){ syncFromServer(); loadAcertosResumo(); }, AUTO_REFRESH_MIN * 60000);
+  syncFromServerInterval = setInterval(function(){ syncFromServer(); loadAcertosResumo();
+carregarVipSet(); }, AUTO_REFRESH_MIN * 60000);
 
   // Checagem de alerta de proximidade (independente, mais frequente)
   if (alertCheckInterval) clearInterval(alertCheckInterval);
@@ -840,6 +843,24 @@ function _parEmFoco(r){
 // chance daquela corrida especifica. A tela diz isso de forma explicita —
 // numero especifico ("69%") passa sensacao de certeza justamente por ser
 // especifico, e aqui o custo de confundir os dois e' dinheiro.
+// Conjunto "hora|corrida" das corridas que passaram no filtro VIP. Carregado
+// no boot pra a arena poder se destacar mesmo quando voce chega na corrida
+// navegando normal, sem ter aberto a lista.
+var VIP_SET = new Set();
+function carregarVipSet(){
+  fetch(BASE + '/api/carga-vip')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if(!d || !d.entradas) return;
+      VIP_SET = new Set(d.entradas.map(function(e){ return e.hora + '|' + e.corrida; }));
+      // Redesenha o painel se a corrida em foco virou VIP agora.
+      var r = results[focusRaceIdx];
+      if(r && _ehVip(r)) renderFocusPanel(r, focusRaceIdx);
+    })
+    .catch(function(){});
+}
+function _ehVip(r){ return !!(r && VIP_SET.has(r.hora + '|' + r.corrida)); }
+
 function abrirCargaVip(){
   var m = document.getElementById('vip-modal');
   if(!m){
@@ -1113,6 +1134,11 @@ function renderFocusPanel(r, idx) {
     '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
     + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
+    // Selo VIP centralizado no cabecalho: identifica a corrida de relance,
+    // mesmo quando voce chegou nela navegando e nao pela lista.
+    + (_ehVip(r)
+      ? '<div style="flex:1;text-align:center;padding-top:4px"><span style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.35);color:#eab308;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:4px 12px;border-radius:14px">&#11088; Carga VIP</span></div>'
+      : '')
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
     + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:flex-start">'
@@ -1177,6 +1203,12 @@ function renderFocusPanel(r, idx) {
         ? '<div style="margin-top:8px">' + oldBanner + suspectBanner + '</div>'
         : '')
     + '<div id="fp-odds-live" style="display:none"></div>';
+
+  // Fundo roxo nas corridas da Carga VIP. Vai por style inline de proposito:
+  // a cor vem de var(--bg) no CSS da tela, e sobrescrever aqui evita depender
+  // de qual regra vence. Sempre reseta no else — senao a corrida seguinte
+  // herdaria o roxo da anterior.
+  focusCol.style.background = _ehVip(r) ? '#381034' : '';
 
   startOddsLive(r);
 }
