@@ -311,7 +311,7 @@ async function autoCheckAndAnalyze() {
               results.push({
                 tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
                 corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
-                nameFav:r.name_fav||'', trapUnd:r.trap_und||0, nameUnd:r.name_und||'',
+                nameFav:_limpaNome(r.name_fav)||'', trapUnd:r.trap_und||0, nameUnd:_limpaNome(r.name_und)||'',
                 pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
                 obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
                 avbNaoAberto: !!r.avb_nao_aberto,
@@ -550,8 +550,13 @@ async function syncFromServer() {
       if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel || cur.flagAtrasada!==!!r.flag_atrasada) {
         changedAny = true;
       }
-      cur.nivel = r.nivel; cur.trapFav = r.trap_fav; cur.nameFav = r.name_fav;
-      cur.trapUnd = r.trap_und; cur.nameUnd = r.name_und; cur.pct = r.pct;
+      // _limpaNome aqui, na ENTRADA: o nome vindo do servidor as vezes traz a
+      // linha de pedigree inteira ("Nome (M) ltf b Pai-Mae Oct24"). Limpar num
+      // ponto so vale mais que caçar as ~10 telas que exibem o nome — bastava
+      // esquecer uma pra o problema voltar, e foi o que aconteceu quando
+      // tratei so o caminho do aHist.
+      cur.nivel = r.nivel; cur.trapFav = r.trap_fav; cur.nameFav = _limpaNome(r.name_fav);
+      cur.trapUnd = r.trap_und; cur.nameUnd = _limpaNome(r.name_und); cur.pct = r.pct;
       cur.perfilFav = r.perfil_fav; cur.perfilUnd = r.perfil_und; cur.obs = r.obs;
       cur.odd = r.odd; cur.valor = r.valor; cur.avbNaoAberto = !!r.avb_nao_aberto;
       cur.top3 = r.top3;
@@ -1000,8 +1005,8 @@ function _nomeDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return '';
   var _d = _dadosDoTrap(r, trap, parA, parB);
   if (_d && _d.nome != null && _d.nome !== '') return _limpaNome(_d.nome);
-  if(String(trap)===String(r.trapFav)) return r.nameFav||'';
-  if(String(trap)===String(r.trapUnd)) return r.nameUnd||'';
+  if(String(trap)===String(r.trapFav)) return _limpaNome(r.nameFav)||'';
+  if(String(trap)===String(r.trapUnd)) return _limpaNome(r.nameUnd)||'';
   var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
   if(g && g.nome) return g.nome;
   var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
@@ -1059,7 +1064,11 @@ function renderFocusPanel(r, idx) {
   focusRaceIdx = idx;
 
   var tf = r.trapFav || 1, tu = r.trapUnd || 2;
-  var nf = r.nameFav || 'Favorito', nu = r.nameUnd || 'Underdog';
+  // Passa pelo _limpaNome tambem aqui: ate agora so o caminho do aHist era
+  // limpo, e o nome que vem direto do r.nameFav/nameUnd chegava cru quando o
+  // motor gravou a linha de pedigree inteira. O sintoma e' o nome ocupando
+  // tres linhas e empurrando o layout da arena.
+  var nf = _limpaNome(r.nameFav) || 'Favorito', nu = _limpaNome(r.nameUnd) || 'Underdog';
   var tc = ['','t1','t2','t3','t4','t5','t6'];
   var hbr = r.hora_br || convertHora(r.hora||'');
   var conf = r.pct || 0;
