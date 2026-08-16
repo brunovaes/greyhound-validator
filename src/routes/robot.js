@@ -2628,6 +2628,19 @@ router.get('/diag/pdfs', requireAdmin, (req, res) => {
 // DIAGNOSTICO (somente leitura): das corridas de HOJE que estao no sistema
 // (carregadas), quantas entram no perfil A1-A12 + 400-500m — e quais ficam de
 // fora e por que. Ajuda a entender "poucas corridas apresentadas". Nao altera nada.
+// BACKTEST do AvB de alta confiança: mede no histórico se um gap grande de score
+// do motor prevê o galgo de maior score chegando na frente do outro — e se isso
+// se sustenta quando as odds são próximas (onde o Frente a frente abre). Leitura
+// pura. Parâmetro ?sp=1.3 ajusta o que conta como "odds próximas" (razão de odd).
+router.get('/diag/backtest-confianca', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const bt = require('../utils/backtestConfianca');
+    const spCloseRatio = parseFloat(req.query.sp) || 1.3;
+    res.json(bt.rodar(db, { spCloseRatio }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
