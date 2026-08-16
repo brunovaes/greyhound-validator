@@ -988,6 +988,18 @@ function _pintaCargaVip(d){
     return;
   }
 
+  // Ordena pelo horario BR. O motor entrega ordenado por relevancia (Premium
+  // primeiro, maior delta no topo), mas na hora de operar o que importa e' a
+  // sequencia do dia: a lista serve pra saber o que vem A SEGUIR.
+  // A conversao UK->BR pode virar o dia (UK 11:04 = BR 07:04), entao ordenar
+  // pela hora UK crua deixaria as corridas da manha no fim da lista.
+  ent = ent.slice().sort(function(a, b){
+    var ha = a.hora_br || (a.hora ? convertHora(a.hora) : '');
+    var hb = b.hora_br || (b.hora ? convertHora(b.hora) : '');
+    var m = function(h){ var p = String(h||'').split(':'); return (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0); };
+    return m(ha) - m(hb);
+  });
+
   var linhas = ent.map(function(e, i){
     var premium = String(e.nivel||'').toLowerCase() === 'premium';
     var cor = premium ? '#eab308' : '#22c55e';
