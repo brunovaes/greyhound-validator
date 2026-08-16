@@ -926,163 +926,29 @@ function _cssVip(){
 
 function _ehVip(r){ return !!(r && VIP_SET.has(r.hora + '|' + r.corrida)); }
 
-function abrirCargaVip(){
-  var m = document.getElementById('vip-modal');
-  if(!m){
-    m = document.createElement('div');
-    m.id = 'vip-modal';
-    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
-    m.addEventListener('click', function(e){ if(e.target===m) fecharCargaVip(); });
-    document.body.appendChild(m);
-  }
-  m.style.display = 'flex';
-  m.innerHTML = '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:900px;width:100%;overflow:hidden">'
-    + '<div style="padding:18px 22px;color:var(--mut)">Carregando…</div></div>';
-
-  // Le como TEXTO antes do JSON: quando o servidor devolve HTML (rota ausente,
-  // sessao expirada, 500), o .json() estoura com "Unexpected token '<'", que
-  // nao diz nada a quem esta usando.
-  fetch(BASE + '/api/carga-vip', { credentials:'same-origin' })
-    .then(function(r){ return r.text().then(function(t){ return { status:r.status, texto:t }; }); })
-    .then(function(res){
-      var d = null;
-      try { d = JSON.parse(res.texto); } catch(e) {}
-      if (d) { _pintaCargaVip(d); return; }
-      var motivo = res.status === 404 ? 'a rota /api/carga-vip não existe neste servidor'
-                 : (res.status === 401 || res.status === 403) ? 'sem permissão (ou sessão expirada — recarregue a página)'
-                 : res.status >= 500 ? 'o servidor falhou ao montar a lista'
-                 : 'o servidor respondeu algo que não é JSON';
-      _vipCorpo('<div style="padding:22px;color:#ef4444;line-height:1.6">'
-        + '<div style="font-weight:700;margin-bottom:6px">Não consegui carregar a Carga VIP</div>'
-        + '<div style="font-size:12px;color:#f59e0b">HTTP ' + res.status + ' — ' + motivo + '.</div></div>');
-    })
-    .catch(function(e){ _vipCorpo('<div style="padding:22px;color:#ef4444">Erro de conexão: ' + e.message + '</div>'); });
+// A lista da Carga VIP virou TELA propria (GET /carga-vip, servida pelo
+// main.js + public/js/cargaVip.js). Aqui ficou so o outro lado do caminho:
+// clicar numa corrida la manda pra Analisar com ?vip=hora|corrida, e esta
+// funcao foca a corrida ao abrir.
+function _focoVipDaUrl(){
+  var alvo = null;
+  try { alvo = new URLSearchParams(location.search).get('vip'); } catch(e){}
+  if(!alvo) return;
+  // Limpa o parametro da URL na hora: sem isso, um F5 daqui a pouco jogaria
+  // voce de volta numa corrida que ja largou.
+  try { history.replaceState(null, '', location.pathname); } catch(e){}
+  var p = alvo.split('|');
+  var hora = p[0], corrida = p.slice(1).join('|');
+  // As corridas do dia podem ainda estar carregando quando a pagina abre,
+  // entao insiste por alguns segundos antes de desistir.
+  var tent = 0;
+  var t = setInterval(function(){
+    tent++;
+    var idx = results.findIndex(function(r){ return r.tipo==='avb' && r.hora===hora && r.corrida===corrida; });
+    if(idx >= 0){ clearInterval(t); renderFocusPanel(results[idx], idx); return; }
+    if(tent >= 30){ clearInterval(t); showToast('Essa corrida não está carregada na tela.', false); }
+  }, 400);
 }
-function fecharCargaVip(){
-  var m = document.getElementById('vip-modal');
-  if(m) m.style.display = 'none';
-}
-function _vipCorpo(html){
-  var m = document.getElementById('vip-modal');
-  if(m) m.innerHTML = '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:900px;width:100%;overflow:hidden">' + html + '</div>';
-}
-function _pintaCargaVip(d){
-  if(!d || d.error){ _vipCorpo('<div style="padding:22px;color:#ef4444">' + ((d&&d.error)||'resposta inesperada') + '</div>'); return; }
-  var ent = d.entradas || [];
-
-  var cab = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;border-bottom:1px solid #222">'
-    + '<div><div style="font-size:16px;font-weight:800;color:#f0f0f0">&#11088; Carga VIP</div>'
-    +   '<div style="font-size:11px;color:var(--mut);margin-top:2px">' + (d.date||'') + ' &middot; ' + (d.total||0) + ' corrida(s) no filtro</div></div>'
-    + '<button type="button" onclick="fecharCargaVip()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1">&times;</button></div>';
-
-  // O aviso vem ANTES da lista de proposito: depois dela, com os numeros ja
-  // lidos, vira rodape que ninguem le.
-  var aviso = '<div style="margin:14px 22px 0;padding:11px 14px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:11.5px;color:#eab308;line-height:1.6">'
-    + '<strong>Isto é um filtro de valor, não uma previsão.</strong> As taxas abaixo são o histórico deste filtro em corridas parecidas — não são a chance desta corrida específica. '
-    + 'Corrida a corrida, qualquer uma pode perder.'
-    + (d.aviso ? '<div style="margin-top:6px;color:#a3894a">' + d.aviso + '</div>' : '')
-    + '</div>';
-
-  if(!ent.length){
-    _vipCorpo(cab + aviso + '<div style="padding:26px 22px;text-align:center;color:var(--mut);font-size:13px">Nenhuma corrida passou no filtro hoje.</div>');
-    return;
-  }
-
-  // Ordena pelo horario BR. O motor entrega ordenado por relevancia (Premium
-  // primeiro, maior delta no topo), mas na hora de operar o que importa e' a
-  // sequencia do dia: a lista serve pra saber o que vem A SEGUIR.
-  // A conversao UK->BR pode virar o dia (UK 11:04 = BR 07:04), entao ordenar
-  // pela hora UK crua deixaria as corridas da manha no fim da lista.
-  ent = ent.slice().sort(function(a, b){
-    var ha = a.hora_br || (a.hora ? convertHora(a.hora) : '');
-    var hb = b.hora_br || (b.hora ? convertHora(b.hora) : '');
-    var m = function(h){ var p = String(h||'').split(':'); return (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0); };
-    return m(ha) - m(hb);
-  });
-
-  var linhas = ent.map(function(e, i){
-    var premium = String(e.nivel||'').toLowerCase() === 'premium';
-    var cor = premium ? '#eab308' : '#22c55e';
-    // taxa_nivel_pct e' o nome novo; taxa_estimada_pct o antigo. Lemos os dois
-    // pra a tela nao ficar sem numero na janela entre os dois deploys.
-    var taxa = (e.taxa_nivel_pct != null) ? e.taxa_nivel_pct : e.taxa_estimada_pct;
-    var selos = [];
-    if(e.selo_pick_frente) selos.push('sai na frente');
-    if(e.selo_outro_fuma) selos.push('outro fuma');
-    var nums = [];
-    if(e.categoria) nums.push(e.categoria);
-    if(e.ratio_odd != null) nums.push('odd ' + e.ratio_odd);
-    if(e.dt_caltm != null) nums.push('&Delta;t ' + e.dt_caltm);
-
-    // Motivo do skip so aqui, na lista — e' onde voce decide se vale entrar.
-    // Na Analisar o Bruno nao quer (pediria atencao no momento errado).
-    var MOTIVOS = { margem_insuficiente:'o motor descartou por margem apertada',
-                    historico_insuficiente:'o motor descartou por histórico insuficiente' };
-    var skipTag = e.skip
-      ? '<div style="font-size:9.5px;color:#c084fc;margin-top:2px">&#9888; ' + (MOTIVOS[e.skip_motivo] || ('skip: ' + (e.skip_motivo||'motivo não informado'))) + '</div>'
-      : '';
-
-    return '<div class="vip-lin" data-i="' + i + '" data-hora="' + (e.hora||'') + '" data-corrida="' + (e.corrida||'') + '"'
-      + ' style="display:flex;align-items:center;gap:12px;padding:11px 22px;border-bottom:1px solid #1e2430;cursor:pointer'
-      + (e.skip ? ';background:rgba(192,132,252,.06)' : '') + '"'
-      + ' title="Clique para abrir esta corrida na tela">'
-      // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
-      // O endpoint manda so a hora UK, entao a BR sai do convertHora() — a
-      // MESMA conversao que o resto da tela usa, pra os dois nunca divergirem.
-      // Se um dia vier hora_br do servidor, ela tem prioridade.
-      + (function(){
-          var uk = e.hora || '';
-          var br = e.hora_br || (uk ? convertHora(uk) : '');
-          return '<div style="width:56px;flex-shrink:0;text-align:center">'
-            + '<div style="font-size:14px;font-weight:800;color:#22c55e;line-height:1.1">' + (br || uk || '—') + '</div>'
-            + (br && uk && br !== uk ? '<div style="font-size:10px;color:#3f8f5c">' + uk + '</div>' : '')
-            + '</div>';
-        })()
-      + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:12.5px;color:#f0f0f0;font-weight:600">T' + e.pick_trap + ' ' + _limpaNome(e.pick_nome) + ' <span style="color:#555">vence</span> T' + e.outro_trap + ' ' + _limpaNome(e.outro_nome) + '</div>'
-      +   '<div style="font-size:10.5px;color:var(--mut);margin-top:1px">' + (e.corrida||'') + (e.dist?' · '+e.dist:'') + (nums.length?' · '+nums.join(' · '):'') + '</div>'
-      +   (selos.length ? '<div style="font-size:9.5px;color:#60a5fa;margin-top:2px">' + selos.join(' · ') + '</div>' : '')
-      +   skipTag
-      + '</div>'
-      + '<div style="text-align:right;flex-shrink:0">'
-      +   '<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:' + cor + '">' + (e.nivel||'') + '</div>'
-      +   (taxa != null
-          ? '<div style="font-size:15px;font-weight:800;color:' + cor + '">~' + taxa + '%</div>'
-            + '<div style="font-size:8px;color:#555;white-space:nowrap">histórico do filtro</div>'
-          : '')
-      + '</div></div>';
-  }).join('');
-
-  // Legenda dos niveis: o "niveis" e' um OBJETO por nivel ({criterio,
-  // taxa_historica_pct}). Antes concatenavamos ele direto e saia
-  // "Valor: [object Object]". Como cada linha ja mostra a taxa, aqui fica so
-  // o CRITERIO — o que define o nivel, que e' o que a linha nao diz.
-  var legenda = '';
-  if (d.niveis && typeof d.niveis === 'object') {
-    var partes = Object.keys(d.niveis).map(function(k){
-      var v = d.niveis[k] || {};
-      var crit = (typeof v === 'object') ? v.criterio : v;
-      return crit ? '<strong style="color:' + (k.toLowerCase()==='premium'?'#eab308':'#22c55e') + '">' + k + '</strong>: ' + crit : '';
-    }).filter(Boolean);
-    if (partes.length) legenda = '<div style="padding:10px 22px 0;font-size:10.5px;color:var(--mut);line-height:1.6">' + partes.join('<br>') + '</div>';
-  }
-
-  _vipCorpo(cab + aviso + legenda
-    + '<div style="margin-top:10px">' + linhas + '</div>'
-    + '<div style="padding:12px 22px;font-size:10.5px;color:#555">Clique numa corrida para abri-la na tela.</div>');
-}
-
-// Clique numa linha foca a corrida na Analisar. Delegacao em vez de onclick
-// inline: nome de galgo com apostrofo (comum) quebraria o atributo.
-document.addEventListener('click', function(ev){
-  var lin = ev.target && ev.target.closest ? ev.target.closest('.vip-lin') : null;
-  if(!lin) return;
-  var hora = lin.getAttribute('data-hora'), corrida = lin.getAttribute('data-corrida');
-  var idx = results.findIndex(function(r){ return r.tipo==='avb' && r.hora===hora && r.corrida===corrida; });
-  if(idx < 0){ showToast('Essa corrida não está carregada na tela.', false); return; }
-  fecharCargaVip();
-  renderFocusPanel(results[idx], idx);
-});
 
 function _limpaNome(n){
   if(!n) return '';
@@ -3019,6 +2885,8 @@ document.addEventListener('DOMContentLoaded',async function(){
   } else {
     setTimeout(autoCheckAndAnalyze, 100);
   }
+
+  _focoVipDaUrl();
 
   document.getElementById('race-input').addEventListener('change',async function(){
     if (!this.files.length) return;

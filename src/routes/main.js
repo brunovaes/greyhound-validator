@@ -721,7 +721,7 @@ ${navBar(user, 'analisar')}
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregar PDF
         </label>
-        ${can(user,'analisar.carga_vip') ? `<button type="button" class="tabbtn" id="btn-carga-vip" onclick="abrirCargaVip()" style="cursor:pointer;font-family:inherit">&#11088; Carga VIP</button>` : ''}
+        ${can(user,'analisar.carga_vip') ? `<a href="${BASE}/carga-vip" class="tabbtn" id="btn-carga-vip">&#11088; Carga VIP</a>` : ''}
         <a href="${BASE}/historico" class="tabbtn">&#128220; Históricos</a>
       </div>
       <div class="flist" id="rlist"></div>
@@ -1270,6 +1270,75 @@ function copyVals(p){
 
 applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
 </script>
+</body></html>`);
+});
+
+// ── CARGA VIP ───────────────────────────────────────────────────────────────
+// Era um modal desenhado pelo app.js por cima da tela Analisar: cobria o
+// cabecalho e o menu, nao tinha URL propria e o botao voltar do navegador nao
+// servia pra sair. Virou tela propria, com a mesma moldura do Historico.
+// Aqui vai SO a moldura: a lista e' montada no navegador por
+// public/js/cargaVip.js, que le a MESMA rota de antes (GET /api/carga-vip).
+// Arquivo estatico de proposito, pra o JS da lista nao passar por template
+// literal (onde aspas e \n se resolvem errado com facilidade).
+router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
+  const user = req.user;
+  const logoB64 = getLogo();
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carga VIP - Greyhound Factory</title>
+<link rel="stylesheet" href="${BASE}/static/css/shared.css">
+<style>
+${designTokensCSS()}
+.content{padding:24px;max-width:900px;margin:0 auto}
+.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
+h1{font-size:20px;font-weight:700;margin-bottom:3px}
+.sub{font-size:12px;color:#888}
+.volta{font-size:12px;color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:6px 12px;border-radius:6px;white-space:nowrap;flex-shrink:0}
+.volta:hover{background:rgba(34,197,94,.1)}
+.vip-aviso{padding:12px 15px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:12px;color:#eab308;line-height:1.6;margin-bottom:12px}
+.vip-legenda{font-size:11px;color:#888;line-height:1.7;margin-bottom:12px;padding:0 2px}
+.vip-box{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
+.vip-lin{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #1e2430;cursor:pointer;transition:background .15s}
+.vip-lin:last-child{border-bottom:none}
+.vip-lin:hover{background:rgba(255,255,255,.03)}
+.vip-lin.tem-skip{background:rgba(192,132,252,.06)}
+.vip-lin.tem-skip:hover{background:rgba(192,132,252,.11)}
+.vip-hora{width:58px;flex-shrink:0;text-align:center}
+.vip-hora .br{font-size:15px;font-weight:800;color:#22c55e;line-height:1.1}
+.vip-hora .uk{font-size:10px;color:#3f8f5c}
+.vip-meio{flex:1;min-width:0}
+.vip-meio .par{font-size:13px;color:#f0f0f0;font-weight:600}
+.vip-meio .par .vence{color:#555;font-weight:500}
+.vip-meio .det{font-size:11px;color:#888;margin-top:2px}
+.vip-meio .selos{font-size:10px;color:#60a5fa;margin-top:2px}
+.vip-skip{font-size:10px;color:#c084fc;margin-top:2px}
+.vip-taxa{text-align:right;flex-shrink:0}
+.vip-taxa .nivel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.vip-taxa .pct{font-size:16px;font-weight:800;line-height:1.2}
+.vip-taxa .rot{font-size:8px;color:#555;white-space:nowrap}
+.vip-rodape{padding:12px 2px;font-size:11px;color:#555}
+@media(max-width:768px){
+  html,body{overflow-x:hidden}
+  .content{padding:14px 12px}
+  .topo{flex-direction:column;gap:10px}
+  .vip-lin{padding:11px 12px;gap:9px}
+  .vip-hora{width:46px}
+  .vip-taxa .pct{font-size:14px}
+}
+</style></head><body>
+<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Factory">` : '<div style="height:130px;background:#000"></div>'}</div>
+${navBar(user, 'cargavip')}
+<div class="content">
+  <div class="topo">
+    <div>
+      <h1>&#11088; Carga VIP</h1>
+      <div class="sub" id="vip-sub">Carregando...</div>
+    </div>
+    <a class="volta" href="${BASE}">&#8592; Voltar para Analisar</a>
+  </div>
+  <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
+</div>
+<script>var VIP_BASE='${BASE}';</script>
+<script src="${BASE}/static/js/telaCargaVip.js" defer></script>
 </body></html>`);
 });
 
