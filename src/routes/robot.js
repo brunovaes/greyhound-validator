@@ -1424,11 +1424,23 @@ var impPlano = null, impLimpar = [];
 })();
 
 function impLer(f){
+  // O Excel exporta em DOIS formatos conforme a opcao escolhida ao salvar:
+  // "CSV (separado por virgulas)" grava em windows-1252, e "CSV UTF-8" grava
+  // em UTF-8 com BOM. Forcar um so estragava os acentos do outro.
+  // Detectamos: le como UTF-8 e, se aparecer o caractere de substituicao
+  // (\uFFFD, o "losango com interrogacao"), reli como windows-1252.
   var fr = new FileReader();
-  // windows-1252 porque o Excel brasileiro exporta assim; ler como UTF-8
-  // quebraria os acentos das pistas e dos nomes.
-  fr.onload = function(){ impSimular(fr.result); };
-  fr.readAsText(f, 'windows-1252');
+  fr.onload = function(){
+    var txt = fr.result;
+    if (txt && txt.indexOf('\uFFFD') >= 0) {
+      var fr2 = new FileReader();
+      fr2.onload = function(){ impSimular(fr2.result); };
+      fr2.readAsText(f, 'windows-1252');
+      return;
+    }
+    impSimular(txt);
+  };
+  fr.readAsText(f, 'utf-8');
 }
 
 function impSimular(texto){
