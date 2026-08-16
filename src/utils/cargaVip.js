@@ -66,9 +66,12 @@ function listar(db, opts) {
   const date = opts.date;
   const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15;
 
+  // SEM filtro de nivel de propósito: o funil VIP é independente do AvB do motor,
+  // e corrida 'skip' (margem insuficiente) é JUSTO onde as odds coladas moram —
+  // além de que o backtest que mediu as taxas (62%/69%) não filtrava skip.
   const rows = db.prepare(
     "SELECT r.hora, r.corrida, r.dist, r.hist_all FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-    "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL AND r.nivel != 'skip' ORDER BY r.hora"
+    "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
   ).all(date);
 
   const entradas = [];
