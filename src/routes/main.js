@@ -1475,10 +1475,12 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
   aplicarPessoais(db, races, user.id);
 
-  // "Bateu" e "Odd" passam a refletir o AvB que REALMENTE valia: o BW quando
-  // existe (sua escolha, senao a principal da reanalise), e o do Motor quando
-  // nao existe. Sem isto a tela mostraria o acerto de uma disputa e o par de
+  // "Bateu" passa a refletir o AvB que REALMENTE valia: o BW quando existe
+  // (sua escolha, senao a principal da reanalise), e o do Motor quando nao
+  // existe. Sem isto a tela mostraria o acerto de uma disputa e o par de
   // outra — a reanalise troca o par com frequencia.
+  // A ODD nao entra nessa regra: ela e' registro de APOSTA, e so existe
+  // depois do "Entrei!". Ver a nota mais abaixo.
   // O bateu e' DERIVADO da chegada (finishing_order_json) com bateuPar, a
   // mesma funcao usada nos KPIs, pra os dois numeros nunca discordarem.
   // null (trap fora da chegada) fica como "-", nem acerto nem erro.
@@ -1489,7 +1491,13 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       if (!bw) continue;
       const b = bateuPar(r.finishing_order_json, bw.aTrap, bw.bTrap);
       r.bateu = (b === null) ? '' : (b ? 'sim' : 'nao');
-      if (bw.odd != null && (r.odd == null || r.odd === '')) r.odd = bw.odd;
+      // A Odd NAO e' mais sobrescrita pela do fechamento. Antes esta linha
+      // fazia "r.odd = bw.odd" quando a odd pessoal estava vazia, o que
+      // quebrava a regra de que Odd so existe depois do "Entrei!" — e, pior,
+      // inflava Entradas/Green/%Green, que filtram justamente por r.odd:
+      // corrida nunca apostada passava a contar como aposta.
+      // A odd do fechamento continua visivel na coluna AvB BW, que e' o lugar
+      // dela: referencia do mercado, nao registro de aposta.
     }
   }
   const racesValidas = races.filter(r=>r.nivel!=='skip');
