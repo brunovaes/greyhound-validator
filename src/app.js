@@ -206,6 +206,11 @@ async function loadSystemConfig() {
     ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
     ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
     try { ALARME_FILTRO.regras = c.alarme_filtro_regras ? JSON.parse(c.alarme_filtro_regras) : []; } catch(e){ ALARME_FILTRO.regras = []; }
+    if (c.vip_skip_ativo != null) VIP_CFG.ativo = +c.vip_skip_ativo;
+    if (c.vip_skip_min_antes != null) VIP_CFG.minAntes = +c.vip_skip_min_antes;
+    if (c.vip_skip_alarme != null) VIP_CFG.alarme = +c.vip_skip_alarme;
+    if (c.vip_cor_destaque) VIP_CFG.corDestaque = c.vip_cor_destaque;
+    if (c.vip_cor_fundo) VIP_CFG.corFundo = c.vip_cor_fundo;
     // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
     // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
     // descarta o estado de alerta atual (o aviso padrao e' descartado) e
@@ -476,9 +481,11 @@ function isOldRaceCard(r) {
 // so pra consulta/estudo, nao participa da logica de "ja passou". Corridas
 // de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
 function shouldShowRace(r) {
-  // No modo simulado (?simavb=1) o filtro de horario nao vale: a ideia e'
-  // conseguir testar a tela com qualquer corrida, inclusive as ja encerradas.
   if (typeof _SIM_AVB !== 'undefined' && _SIM_AVB) return true;
+  // Skip que a Carga VIP destravou entra em tela dentro da janela, mesmo
+  // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
+  // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
+  if (_vipSkipLiberado(r)) return true;
   return isOldRaceCard(r) || isUpcoming(r);
 }
 
@@ -784,8 +791,10 @@ function enterFocusMode() {
   // recarregar a página na mão. syncFromServer() já existia pronta, só
   // faltava ser chamada de algum lugar.
   if (syncFromServerInterval) clearInterval(syncFromServerInterval);
-  syncFromServerInterval = setInterval(function(){ syncFromServer(); loadAcertosResumo();
-carregarVipSet(); }, AUTO_REFRESH_MIN * 60000);
+  // Roda AGORA e a cada refresh. So dentro do setInterval, a lista VIP so
+  // chegava no 1o ciclo automatico e quem clicava logo nao via nada.
+  carregarVipSet();
+  syncFromServerInterval = setInterval(function(){ syncFromServer(); loadAcertosResumo(); carregarVipSet(); }, AUTO_REFRESH_MIN * 60000);
 
   // Checagem de alerta de proximidade (independente, mais frequente)
   if (alertCheckInterval) clearInterval(alertCheckInterval);
@@ -852,18 +861,69 @@ function _parEmFoco(r){
 // no boot pra a arena poder se destacar mesmo quando voce chega na corrida
 // navegando normal, sem ter aberto a lista.
 var VIP_SET = new Set();
+// Config da Carga VIP (Configuracoes -> aba Alarme). Defaults iguais aos do
+// servidor pra a tela funcionar mesmo antes do /api/config responder.
+var VIP_CFG = { ativo:1, minAntes:5, alarme:1, corDestaque:'#c084fc', corFundo:'#140B2B' };
+// Quais corridas do VIP estao marcadas como skip (e o motivo). O destrave so
+// vale pra elas: skip por falta de historico nem chega no filtro, entao aqui
+// so entram os de margem apertada.
+var VIP_SKIP = new Map();
 function carregarVipSet(){
   fetch(BASE + '/api/carga-vip')
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(d){
       if(!d || !d.entradas) return;
       VIP_SET = new Set(d.entradas.map(function(e){ return e.hora + '|' + e.corrida; }));
+      VIP_SKIP = new Map();
+      d.entradas.forEach(function(e){ if(e.skip) VIP_SKIP.set(e.hora + '|' + e.corrida, e.skip_motivo || ''); });
       // Redesenha o painel se a corrida em foco virou VIP agora.
       var r = results[focusRaceIdx];
+      _cssVip();
       if(r && _ehVip(r)) renderFocusPanel(r, focusRaceIdx);
     })
     .catch(function(){});
 }
+// A corrida e' um skip que a Carga VIP destravou E ja esta dentro da janela?
+// Fora da janela ela continua escondida, como qualquer skip.
+// Alarme quando um skip destravado ENTRA em tela. Toca uma vez por corrida:
+// o ciclo de refresh chama isto de minuto em minuto, e sem a marca o alarme
+// repetiria ate a largada.
+var _vipAvisados = new Set();
+function _avisarVipSkip(r){
+  if(!VIP_CFG.alarme || !r) return;
+  var k = r.hora + '|' + r.corrida;
+  if(_vipAvisados.has(k)) return;
+  _vipAvisados.add(k);
+  try { playSom(ALARME_FILTRO.som || 'sino'); } catch(e){}
+  try { showToast('\u2B50 Carga VIP destravou ' + (r.corrida||'') + ' — o motor tinha marcado como skip por margem.', true); } catch(e){}
+  if (typeof window.ghTicker === 'function') {
+    try { window.ghTicker('Carga VIP: ' + (r.corrida||'') + ' liberada (skip por margem)'); } catch(e){}
+  }
+}
+
+function _vipSkipLiberado(r){
+  if(!VIP_CFG.ativo || !r) return false;
+  if(!VIP_SKIP.has(r.hora + '|' + r.corrida)) return false;
+  var min = minutesToRace(r);
+  return min !== null && min <= VIP_CFG.minAntes && min >= -2;
+}
+// CSS do selo VIP, injetado uma vez. Anima OPACIDADE, nao display: piscar
+// escondendo empurra o layout a cada meio segundo e cansa a vista.
+function _cssVip(){
+  var st = document.getElementById('vip-css');
+  if(!st){ st = document.createElement('style'); st.id = 'vip-css'; document.head.appendChild(st); }
+  var c = VIP_CFG.corDestaque || '#c084fc';
+  st.textContent =
+    '.vip-selo{display:inline-flex;align-items:center;gap:6px;'
+    + 'background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);color:#eab308;'
+    + 'font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;'
+    + 'padding:4px 12px;border-radius:14px;animation:vipPisca 1.6s ease-in-out infinite}'
+    + '.vip-selo.vip-skip{background:rgba(192,132,252,.14);border-color:' + c + ';color:' + c + '}'
+    + '@keyframes vipPisca{0%,100%{opacity:1}50%{opacity:.5}}'
+    // Respeita quem pediu menos animacao no sistema: o selo fica visivel, so parado.
+    + '@media(prefers-reduced-motion:reduce){.vip-selo{animation:none}}';
+}
+
 function _ehVip(r){ return !!(r && VIP_SET.has(r.hora + '|' + r.corrida)); }
 
 function abrirCargaVip(){
@@ -879,10 +939,24 @@ function abrirCargaVip(){
   m.innerHTML = '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:900px;width:100%;overflow:hidden">'
     + '<div style="padding:18px 22px;color:var(--mut)">Carregando…</div></div>';
 
-  fetch(BASE + '/api/carga-vip')
-    .then(function(r){ return r.json(); })
-    .then(_pintaCargaVip)
-    .catch(function(e){ _vipCorpo('<div style="padding:22px;color:#ef4444">Erro ao carregar: ' + e.message + '</div>'); });
+  // Le como TEXTO antes do JSON: quando o servidor devolve HTML (rota ausente,
+  // sessao expirada, 500), o .json() estoura com "Unexpected token '<'", que
+  // nao diz nada a quem esta usando.
+  fetch(BASE + '/api/carga-vip', { credentials:'same-origin' })
+    .then(function(r){ return r.text().then(function(t){ return { status:r.status, texto:t }; }); })
+    .then(function(res){
+      var d = null;
+      try { d = JSON.parse(res.texto); } catch(e) {}
+      if (d) { _pintaCargaVip(d); return; }
+      var motivo = res.status === 404 ? 'a rota /api/carga-vip não existe neste servidor'
+                 : (res.status === 401 || res.status === 403) ? 'sem permissão (ou sessão expirada — recarregue a página)'
+                 : res.status >= 500 ? 'o servidor falhou ao montar a lista'
+                 : 'o servidor respondeu algo que não é JSON';
+      _vipCorpo('<div style="padding:22px;color:#ef4444;line-height:1.6">'
+        + '<div style="font-weight:700;margin-bottom:6px">Não consegui carregar a Carga VIP</div>'
+        + '<div style="font-size:12px;color:#f59e0b">HTTP ' + res.status + ' — ' + motivo + '.</div></div>');
+    })
+    .catch(function(e){ _vipCorpo('<div style="padding:22px;color:#ef4444">Erro de conexão: ' + e.message + '</div>'); });
 }
 function fecharCargaVip(){
   var m = document.getElementById('vip-modal');
@@ -917,6 +991,9 @@ function _pintaCargaVip(d){
   var linhas = ent.map(function(e, i){
     var premium = String(e.nivel||'').toLowerCase() === 'premium';
     var cor = premium ? '#eab308' : '#22c55e';
+    // taxa_nivel_pct e' o nome novo; taxa_estimada_pct o antigo. Lemos os dois
+    // pra a tela nao ficar sem numero na janela entre os dois deploys.
+    var taxa = (e.taxa_nivel_pct != null) ? e.taxa_nivel_pct : e.taxa_estimada_pct;
     var selos = [];
     if(e.selo_pick_frente) selos.push('sai na frente');
     if(e.selo_outro_fuma) selos.push('outro fuma');
@@ -924,27 +1001,54 @@ function _pintaCargaVip(d){
     if(e.categoria) nums.push(e.categoria);
     if(e.ratio_odd != null) nums.push('odd ' + e.ratio_odd);
     if(e.dt_caltm != null) nums.push('&Delta;t ' + e.dt_caltm);
+
+    // Motivo do skip so aqui, na lista — e' onde voce decide se vale entrar.
+    // Na Analisar o Bruno nao quer (pediria atencao no momento errado).
+    var MOTIVOS = { margem_insuficiente:'o motor descartou por margem apertada',
+                    historico_insuficiente:'o motor descartou por histórico insuficiente' };
+    var skipTag = e.skip
+      ? '<div style="font-size:9.5px;color:#c084fc;margin-top:2px">&#9888; ' + (MOTIVOS[e.skip_motivo] || ('skip: ' + (e.skip_motivo||'motivo não informado'))) + '</div>'
+      : '';
+
     return '<div class="vip-lin" data-i="' + i + '" data-hora="' + (e.hora||'') + '" data-corrida="' + (e.corrida||'') + '"'
-      + ' style="display:flex;align-items:center;gap:12px;padding:11px 22px;border-bottom:1px solid #1e2430;cursor:pointer"'
+      + ' style="display:flex;align-items:center;gap:12px;padding:11px 22px;border-bottom:1px solid #1e2430;cursor:pointer'
+      + (e.skip ? ';background:rgba(192,132,252,.06)' : '') + '"'
       + ' title="Clique para abrir esta corrida na tela">'
-      + '<div style="width:52px;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:#22c55e">' + (e.hora||'—') + '</div></div>'
+      // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
+      + '<div style="width:56px;flex-shrink:0;text-align:center">'
+      +   '<div style="font-size:14px;font-weight:800;color:#22c55e;line-height:1.1">' + (e.hora_br || e.hora || '—') + '</div>'
+      +   (e.hora_br && e.hora ? '<div style="font-size:10px;color:#3f8f5c">' + e.hora + '</div>' : '')
+      + '</div>'
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:12.5px;color:#f0f0f0;font-weight:600">T' + e.pick_trap + ' ' + (e.pick_nome||'') + ' <span style="color:#555">vence</span> T' + e.outro_trap + ' ' + (e.outro_nome||'') + '</div>'
+      +   '<div style="font-size:12.5px;color:#f0f0f0;font-weight:600">T' + e.pick_trap + ' ' + _limpaNome(e.pick_nome) + ' <span style="color:#555">vence</span> T' + e.outro_trap + ' ' + _limpaNome(e.outro_nome) + '</div>'
       +   '<div style="font-size:10.5px;color:var(--mut);margin-top:1px">' + (e.corrida||'') + (e.dist?' · '+e.dist:'') + (nums.length?' · '+nums.join(' · '):'') + '</div>'
       +   (selos.length ? '<div style="font-size:9.5px;color:#60a5fa;margin-top:2px">' + selos.join(' · ') + '</div>' : '')
+      +   skipTag
       + '</div>'
       + '<div style="text-align:right;flex-shrink:0">'
       +   '<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:' + cor + '">' + (e.nivel||'') + '</div>'
-      +   (e.taxa_estimada_pct != null
-          ? '<div style="font-size:15px;font-weight:800;color:' + cor + '">~' + e.taxa_estimada_pct + '%</div>'
+      +   (taxa != null
+          ? '<div style="font-size:15px;font-weight:800;color:' + cor + '">~' + taxa + '%</div>'
             + '<div style="font-size:8px;color:#555;white-space:nowrap">histórico do filtro</div>'
           : '')
       + '</div></div>';
   }).join('');
 
-  var niveis = d.niveis ? Object.keys(d.niveis).map(function(k){ return k + ': ' + d.niveis[k]; }).join(' · ') : '';
-  _vipCorpo(cab + aviso
-    + (niveis ? '<div style="padding:10px 22px 0;font-size:11px;color:var(--mut)">' + niveis + '</div>' : '')
+  // Legenda dos niveis: o "niveis" e' um OBJETO por nivel ({criterio,
+  // taxa_historica_pct}). Antes concatenavamos ele direto e saia
+  // "Valor: [object Object]". Como cada linha ja mostra a taxa, aqui fica so
+  // o CRITERIO — o que define o nivel, que e' o que a linha nao diz.
+  var legenda = '';
+  if (d.niveis && typeof d.niveis === 'object') {
+    var partes = Object.keys(d.niveis).map(function(k){
+      var v = d.niveis[k] || {};
+      var crit = (typeof v === 'object') ? v.criterio : v;
+      return crit ? '<strong style="color:' + (k.toLowerCase()==='premium'?'#eab308':'#22c55e') + '">' + k + '</strong>: ' + crit : '';
+    }).filter(Boolean);
+    if (partes.length) legenda = '<div style="padding:10px 22px 0;font-size:10.5px;color:var(--mut);line-height:1.6">' + partes.join('<br>') + '</div>';
+  }
+
+  _vipCorpo(cab + aviso + legenda
     + '<div style="margin-top:10px">' + linhas + '</div>'
     + '<div style="padding:12px 22px;font-size:10.5px;color:#555">Clique numa corrida para abri-la na tela.</div>');
 }
@@ -1146,7 +1250,7 @@ function renderFocusPanel(r, idx) {
     // Selo VIP centralizado no cabecalho: identifica a corrida de relance,
     // mesmo quando voce chegou nela navegando e nao pela lista.
     + (_ehVip(r)
-      ? '<div style="flex:1;text-align:center;padding-top:4px"><span style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.35);color:#eab308;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:4px 12px;border-radius:14px">&#11088; Carga VIP</span></div>'
+      ? '<div style="flex:1;text-align:center;padding-top:4px"><span class="vip-selo' + (_vipSkipLiberado(r)?' vip-skip':'') + '">&#11088; Carga VIP</span></div>'
       : '')
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
@@ -1217,7 +1321,8 @@ function renderFocusPanel(r, idx) {
   // a cor vem de var(--bg) no CSS da tela, e sobrescrever aqui evita depender
   // de qual regra vence. Sempre reseta no else — senao a corrida seguinte
   // herdaria o roxo da anterior.
-  focusCol.style.background = _ehVip(r) ? '#140B2B' : '';
+  focusCol.style.background = _ehVip(r) ? (VIP_CFG.corFundo || '#140B2B') : '';
+  if (_vipSkipLiberado(r)) _avisarVipSkip(r);
 
   startOddsLive(r);
 }

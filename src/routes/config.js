@@ -324,6 +324,37 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-automacao">
 
 <div class="section">
+<div class="sec-title">Carga VIP na tela Analisar</div>
+<p class="hint" style="margin-bottom:10px">Corridas que o motor marcou como <strong>skip</strong> mas que passaram no filtro de valor podem voltar pra tela perto da largada. O skip por margem apertada entra; o skip por falta de histórico nunca aparece no filtro, então não há esse risco.</p>
+<div class="bloco-fields">
+  <div class="field">
+    <label>Destravar skip da Carga VIP</label>
+    <select name="vip_skip_ativo">
+      <option value="1" ${config.vip_skip_ativo!=0?'selected':''}>Ativado</option>
+      <option value="0" ${config.vip_skip_ativo==0?'selected':''}>Desativado</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Minutos antes da largada</label>
+    <input type="number" name="vip_skip_min_antes" min="1" max="30" value="${config.vip_skip_min_antes!=null?config.vip_skip_min_antes:5}">
+  </div>
+  <div class="field">
+    <label>Alarme sonoro ao entrar em tela</label>
+    <select name="vip_skip_alarme">
+      <option value="1" ${config.vip_skip_alarme!=0?'selected':''}>Ativado</option>
+      <option value="0" ${config.vip_skip_alarme==0?'selected':''}>Desativado</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Cor do destaque (lista e selo)</label>
+    <input type="text" name="vip_cor_destaque" placeholder="#c084fc" value="${config.vip_cor_destaque||'#c084fc'}">
+  </div>
+  <div class="field">
+    <label>Cor de fundo da disputa</label>
+    <input type="text" name="vip_cor_fundo" placeholder="#140B2B" value="${config.vip_cor_fundo||'#140B2B'}">
+  </div>
+</div>
+
 <div class="sec-title">Alarme para filtro selecionado</div>
 <div class="bloco-toggle">
   <input type="hidden" name="alarme_filtro_ativo" value="0">
@@ -1178,9 +1209,14 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_som TEXT DEFAULT 'beep'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_cor TEXT DEFAULT 'azul'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_skip_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_skip_min_antes INTEGER DEFAULT 5").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_skip_alarme INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_cor_destaque TEXT DEFAULT '#c084fc'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_cor_fundo TEXT DEFAULT '#140B2B'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1205,6 +1241,11 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.alarme_filtro_som||'beep',
       d.alarme_filtro_cor||'azul',
       d.alarme_filtro_regras||null,
+      d.vip_skip_ativo!=null?parseInt(d.vip_skip_ativo):1,
+      d.vip_skip_min_antes!=null?parseInt(d.vip_skip_min_antes):5,
+      d.vip_skip_alarme!=null?parseInt(d.vip_skip_alarme):1,
+      d.vip_cor_destaque||'#c084fc',
+      d.vip_cor_fundo||'#140B2B',
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
