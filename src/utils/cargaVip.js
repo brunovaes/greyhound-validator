@@ -70,7 +70,7 @@ function listar(db, opts) {
   // e corrida 'skip' (margem insuficiente) é JUSTO onde as odds coladas moram —
   // além de que o backtest que mediu as taxas (62%/69%) não filtrava skip.
   const rows = db.prepare(
-    "SELECT r.hora, r.corrida, r.dist, r.hist_all FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "SELECT r.hora, r.corrida, r.dist, r.nivel, r.obs, r.hist_all FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
   ).all(date);
 
@@ -113,6 +113,7 @@ function listar(db, opts) {
         const dt = other.caltmAvg - pick.caltmAvg;                        // pick mais rápido
         if (!(dt > DT_VALOR)) continue;
         const nivel = dt >= DT_PREMIUM ? 'Premium' : 'Valor';
+        const ehSkip = String(row.nivel || '') === 'skip';
         entradas.push({
           hora: row.hora, corrida: row.corrida, dist: row.dist,
           pick_trap: pick.trap, pick_nome: pick.nome,
@@ -121,7 +122,13 @@ function listar(db, opts) {
           ratio_odd: +ratio.toFixed(3),
           dt_caltm: +dt.toFixed(2),
           nivel: nivel,
-          taxa_estimada_pct: nivel === 'Premium' ? TAXA_PREMIUM : TAXA_VALOR,
+          // MESMO número da taxa histórica do nível (niveis[nivel].taxa_historica_pct).
+          // NÃO é estimativa desta corrida — renomeado de "taxa_estimada" p/ deixar claro.
+          taxa_nivel_pct: nivel === 'Premium' ? TAXA_PREMIUM : TAXA_VALOR,
+          // Corrida que o motor descartou por MARGEM apertada (nunca por falta de
+          // histórico — essas nem têm hist_all, então não chegam à Carga VIP).
+          skip: ehSkip,
+          skip_motivo: ehSkip ? (/margem/i.test(row.obs || '') ? 'margem_insuficiente' : 'outro') : null,
           // selos de bônus (EM OBSERVAÇÃO — amostra pequena, não filtram nada):
           selo_pick_frente: _FRONT.indexOf(pick.perfil) >= 0,
           selo_outro_fuma: other.perfil === 'fumador'
