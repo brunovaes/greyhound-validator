@@ -721,6 +721,7 @@ ${navBar(user, 'analisar')}
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregar PDF
         </label>
+        ${can(user,'analisar.carga_vip') ? `<button type="button" class="tabbtn" id="btn-carga-vip" onclick="abrirCargaVip()" style="width:100%;text-align:left;cursor:pointer;font:inherit">&#11088; Carga VIP</button>` : ''}
         <a href="${BASE}/historico" class="tabbtn">&#128220; Históricos</a>
       </div>
       <div class="flist" id="rlist"></div>

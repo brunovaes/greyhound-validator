@@ -834,6 +834,107 @@ function _parEmFoco(r){
 //
 // Se nada casar, devolve o texto como veio: melhor um nome longo do que um
 // nome cortado no lugar errado.
+// ── CARGA VIP ─────────────────────────────────────────────────────────────
+// Lista as corridas que passaram no filtro de VALOR do motor. E' filtro de
+// valor, NAO previsao: as taxas (62%/69%) sao o historico do filtro, nao a
+// chance daquela corrida especifica. A tela diz isso de forma explicita —
+// numero especifico ("69%") passa sensacao de certeza justamente por ser
+// especifico, e aqui o custo de confundir os dois e' dinheiro.
+function abrirCargaVip(){
+  var m = document.getElementById('vip-modal');
+  if(!m){
+    m = document.createElement('div');
+    m.id = 'vip-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto';
+    m.addEventListener('click', function(e){ if(e.target===m) fecharCargaVip(); });
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+  m.innerHTML = '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:900px;width:100%;overflow:hidden">'
+    + '<div style="padding:18px 22px;color:var(--mut)">Carregando…</div></div>';
+
+  fetch(BASE + '/api/carga-vip')
+    .then(function(r){ return r.json(); })
+    .then(_pintaCargaVip)
+    .catch(function(e){ _vipCorpo('<div style="padding:22px;color:#ef4444">Erro ao carregar: ' + e.message + '</div>'); });
+}
+function fecharCargaVip(){
+  var m = document.getElementById('vip-modal');
+  if(m) m.style.display = 'none';
+}
+function _vipCorpo(html){
+  var m = document.getElementById('vip-modal');
+  if(m) m.innerHTML = '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:900px;width:100%;overflow:hidden">' + html + '</div>';
+}
+function _pintaCargaVip(d){
+  if(!d || d.error){ _vipCorpo('<div style="padding:22px;color:#ef4444">' + ((d&&d.error)||'resposta inesperada') + '</div>'); return; }
+  var ent = d.entradas || [];
+
+  var cab = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;border-bottom:1px solid #222">'
+    + '<div><div style="font-size:16px;font-weight:800;color:#f0f0f0">&#11088; Carga VIP</div>'
+    +   '<div style="font-size:11px;color:var(--mut);margin-top:2px">' + (d.date||'') + ' &middot; ' + (d.total||0) + ' corrida(s) no filtro</div></div>'
+    + '<button type="button" onclick="fecharCargaVip()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1">&times;</button></div>';
+
+  // O aviso vem ANTES da lista de proposito: depois dela, com os numeros ja
+  // lidos, vira rodape que ninguem le.
+  var aviso = '<div style="margin:14px 22px 0;padding:11px 14px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:11.5px;color:#eab308;line-height:1.6">'
+    + '<strong>Isto é um filtro de valor, não uma previsão.</strong> As taxas abaixo são o histórico deste filtro em corridas parecidas — não são a chance desta corrida específica. '
+    + 'Corrida a corrida, qualquer uma pode perder.'
+    + (d.aviso ? '<div style="margin-top:6px;color:#a3894a">' + d.aviso + '</div>' : '')
+    + '</div>';
+
+  if(!ent.length){
+    _vipCorpo(cab + aviso + '<div style="padding:26px 22px;text-align:center;color:var(--mut);font-size:13px">Nenhuma corrida passou no filtro hoje.</div>');
+    return;
+  }
+
+  var linhas = ent.map(function(e, i){
+    var premium = String(e.nivel||'').toLowerCase() === 'premium';
+    var cor = premium ? '#eab308' : '#22c55e';
+    var selos = [];
+    if(e.selo_pick_frente) selos.push('sai na frente');
+    if(e.selo_outro_fuma) selos.push('outro fuma');
+    var nums = [];
+    if(e.categoria) nums.push(e.categoria);
+    if(e.ratio_odd != null) nums.push('odd ' + e.ratio_odd);
+    if(e.dt_caltm != null) nums.push('&Delta;t ' + e.dt_caltm);
+    return '<div class="vip-lin" data-i="' + i + '" data-hora="' + (e.hora||'') + '" data-corrida="' + (e.corrida||'') + '"'
+      + ' style="display:flex;align-items:center;gap:12px;padding:11px 22px;border-bottom:1px solid #1e2430;cursor:pointer"'
+      + ' title="Clique para abrir esta corrida na tela">'
+      + '<div style="width:52px;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:#22c55e">' + (e.hora||'—') + '</div></div>'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:12.5px;color:#f0f0f0;font-weight:600">T' + e.pick_trap + ' ' + (e.pick_nome||'') + ' <span style="color:#555">vence</span> T' + e.outro_trap + ' ' + (e.outro_nome||'') + '</div>'
+      +   '<div style="font-size:10.5px;color:var(--mut);margin-top:1px">' + (e.corrida||'') + (e.dist?' · '+e.dist:'') + (nums.length?' · '+nums.join(' · '):'') + '</div>'
+      +   (selos.length ? '<div style="font-size:9.5px;color:#60a5fa;margin-top:2px">' + selos.join(' · ') + '</div>' : '')
+      + '</div>'
+      + '<div style="text-align:right;flex-shrink:0">'
+      +   '<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:' + cor + '">' + (e.nivel||'') + '</div>'
+      +   (e.taxa_estimada_pct != null
+          ? '<div style="font-size:15px;font-weight:800;color:' + cor + '">~' + e.taxa_estimada_pct + '%</div>'
+            + '<div style="font-size:8px;color:#555;white-space:nowrap">histórico do filtro</div>'
+          : '')
+      + '</div></div>';
+  }).join('');
+
+  var niveis = d.niveis ? Object.keys(d.niveis).map(function(k){ return k + ': ' + d.niveis[k]; }).join(' · ') : '';
+  _vipCorpo(cab + aviso
+    + (niveis ? '<div style="padding:10px 22px 0;font-size:11px;color:var(--mut)">' + niveis + '</div>' : '')
+    + '<div style="margin-top:10px">' + linhas + '</div>'
+    + '<div style="padding:12px 22px;font-size:10.5px;color:#555">Clique numa corrida para abri-la na tela.</div>');
+}
+
+// Clique numa linha foca a corrida na Analisar. Delegacao em vez de onclick
+// inline: nome de galgo com apostrofo (comum) quebraria o atributo.
+document.addEventListener('click', function(ev){
+  var lin = ev.target && ev.target.closest ? ev.target.closest('.vip-lin') : null;
+  if(!lin) return;
+  var hora = lin.getAttribute('data-hora'), corrida = lin.getAttribute('data-corrida');
+  var idx = results.findIndex(function(r){ return r.tipo==='avb' && r.hora===hora && r.corrida===corrida; });
+  if(idx < 0){ showToast('Essa corrida não está carregada na tela.', false); return; }
+  fecharCargaVip();
+  renderFocusPanel(results[idx], idx);
+});
+
 function _limpaNome(n){
   if(!n) return '';
   var txt = String(n).trim();
