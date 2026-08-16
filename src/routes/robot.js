@@ -2654,6 +2654,18 @@ router.get('/diag/backtest-vip', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// CARGA VIP — lista de entradas fortes das corridas de HOJE (preview de admin,
+// antes de virar botão na tela Analisar). ?date=YYYY-MM-DD pra outro dia.
+router.get('/diag/carga-vip', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const cv = require('../utils/cargaVip');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    res.json(cv.listar(db, { date, spRatioMax }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
