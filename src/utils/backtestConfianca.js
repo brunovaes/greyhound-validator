@@ -140,15 +140,46 @@ function _ultimasCorridas(historico, n) {
 }
 function _avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
 
+// Perfil recalculado dos bends — mesma regra do motor (calcularPerfil, api.js).
+// Rótulos: avassalador/modoturbo = corre na frente; fumador = cai no fim;
+// recuperador/estavel = meio. NÃO checa atenuante de remark (aprox. pro backtest,
+// então pode marcar 'fumador' a mais — deixa o teste da ideia conservador).
+function _perfilDeHist(historico) {
+  const res = (historico || []).slice(0, 5).map(l => {
+    const bends = l && l.bends;
+    if (!bends || String(bends).length < 2) return null;
+    const nums = String(bends).split('').map(Number).filter(n => !isNaN(n) && n > 0);
+    if (nums.length < 2) return null;
+    const diffs = [];
+    for (let i = 1; i < nums.length; i++) diffs.push(nums[i] - nums[i - 1]);
+    const primeiro = nums[0], ultimo = nums[nums.length - 1];
+    const terminouMelhor = ultimo < primeiro, terminouPior = ultimo > primeiro;
+    const nuncaMelhorou = diffs.every(d => d >= 0), nuncaPiorou = diffs.every(d => d <= 0);
+    const qtdPrimeiro = nums.filter(n => n === 1).length;
+    if (qtdPrimeiro >= 3) return 'avassalador';
+    if (nuncaPiorou && terminouMelhor) return 'modoturbo';
+    if (nuncaMelhorou && terminouPior) return 'fumador';
+    if (terminouMelhor) return 'recuperador';
+    return 'estavel';
+  }).filter(Boolean);
+  if (!res.length) return 'estavel';
+  const c = {}; res.forEach(p => c[p] = (c[p] || 0) + 1);
+  return Object.entries(c).sort((a, b) => b[1] - a[1])[0][0];
+}
+const _FRONT = ['avassalador', 'modoturbo']; // "corre na frente"
+
 function rodarVIP(db, opts) {
   opts = opts || {};
   const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15; // "odds quase iguais"
   const dtMin = opts.dtMin > 0 ? opts.dtMin : 0.10;               // pick mais rápido por > dtMin (s)
 
+  // hist_all basta: traz o histórico dos galgos elegíveis, com bends/sp/split/
+  // caltm/classe por linha. O perfil é RECALCULADO daqui (o gravado no scores_json
+  // é recente e usa outro rótulo), então as ideias de Fumador/frente ficam testáveis.
   const rows = db.prepare(
-    "SELECT s.created_at AS quando, r.scores_json, r.hist_all, r.finishing_order_json, r.corrida " +
+    "SELECT s.created_at AS quando, r.hist_all, r.finishing_order_json, r.corrida " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
-    "WHERE r.scores_json IS NOT NULL AND r.hist_all IS NOT NULL AND r.finishing_order_json IS NOT NULL"
+    "WHERE r.hist_all IS NOT NULL AND r.finishing_order_json IS NOT NULL"
   ).all();
 
   const funil = { pares: 0, odds_coladas: 0, categoria_igual: 0, tem_split: 0, nao_fuma: 0, tempo_ok: 0 };
@@ -157,25 +188,22 @@ function rodarVIP(db, opts) {
   const exemplos = [];
 
   for (const row of rows) {
-    let dogsScore = null, histAll = null, fo = null;
-    try { dogsScore = JSON.parse(row.scores_json); } catch (e) { continue; }
+    let histAll = null, fo = null;
     try { histAll = JSON.parse(row.hist_all); } catch (e) { continue; }
     try { fo = JSON.parse(row.finishing_order_json); } catch (e) { continue; }
-    if (!Array.isArray(dogsScore) || !Array.isArray(histAll) || !Array.isArray(fo) || !fo.length) continue;
-
-    const perfilPorTrap = {}, histPorTrap = {};
-    for (const d of dogsScore) if (d && d.trap != null) perfilPorTrap[d.trap] = d.perfil || null;
-    for (const h of histAll) if (h && h.trap != null) histPorTrap[h.trap] = h.historico || [];
+    if (!Array.isArray(histAll) || !Array.isArray(fo) || !fo.length) continue;
 
     const info = {};
-    for (const t of Object.keys(histPorTrap).map(Number).filter(t => Object.prototype.hasOwnProperty.call(perfilPorTrap, t))) {
-      const u2 = _ultimasCorridas(histPorTrap[t], 2);
+    for (const h of histAll) {
+      if (!h || h.trap == null) continue;
+      const historico = h.historico || [];
+      const u2 = _ultimasCorridas(historico, 2);
       if (u2.length < 2) continue; // precisa das 2 últimas corridas de verdade
       const odds = u2.map(l => _oddDecimal(l.sp)).filter(v => v != null);
       const splits = u2.map(l => Number(l.split)).filter(v => Number.isFinite(v) && v > 0);
       const tempos = u2.map(l => Number(l.caltm)).filter(v => Number.isFinite(v) && v > 0);
-      info[t] = {
-        trap: t, perfil: perfilPorTrap[t],
+      info[h.trap] = {
+        trap: h.trap, perfil: _perfilDeHist(historico),   // recalculado dos bends
         oddMedia: odds.length ? _avg(odds) : null,
         splitAvg: splits.length ? _avg(splits) : null,
         caltmAvg: tempos.length ? _avg(tempos) : null,
@@ -201,8 +229,8 @@ function rodarVIP(db, opts) {
         funil.tem_split++;
         const pick = X.splitAvg <= Y.splitAvg ? X : Y;
         const other = pick === X ? Y : X;
-        // 4. pick não fuma
-        if (pick.perfil === 'Fumador') continue;
+        // 4. pick não fuma (perfil recalculado)
+        if (pick.perfil === 'fumador') continue;
         funil.nao_fuma++;
         // 5. pick mais rápido que o outro por > Δt nas 2 últimas
         if (!(pick.caltmAvg > 0 && other.caltmAvg > 0)) continue;
@@ -214,14 +242,13 @@ function rodarVIP(db, opts) {
         if (row.quando) dias.add(String(row.quando).slice(0, 10));
         entradas.push({
           acertou: res,
-          ofuma: other.perfil === 'Fumador',    // ideia 1: o ADVERSÁRIO cai no fim
-          pfront: pick.perfil === 'Frontrunner' // ideia 2: o pick corre na frente
+          ofuma: other.perfil === 'fumador',        // ideia 1: o ADVERSÁRIO cai no fim
+          pfront: _FRONT.indexOf(pick.perfil) >= 0  // ideia 2: o pick corre na frente
         });
         if (exemplos.length < 25) exemplos.push({
           corrida: row.corrida, pick: pick.trap, other: other.trap,
           ratio_odd: +ratio.toFixed(3), dt_caltm: +(other.caltmAvg - pick.caltmAvg).toFixed(2),
-          categoria: X.catRecent, acertou: res,
-          outro_fuma: other.perfil === 'Fumador', pick_frontrunner: pick.perfil === 'Frontrunner'
+          categoria: X.catRecent, pick_perfil: pick.perfil, outro_perfil: other.perfil, acertou: res
         });
       }
     }
