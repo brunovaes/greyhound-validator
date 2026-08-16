@@ -1015,10 +1015,17 @@ function _pintaCargaVip(d){
       + (e.skip ? ';background:rgba(192,132,252,.06)' : '') + '"'
       + ' title="Clique para abrir esta corrida na tela">'
       // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
-      + '<div style="width:56px;flex-shrink:0;text-align:center">'
-      +   '<div style="font-size:14px;font-weight:800;color:#22c55e;line-height:1.1">' + (e.hora_br || e.hora || '—') + '</div>'
-      +   (e.hora_br && e.hora ? '<div style="font-size:10px;color:#3f8f5c">' + e.hora + '</div>' : '')
-      + '</div>'
+      // O endpoint manda so a hora UK, entao a BR sai do convertHora() — a
+      // MESMA conversao que o resto da tela usa, pra os dois nunca divergirem.
+      // Se um dia vier hora_br do servidor, ela tem prioridade.
+      + (function(){
+          var uk = e.hora || '';
+          var br = e.hora_br || (uk ? convertHora(uk) : '');
+          return '<div style="width:56px;flex-shrink:0;text-align:center">'
+            + '<div style="font-size:14px;font-weight:800;color:#22c55e;line-height:1.1">' + (br || uk || '—') + '</div>'
+            + (br && uk && br !== uk ? '<div style="font-size:10px;color:#3f8f5c">' + uk + '</div>' : '')
+            + '</div>';
+        })()
       + '<div style="flex:1;min-width:0">'
       +   '<div style="font-size:12.5px;color:#f0f0f0;font-weight:600">T' + e.pick_trap + ' ' + _limpaNome(e.pick_nome) + ' <span style="color:#555">vence</span> T' + e.outro_trap + ' ' + _limpaNome(e.outro_nome) + '</div>'
       +   '<div style="font-size:10.5px;color:var(--mut);margin-top:1px">' + (e.corrida||'') + (e.dist?' · '+e.dist:'') + (nums.length?' · '+nums.join(' · '):'') + '</div>'
