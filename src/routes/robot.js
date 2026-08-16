@@ -1497,7 +1497,12 @@ function impPintar(d){
 
   html += '<div class="card">'
     + (c.ok
-      ? '<button class="btn" id="imp-aplicar">Aplicar: gravar '+c.ok+' e limpar '+impLimpar.length+'</button>'
+      ? '<button class="btn" id="imp-aplicar">Aplicar: '+c.ok+' entrada(s) da planilha'+(impLimpar.length?' &middot; zerar '+impLimpar.length+' fora dela':'')+'</button>'
+        + '<div style="font-size:11px;color:#888;margin-top:8px;line-height:1.6">Depois de aplicar, <strong style="color:#22c55e">as '+c.ok+' corridas acima</strong> ficam com Odd e Stake preenchidos.'
+        + (impLimpar.length
+          ? ' As <strong style="color:#ef4444">'+impLimpar.length+'</strong> listadas em vermelho perdem a Odd (estavam preenchidas e não constam na planilha).'
+          : ' <strong>Nenhuma outra corrida do dia tem Odd no banco</strong>, então não há o que zerar — as demais já estão sem aposta.')
+        + ' Todas as outras corridas do dia continuam sem Odd.</div>'
       : '<div style="color:#ef4444;font-size:12px"><strong>Aplicação bloqueada.</strong> Nenhuma linha da planilha casou com uma corrida — '
         + 'aplicar assim apagaria '+impLimpar.length+' entrada(s) sem colocar nada no lugar. '
         + 'Confira se a data e as pistas da planilha batem com as corridas analisadas nesse dia.</div>')
