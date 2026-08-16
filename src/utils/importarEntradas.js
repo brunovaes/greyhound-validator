@@ -73,7 +73,12 @@ function _chaveNome(s) {
 
 // Le o CSV e devolve as linhas ja interpretadas (sem tocar no banco).
 function lerCsv(texto) {
-  const linhas = String(texto).split(/\r?\n/).filter(l => l.trim());
+  // Remove o BOM (\uFEFF) do inicio. O Excel grava esses 3 bytes invisiveis
+  // quando salva como "CSV UTF-8", e eles grudam na PRIMEIRA coluna do
+  // cabecalho: "Data" vira "\uFEFFData" e a busca por 'data' nao acha nada.
+  // O arquivo parece identico ao olho e o importador le zero linhas.
+  const limpo = String(texto).replace(/^\uFEFF/, '');
+  const linhas = limpo.split(/\r?\n/).filter(l => l.trim());
   if (!linhas.length) return { erro: 'arquivo vazio', linhas: [] };
 
   const cab = linhas[0].split(';').map(x => x.trim().toLowerCase());
