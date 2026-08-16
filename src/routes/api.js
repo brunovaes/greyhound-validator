@@ -1372,6 +1372,25 @@ router.get('/session/:id/races', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// CARGA VIP — lista de entradas fortes do dia p/ a tela Analisar. Gated pela
+// permissão 'analisar.carga_vip' (padrão liberado; restringe quem configurar a
+// regra em Acessos). Filtro de VALOR, não certeza — a etiqueta na tela diz isso.
+router.get('/carga-vip', (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+    const { podeAcessar } = require('../middleware/acesso');
+    if (!podeAcessar(req.user, 'analisar.carga_vip')) {
+      return res.status(403).json({ error: 'Sem permissão para a Carga VIP.' });
+    }
+    const cv = require('../utils/cargaVip');
+    // "hoje" em BRT (bate com date(s.created_at,'-3 hours') usado na query)
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+      ? req.query.date
+      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    res.json(cv.listar(db, { date }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/sessions', (req, res) => {
   try {
     const sessions = db.prepare('SELECT id, name, created_at FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);

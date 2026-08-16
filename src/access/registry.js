@@ -24,6 +24,7 @@ const ACCESS_CATEGORIES = [
     { key: 'analisar.relatorio',         label: 'Relatorio de analise (icone)' },
     { key: 'analisar.corrida_completa',  label: 'Corrida completa 6 galgos (icone)' },
     { key: 'analisar.exportar_csv',      label: 'Exportar CSV' },
+    { key: 'analisar.carga_vip',         label: 'Carga VIP (entradas fortes do dia)' },
     { key: 'analisar.acertos',           label: 'Painel Acertos (dia/mes)' },
     { key: 'analisar.sessoes_recentes',  label: 'Sessoes recentes' },
   ]},
