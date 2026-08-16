@@ -1208,7 +1208,7 @@ function renderFocusPanel(r, idx) {
   // a cor vem de var(--bg) no CSS da tela, e sobrescrever aqui evita depender
   // de qual regra vence. Sempre reseta no else — senao a corrida seguinte
   // herdaria o roxo da anterior.
-  focusCol.style.background = _ehVip(r) ? '#381034' : '';
+  focusCol.style.background = _ehVip(r) ? '#140B2B' : '';
 
   startOddsLive(r);
 }
