@@ -152,7 +152,7 @@ function rodarVIP(db, opts) {
   ).all();
 
   const funil = { pares: 0, odds_coladas: 0, categoria_igual: 0, tem_split: 0, nao_fuma: 0, tempo_ok: 0 };
-  let hits = 0, tot = 0;
+  const entradas = [];   // {acertou, ofuma, pfront} — pra medir baseline + ideias novas
   const dias = new Set();
   const exemplos = [];
 
@@ -211,18 +211,27 @@ function rodarVIP(db, opts) {
         // resultado real
         const res = bateuPar(fo, pick.trap, other.trap);
         if (res === null) continue;
-        tot++; if (res) hits++;
         if (row.quando) dias.add(String(row.quando).slice(0, 10));
+        entradas.push({
+          acertou: res,
+          ofuma: other.perfil === 'Fumador',    // ideia 1: o ADVERSÁRIO cai no fim
+          pfront: pick.perfil === 'Frontrunner' // ideia 2: o pick corre na frente
+        });
         if (exemplos.length < 25) exemplos.push({
           corrida: row.corrida, pick: pick.trap, other: other.trap,
           ratio_odd: +ratio.toFixed(3), dt_caltm: +(other.caltmAvg - pick.caltmAvg).toFixed(2),
-          categoria: X.catRecent, acertou: res
+          categoria: X.catRecent, acertou: res,
+          outro_fuma: other.perfil === 'Fumador', pick_frontrunner: pick.perfil === 'Frontrunner'
         });
       }
     }
   }
 
   const nDias = dias.size || 1;
+  const resumoDe = (arr) => {
+    const n = arr.length, ac = arr.filter(e => e.acertou).length;
+    return { entradas: n, acertos: ac, taxa_pct: n ? +(100 * ac / n).toFixed(1) : null, entradas_por_dia: +(n / nDias).toFixed(2) };
+  };
   return {
     parametros: {
       sp_ratio_max: spRatioMax, delta_tempo_min_s: dtMin,
@@ -230,15 +239,18 @@ function rodarVIP(db, opts) {
       split: 'média das 2 últimas (menor = pick)', regra_fuma: 'pick != Fumador'
     },
     funil,
-    resultado: {
-      entradas_VIP: tot, acertos: hits,
-      taxa_pct: tot ? +(100 * hits / tot).toFixed(1) : null,
-      dias_cobertos: nDias, entradas_por_dia: +(tot / nDias).toFixed(2)
-    },
+    dias_cobertos: nDias,
+    // baseline = o funil atual. As três abaixo são as IDEIAS NOVAS, medidas
+    // sobre as mesmas entradas — dá pra ver num tiro só se cada uma sobe o acerto.
+    baseline: resumoDe(entradas),
+    ideia1_outro_fuma: resumoDe(entradas.filter(e => e.ofuma)),
+    ideia2_pick_frontrunner: resumoDe(entradas.filter(e => e.pfront)),
+    ideias_1e2_juntas: resumoDe(entradas.filter(e => e.ofuma && e.pfront)),
     exemplos,
-    legenda: 'funil = quantos PARES sobrevivem a cada etapa (pares → odds coladas → categoria igual → tem split → não fuma → tempo). '
-      + 'entradas_VIP = pares que passaram TUDO e tiveram chegada definida. taxa_pct = % em que o pick chegou na frente do outro. '
-      + 'Alvo: taxa_pct perto de 100% COM entradas_por_dia razoável. Ajuste ?sp= (razão de odd) e ?dt= (Δt em s) na URL.'
+    legenda: 'baseline = o funil atual (odds coladas, mesma categoria, melhor split, não fuma, mais rápido por >Δt). '
+      + 'ideia1_outro_fuma = só quando o ADVERSÁRIO é Fumador (apostar contra quem cai). '
+      + 'ideia2_pick_frontrunner = só quando o pick corre na frente (Frontrunner). ideias_1e2_juntas = as duas juntas. '
+      + 'Compare taxa_pct e entradas_por_dia de cada uma contra o baseline. Ajuste ?sp= e ?dt= na URL.'
   };
 }
 
