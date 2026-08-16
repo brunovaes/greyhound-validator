@@ -15,6 +15,7 @@
 // Saída: taxa de acerto por faixa de gap (todos os pares e só os de odd próxima),
 // a matriz proximidade-de-SP × gap, e a distribuição dos gaps (pra calibrar).
 const { bateuPar } = require('./avbResultado');
+const { probImplicita } = require('./spEngine');
 
 function _num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
@@ -117,4 +118,128 @@ function rodar(db, opts) {
   };
 }
 
-module.exports = { rodar };
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKTEST DO FUNIL "CARGA VIP" (hipótese do Bruno)
+// Funil, na ordem: odds quase iguais > mesma categoria entre os dois >
+// melhor split (define o pick) > pick não é Fumador > pick mais rápido que o
+// outro por > Δt nas 2 últimas. Mede quantas vezes o pick chegou na frente.
+//
+// Recalcula a odd das 2 últimas a partir do hist_all.sp (não depende do oddMedia
+// gravado, que é recente) — então roda em todo o histórico. Leitura pura.
+function _oddDecimal(spStr) {
+  if (!spStr) return null;
+  const p = probImplicita(String(spStr).replace(/[A-Za-z]+$/, ''));
+  return (p && p > 0) ? 1 / p : null;
+}
+function _isTrialClasse(c) {
+  const s = String(c || '').trim().toUpperCase();
+  return s === 'T' || s === 'S' || s.startsWith('T ') || s.startsWith('S ');
+}
+function _ultimasCorridas(historico, n) {
+  return (historico || []).filter(l => l && !_isTrialClasse(l.classe) && Number(l.caltm) > 0).slice(0, n);
+}
+function _avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
+
+function rodarVIP(db, opts) {
+  opts = opts || {};
+  const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15; // "odds quase iguais"
+  const dtMin = opts.dtMin > 0 ? opts.dtMin : 0.10;               // pick mais rápido por > dtMin (s)
+
+  const rows = db.prepare(
+    "SELECT s.created_at AS quando, r.scores_json, r.hist_all, r.finishing_order_json, r.corrida " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE r.scores_json IS NOT NULL AND r.hist_all IS NOT NULL AND r.finishing_order_json IS NOT NULL"
+  ).all();
+
+  const funil = { pares: 0, odds_coladas: 0, categoria_igual: 0, tem_split: 0, nao_fuma: 0, tempo_ok: 0 };
+  let hits = 0, tot = 0;
+  const dias = new Set();
+  const exemplos = [];
+
+  for (const row of rows) {
+    let dogsScore = null, histAll = null, fo = null;
+    try { dogsScore = JSON.parse(row.scores_json); } catch (e) { continue; }
+    try { histAll = JSON.parse(row.hist_all); } catch (e) { continue; }
+    try { fo = JSON.parse(row.finishing_order_json); } catch (e) { continue; }
+    if (!Array.isArray(dogsScore) || !Array.isArray(histAll) || !Array.isArray(fo) || !fo.length) continue;
+
+    const perfilPorTrap = {}, histPorTrap = {};
+    for (const d of dogsScore) if (d && d.trap != null) perfilPorTrap[d.trap] = d.perfil || null;
+    for (const h of histAll) if (h && h.trap != null) histPorTrap[h.trap] = h.historico || [];
+
+    const info = {};
+    for (const t of Object.keys(histPorTrap).map(Number).filter(t => Object.prototype.hasOwnProperty.call(perfilPorTrap, t))) {
+      const u2 = _ultimasCorridas(histPorTrap[t], 2);
+      if (u2.length < 2) continue; // precisa das 2 últimas corridas de verdade
+      const odds = u2.map(l => _oddDecimal(l.sp)).filter(v => v != null);
+      const splits = u2.map(l => Number(l.split)).filter(v => Number.isFinite(v) && v > 0);
+      const tempos = u2.map(l => Number(l.caltm)).filter(v => Number.isFinite(v) && v > 0);
+      info[t] = {
+        trap: t, perfil: perfilPorTrap[t],
+        oddMedia: odds.length ? _avg(odds) : null,
+        splitAvg: splits.length ? _avg(splits) : null,
+        caltmAvg: tempos.length ? _avg(tempos) : null,
+        catRecent: u2[0] ? String(u2[0].classe || '').trim().toUpperCase() : null
+      };
+    }
+
+    const lista = Object.values(info);
+    for (let i = 0; i < lista.length; i++) {
+      for (let j = i + 1; j < lista.length; j++) {
+        const X = lista[i], Y = lista[j];
+        funil.pares++;
+        // 1. odds quase iguais
+        if (!(X.oddMedia > 0 && Y.oddMedia > 0)) continue;
+        const ratio = Math.max(X.oddMedia, Y.oddMedia) / Math.min(X.oddMedia, Y.oddMedia);
+        if (ratio > spRatioMax) continue;
+        funil.odds_coladas++;
+        // 2. mesma categoria entre os dois (classe mais recente)
+        if (!(X.catRecent && Y.catRecent && X.catRecent === Y.catRecent)) continue;
+        funil.categoria_igual++;
+        // 3. melhor split define o pick
+        if (!(X.splitAvg > 0 && Y.splitAvg > 0)) continue;
+        funil.tem_split++;
+        const pick = X.splitAvg <= Y.splitAvg ? X : Y;
+        const other = pick === X ? Y : X;
+        // 4. pick não fuma
+        if (pick.perfil === 'Fumador') continue;
+        funil.nao_fuma++;
+        // 5. pick mais rápido que o outro por > Δt nas 2 últimas
+        if (!(pick.caltmAvg > 0 && other.caltmAvg > 0)) continue;
+        if (!((other.caltmAvg - pick.caltmAvg) > dtMin)) continue;
+        funil.tempo_ok++;
+        // resultado real
+        const res = bateuPar(fo, pick.trap, other.trap);
+        if (res === null) continue;
+        tot++; if (res) hits++;
+        if (row.quando) dias.add(String(row.quando).slice(0, 10));
+        if (exemplos.length < 25) exemplos.push({
+          corrida: row.corrida, pick: pick.trap, other: other.trap,
+          ratio_odd: +ratio.toFixed(3), dt_caltm: +(other.caltmAvg - pick.caltmAvg).toFixed(2),
+          categoria: X.catRecent, acertou: res
+        });
+      }
+    }
+  }
+
+  const nDias = dias.size || 1;
+  return {
+    parametros: {
+      sp_ratio_max: spRatioMax, delta_tempo_min_s: dtMin,
+      categoria: 'mesma entre os dois (classe mais recente)',
+      split: 'média das 2 últimas (menor = pick)', regra_fuma: 'pick != Fumador'
+    },
+    funil,
+    resultado: {
+      entradas_VIP: tot, acertos: hits,
+      taxa_pct: tot ? +(100 * hits / tot).toFixed(1) : null,
+      dias_cobertos: nDias, entradas_por_dia: +(tot / nDias).toFixed(2)
+    },
+    exemplos,
+    legenda: 'funil = quantos PARES sobrevivem a cada etapa (pares → odds coladas → categoria igual → tem split → não fuma → tempo). '
+      + 'entradas_VIP = pares que passaram TUDO e tiveram chegada definida. taxa_pct = % em que o pick chegou na frente do outro. '
+      + 'Alvo: taxa_pct perto de 100% COM entradas_por_dia razoável. Ajuste ?sp= (razão de odd) e ?dt= (Δt em s) na URL.'
+  };
+}
+
+module.exports = { rodar, rodarVIP };

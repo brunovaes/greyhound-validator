@@ -2641,6 +2641,19 @@ router.get('/diag/backtest-confianca', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// BACKTEST do funil "Carga VIP" (odds coladas > mesma categoria > melhor split >
+// não fuma > mais rápido por >Δt). Mede a taxa real e quantas entradas/dia.
+// ?sp=1.15 (razão de odd) e ?dt=0.10 (Δt em s) ajustam sem redeploy.
+router.get('/diag/backtest-vip', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const bt = require('../utils/backtestConfianca');
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    const dtMin = parseFloat(req.query.dt) || 0.10;
+    res.json(bt.rodarVIP(db, { spRatioMax, dtMin }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
