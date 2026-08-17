@@ -257,7 +257,9 @@
       // null acontece quando um dos dois ficou fora da chegada (retirada, nao
       // largou) ou em dead heat entre os dois. Fica NEUTRO, igual ao "-" do
       // Historico: nao e' acerto nem erro, e pintar de vermelho seria mentira.
-      var marca = e.bateu === true ? ' bateu' : (e.bateu === false ? ' errou' : '');
+      var vd = veredito(e.chegada, e.bateu, e.pick_trap, e.outro_trap);
+      var marca = vd.classe ? ' ' + vd.classe : '';
+      if (vd.aviso && window.console) console.warn('[carga-vip] ' + e.hora + '|' + e.corrida + ' -> ' + vd.aviso);
 
       return '<div class="vip-lin' + (e.skip ? ' tem-skip' : '') + marca + '"'
         + ' data-hora="' + esc(e.hora || '') + '" data-corrida="' + esc(e.corrida || '') + '"'
@@ -330,18 +332,52 @@
       .catch(function () { /* sem resultado: as linhas ficam como estao */ });
   }
 
+  // Posicao de um trap dentro da chegada. A fonte e' o campo pos, nao a ordem
+  // do array (o motor avisou que o array vem ordenado, mas que o pos e' quem
+  // manda).
+  function posDoTrap(chegada, trap) {
+    if (!chegada) return null;
+    for (var i = 0; i < chegada.length; i++) {
+      if (Number(chegada[i].trap) === Number(trap)) return Number(chegada[i].pos);
+    }
+    return null;
+  }
+
+  // Decide a cor da linha, CONFERINDO o bateu contra o podio que esta na tela.
+  //
+  // Por que conferir: o bateu vem pronto de fora (do motor, ou da rota
+  // /carga-vip/resultados, que usa bateuPar). A tela nao recalcula por conta
+  // propria de proposito, pra nao criar uma segunda versao da verdade. Mas
+  // pintar de verde uma linha cujo podio na mesma tela mostra o contrario e'
+  // pior do que nao pintar: passa confianca numa informacao errada.
+  //
+  // Entao: se o bateu contradiz as posicoes exibidas, a linha fica NEUTRA e o
+  // tooltip denuncia a divergencia, em vez de escolher um dos dois.
+  // Retorna { classe, aviso }.
+  function veredito(chegada, bateu, pick, outro) {
+    if (bateu !== true && bateu !== false) return { classe: '', aviso: '' };
+    var pa = posDoTrap(chegada, pick), pb = posDoTrap(chegada, outro);
+    // Sem chegada pra conferir: confia no que veio.
+    if (pa == null || pb == null) return { classe: bateu ? 'bateu' : 'errou', aviso: '' };
+    var esperado = pa < pb;
+    if (esperado !== bateu) {
+      return {
+        classe: '',
+        aviso: 'Divergência: a chegada mostra T' + pick + ' em ' + pa + 'o e T' + outro + ' em ' + pb
+             + 'o, mas o resultado recebido diz o contrário. A linha ficou sem cor de propósito.'
+      };
+    }
+    return { classe: bateu ? 'bateu' : 'errou', aviso: '' };
+  }
+
   // Texto do tooltip: em que lugar cada um dos dois chegou e o veredito.
   function explicaResultado(r, pick, outro) {
     if (!r.chegada || !r.chegada.length) return 'Sem chegada registrada.';
-    var pos = function (t) {
-      for (var i = 0; i < r.chegada.length; i++) {
-        if (Number(r.chegada[i].trap) === Number(t)) return Number(r.chegada[i].pos);
-      }
-      return null;
-    };
-    var pa = pos(pick), pb = pos(outro);
+    var pa = posDoTrap(r.chegada, pick), pb = posDoTrap(r.chegada, outro);
     var lugar = function (t, p) { return 'T' + t + ': ' + (p == null ? 'fora da chegada' : p + 'o lugar'); };
     var linha1 = lugar(pick, pa) + '  |  ' + lugar(outro, pb);
+    var v = veredito(r.chegada, r.bateu, pick, outro);
+    if (v.aviso) return linha1 + '\n' + v.aviso;
     if (r.bateu === true) return linha1 + '\nBateu: o pick chegou à frente do outro.';
     if (r.bateu === false) return linha1 + '\nNão bateu: o outro chegou à frente do pick.';
     if (pa == null || pb == null) return linha1 + '\nIndefinido: um dos dois não consta na chegada.';
@@ -372,9 +408,10 @@
 
       // Verde/vermelho SO quando a chegada resolveu a disputa. bateu null fica
       // neutro: nao e' acerto nem erro.
+      var v = veredito(r.chegada, r.bateu, pick, outro);
       lin.classList.remove('bateu', 'errou');
-      if (r.bateu === true) lin.classList.add('bateu');
-      else if (r.bateu === false) lin.classList.add('errou');
+      if (v.classe) lin.classList.add(v.classe);
+      if (v.aviso && window.console) console.warn('[carga-vip] ' + chave + ' -> ' + v.aviso);
     }
   }
 
