@@ -1478,8 +1478,6 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 /* Verde/vermelho SO quando a chegada resolveu a disputa. Corrida que ainda nao
    correu, e disputa indefinida (galgo fora da chegada, dead heat), ficam
    neutras: pintar de vermelho o que ninguem errou seria mentira. */
-.vip-lin.bateu{border-left-color:#22c55e}
-.vip-lin.errou{border-left-color:#ef4444}
 .vip-conf{display:flex;align-items:center;gap:5px;flex-shrink:0;width:200px}
 .vip-dog{width:62px;height:42px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
@@ -1489,10 +1487,15 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-dog .semarte{width:26px;height:26px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0}
 .vip-chegada{display:flex;align-items:center;gap:3px;flex-shrink:0;width:150px}
-.vip-pos{width:20px;height:20px;border-radius:50%;background:#1a2130;border:1px solid #2a3342;color:#8a94a6;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
-.vip-pos.p1{background:rgba(234,179,8,.16);border-color:rgba(234,179,8,.45);color:#eab308}
-.vip-pos.pick{border-color:#22c55e;color:#22c55e}
-.vip-pos.outro{border-color:#60a5fa;color:#60a5fa}
+/* As bolinhas da chegada sao os .trap-badge t1..t6 do designTokens, com as
+   cores reais das mangas. Aqui so o tamanho, que cada tela ajusta. */
+.vip-chegada .trap-badge{width:20px;height:20px;font-size:10px;font-weight:700;flex-shrink:0}
+/* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
+   pra ver onde o par chegou sem contornos competindo com a cor da manga. */
+.vip-chegada .trap-badge{opacity:.4}
+.vip-chegada .trap-badge.nodisputa{opacity:1}
+/* Anel dourado no primeiro lugar. */
+.vip-chegada .trap-badge.p1{box-shadow:0 0 0 2px rgba(234,179,8,.85)}
 .vip-chegada .aguarda{font-size:10px;color:#3f4c5f}
 .vip-acao{flex-shrink:0}
 .vip-acao .btn{display:inline-block;font-size:11px;font-weight:600;color:#22c55e;background:transparent;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 11px;text-decoration:none;white-space:nowrap}
@@ -1501,6 +1504,12 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-lin:hover{background:rgba(255,255,255,.03)}
 .vip-lin.tem-skip{background:rgba(192,132,252,.06)}
 .vip-lin.tem-skip:hover{background:rgba(192,132,252,.11)}
+/* Resultado pinta a LINHA INTEIRA. Vem depois do tem-skip de proposito: numa
+   corrida que era skip E ja correu, o que interessa e' o resultado. */
+.vip-lin.bateu{background:rgba(34,197,94,.13);border-left-color:#22c55e}
+.vip-lin.bateu:hover{background:rgba(34,197,94,.19)}
+.vip-lin.errou{background:rgba(239,68,68,.11);border-left-color:#ef4444}
+.vip-lin.errou:hover{background:rgba(239,68,68,.17)}
 .vip-hora{width:58px;flex-shrink:0;text-align:center}
 .vip-hora .br{font-size:15px;font-weight:800;color:#22c55e;line-height:1.1}
 .vip-hora .uk{font-size:10px;color:#3f8f5c}

@@ -90,10 +90,12 @@
     var ord = chegada.slice().sort(function (a, b) { return Number(a.pos) - Number(b.pos); });
     return ord.map(function (f) {
       var t = Number(f.trap), pos = Number(f.pos);
-      var cls = 'vip-pos' + (pos === 1 ? ' p1' : '')
-        + (t === Number(pickTrap) ? ' pick' : (t === Number(outroTrap) ? ' outro' : ''));
+      // trap-badge t1..t6 vem do designTokens: e' a cor real da manga daquele
+      // trap, a mesma bolinha usada no Historico e na tela de sessao.
+      var cls = 'trap-badge t' + t + (pos === 1 ? ' p1' : '')
+        + ((t === Number(pickTrap) || t === Number(outroTrap)) ? ' nodisputa' : '');
       var nome = nomes && nomes[String(t)] ? ' ' + nomes[String(t)] : '';
-      return '<div class="' + cls + '" title="' + esc(pos + 'o lugar: T' + t + nome) + '">' + esc(t) + '</div>';
+      return '<span class="' + cls + '" title="' + esc(pos + 'o lugar: T' + t + nome) + '">' + esc(t) + '</span>';
     }).join('');
   }
 
