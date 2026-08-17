@@ -24,6 +24,10 @@
   // { "1": ["url", ...], ... } — as artes disponiveis por trap. Vem vazio se a
   // pasta public/img/dogs nao existir; a tela cai na bolinha com o numero.
   var DOGS = window.VIP_DOGS || {};
+  // Codigo do Racing Post -> nome completo. Vem do servidor (src/utils/
+  // nomesPistas.js), nao copiado aqui: mapa duplicado fica pra tras quando
+  // alguem adiciona uma pista nova.
+  var PISTAS = window.VIP_PISTAS || {};
   var alvo = document.getElementById('vip-conteudo');
   if (!alvo) return;
 
@@ -56,6 +60,28 @@
       }
     }
     return txt;
+  }
+
+  // Linha de detalhe: "08:09 / 12:09 - Dunstall Park A4 · 480m · odd 1.125 · Δt 0.28"
+  // A hora repete a coluna da esquerda de proposito, a pedido: lendo a linha
+  // corrida, o horario e' o primeiro dado que importa.
+  function detalhe(e, br, uk) {
+    var nums = [];
+    if (e.ratio_odd != null) nums.push('odd ' + esc(e.ratio_odd));
+    if (e.dt_caltm != null) nums.push('&Delta;t ' + esc(e.dt_caltm));
+    // A categoria so entra quando NAO esta no fim do nome da corrida, pra nao
+    // sair "Dunstall Park A4 · A4".
+    var corrida = pistaCompleta(e.corrida);
+    if (e.categoria && corrida.slice(-String(e.categoria).length) !== String(e.categoria)) {
+      nums.unshift(esc(e.categoria));
+    }
+    var horas = [br, uk].filter(Boolean).join(' / ');
+    // dist as vezes ja vem com o "m"
+    var dist = e.dist == null ? '' : String(e.dist);
+    if (dist && !/m$/i.test(dist)) dist += 'm';
+    var partes = [esc(corrida)];
+    if (dist) partes.push(esc(dist));
+    return (horas ? esc(horas) + ' - ' : '') + partes.concat(nums).join(' \u00b7 ');
   }
 
   // Escolhe a arte do galgo. O TRAP ja vem certo no nome do arquivo (a manga
@@ -97,6 +123,16 @@
       var nome = nomes && nomes[String(t)] ? ' ' + nomes[String(t)] : '';
       return '<span class="' + cls + '" title="' + esc(pos + 'o lugar: T' + t + nome) + '">' + esc(t) + '</span>';
     }).join('');
+  }
+
+  // "DunPk A4" -> "Dunstall Park A4". Troca so a primeira palavra; se o codigo
+  // nao estiver no mapa, devolve como veio.
+  function pistaCompleta(corrida) {
+    var txt = String(corrida || '').trim();
+    if (!txt) return '';
+    var p = txt.split(' ');
+    if (PISTAS[p[0]]) { p[0] = PISTAS[p[0]]; return p.join(' '); }
+    return txt;
   }
 
   function esc(s) {
@@ -202,7 +238,8 @@
       if (e.selo_outro_fuma) selos.push('outro fuma');
 
       var nums = [];
-      if (e.categoria) nums.push(esc(e.categoria));
+      // A categoria NAO entra: ela ja aparece no fim do nome da corrida
+      // ("Dunstall Park A4"), e repetir vira "A4 · A4".
       if (e.ratio_odd != null) nums.push('odd ' + esc(e.ratio_odd));
       if (e.dt_caltm != null) nums.push('&Delta;t ' + esc(e.dt_caltm));
 
@@ -238,7 +275,7 @@
         + '<div class="vip-meio">'
         + '<div class="par">T' + esc(e.pick_trap) + ' ' + esc(limpaNome(e.pick_nome))
         + ' <span class="vence">vence</span> T' + esc(e.outro_trap) + ' ' + esc(limpaNome(e.outro_nome)) + '</div>'
-        + '<div class="det">' + esc(e.corrida || '') + (e.dist ? ' \u00b7 ' + esc(e.dist) : '') + (nums.length ? ' \u00b7 ' + nums.join(' \u00b7 ') : '') + '</div>'
+        + '<div class="det">' + detalhe(e, br, uk) + '</div>'
         + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
         + skipTag
         + '</div>'
@@ -293,6 +330,25 @@
       .catch(function () { /* sem resultado: as linhas ficam como estao */ });
   }
 
+  // Texto do tooltip: em que lugar cada um dos dois chegou e o veredito.
+  function explicaResultado(r, pick, outro) {
+    if (!r.chegada || !r.chegada.length) return 'Sem chegada registrada.';
+    var pos = function (t) {
+      for (var i = 0; i < r.chegada.length; i++) {
+        if (Number(r.chegada[i].trap) === Number(t)) return Number(r.chegada[i].pos);
+      }
+      return null;
+    };
+    var pa = pos(pick), pb = pos(outro);
+    var lugar = function (t, p) { return 'T' + t + ': ' + (p == null ? 'fora da chegada' : p + 'o lugar'); };
+    var linha1 = lugar(pick, pa) + '  |  ' + lugar(outro, pb);
+    if (r.bateu === true) return linha1 + '\nBateu: o pick chegou à frente do outro.';
+    if (r.bateu === false) return linha1 + '\nNão bateu: o outro chegou à frente do pick.';
+    if (pa == null || pb == null) return linha1 + '\nIndefinido: um dos dois não consta na chegada.';
+    if (pa === pb) return linha1 + '\nIndefinido: empate entre os dois.';
+    return linha1 + '\nIndefinido.';
+  }
+
   function aplicarResultados(mapa) {
     var linhas = document.querySelectorAll('.vip-lin');
     for (var i = 0; i < linhas.length; i++) {
@@ -306,7 +362,13 @@
       var outro = btn && btn.getAttribute('data-b');
 
       var alvoCheg = lin.querySelector('.vip-chegada');
-      if (alvoCheg) alvoCheg.innerHTML = bolinhasChegada(r.chegada, pick, outro, r.nomes);
+      if (alvoCheg) {
+        alvoCheg.innerHTML = bolinhasChegada(r.chegada, pick, outro, r.nomes);
+        // Deixa a conta a vista. Verde NAO quer dizer "venceu a corrida", e sim
+        // "o pick chegou a frente do outro do par" — que e' o que o AvB aposta.
+        // Sem isto, uma linha verde com o pick em 3o parece erro da tela.
+        alvoCheg.title = explicaResultado(r, pick, outro);
+      }
 
       // Verde/vermelho SO quando a chegada resolveu a disputa. bateu null fica
       // neutro: nao e' acerto nem erro.

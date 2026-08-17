@@ -7,7 +7,7 @@ const { requireAdmin } = require('../middleware/auth');
 const { can } = require('../access/store');
 const { planLabel } = require('../utils/plans');
 const { designTokensCSS } = require('../utils/designTokens');
-const { nomeCorridaCompleto, nomePista } = require('../utils/nomesPistas');
+const { nomeCorridaCompleto, nomePista, NOMES_PISTAS } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
 const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
@@ -1327,13 +1327,24 @@ router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express
     // Uma consulta so pro dia inteiro, em vez de uma por corrida. Mesmo filtro
     // de dia usado no resto do sistema: sessao canonica, hora de Brasilia.
     const linhas = db.prepare(
-      "SELECT r.hora, r.corrida, r.finishing_order_json, r.race_card " +
+      "SELECT r.id, r.hora, r.corrida, r.finishing_order_json, r.race_card " +
       "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
       "WHERE s.user_id = ? AND date(s.created_at,'-3 hours') = ?"
     ).all(CANONICO, date);
 
+    // A mesma corrida pode aparecer em mais de uma sessao do dia (PDF
+    // reimportado). Preferimos a linha que TEM chegada gravada e, entre duas
+    // com chegada, a mais recente. Sem este criterio, pegar a linha errada
+    // devolve 'sem resultado' pra corrida que ja correu, ou uma chegada velha.
     const porChave = new Map();
-    for (const l of linhas) porChave.set(l.hora + '|' + l.corrida, l);
+    for (const l of linhas) {
+      const k = l.hora + '|' + l.corrida;
+      const atual = porChave.get(k);
+      if (!atual) { porChave.set(k, l); continue; }
+      const temNova = !!l.finishing_order_json, temVelha = !!atual.finishing_order_json;
+      if (temNova && !temVelha) porChave.set(k, l);
+      else if (temNova === temVelha && l.id > atual.id) porChave.set(k, l);
+    }
 
     const json = (t) => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
 
@@ -1440,6 +1451,10 @@ router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
   const user = req.user;
   const logoB64 = getLogo();
   const DOGS = JSON.stringify(catalogoGalgos());
+  // Nome completo das pistas vem do src/utils/nomesPistas.js, a fonte unica.
+  // Passado pra tela em vez de copiado no JS do cliente: mapa duplicado e' mapa
+  // que fica pra tras quando alguem adiciona uma pista nova.
+  const PISTAS = JSON.stringify(NOMES_PISTAS);
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carga VIP - Greyhound Factory</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
@@ -1551,7 +1566,7 @@ ${navBar(user, 'cargavip')}
 </div>
 <div id="gv-modal"><div id="gv-box"><div id="gv-hdr"><h3 id="gv-title">Disputa</h3><button id="gv-xbtn" type="button" aria-label="Fechar">&#x2715;</button></div><div id="gv-body"></div></div></div>
 <script src="${BASE}/static/js/cardGalgo.js"></script>
-<script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};</script>
+<script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};var VIP_PISTAS=${PISTAS};</script>
 <script src="${BASE}/static/js/telaCargaVip.js" defer></script>
 </body></html>`);
 });
