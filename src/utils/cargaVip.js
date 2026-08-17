@@ -13,6 +13,24 @@
 // Leitura pura: lê races.hist_all (bends/sp/split/caltm/classe por linha) das
 // corridas de hoje e devolve os pares que passam o funil. Não grava nada.
 const { probImplicita } = require('./spEngine');
+const { bateuPar } = require('./avbResultado'); // fonte única do "bateu" (= Histórico)
+
+// Limpa o nome do galgo (mesma regra do _limpaNome do app.js): corta sexo (M/W),
+// cores (bk/bd/w...), mês-ano (jan26) e (Ssn...). Servidor manda já limpo.
+function _limpaNome(n) {
+  if (!n) return '';
+  const txt = String(n).trim();
+  const mSexo = txt.match(/^(.*?\((?:M|W)\))/);
+  if (mSexo) return mSexo[1].trim();
+  const toks = txt.split(/\s+/);
+  const CORES = /^(?:bk|bd|be|f|w|bkw|wbk|bdw|wbd|bew|wbe|bebdw|bkwtkd|bkbd|bebd|dkbd|lgbd|bkwbd)$/i;
+  const MESANO = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2}$/i;
+  for (let k = 1; k < toks.length; k++) {
+    const t = toks[k];
+    if (CORES.test(t) || MESANO.test(t) || /^\(Ssn/i.test(t)) return toks.slice(0, k).join(' ').trim();
+  }
+  return txt;
+}
 
 // Taxas medidas no backtest (32 dias) — etiqueta honesta na tela.
 const TAXA_VALOR = 62;
@@ -70,15 +88,42 @@ function listar(db, opts) {
   // e corrida 'skip' (margem insuficiente) é JUSTO onde as odds coladas moram —
   // além de que o backtest que mediu as taxas (62%/69%) não filtrava skip.
   const rows = db.prepare(
-    "SELECT r.hora, r.corrida, r.dist, r.nivel, r.obs, r.hist_all FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "SELECT r.hora, r.corrida, r.dist, r.nivel, r.obs, r.hist_all, r.finishing_order_json, r.race_card " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
   ).all(date);
+
+  // Pares que o betwinner ABRIU, por corrida (captador avb_abertos) — pra dizer se
+  // o par ficou disponível e a que odd. Cada par: {aTrap,bTrap,oddAvenceB,oddBvenceA}.
+  // Corrida SEM linha aqui = não monitorada → abriu fica null (não é o mesmo que false).
+  const abertosPorCorrida = {};
+  try {
+    const abrs = db.prepare("SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?").all(date);
+    for (const a of abrs) {
+      let pares = null; try { pares = JSON.parse(a.pares_json); } catch (e) {}
+      if (Array.isArray(pares)) abertosPorCorrida[String(a.corrida || '') + '|' + String(a.hora || '')] = pares;
+    }
+  } catch (e) {}
 
   const entradas = [];
   for (const row of rows) {
     let histAll = null;
     try { histAll = JSON.parse(row.hist_all); } catch (e) { continue; }
     if (!Array.isArray(histAll)) continue;
+
+    // Chegada (revisão do dia): array [{pos,trap}] já parseado, ou null quando não
+    // há resultado. NUNCA [] — a tela distingue "não correu" de "correu sem extrair".
+    let chegada = null;
+    try { const arr = JSON.parse(row.finishing_order_json); if (Array.isArray(arr) && arr.length) chegada = arr; } catch (e) {}
+    // nomes limpos por trap (só p/ tooltip das bolinhas), do race_card. Opcional.
+    let nomesPorTrap = null;
+    try {
+      const rc = JSON.parse(row.race_card);
+      if (Array.isArray(rc) && rc.length) {
+        nomesPorTrap = {};
+        for (const g of rc) if (g && g.trap != null) nomesPorTrap[String(g.trap)] = _limpaNome(g.nome);
+      }
+    } catch (e) {}
 
     const info = [];
     for (const h of histAll) {
@@ -114,6 +159,21 @@ function listar(db, opts) {
         if (!(dt > DT_VALOR)) continue;
         const nivel = dt >= DT_PREMIUM ? 'Premium' : 'Valor';
         const ehSkip = String(row.nivel || '') === 'skip';
+        // O par pick×outro abriu no betwinner? A que odd?
+        const paresAbertos = abertosPorCorrida[String(row.corrida || '') + '|' + String(row.hora || '')];
+        let abriu = null, oddAbertura = null;
+        if (paresAbertos) {                                  // corrida foi monitorada
+          const par = paresAbertos.find(p =>
+            (Number(p.aTrap) === pick.trap && Number(p.bTrap) === other.trap) ||
+            (Number(p.aTrap) === other.trap && Number(p.bTrap) === pick.trap));
+          if (par) {
+            abriu = true;
+            const od = Number(Number(par.aTrap) === pick.trap ? par.oddAvenceB : par.oddBvenceA);
+            oddAbertura = Number.isFinite(od) && od > 0 ? od : null;
+          } else {
+            abriu = false;                                   // monitorada, mas esse par não abriu
+          }
+        }
         entradas.push({
           hora: row.hora, corrida: row.corrida, dist: row.dist,
           pick_trap: pick.trap, pick_nome: pick.nome,
@@ -129,6 +189,14 @@ function listar(db, opts) {
           // histórico — essas nem têm hist_all, então não chegam à Carga VIP).
           skip: ehSkip,
           skip_motivo: ehSkip ? (/margem/i.test(row.obs || '') ? 'margem_insuficiente' : 'outro') : null,
+          // ── revisão do dia (aditivo): chegada + se a disputa bateu ──
+          chegada: chegada,                                    // [{pos,trap}] ou null (nunca [])
+          bateu: bateuPar(chegada, pick.trap, other.trap),     // true|false|null (null puro = "-")
+          nomes_por_trap: nomesPorTrap,                        // {trap: nome limpo} ou null
+          // ── o par abriu no BW e a que odd (captador avb_abertos) ──
+          abriu: abriu,                                        // true|false|null (null = não monitorada)
+          odd_abertura: oddAbertura,                           // odd capturada do par (~cedo) ou null
+          odd_largada: null,                                   // não rastreado ainda (ver captador)
           // selos de bônus (EM OBSERVAÇÃO — amostra pequena, não filtram nada):
           selo_pick_frente: _FRONT.indexOf(pick.perfil) >= 0,
           selo_outro_fuma: other.perfil === 'fumador'
