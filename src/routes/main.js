@@ -1273,22 +1273,53 @@ applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
 </body></html>`);
 });
 
+// Catalogo das artes dos galgos, usado pela tela Carga VIP. Os arquivos vivem
+// em public/img/dogs, nomeados Trap<N>_<pelagem>.png: o TRAP ja vem certo no
+// arquivo (manga da cor certa) e o que varia e' a pelagem.
+// Prefere a pasta mini/ (gerada por tools/miniaturasDogs.js): os originais tem
+// ~2,3 MB cada, o que passa na Analisar (uma corrida por vez) mas nao numa
+// lista com dezenas de linhas.
+// Lido do disco uma vez e guardado: a pasta so muda em deploy.
+let _dogsCache = null;
+function catalogoGalgos() {
+  if (_dogsCache) return _dogsCache;
+  const base = path.join(__dirname, '../../public/img/dogs');
+  const mini = path.join(base, 'mini');
+  let dir = base, url = BASE + '/static/img/dogs/';
+  try {
+    if (fs.existsSync(mini) && fs.readdirSync(mini).some(f => /\.png$/i.test(f))) {
+      dir = mini; url = BASE + '/static/img/dogs/mini/';
+    }
+  } catch (e) { /* sem mini: fica no original */ }
+  const porTrap = {};
+  try {
+    fs.readdirSync(dir).filter(f => /\.png$/i.test(f)).sort().forEach(f => {
+      const m = f.match(/^Trap(\d)_/i);
+      if (!m) return;
+      (porTrap[m[1]] = porTrap[m[1]] || []).push(url + encodeURIComponent(f));
+    });
+  } catch (e) { /* sem pasta: a tela cai na bolinha com o numero do trap */ }
+  _dogsCache = porTrap;
+  return porTrap;
+}
+
 // ── CARGA VIP ───────────────────────────────────────────────────────────────
 // Era um modal desenhado pelo app.js por cima da tela Analisar: cobria o
 // cabecalho e o menu, nao tinha URL propria e o botao voltar do navegador nao
 // servia pra sair. Virou tela propria, com a mesma moldura do Historico.
 // Aqui vai SO a moldura: a lista e' montada no navegador por
-// public/js/cargaVip.js, que le a MESMA rota de antes (GET /api/carga-vip).
+// public/js/telaCargaVip.js, que le a MESMA rota de antes (GET /api/carga-vip).
 // Arquivo estatico de proposito, pra o JS da lista nao passar por template
 // literal (onde aspas e \n se resolvem errado com facilidade).
 router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
   const user = req.user;
   const logoB64 = getLogo();
+  const DOGS = JSON.stringify(catalogoGalgos());
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carga VIP - Greyhound Factory</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
-.content{padding:24px;max-width:900px;margin:0 auto}
+.content{padding:24px;max-width:1240px;margin:0 auto}
 .topo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
 h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .sub{font-size:12px;color:#888}
@@ -1297,7 +1328,29 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-aviso{padding:12px 15px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:12px;color:#eab308;line-height:1.6;margin-bottom:12px}
 .vip-legenda{font-size:11px;color:#888;line-height:1.7;margin-bottom:12px;padding:0 2px}
 .vip-box{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
-.vip-lin{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #1e2430;cursor:pointer;transition:background .15s}
+.vip-lin{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid #1e2430;border-left:3px solid transparent;cursor:pointer;transition:background .15s}
+/* Verde/vermelho SO quando a chegada resolveu a disputa. Corrida que ainda nao
+   correu, e disputa indefinida (galgo fora da chegada, dead heat), ficam
+   neutras: pintar de vermelho o que ninguem errou seria mentira. */
+.vip-lin.bateu{border-left-color:#22c55e}
+.vip-lin.errou{border-left-color:#ef4444}
+.vip-conf{display:flex;align-items:center;gap:5px;flex-shrink:0;width:200px}
+.vip-dog{width:62px;height:42px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+/* A arte olha pra direita. Espelhar a da direita poe os dois de frente um pro
+   outro, como na arena da tela Analisar. */
+.vip-dog.espelha img{transform:scaleX(-1)}
+.vip-dog .semarte{width:26px;height:26px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0}
+.vip-chegada{display:flex;align-items:center;gap:3px;flex-shrink:0;width:150px}
+.vip-pos{width:20px;height:20px;border-radius:50%;background:#1a2130;border:1px solid #2a3342;color:#8a94a6;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.vip-pos.p1{background:rgba(234,179,8,.16);border-color:rgba(234,179,8,.45);color:#eab308}
+.vip-pos.pick{border-color:#22c55e;color:#22c55e}
+.vip-pos.outro{border-color:#60a5fa;color:#60a5fa}
+.vip-chegada .aguarda{font-size:10px;color:#3f4c5f}
+.vip-acao{flex-shrink:0}
+.vip-acao .btn{display:inline-block;font-size:11px;font-weight:600;color:#22c55e;background:transparent;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 11px;text-decoration:none;white-space:nowrap}
+.vip-acao .btn:hover{background:rgba(34,197,94,.12)}
 .vip-lin:last-child{border-bottom:none}
 .vip-lin:hover{background:rgba(255,255,255,.03)}
 .vip-lin.tem-skip{background:rgba(192,132,252,.06)}
@@ -1320,7 +1373,11 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
   html,body{overflow-x:hidden}
   .content{padding:14px 12px}
   .topo{flex-direction:column;gap:10px}
-  .vip-lin{padding:11px 12px;gap:9px}
+  .vip-lin{padding:11px 10px;gap:8px;flex-wrap:wrap}
+  .vip-conf{width:auto}
+  .vip-dog{width:46px;height:32px}
+  .vip-chegada{width:auto;order:9}
+  .vip-acao{order:10;margin-left:auto}
   .vip-hora{width:46px}
   .vip-taxa .pct{font-size:14px}
 }
@@ -1337,7 +1394,7 @@ ${navBar(user, 'cargavip')}
   </div>
   <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
 </div>
-<script>var VIP_BASE='${BASE}';</script>
+<script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};</script>
 <script src="${BASE}/static/js/telaCargaVip.js" defer></script>
 </body></html>`);
 });

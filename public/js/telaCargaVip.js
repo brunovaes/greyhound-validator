@@ -21,6 +21,9 @@
   'use strict';
 
   var BASE = window.VIP_BASE || '/greyhound';
+  // { "1": ["url", ...], ... } — as artes disponiveis por trap. Vem vazio se a
+  // pasta public/img/dogs nao existir; a tela cai na bolinha com o numero.
+  var DOGS = window.VIP_DOGS || {};
   var alvo = document.getElementById('vip-conteudo');
   if (!alvo) return;
 
@@ -53,6 +56,45 @@
       }
     }
     return txt;
+  }
+
+  // Escolhe a arte do galgo. O TRAP ja vem certo no nome do arquivo (a manga
+  // e' da cor do trap); o que sorteamos e' a PELAGEM.
+  //
+  // O sorteio e' FIXO pelo nome do galgo, nao a cada carregamento: Ardera Dame
+  // pega uma pelagem arbitraria, mas pega sempre a mesma. Figura trocando de
+  // cara a cada F5 atrapalharia reconhecer a corrida de bate-pronto.
+  function arteDoGalgo(trap, nome) {
+    var lista = DOGS[String(trap)];
+    if (!lista || !lista.length) return null;
+    var h = 0, txt = String(nome || '');
+    for (var i = 0; i < txt.length; i++) h = ((h << 5) - h + txt.charCodeAt(i)) | 0;
+    return lista[Math.abs(h) % lista.length];
+  }
+
+  // A arte olha pra direita. Espelhando a da direita, os dois ficam de frente
+  // um pro outro, como na arena da tela Analisar.
+  function figura(trap, nome, espelha) {
+    var src = arteDoGalgo(trap, nome);
+    var cls = 'vip-dog' + (espelha ? ' espelha' : '');
+    if (!src) return '<div class="' + cls + '"><span class="semarte">' + esc(trap) + '</span></div>';
+    return '<div class="' + cls + '"><img src="' + esc(src) + '" alt="T' + esc(trap) + '" loading="lazy"></div>';
+  }
+
+  // Chegada completa: uma bolinha por posicao, na ordem 1o -> 6o.
+  // A posicao autoritativa e' o campo pos, NAO a ordem do array (o motor avisou
+  // que o array vem ordenado, mas que a fonte e' o pos).
+  // Destaques: 1o lugar em dourado, os dois da disputa contornados.
+  function bolinhasChegada(chegada, pickTrap, outroTrap, nomes) {
+    if (!chegada || !chegada.length) return '<span class="aguarda">aguardando resultado</span>';
+    var ord = chegada.slice().sort(function (a, b) { return Number(a.pos) - Number(b.pos); });
+    return ord.map(function (f) {
+      var t = Number(f.trap), pos = Number(f.pos);
+      var cls = 'vip-pos' + (pos === 1 ? ' p1' : '')
+        + (t === Number(pickTrap) ? ' pick' : (t === Number(outroTrap) ? ' outro' : ''));
+      var nome = nomes && nomes[String(t)] ? ' ' + nomes[String(t)] : '';
+      return '<div class="' + cls + '" title="' + esc(pos + 'o lugar: T' + t + nome) + '">' + esc(t) + '</div>';
+    }).join('');
   }
 
   function esc(s) {
@@ -171,13 +213,26 @@
       var uk = e.hora || '';
       var br = e.hora_br || (uk ? horaBr(uk) : '');
 
-      return '<div class="vip-lin' + (e.skip ? ' tem-skip' : '') + '"'
+      // bateu vem do motor, ja calculado com bateuPar sobre a chegada:
+      //   true = a disputa bateu | false = nao bateu | null = INDEFINIDO
+      // null acontece quando um dos dois ficou fora da chegada (retirada, nao
+      // largou) ou em dead heat entre os dois. Fica NEUTRO, igual ao "-" do
+      // Historico: nao e' acerto nem erro, e pintar de vermelho seria mentira.
+      var marca = e.bateu === true ? ' bateu' : (e.bateu === false ? ' errou' : '');
+      var alvoUrl = BASE + '/?vip=' + encodeURIComponent((e.hora || '') + '|' + (e.corrida || ''));
+
+      return '<div class="vip-lin' + (e.skip ? ' tem-skip' : '') + marca + '"'
         + ' data-hora="' + esc(e.hora || '') + '" data-corrida="' + esc(e.corrida || '') + '"'
         + ' title="Clique para abrir esta corrida na tela Analisar">'
         // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
         + '<div class="vip-hora">'
         + '<div class="br">' + esc(br || uk || '-') + '</div>'
         + (br && uk && br !== uk ? '<div class="uk">' + esc(uk) + '</div>' : '')
+        + '</div>'
+        + '<div class="vip-conf">'
+        + figura(e.pick_trap, e.pick_nome, false)
+        + '<div class="vip-vence">vence</div>'
+        + figura(e.outro_trap, e.outro_nome, true)
         + '</div>'
         + '<div class="vip-meio">'
         + '<div class="par">T' + esc(e.pick_trap) + ' ' + esc(limpaNome(e.pick_nome))
@@ -186,23 +241,30 @@
         + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
         + skipTag
         + '</div>'
+        + '<div class="vip-chegada">' + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
         + '<div class="vip-taxa">'
         + '<div class="nivel" style="color:' + cor + '">' + esc(e.nivel || '') + '</div>'
         + (taxa != null
           ? '<div class="pct" style="color:' + cor + '">~' + esc(taxa) + '%</div><div class="rot">histórico do filtro</div>'
           : '')
         + '</div>'
+        + '<div class="vip-acao"><a class="btn" href="' + esc(alvoUrl) + '">Analisar disputa</a></div>'
         + '</div>';
     }).join('');
 
     alvo.innerHTML = aviso + legenda
       + '<div class="vip-box">' + linhas + '</div>'
-      + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar.</div>';
+      + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar. '
+      + 'Borda verde: a disputa bateu. Vermelha: não bateu. Sem cor: ainda não correu, ou a chegada não resolveu a disputa.</div>';
   }
 
   // Delegacao em vez de onclick inline: nome de galgo com apostrofo (comum)
   // quebraria o atributo.
   document.addEventListener('click', function (ev) {
+    // O botao "Analisar disputa" e' um <a> de verdade: deixa o navegador levar.
+    // Sem esta linha o clique nele cairia aqui tambem e a navegacao aconteceria
+    // duas vezes.
+    if (ev.target && ev.target.closest && ev.target.closest('.vip-acao')) return;
     var lin = ev.target && ev.target.closest ? ev.target.closest('.vip-lin') : null;
     if (!lin) return;
     var hora = lin.getAttribute('data-hora') || '';
