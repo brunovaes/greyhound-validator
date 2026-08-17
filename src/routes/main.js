@@ -1381,39 +1381,25 @@ router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
 ${designTokensCSS()}
 ${cssCardGalgo()}
 /* Painel "Analisar disputa": mesmo card da tela /sessao, mesmo CSS. */
-#gv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000;padding:14px}
+#gv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000;padding:10px}
 #gv-modal.open{display:flex}
 /* Cor de dentro do painel: #161B27, a mesma dos cards do resto do app
    (.vip-box aqui, .form-card em Usuarios, .section em Acessos). Antes era
    #0f1319, quase preto, que destoava. Trocar aqui muda so este painel. */
-#gv-box{background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:1320px;width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden}
-#gv-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid #2a3140;flex-shrink:0}
+#gv-box{background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:1100px;width:100%;max-height:96vh;display:flex;flex-direction:column;overflow:hidden}
+#gv-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 18px;border-bottom:1px solid #2a3140;flex-shrink:0}
 #gv-hdr h3{font-size:14px;font-weight:700;color:#f0f0f0;margin:0}
 #gv-xbtn{background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
 #gv-xbtn:hover{color:#f0f0f0}
-#gv-body{padding:14px 16px;overflow:auto;-webkit-overflow-scrolling:touch}
-/* Os dois galgos LADO A LADO. Empilhados, dois historicos de 5 ou 6 corridas
-   passam da altura da tela e obrigam a rolar justamente quando voce quer
-   comparar as duas tabelas de uma olhada so. Lado a lado, a altura cai pela
-   metade e a comparacao fica linha a linha.
-   Tudo sob #gv-body de proposito: as classes .sv-* sao compartilhadas com a
-   tela /sessao, que continua empilhando como sempre. */
-#gv-body{display:flex;align-items:flex-start;gap:18px}
-#gv-body .sv-dog{flex:1 1 0;min-width:0}
-#gv-body .sv-sep{display:none}
-#gv-body .sv-tbl{table-layout:auto;width:100%}
-#gv-body .sv-tbl td{padding:5px 4px}
-#gv-body .sv-td-rem{max-width:none;white-space:normal}
-/* Mensagem de carregando/erro ocupa a largura toda, nao vira uma coluna. */
-#gv-body > p{flex:1 1 100%}
-@media(max-width:900px){
-  #gv-modal{padding:8px}
-  /* Estreito: volta a empilhar e devolve o separador. Lado a lado aqui
-     espremeria as 10 colunas a ponto de nao dar pra ler. */
-  #gv-body{display:block;padding:12px;overflow-x:auto}
-  #gv-body .sv-sep{display:block}
-  #gv-body .sv-tbl{width:auto;min-width:560px}
-}
+#gv-body{padding:12px 16px;overflow:auto;-webkit-overflow-scrolling:touch}
+/* Aperta um pouco as linhas SO deste painel, pra caber mais historico sem
+   rolar. As classes .sv-* sao compartilhadas com a tela /sessao, por isso
+   tudo aqui vai sob #gv-body: la continua com o espacamento de sempre. */
+#gv-body .sv-tbl td{padding:4px 4px}
+#gv-body .sv-tbl th{padding:4px}
+#gv-body .sv-dog-hdr{margin-bottom:5px}
+#gv-body .sv-sep{margin:7px 0}
+@media(max-width:800px){#gv-modal{padding:6px}#gv-body{padding:10px;overflow-x:auto}#gv-body .sv-tbl{table-layout:auto;width:auto;min-width:560px}}
 .content{padding:24px;max-width:1240px;margin:0 auto}
 .topo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
 h1{font-size:20px;font-weight:700;margin-bottom:3px}
