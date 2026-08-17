@@ -219,7 +219,6 @@
       // largou) ou em dead heat entre os dois. Fica NEUTRO, igual ao "-" do
       // Historico: nao e' acerto nem erro, e pintar de vermelho seria mentira.
       var marca = e.bateu === true ? ' bateu' : (e.bateu === false ? ' errou' : '');
-      var alvoUrl = BASE + '/?vip=' + encodeURIComponent((e.hora || '') + '|' + (e.corrida || ''));
 
       return '<div class="vip-lin' + (e.skip ? ' tem-skip' : '') + marca + '"'
         + ' data-hora="' + esc(e.hora || '') + '" data-corrida="' + esc(e.corrida || '') + '"'
@@ -248,7 +247,8 @@
           ? '<div class="pct" style="color:' + cor + '">~' + esc(taxa) + '%</div><div class="rot">histórico do filtro</div>'
           : '')
         + '</div>'
-        + '<div class="vip-acao"><a class="btn" href="' + esc(alvoUrl) + '">Analisar disputa</a></div>'
+        + '<div class="vip-acao"><button type="button" class="btn" data-disputa="1"'
+        + ' data-a="' + esc(e.pick_trap) + '" data-b="' + esc(e.outro_trap) + '">Analisar disputa</button></div>'
         + '</div>';
     }).join('');
 
@@ -257,6 +257,78 @@
       + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar. '
       + 'Borda verde: a disputa bateu. Vermelha: não bateu. Sem cor: ainda não correu, ou a chegada não resolveu a disputa.</div>';
   }
+
+
+  // ── Painel "Analisar disputa" ──────────────────────────────────────────────
+  // Mesmo card da tela Analisar e da /sessao: o svCard() vem de
+  // public/js/cardGalgo.js, carregado pela pagina. Aqui so buscamos os dados e
+  // desenhamos. Sem copiar a tabela pela terceira vez.
+  function fecharDisputa() {
+    var m = document.getElementById('gv-modal');
+    if (m) m.classList.remove('open');
+  }
+
+  function abrirDisputa(hora, corrida, a, b) {
+    var modal = document.getElementById('gv-modal');
+    var titulo = document.getElementById('gv-title');
+    var corpo = document.getElementById('gv-body');
+    if (!modal || !corpo) return;
+    titulo.textContent = 'T' + a + ' vs T' + b;
+    corpo.innerHTML = '<p style="color:#888;font-size:12px;padding:20px;text-align:center">Carregando...</p>';
+    modal.classList.add('open');
+
+    var q = '?hora=' + encodeURIComponent(hora) + '&corrida=' + encodeURIComponent(corrida)
+          + '&a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b);
+    fetch(BASE + '/carga-vip/disputa' + q, { credentials: 'same-origin' })
+      .then(function (r) { return r.text().then(function (t) { return { status: r.status, texto: t }; }); })
+      .then(function (res) {
+        var d = null;
+        try { d = JSON.parse(res.texto); } catch (e) { /* nao era JSON */ }
+        if (!d || d.error) {
+          corpo.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:20px;text-align:center">'
+            + esc((d && d.error) || ('não consegui carregar (HTTP ' + res.status + ')')) + '</p>';
+          return;
+        }
+        titulo.textContent = 'T' + d.a.trap + ' ' + (limpaNome(d.a.nome) || '?')
+          + ' vs T' + d.b.trap + ' ' + (limpaNome(d.b.nome) || '?')
+          + (d.corrida ? '  \u00b7  ' + d.corrida : '');
+        // svCard ja trata hist vazio com "Sem histórico". Se o arquivo do card
+        // nao tiver carregado, avisa em vez de estourar erro no console.
+        if (typeof svCard !== 'function') {
+          corpo.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:20px;text-align:center">O card de histórico não carregou. Recarregue a página.</p>';
+          return;
+        }
+        corpo.innerHTML = svCard(d.a.trap, limpaNome(d.a.nome), d.a.perfil, d.a.hist)
+          + '<div class="sv-sep"></div>'
+          + svCard(d.b.trap, limpaNome(d.b.nome), d.b.perfil, d.b.hist);
+      })
+      .catch(function (e) {
+        corpo.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:20px;text-align:center">Erro de conexão: ' + esc(e.message) + '</p>';
+      });
+  }
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t) return;
+    if (t.id === 'gv-xbtn' || t.id === 'gv-modal') { fecharDisputa(); return; }
+    var btn = t.closest ? t.closest('[data-disputa]') : null;
+    if (!btn) return;
+    // Impede que o clique caia tambem na delegacao da linha, que navega pra
+    // Analisar. stopPropagation() NAO basta: os dois listeners estao no mesmo
+    // nó (document), e stopPropagation so barra a subida pros nós de cima.
+    // Quem barra outro listener do mesmo nó e' stopImmediatePropagation.
+    ev.preventDefault();
+    if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    ev.stopPropagation();
+    var lin = btn.closest('.vip-lin');
+    if (!lin) return;
+    abrirDisputa(lin.getAttribute('data-hora'), lin.getAttribute('data-corrida'),
+      btn.getAttribute('data-a'), btn.getAttribute('data-b'));
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') fecharDisputa();
+  });
 
   // Delegacao em vez de onclick inline: nome de galgo com apostrofo (comum)
   // quebraria o atributo.

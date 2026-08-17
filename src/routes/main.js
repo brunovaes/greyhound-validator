@@ -1303,6 +1303,66 @@ function catalogoGalgos() {
   return porTrap;
 }
 
+// Dados dos dois galgos de uma disputa, pro painel "Analisar disputa" da tela
+// Carga VIP. Sob demanda de proposito: mandar o historico de todos os galgos
+// junto com a lista deixaria a tela pesada a toa (dezenas de corridas).
+//
+// FONTE DO HISTORICO, e a ressalva que vem junto:
+// usamos hist_fav/hist_und quando o trap pedido e' o favorito ou o underdog da
+// analise, e hist_all para os demais. Nao e' a mesma fonte da tela Analisar,
+// que prefere o aHist/bHist vindo do robo ao vivo (mais completo) e que nao
+// fica gravado no banco. Ou seja: para a MESMA disputa, este painel pode
+// mostrar algumas linhas a menos que o da Analisar. E' a mesma fonte que a
+// tela /sessao ja usa, entao pelo menos as duas telas de consulta concordam.
+router.get('/carga-vip/disputa', exigirAcesso('analisar.carga_vip'), (req, res) => {
+  try {
+    const hora = String(req.query.hora || '');
+    const corrida = String(req.query.corrida || '');
+    const a = parseInt(req.query.a, 10), b = parseInt(req.query.b, 10);
+    if (!hora || !corrida || !a || !b) return res.status(400).json({ error: 'parametros faltando' });
+
+    // Mesma chave que a lista usa (hora + corrida), na sessao canonica do dia.
+    // Pega a mais recente caso a corrida apareca em mais de uma sessao.
+    const r = db.prepare(
+      "SELECT r.* FROM races r JOIN race_sessions s ON s.id = r.session_id " +
+      "WHERE s.user_id = ? AND r.hora = ? AND r.corrida = ? " +
+      "ORDER BY r.id DESC LIMIT 1"
+    ).get(CANONICO, hora, corrida);
+    if (!r) return res.status(404).json({ error: 'corrida nao encontrada' });
+
+    const json = (t) => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
+    const todos = json(r.hist_all) || [];
+    const scores = json(r.scores_json) || [];
+
+    const doTrap = (trap) => {
+      const igual = (x) => String(x) === String(trap);
+      // 1) fav/und tem coluna propria, que e' o historico usado pela /sessao
+      if (igual(r.trap_fav)) {
+        const h = json(r.hist_fav);
+        if (h && h.length) return { trap, nome: r.name_fav, perfil: r.perfil_fav, hist: h };
+      }
+      if (igual(r.trap_und)) {
+        const h = json(r.hist_und);
+        if (h && h.length) return { trap, nome: r.name_und, perfil: r.perfil_und, hist: h };
+      }
+      // 2) qualquer outro galgo: hist_all
+      const g = todos.find(x => igual(x.trap));
+      const sc = scores.find(x => igual(x.trap));
+      return {
+        trap,
+        nome: (g && g.nome) || (sc && sc.nome) || (igual(r.trap_fav) ? r.name_fav : igual(r.trap_und) ? r.name_und : ''),
+        perfil: (g && g.perfil) || (sc && sc.perfil) || '',
+        hist: (g && g.historico) || null
+      };
+    };
+
+    res.json({ corrida: r.corrida, hora: r.hora, a: doTrap(a), b: doTrap(b) });
+  } catch (e) {
+    console.error('[carga-vip/disputa]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── CARGA VIP ───────────────────────────────────────────────────────────────
 // Era um modal desenhado pelo app.js por cima da tela Analisar: cobria o
 // cabecalho e o menu, nao tinha URL propria e o botao voltar do navegador nao
@@ -1319,6 +1379,17 @@ router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
+${cssCardGalgo()}
+/* Painel "Analisar disputa": mesmo card da tela /sessao, mesmo CSS. */
+#gv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000;padding:20px}
+#gv-modal.open{display:flex}
+#gv-box{background:#0f1319;border:1px solid #222;border-radius:12px;max-width:1000px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+#gv-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #1e2430}
+#gv-hdr h3{font-size:14px;font-weight:700;color:#f0f0f0;margin:0}
+#gv-xbtn{background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
+#gv-xbtn:hover{color:#f0f0f0}
+#gv-body{padding:16px 18px;overflow:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:800px){#gv-modal{padding:8px}#gv-body{padding:12px}.sv-tbl{table-layout:auto;width:auto;min-width:560px}#gv-body{overflow-x:auto}}
 .content{padding:24px;max-width:1240px;margin:0 auto}
 .topo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
 h1{font-size:20px;font-weight:700;margin-bottom:3px}
@@ -1394,10 +1465,37 @@ ${navBar(user, 'cargavip')}
   </div>
   <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
 </div>
+<div id="gv-modal"><div id="gv-box"><div id="gv-hdr"><h3 id="gv-title">Disputa</h3><button id="gv-xbtn" type="button" aria-label="Fechar">&#x2715;</button></div><div id="gv-body"></div></div></div>
+<script src="${BASE}/static/js/cardGalgo.js"></script>
 <script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};</script>
 <script src="${BASE}/static/js/telaCargaVip.js" defer></script>
 </body></html>`);
 });
+
+// CSS do card de historico de galgo (.sv-*), usado pelo painel "Analisar
+// disputa". Vive numa funcao porque DUAS telas o injetam: /sessao/:id e
+// /carga-vip. O JS que monta o card esta em public/js/cardGalgo.js.
+function cssCardGalgo() {
+  return `.sv-dog{width:100%}
+.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
+.sv-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
+.sv-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
+.sv-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
+.sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
+.sv-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
+.sv-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
+.sv-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:sans-serif}
+.sv-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:sans-serif;font-size:12px}
+.sv-tbl tr:last-child td{border-bottom:none}
+.sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
+.sv-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:sans-serif}
+.sv-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:sans-serif}
+.sv-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:sans-serif}
+.sv-bends{font-family:sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
+.sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
+.sv-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}`;
+}
 
 router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
@@ -1870,25 +1968,7 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
 #sv-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
 #sv-xbtn:hover{color:#fff}
 #sv-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
-.sv-dog{width:100%}
-.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
-.sv-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
-.sv-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
-.sv-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
-.sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
-.sv-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
-.sv-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
-.sv-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:sans-serif}
-.sv-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:sans-serif;font-size:12px}
-.sv-tbl tr:last-child td{border-bottom:none}
-.sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
-.sv-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:sans-serif}
-.sv-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:sans-serif}
-.sv-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:sans-serif}
-.sv-bends{font-family:sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
-.sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
-.sv-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}
+${cssCardGalgo()}
 /* Mobile: modal ocupa quase a tela toda e a tabela rola na horizontal
    (colunas legiveis, arrasta pro lado pra ver Bends/Fin/Remarks/Grade/CalTm). */
 @media(max-width:768px){
@@ -1928,6 +2008,7 @@ ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" 
   </div>
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
+<script src="${BASE}/static/js/cardGalgo.js"></script>
 <script>
 
 // "leia mais" das Observacoes: um listener so pra tabela inteira, em vez de
@@ -2025,56 +2106,6 @@ function openSessValModal(id){
   document.getElementById('sv-title').textContent='T'+r.trap_fav+' '+(r.name_fav||'')+' vs T'+r.trap_und+' '+(r.name_und||'');
   document.getElementById('sv-body').innerHTML=svCard(r.trap_fav,r.name_fav,r.perfil_fav,hf)+'<div class="sv-sep"></div>'+svCard(r.trap_und,r.name_und,r.perfil_und,hu);
   document.getElementById('sv-modal').classList.add('open');
-}
-function svExtrairRemarks(mixed){
-  if(!mixed)return'';
-  var ci=mixed.indexOf(',');
-  if(ci>=0){var ws=mixed.lastIndexOf(' ',ci)+1;return mixed.substring(ws);}
-  var tokens=mixed.trim().split(' ');
-  for(var i=tokens.length-1;i>=0;i--){if(tokens[i]&&tokens[i][0]===tokens[i][0].toUpperCase()&&tokens[i][0]!==tokens[i][0].toLowerCase())return tokens.slice(i).join(' ');}
-  return mixed;
-}
-function svClassRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
-function svCard(trap,nome,perfil,hist){
-  var tc=['','t1','t2','t3','t4','t5','t6'];
-  if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:rgba(255,255,255,.3);font-size:11px;padding:8px 0">Sem histórico</p></div>';
-  // Calcular melhores valores para destaques
-  var caltms=hist.filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
-  var bestCaltm=caltms.length?Math.min.apply(null,caltms):null;
-  var bestClass=Math.min.apply(null,hist.map(function(h){return svClassRank(h.classe);}));
-  var rows=hist.map(function(h){
-    var rem=svExtrairRemarks(h.remarks||'');
-    var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
-    var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
-    var isBestCl=svClassRank(h.classe)===bestClass&&bestClass<999;
-    return'<tr>'
-      +'<td class="sv-td-date">'+h.data+'</td>'
-      +'<td class="sv-td-track">'+h.pista+'</td>'
-      +'<td class="sv-td-muted" style="text-align:center">'+h.dist+'m</td>'
-      +'<td class="sv-td-muted" style="text-align:center">['+h.trap+']</td>'
-      +'<td class="sv-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
-      +'<td class="sv-bends">'+(h.bends||'')+'</td>'
-      +'<td class="sv-td-muted" style="text-align:center">'+(h.pos||'-')+'</td>'
-      +'<td class="sv-td-rem">'+rem+'</td>'
-      +'<td style="text-align:center"><span class="sv-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
-      +'<td class="sv-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
-      +'</tr>';
-  }).join('');
-  return'<div class="sv-dog">'
-    +'<div class="sv-dog-hdr">'
-    +'<span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span>'
-    +'<span class="sv-name">'+(nome||'')+'</span>'
-    +(perfil?'<span class="sv-perfil">'+perfil+'</span>':'')
-    +'</div>'
-    +'<table class="sv-tbl">'
-    +'<colgroup>'
-    +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
-    +'<col style="width:30px"><col style="width:40px"><col style="width:35px">'
-    +'<col style="width:25px"><col style="width:60px"><col style="width:30px"><col style="width:40px">'
-    +'</colgroup>'
-    +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Fin</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table>'
-    +'</div>';
 }
 function closeReplayModal(){
   document.getElementById('rv-modal').classList.remove('open');
