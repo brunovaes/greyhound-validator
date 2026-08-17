@@ -1303,6 +1303,71 @@ function catalogoGalgos() {
   return porTrap;
 }
 
+// Chegada e resultado das corridas da Carga VIP.
+//
+// POR QUE ISTO EXISTE AQUI, e nao no /api/carga-vip: o dado ja esta no banco.
+// O robo de resultados grava races.finishing_order_json, e e' de la que a tela
+// Historico tira o "Bateu". Esta rota so faz o mesmo caminho pras corridas da
+// lista VIP, sem esperar mudanca no motor.
+//
+// O resultado NAO e' recalculado aqui: usamos bateuPar(), a mesma funcao do
+// Historico e dos KPIs. Se a tela fizesse a propria conta, uma divergencia
+// entre ela e o Historico seria impossivel de arbitrar depois.
+//
+// Recebe os pares porque quem sabe qual disputa vale e' a lista (o pick e o
+// outro vem do motor, e nao sao necessariamente o fav e o und da corrida).
+router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express.json(), (req, res) => {
+  try {
+    const { date, pares } = req.body || {};
+    if (!Array.isArray(pares) || !pares.length) return res.json({});
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return res.status(400).json({ error: 'data invalida' });
+
+    const { bateuPar } = require('../utils/avbResultado');
+
+    // Uma consulta so pro dia inteiro, em vez de uma por corrida. Mesmo filtro
+    // de dia usado no resto do sistema: sessao canonica, hora de Brasilia.
+    const linhas = db.prepare(
+      "SELECT r.hora, r.corrida, r.finishing_order_json, r.race_card " +
+      "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
+      "WHERE s.user_id = ? AND date(s.created_at,'-3 hours') = ?"
+    ).all(CANONICO, date);
+
+    const porChave = new Map();
+    for (const l of linhas) porChave.set(l.hora + '|' + l.corrida, l);
+
+    const json = (t) => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
+
+    const out = {};
+    for (const p of pares) {
+      const chave = String(p.hora || '') + '|' + String(p.corrida || '');
+      const l = porChave.get(chave);
+      if (!l) continue;
+      const chegada = json(l.finishing_order_json);
+      if (!Array.isArray(chegada) || !chegada.length) { out[chave] = { chegada: null, bateu: null }; continue; }
+
+      // bateu: true | false | null. O null (galgo fora da chegada, dead heat)
+      // e' repassado como null de proposito: na tela ele fica NEUTRO, igual ao
+      // "-" do Historico. Virar false pintaria de vermelho o que ninguem errou.
+      const b = bateuPar(l.finishing_order_json, p.a, p.b);
+
+      // nome por trap, so pro tooltip das bolinhas. Melhor esforco: o formato
+      // do race_card varia entre analises antigas e novas.
+      const nomes = {};
+      const card = json(l.race_card);
+      const lista = Array.isArray(card) ? card : (card && card.galgos) || [];
+      for (const g of lista) {
+        if (g && g.trap != null) nomes[String(g.trap)] = String(g.nome || g.name || '').trim();
+      }
+
+      out[chave] = { chegada, bateu: b, nomes };
+    }
+    res.json(out);
+  } catch (e) {
+    console.error('[carga-vip/resultados]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Dados dos dois galgos de uma disputa, pro painel "Analisar disputa" da tela
 // Carga VIP. Sob demanda de proposito: mandar o historico de todos os galgos
 // junto com a lista deixaria a tela pesada a toa (dezenas de corridas).

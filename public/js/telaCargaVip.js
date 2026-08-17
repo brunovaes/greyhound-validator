@@ -256,8 +256,63 @@
       + '<div class="vip-box">' + linhas + '</div>'
       + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar. '
       + 'Borda verde: a disputa bateu. Vermelha: não bateu. Sem cor: ainda não correu, ou a chegada não resolveu a disputa.</div>';
+
+    // A lista ja esta na tela; agora busca a chegada e pinta por cima.
+    buscarResultados(d, ent);
   }
 
+
+
+  // ── Chegada e resultado ────────────────────────────────────────────────────
+  // O /api/carga-vip monta o card PRE corrida e nao traz a chegada. O dado ja
+  // existe no banco (o robo de resultados grava finishing_order_json, e e' de
+  // la que o Historico tira o "Bateu"), entao buscamos numa segunda chamada.
+  //
+  // Em duas etapas de proposito: a lista aparece na hora, sem esperar. Quando
+  // o resultado chega, as linhas ja desenhadas sao atualizadas no lugar, em vez
+  // de redesenhar tudo (redesenhar piscaria a tela inteira por causa de uma
+  // borda).
+  //
+  // Se um dia o motor passar a mandar chegada/bateu junto da lista, o que veio
+  // dele tem prioridade e estas linhas simplesmente nao sao pedidas.
+  function buscarResultados(d, ent) {
+    var faltam = ent.filter(function (e) { return !e.chegada; });
+    if (!d.date || !faltam.length) return;
+    var pares = faltam.map(function (e) {
+      return { hora: e.hora, corrida: e.corrida, a: e.pick_trap, b: e.outro_trap };
+    });
+    fetch(BASE + '/carga-vip/resultados', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: d.date, pares: pares })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (mapa) { if (mapa && !mapa.error) aplicarResultados(mapa); })
+      .catch(function () { /* sem resultado: as linhas ficam como estao */ });
+  }
+
+  function aplicarResultados(mapa) {
+    var linhas = document.querySelectorAll('.vip-lin');
+    for (var i = 0; i < linhas.length; i++) {
+      var lin = linhas[i];
+      var chave = (lin.getAttribute('data-hora') || '') + '|' + (lin.getAttribute('data-corrida') || '');
+      var r = mapa[chave];
+      if (!r) continue;
+
+      var btn = lin.querySelector('[data-disputa]');
+      var pick = btn && btn.getAttribute('data-a');
+      var outro = btn && btn.getAttribute('data-b');
+
+      var alvoCheg = lin.querySelector('.vip-chegada');
+      if (alvoCheg) alvoCheg.innerHTML = bolinhasChegada(r.chegada, pick, outro, r.nomes);
+
+      // Verde/vermelho SO quando a chegada resolveu a disputa. bateu null fica
+      // neutro: nao e' acerto nem erro.
+      lin.classList.remove('bateu', 'errou');
+      if (r.bateu === true) lin.classList.add('bateu');
+      else if (r.bateu === false) lin.classList.add('errou');
+    }
+  }
 
   // ── Painel "Analisar disputa" ──────────────────────────────────────────────
   // Mesmo card da tela Analisar e da /sessao: o svCard() vem de
