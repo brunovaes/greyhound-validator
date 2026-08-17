@@ -68,6 +68,10 @@
   function detalhe(e, br, uk) {
     var nums = [];
     if (e.ratio_odd != null) nums.push('odd ' + esc(e.ratio_odd));
+    // Odd capturada quando o par abriu na casa. E' outra coisa que a odd acima
+    // (que e' do momento da analise), por isso vem rotulada e nao no lugar
+    // dela: uma diz o que o motor viu, a outra o que dava pra pegar.
+    if (e.odd_abertura != null) nums.push('abriu ' + esc(e.odd_abertura));
     if (e.dt_caltm != null) nums.push('&Delta;t ' + esc(e.dt_caltm));
     // A categoria so entra quando NAO esta no fim do nome da corrida, pra nao
     // sair "Dunstall Park A4 · A4".
@@ -237,6 +241,15 @@
       if (e.selo_pick_frente) selos.push('sai na frente');
       if (e.selo_outro_fuma) selos.push('outro fuma');
 
+      // abriu: true = o par apareceu na BW | false = corrida monitorada e o par
+      // NAO abriu | null = corrida nao monitorada.
+      // Os tres casos sao diferentes e so o false vira aviso na tela: nele o
+      // filtro apontou e nao deu pra entrar, que e' informacao de operacao.
+      // O null fica calado de proposito: "nao medimos" nao e' "nao abriu", e
+      // tratar os dois igual esconderia buraco de cobertura do monitoramento.
+      var naoAbriu = e.abriu === false
+        ? '<div class="naoabriu">não abriu na BW</div>' : '';
+
       var nums = [];
       // A categoria NAO entra: ela ja aparece no fim do nome da corrida
       // ("Dunstall Park A4"), e repetir vira "A4 · A4".
@@ -279,6 +292,7 @@
         + ' <span class="vence">vence</span> T' + esc(e.outro_trap) + ' ' + esc(limpaNome(e.outro_nome)) + '</div>'
         + '<div class="det">' + detalhe(e, br, uk) + '</div>'
         + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
+        + naoAbriu
         + skipTag
         + '</div>'
         + '<div class="vip-chegada">' + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
@@ -390,12 +404,14 @@
     for (var i = 0; i < linhas.length; i++) {
       var lin = linhas[i];
       var chave = (lin.getAttribute('data-hora') || '') + '|' + (lin.getAttribute('data-corrida') || '');
-      var r = mapa[chave];
-      if (!r) continue;
 
       var btn = lin.querySelector('[data-disputa]');
       var pick = btn && btn.getAttribute('data-a');
       var outro = btn && btn.getAttribute('data-b');
+      // A chave inclui o PAR: a mesma corrida pode ter mais de uma entrada na
+      // lista, com pares diferentes, e cada uma tem o seu proprio resultado.
+      var r = mapa[chave + '|' + pick + 'x' + outro] || mapa[chave];
+      if (!r) continue;
 
       var alvoCheg = lin.querySelector('.vip-chegada');
       if (alvoCheg) {

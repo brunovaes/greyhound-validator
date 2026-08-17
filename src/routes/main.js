@@ -1350,8 +1350,14 @@ router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express
 
     const out = {};
     for (const p of pares) {
-      const chave = String(p.hora || '') + '|' + String(p.corrida || '');
-      const l = porChave.get(chave);
+      // A resposta e' indexada por corrida + PAR, nao so por corrida. A mesma
+      // corrida pode ter mais de uma entrada na lista VIP, com pares
+      // diferentes; indexando so por hora|corrida, a segunda sobrescrevia a
+      // primeira e as duas linhas recebiam a conta de um par so. O podio ficava
+      // certo (e' o mesmo pras duas) e a cor de uma delas vinha do par errado.
+      const corridaChave = String(p.hora || '') + '|' + String(p.corrida || '');
+      const chave = corridaChave + '|' + p.a + 'x' + p.b;
+      const l = porChave.get(corridaChave);
       if (!l) continue;
       const chegada = json(l.finishing_order_json);
       if (!Array.isArray(chegada) || !chegada.length) { out[chave] = { chegada: null, bateu: null }; continue; }
@@ -1533,6 +1539,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-meio .par .vence{color:#555;font-weight:500}
 .vip-meio .det{font-size:11px;color:#888;margin-top:2px}
 .vip-meio .selos{font-size:10px;color:#60a5fa;margin-top:2px}
+.vip-meio .naoabriu{font-size:10px;color:#f97316;margin-top:2px;font-weight:600}
 .vip-skip{font-size:10px;color:#c084fc;margin-top:2px}
 .vip-taxa{text-align:right;flex-shrink:0}
 .vip-taxa .nivel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
