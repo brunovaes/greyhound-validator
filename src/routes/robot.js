@@ -2678,6 +2678,18 @@ router.get('/diag/estudo-reverso', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// MAPA por relevância: combinações pista×turno×metragem×categoria × sinal,
+// ranqueadas pelo limite inferior do IC 95%. ?min=40 (piso de amostra), ?sp=1.15.
+router.get('/diag/estudo-mapa', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const es = require('../utils/estudoReverso');
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    const minN = parseInt(req.query.min) || 40;
+    res.json(es.mapa(db, { spRatioMax, minN }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');

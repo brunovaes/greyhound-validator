@@ -48,6 +48,8 @@ function _perfilGalgo(h) {
     caltm: _avg(u2.map(l => Number(l.caltm)).filter(v => v > 0)),
     split: _avg(u2.map(l => Number(l.split)).filter(v => v > 0)),
     posStd: _std(u.map(l => Number(l.pos)).filter(v => v > 0)),
+    // pódio: % das últimas (até 5) em que chegou no top 3
+    podio: (() => { const ps = u.map(l => Number(l.pos)).filter(v => v > 0); return ps.length ? _avg(ps.map(p => p <= 3 ? 1 : 0)) : null; })(),
     catNivel: _nivelCat(u2[0].classe),
     perfil: _perfilRank(h.historico || [])
   };
@@ -62,6 +64,7 @@ function _votos(X, Y, vazioX, vazioY) {
   };
   return {
     caltm: cmp(X.caltm, Y.caltm, true),
+    podio: cmp(X.podio, Y.podio, false),          // maior taxa de pódio = melhor
     consistencia: cmp(X.posStd, Y.posStd, true),
     categoria: cmp(X.catNivel, Y.catNivel, true),
     sp_mercado: cmp(X.oddMedia, Y.oddMedia, true),
@@ -72,7 +75,7 @@ function _votos(X, Y, vazioX, vazioY) {
     trap_vazia: (vazioX && !vazioY) ? 1 : ((vazioY && !vazioX) ? -1 : 0)
   };
 }
-const SINAIS = ['caltm', 'consistencia', 'categoria', 'sp_mercado', 'split', 'perfil', 'boxe_menor', 'trap_vazia'];
+const SINAIS = ['caltm', 'podio', 'consistencia', 'categoria', 'sp_mercado', 'split', 'perfil', 'boxe_menor', 'trap_vazia'];
 
 function rodar(db, opts) {
   opts = opts || {};
@@ -168,4 +171,86 @@ function rodar(db, opts) {
   };
 }
 
-module.exports = { rodar };
+// ── MAPA por relevância: todas as combinações pista×turno×metragem×categoria ──
+// (subconjuntos de 1 a 3 dimensões, pra não pulverizar a amostra) × sinal.
+// Ranqueado pelo LIMITE INFERIOR do IC 95% (Wilson): a "relevância honesta" —
+// premia edge alto COM amostra grande e derruba os 90%-de-8-corridas.
+function _categoria(corrida) { const p = String(corrida || '').trim().split(/\s+/); return p.length > 1 ? p[p.length - 1].toUpperCase() : '?'; }
+function _distVal(dist) { const d = parseInt(String(dist || '').replace(/[^0-9]/g, '')) || 0; return d ? d + 'm' : '?'; }
+function _wilson(ok, n) { if (!n) return [0, 0]; const z = 1.96, p = ok / n, den = 1 + z * z / n; const c = (p + z * z / (2 * n)) / den; const h = (z * Math.sqrt((p * (1 - p) + z * z / (4 * n)) / n)) / den; return [c - h, c + h]; }
+
+function mapa(db, opts) {
+  opts = opts || {};
+  const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15;
+  const minN = opts.minN > 0 ? opts.minN : 40;   // piso de amostra por gaveta
+  const topN = opts.topN > 0 ? opts.topN : 80;
+
+  const rows = db.prepare(
+    "SELECT r.hora, r.corrida, r.dist, r.hist_all, r.finishing_order_json, r.race_card " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE r.hist_all IS NOT NULL AND r.finishing_order_json IS NOT NULL"
+  ).all();
+
+  const regs = [];
+  for (const row of rows) {
+    let hist = null, fo = null, rc = null;
+    try { hist = JSON.parse(row.hist_all); } catch (e) { continue; }
+    try { fo = JSON.parse(row.finishing_order_json); } catch (e) { continue; }
+    if (!Array.isArray(hist) || hist.length < 2 || !Array.isArray(fo) || !fo.length) continue;
+    try { rc = JSON.parse(row.race_card); } catch (e) { rc = null; }
+    const presentes = new Set();
+    (Array.isArray(rc) ? rc : hist).forEach(g => { if (g && g.trap != null) presentes.add(Number(g.trap)); });
+    const vaz = new Set(); for (let t = 1; t <= 6; t++) if (!presentes.has(t)) vaz.add(t);
+    const temVazia = t => vaz.has(t - 1) || vaz.has(t + 1);
+    const galgos = hist.map(_perfilGalgo).filter(g => g && g.oddMedia > 0 && g.trap > 0);
+    const ctx = { turno: _turno(row.hora), pista: _pista(row.corrida), dist: _distVal(row.dist), cat: _categoria(row.corrida) };
+    for (let i = 0; i < galgos.length; i++) for (let j = i + 1; j < galgos.length; j++) {
+      const X = galgos[i], Y = galgos[j];
+      if (Math.max(X.oddMedia, Y.oddMedia) / Math.min(X.oddMedia, Y.oddMedia) > spRatioMax) continue;
+      const res = bateuPar(fo, X.trap, Y.trap); if (res === null) continue;
+      regs.push({ turno: ctx.turno, pista: ctx.pista, dist: ctx.dist, cat: ctx.cat, winner: res ? 1 : -1, votos: _votos(X, Y, temVazia(X.trap), temVazia(Y.trap)) });
+    }
+  }
+
+  const DIMS = [{ k: 'pista', g: r => r.pista }, { k: 'turno', g: r => r.turno }, { k: 'dist', g: r => r.dist }, { k: 'cat', g: r => r.cat }];
+  // subconjuntos de 1 a 3 dimensões
+  const subsets = [];
+  for (let m = 1; m < (1 << DIMS.length); m++) { const s = []; for (let i = 0; i < DIMS.length; i++) if (m & (1 << i)) s.push(DIMS[i]); if (s.length <= 3) subsets.push(s); }
+
+  const celulas = [];
+  for (const sub of subsets) {
+    const grupos = {};
+    for (const r of regs) { const key = sub.map(d => d.k + '=' + (d.g(r) || '?')).join(' · '); (grupos[key] = grupos[key] || []).push(r); }
+    for (const key in grupos) {
+      const arr = grupos[key];
+      if (arr.length < minN) continue;
+      for (const sinal of SINAIS) {
+        let n = 0, ok = 0;
+        for (const r of arr) { const v = r.votos[sinal]; if (v === 0) continue; n++; if (v === r.winner) ok++; }
+        if (n < minN) continue;
+        const [lo, hi] = _wilson(ok, n);
+        if (lo <= 0.5) continue;                 // só o que é CONFIANTEMENTE acima da moeda
+        celulas.push({
+          profundidade: sub.length, contexto: key, sinal,
+          n, acertos: ok, taxa_pct: +(100 * ok / n).toFixed(1),
+          ic_low_pct: +(100 * lo).toFixed(1), ic_high_pct: +(100 * hi).toFixed(1)
+        });
+      }
+    }
+  }
+  celulas.sort((a, b) => b.ic_low_pct - a.ic_low_pct);
+
+  return {
+    parametros: { sp_ratio_max: spRatioMax, min_amostra: minN, ordenado_por: 'limite inferior do IC 95% (relevância honesta)' },
+    total_pares: regs.length,
+    celulas_relevantes: celulas.length,
+    por_profundidade: { '1_dim': celulas.filter(c => c.profundidade === 1).length, '2_dim': celulas.filter(c => c.profundidade === 2).length, '3_dim': celulas.filter(c => c.profundidade === 3).length },
+    mapa: celulas.slice(0, topN),
+    legenda: 'Cada célula: um contexto (1 a 3 filtros) + o sinal que funciona nele. Só aparecem gavetas com n>=' + minN
+      + ' E cujo edge é CONFIANTEMENTE > 50% (limite inferior do IC 95% acima da moeda). Ordenado por ic_low_pct = o '
+      + 'PIOR caso honesto do edge — é por ele que se aposta, não pela taxa crua. Se combinação de 4 filtros não aparece, '
+      + 'é porque não há corridas suficientes: o mapa está te protegendo do overfit, não escondendo ouro.'
+  };
+}
+
+module.exports = { rodar, mapa };
