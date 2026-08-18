@@ -68,10 +68,6 @@
   function detalhe(e, br, uk) {
     var nums = [];
     if (e.ratio_odd != null) nums.push('odd ' + esc(e.ratio_odd));
-    // Odd capturada quando o par abriu na casa. E' outra coisa que a odd acima
-    // (que e' do momento da analise), por isso vem rotulada e nao no lugar
-    // dela: uma diz o que o motor viu, a outra o que dava pra pegar.
-    if (e.odd_abertura != null) nums.push('abriu ' + esc(e.odd_abertura));
     if (e.dt_caltm != null) nums.push('&Delta;t ' + esc(e.dt_caltm));
     // A categoria so entra quando NAO esta no fim do nome da corrida, pra nao
     // sair "Dunstall Park A4 · A4".
@@ -241,14 +237,7 @@
       if (e.selo_pick_frente) selos.push('sai na frente');
       if (e.selo_outro_fuma) selos.push('outro fuma');
 
-      // abriu: true = o par apareceu na BW | false = corrida monitorada e o par
-      // NAO abriu | null = corrida nao monitorada.
-      // Os tres casos sao diferentes e so o false vira aviso na tela: nele o
-      // filtro apontou e nao deu pra entrar, que e' informacao de operacao.
-      // O null fica calado de proposito: "nao medimos" nao e' "nao abriu", e
-      // tratar os dois igual esconderia buraco de cobertura do monitoramento.
-      var naoAbriu = e.abriu === false
-        ? '<div class="naoabriu">não abriu na BW</div>' : '';
+
 
       var nums = [];
       // A categoria NAO entra: ela ja aparece no fim do nome da corrida
@@ -274,49 +263,110 @@
       var marca = vd.classe ? ' ' + vd.classe : '';
       if (vd.aviso && window.console) console.warn('[carga-vip] ' + e.hora + '|' + e.corrida + ' -> ' + vd.aviso);
 
+      var alvoBW = e.abriu === true
+        ? '<div class="sim">' + (e.odd_abertura != null ? esc(e.odd_abertura) : 'sim') + '</div>'
+          + (e.odd_abertura != null ? '<div class="rot">odd de abertura</div>' : '')
+        // false = corrida monitorada e o par NAO abriu: o filtro apontou e nao
+        // deu pra entrar. null = corrida nao monitorada, que e' outra coisa e
+        // fica como "-": tratar os dois igual esconderia buraco de cobertura.
+        : e.abriu === false ? '<div class="nao">não abriu</div>'
+        : '<div class="nd">-</div>';
+
       return '<div class="vip-lin' + (e.skip ? ' tem-skip' : '') + marca + '"'
         + ' data-hora="' + esc(e.hora || '') + '" data-corrida="' + esc(e.corrida || '') + '"'
         + ' title="Clique para abrir esta corrida na tela Analisar">'
         // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
-        + '<div class="vip-hora">'
+        + '<div class="c-hora vip-hora">'
         + '<div class="br">' + esc(br || uk || '-') + '</div>'
         + (br && uk && br !== uk ? '<div class="uk">' + esc(uk) + '</div>' : '')
         + '</div>'
+        + '<div class="c-avb">'
         + '<div class="vip-conf">'
         + figura(e.pick_trap, e.pick_nome, false)
         + '<div class="vip-vence">vence</div>'
         + figura(e.outro_trap, e.outro_nome, true)
         + '</div>'
-        + '<div class="vip-meio">'
-        + '<div class="par">T' + esc(e.pick_trap) + ' ' + esc(limpaNome(e.pick_nome))
+        + '<div class="vip-par">T' + esc(e.pick_trap) + ' ' + esc(limpaNome(e.pick_nome))
         + ' <span class="vence">vence</span> T' + esc(e.outro_trap) + ' ' + esc(limpaNome(e.outro_nome)) + '</div>'
-        + '<div class="det">' + detalhe(e, br, uk) + '</div>'
+        + '</div>'
+        + '<div class="c-det vip-det">' + detalhe(e, br, uk)
         + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
-        + naoAbriu
         + skipTag
         + '</div>'
-        + '<div class="vip-chegada">' + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
-        + '<div class="vip-taxa">'
+        + '<div class="c-bw vip-bw">' + alvoBW + '</div>'
+        + '<div class="c-pod vip-chegada">' + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
+        + '<div class="c-cha vip-taxa">'
         + '<div class="nivel" style="color:' + cor + '">' + esc(e.nivel || '') + '</div>'
         + (taxa != null
           ? '<div class="pct" style="color:' + cor + '">~' + esc(taxa) + '%</div><div class="rot">histórico do filtro</div>'
           : '')
         + '</div>'
-        + '<div class="vip-acao"><button type="button" class="btn" data-disputa="1"'
+        + '<div class="c-aca vip-acao"><button type="button" class="btn" data-disputa="1"'
         + ' data-a="' + esc(e.pick_trap) + '" data-b="' + esc(e.outro_trap) + '">Analisar disputa</button></div>'
         + '</div>';
     }).join('');
 
+    // Cabecalho com as MESMAS classes de largura das colunas da linha. Fica
+    // colado no topo ao rolar (position:sticky no CSS).
+    var cabecalho = '<div class="vip-cab">'
+      + '<span class="c-hora">Hora</span>'
+      + '<span class="c-avb">AvB</span>'
+      + '<span class="c-det">Detalhes</span>'
+      + '<span class="c-bw">Abriu na BW</span>'
+      + '<span class="c-pod">Pódio</span>'
+      + '<span class="c-cha">Chances</span>'
+      + '<span class="c-aca"></span>'
+      + '</div>';
+
     alvo.innerHTML = aviso + legenda
-      + '<div class="vip-box">' + linhas + '</div>'
+      + '<div class="vip-box">' + cabecalho + linhas + '</div>'
       + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar. '
       + 'Borda verde: a disputa bateu. Vermelha: não bateu. Sem cor: ainda não correu, ou a chegada não resolveu a disputa.</div>';
+
+    ENTRADAS = ent;
+    pintarKpis();
 
     // A lista ja esta na tela; agora busca a chegada e pinta por cima.
     buscarResultados(d, ent);
   }
 
 
+
+  // ── KPIs do dia ────────────────────────────────────────────────────────────
+  // Guardamos as entradas porque os KPIs sao recalculados quando a chegada
+  // chega na segunda etapa. Sem isso, eles ficariam congelados no que a lista
+  // sabia no primeiro instante.
+  var ENTRADAS = [];
+
+  function pintarKpis() {
+    var box = document.getElementById('vip-kpis');
+    if (!box) return;
+    var total = ENTRADAS.length, vit = 0, der = 0, abriu = 0, medidas = 0;
+    for (var i = 0; i < ENTRADAS.length; i++) {
+      var e = ENTRADAS[i];
+      var v = veredito(e.chegada, e.bateu, e.pick_trap, e.outro_trap);
+      if (v.classe === 'bateu') vit++;
+      else if (v.classe === 'errou') der++;
+      if (e.abriu === true) abriu++;
+      if (e.abriu === true || e.abriu === false) medidas++;
+    }
+    // A porcentagem sai sobre as corridas RESOLVIDAS, nao sobre o total: as que
+    // nao correram, ou cuja chegada nao decidiu a disputa, nao sao acerto nem
+    // erro, e conta-las no denominador empurraria os dois numeros pra baixo o
+    // dia inteiro, dando a impressao de um desempenho pior do que o real.
+    var resolvidas = vit + der;
+    var pc = function (n) { return resolvidas ? Math.round(n / resolvidas * 100) + '%' : '-'; };
+
+    var card = function (cls, rot, val, pct) {
+      return '<div class="vip-kpi ' + cls + '"><div class="rot">' + rot + '</div>'
+        + '<div class="val">' + val + (pct ? '<span class="pct">' + pct + '</span>' : '') + '</div></div>';
+    };
+    box.innerHTML =
+        card('', 'Corridas', total, resolvidas < total ? '<span style="color:#666;font-weight:600">' + resolvidas + ' resolvidas</span>' : '')
+      + card('ok', 'Vitórias', vit, pc(vit))
+      + card('ruim', 'Derrotas', der, pc(der))
+      + card('bw', 'Abriu na BW', abriu + (medidas ? '<span style="font-size:13px;color:#666">/' + medidas + '</span>' : ''), '');
+  }
 
   // ── Chegada e resultado ────────────────────────────────────────────────────
   // O /api/carga-vip monta o card PRE corrida e nao traz a chegada. O dado ja
@@ -424,11 +474,22 @@
 
       // Verde/vermelho SO quando a chegada resolveu a disputa. bateu null fica
       // neutro: nao e' acerto nem erro.
+      // Grava na entrada tambem, senao os KPIs continuariam com a foto antiga.
+      for (var j = 0; j < ENTRADAS.length; j++) {
+        var en = ENTRADAS[j];
+        if (en.hora === lin.getAttribute('data-hora') && en.corrida === lin.getAttribute('data-corrida')
+            && String(en.pick_trap) === String(pick) && String(en.outro_trap) === String(outro)) {
+          en.chegada = r.chegada; en.bateu = r.bateu; en.nomes_por_trap = en.nomes_por_trap || r.nomes;
+          break;
+        }
+      }
+
       var v = veredito(r.chegada, r.bateu, pick, outro);
       lin.classList.remove('bateu', 'errou');
       if (v.classe) lin.classList.add(v.classe);
       if (v.aviso && window.console) console.warn('[carga-vip] ' + chave + ' -> ' + v.aviso);
     }
+    pintarKpis();
   }
 
   // ── Painel "Analisar disputa" ──────────────────────────────────────────────
