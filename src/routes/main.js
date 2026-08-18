@@ -1486,6 +1486,9 @@ ${cssCardGalgo()}
 #gv-body .sv-dog-hdr{margin-bottom:5px}
 #gv-body .sv-sep{margin:7px 0}
 @media(max-width:800px){#gv-modal{padding:6px}#gv-body{padding:10px;overflow-x:auto}#gv-body .sv-tbl{table-layout:auto;width:auto;min-width:560px}}
+body{background:#161B27}
+/* Com o fundo da tela em #161B27, os paineis precisam de um tom acima pra nao
+   sumirem: mesma cor de fundo e de card viraria uma chapa so. */
 .content{padding:24px;max-width:1240px;margin:0 auto}
 .topo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
 h1{font-size:20px;font-weight:700;margin-bottom:3px}
@@ -1493,11 +1496,12 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .volta{font-size:12px;color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:6px 12px;border-radius:6px;white-space:nowrap;flex-shrink:0}
 .volta:hover{background:rgba(34,197,94,.1)}
 .vip-aviso{padding:12px 15px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:12px;color:#eab308;line-height:1.6;margin-bottom:12px}
-.vip-legenda{font-size:11px;color:#888;line-height:1.7;margin-bottom:12px;padding:0 2px}
+.vip-faixa{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.vip-legenda{font-size:11px;color:#888;line-height:1.7;padding:0 2px}
 
 /* KPIs do dia, no alto e a direita, no formato dos cards do Historico. */
-.vip-kpis{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-bottom:14px}
-.vip-kpi{background:#161B27;border:1px solid #222;border-top:2px solid #22c55e;border-radius:8px;padding:9px 14px;min-width:104px}
+.vip-kpis{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+.vip-kpi{background:#1B2231;border:1px solid #2a3140;border-top:2px solid #22c55e;border-radius:8px;padding:9px 14px;min-width:104px}
 .vip-kpi .rot{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#666;margin-bottom:3px}
 .vip-kpi .val{font-size:19px;font-weight:800;line-height:1.1;color:#f0f0f0}
 .vip-kpi .pct{font-size:11px;font-weight:700;margin-left:5px}
@@ -1505,16 +1509,19 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-kpi.ruim{border-top-color:#ef4444}.vip-kpi.ruim .val{color:#ef4444}
 .vip-kpi.bw{border-top-color:#60a5fa}.vip-kpi.bw .val{color:#60a5fa}
 
-.vip-box{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
+/* SEM overflow:hidden: ele cria um contexto de rolagem proprio e faz o
+   position:sticky do cabecalho grudar nesta caixa, que nao rola, em vez de na
+   janela. O arredondamento vem das pontas (cabecalho e ultima linha). */
+.vip-box{background:#1B2231;border:1px solid #2a3140;border-radius:10px}
 
 /* Cabecalho de tabela, colado no topo ao rolar. As larguras aqui e na linha
    sao as MESMAS: o alinhamento das colunas depende disso, entao mexer numa
    pede mexer na outra. */
-.vip-cab{display:flex;align-items:center;gap:14px;padding:9px 16px;background:#0D1117;border-bottom:1px solid #2a3140;position:sticky;top:0;z-index:5}
-.vip-cab span{font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666}
+.vip-cab{display:flex;align-items:center;gap:14px;padding:10px 16px;background:#0D1117;border-bottom:1px solid #2a3140;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
+.vip-cab span{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8a94a6;text-align:center}
 
 .vip-lin{display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid #1e2430;border-left:3px solid transparent;cursor:pointer;transition:background .15s}
-.vip-lin:last-child{border-bottom:none}
+.vip-lin:last-child{border-bottom:none;border-radius:0 0 9px 9px}
 .vip-lin:hover{background:rgba(255,255,255,.03)}
 .vip-lin.tem-skip{background:rgba(192,132,252,.06)}
 .vip-lin.tem-skip:hover{background:rgba(192,132,252,.11)}
@@ -1537,16 +1544,16 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-hora .br{font-size:15px;font-weight:800;color:#22c55e;line-height:1.1}
 .vip-hora .uk{font-size:10px;color:#3f8f5c}
 
-.vip-conf{display:flex;align-items:center;gap:4px;margin-bottom:2px}
+.vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:6px}
 .vip-dog{width:88px;height:58px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 /* A arte olha pra direita. Espelhar a da direita poe os dois de frente um pro
    outro, como na arena da tela Analisar. */
 .vip-dog.espelha img{transform:scaleX(-1)}
 .vip-dog .semarte{width:30px;height:30px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
-.vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0}
-.vip-par{font-size:12.5px;color:#f0f0f0;font-weight:600;line-height:1.35}
-.vip-par .vence{color:#555;font-weight:500}
+.vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:22px}
+.vip-galgo{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.vip-galgo .nome{font-size:12px;color:#f0f0f0;font-weight:600;text-align:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .vip-det{font-size:11px;color:#888;line-height:1.5}
 .vip-det .selos{font-size:10px;color:#60a5fa;margin-top:2px}
@@ -1605,7 +1612,7 @@ ${navBar(user, 'cargavip')}
     </div>
     <a class="volta" href="${BASE}">&#8592; Voltar para Analisar</a>
   </div>
-  <div class="vip-kpis" id="vip-kpis"></div>
+  <div class="vip-faixa"><div class="vip-legenda" id="vip-legenda"></div><div class="vip-kpis" id="vip-kpis"></div></div>
   <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
 </div>
 <div id="gv-modal"><div id="gv-box"><div id="gv-hdr"><h3 id="gv-title">Disputa</h3><button id="gv-xbtn" type="button" aria-label="Fechar">&#x2715;</button></div><div id="gv-body"></div></div></div>

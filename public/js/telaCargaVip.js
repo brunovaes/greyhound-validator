@@ -107,6 +107,22 @@
     return '<div class="' + cls + '"><img src="' + esc(src) + '" alt="T' + esc(trap) + '" loading="lazy"></div>';
   }
 
+  // So o primeiro nome. O nome completo continua no title, pra nao se perder.
+  function primeiroNome(n) {
+    var limpo = limpaNome(n);
+    var p = String(limpo || '').trim().split(/\s+/);
+    return p[0] || '';
+  }
+
+  // Um galgo da coluna AvB: figura em cima, primeiro nome embaixo, centralizado.
+  function galgo(trap, nome, espelha) {
+    var limpo = limpaNome(nome);
+    return '<div class="vip-galgo" title="' + esc('T' + trap + ' ' + limpo) + '">'
+      + figura(trap, nome, espelha)
+      + '<div class="nome">' + esc(primeiroNome(nome)) + '</div>'
+      + '</div>';
+  }
+
   // Chegada completa: uma bolinha por posicao, na ordem 1o -> 6o.
   // A posicao autoritativa e' o campo pos, NAO a ordem do array (o motor avisou
   // que o array vem ordenado, mas que a fonte e' o pos).
@@ -178,18 +194,10 @@
     var ent = d.entradas || [];
     setSub((d.date || '') + ' \u00b7 ' + (d.total != null ? d.total : ent.length) + ' corrida(s) no filtro');
 
-    // O aviso vem ANTES da lista de proposito: depois dela, com os numeros ja
-    // lidos, vira rodape que ninguem le.
-    var aviso = '<div class="vip-aviso">'
-      + '<strong>Isto é um filtro de valor, não uma previsão.</strong> As taxas abaixo são o histórico deste '
-      + 'filtro em corridas parecidas, não são a chance desta corrida específica. '
-      + 'Corrida a corrida, qualquer uma pode perder.'
-      + (d.aviso ? '<div style="margin-top:6px;color:#a3894a">' + esc(d.aviso) + '</div>' : '')
-      + '</div>';
-
     // Legenda dos niveis: "niveis" e' um OBJETO por nivel ({criterio,
     // taxa_historica_pct}). Como cada linha ja mostra a taxa, aqui fica so o
     // CRITERIO, que e' o que a linha nao diz.
+    // A legenda vive fora do #vip-conteudo: ela divide a faixa com os KPIs.
     var legenda = '';
     if (d.niveis && typeof d.niveis === 'object') {
       var partes = Object.keys(d.niveis).map(function (k) {
@@ -199,12 +207,14 @@
         var cor = k.toLowerCase() === 'premium' ? '#eab308' : '#22c55e';
         return '<strong style="color:' + cor + '">' + esc(k) + '</strong>: ' + esc(crit);
       }).filter(Boolean);
-      if (partes.length) legenda = '<div class="vip-legenda">' + partes.join('<br>') + '</div>';
+      if (partes.length) legenda = partes.join('<br>');
     }
 
+    var boxLeg = document.getElementById('vip-legenda');
+    if (boxLeg) boxLeg.innerHTML = legenda;
+
     if (!ent.length) {
-      alvo.innerHTML = aviso + legenda
-        + '<div class="vip-box" style="padding:30px 22px;text-align:center;color:#888;font-size:13px">'
+      alvo.innerHTML = '<div class="vip-box" style="padding:30px 22px;text-align:center;color:#888;font-size:13px">'
         + 'Nenhuma corrida passou no filtro hoje.</div>';
       return;
     }
@@ -280,15 +290,11 @@
         + '<div class="br">' + esc(br || uk || '-') + '</div>'
         + (br && uk && br !== uk ? '<div class="uk">' + esc(uk) + '</div>' : '')
         + '</div>'
-        + '<div class="c-avb">'
-        + '<div class="vip-conf">'
-        + figura(e.pick_trap, e.pick_nome, false)
+        + '<div class="c-avb"><div class="vip-conf">'
+        + galgo(e.pick_trap, e.pick_nome, false)
         + '<div class="vip-vence">vence</div>'
-        + figura(e.outro_trap, e.outro_nome, true)
-        + '</div>'
-        + '<div class="vip-par">T' + esc(e.pick_trap) + ' ' + esc(limpaNome(e.pick_nome))
-        + ' <span class="vence">vence</span> T' + esc(e.outro_trap) + ' ' + esc(limpaNome(e.outro_nome)) + '</div>'
-        + '</div>'
+        + galgo(e.outro_trap, e.outro_nome, true)
+        + '</div></div>'
         + '<div class="c-det vip-det">' + detalhe(e, br, uk)
         + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
         + skipTag
@@ -318,8 +324,7 @@
       + '<span class="c-aca"></span>'
       + '</div>';
 
-    alvo.innerHTML = aviso + legenda
-      + '<div class="vip-box">' + cabecalho + linhas + '</div>'
+    alvo.innerHTML = '<div class="vip-box">' + cabecalho + linhas + '</div>'
       + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar. '
       + 'Borda verde: a disputa bateu. Vermelha: não bateu. Sem cor: ainda não correu, ou a chegada não resolveu a disputa.</div>';
 
