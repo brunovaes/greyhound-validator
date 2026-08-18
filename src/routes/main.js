@@ -1327,7 +1327,7 @@ router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express
     // Uma consulta so pro dia inteiro, em vez de uma por corrida. Mesmo filtro
     // de dia usado no resto do sistema: sessao canonica, hora de Brasilia.
     const linhas = db.prepare(
-      "SELECT r.id, r.hora, r.corrida, r.finishing_order_json, r.race_card " +
+      "SELECT r.id, r.hora, r.corrida, r.finishing_order_json, r.race_card, r.video_url " +
       "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
       "WHERE s.user_id = ? AND date(s.created_at,'-3 hours') = ?"
     ).all(CANONICO, date);
@@ -1360,7 +1360,7 @@ router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express
       const l = porChave.get(corridaChave);
       if (!l) continue;
       const chegada = json(l.finishing_order_json);
-      if (!Array.isArray(chegada) || !chegada.length) { out[chave] = { chegada: null, bateu: null }; continue; }
+      if (!Array.isArray(chegada) || !chegada.length) { out[chave] = { chegada: null, bateu: null, video: l.video_url || null }; continue; }
 
       // bateu: true | false | null. O null (galgo fora da chegada, dead heat)
       // e' repassado como null de proposito: na tela ele fica NEUTRO, igual ao
@@ -1376,7 +1376,7 @@ router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express
         if (g && g.trap != null) nomes[String(g.trap)] = String(g.nome || g.name || '').trim();
       }
 
-      out[chave] = { chegada, bateu: b, nomes };
+      out[chave] = { chegada, bateu: b, nomes, video: l.video_url || null };
     }
     res.json(out);
   } catch (e) {
@@ -1486,6 +1486,22 @@ ${cssCardGalgo()}
 #gv-body .sv-dog-hdr{margin-bottom:5px}
 #gv-body .sv-sep{margin:7px 0}
 @media(max-width:800px){#gv-modal{padding:6px}#gv-body{padding:10px;overflow-x:auto}#gv-body .sv-tbl{table-layout:auto;width:auto;min-width:560px}}
+/* Replay: mesma moldura da tela /sessao (iframe recortado no topo pra esconder
+   a barra do player) e o mesmo link de nova aba, pra quando o site recusar ser
+   embutido. */
+#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
+#rv-modal.open{display:flex}
+#rv-box{background:#0d0d0d;border:1px solid rgba(96,165,250,.25);border-radius:14px;width:988px;max-width:100%;height:824px;max-height:95vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 80px rgba(96,165,250,.08)}
+#rv-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#111;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
+#rv-dot{width:8px;height:8px;border-radius:50%;background:#60a5fa;flex-shrink:0}
+#rv-title{font-size:13px;font-weight:700;color:#60a5fa;flex:1;margin:0}
+#rv-newtab{font-size:11px;color:#555;text-decoration:none;padding:4px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap}
+#rv-newtab:hover{color:#aaa;border-color:#555}
+#rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
+#rv-xbtn:hover{color:#f0f0f0}
+#rv-crop{flex:1;overflow:hidden;position:relative}
+#rv-frame{position:absolute;top:-51px;left:0;width:100%;height:calc(100% + 51px);border:none;background:#000}
+@media(max-width:800px){#rv-modal{padding:6px}}
 body{background:#161B27}
 /* Com o fundo da tela em #161B27, os paineis precisam de um tom acima pra nao
    sumirem: mesma cor de fundo e de card viraria uma chapa so. */
@@ -1538,11 +1554,13 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .c-det{flex:1 1 0;min-width:0}
 .c-bw{width:88px;flex-shrink:0;text-align:center}
 .c-pod{width:150px;flex-shrink:0}
-.c-cha{width:84px;flex-shrink:0;text-align:right}
-.c-aca{width:118px;flex-shrink:0}
+.c-cha{width:84px;flex-shrink:0}
+.c-aca{width:46px;flex-shrink:0}
 
-.vip-hora .br{font-size:15px;font-weight:800;color:#22c55e;line-height:1.1}
-.vip-hora .uk{font-size:10px;color:#3f8f5c}
+/* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
+.vip-lin > div{text-align:center}
+.vip-hora .br{font-size:13px;font-weight:800;color:#22c55e;line-height:1.1}
+.vip-hora .uk{font-size:8px;color:#3f8f5c}
 
 .vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:6px}
 .vip-dog{width:88px;height:58px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
@@ -1553,20 +1571,24 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-dog .semarte{width:30px;height:30px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:22px}
 .vip-galgo{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
-.vip-galgo .nome{font-size:12px;color:#f0f0f0;font-weight:600;text-align:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vip-galgo .nome{font-size:10px;color:#f0f0f0;font-weight:600;text-align:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.vip-det{font-size:11px;color:#888;line-height:1.5}
-.vip-det .selos{font-size:10px;color:#60a5fa;margin-top:2px}
-.vip-skip{font-size:10px;color:#c084fc;margin-top:2px}
+.vip-det{font-size:9px;color:#888;line-height:1.5}
+.vip-det .selos{font-size:8px;color:#60a5fa;margin-top:2px}
+.vip-skip{font-size:8px;color:#c084fc;margin-top:2px}
 
-.vip-bw .sim{font-size:13px;font-weight:800;color:#60a5fa;line-height:1.2}
-.vip-bw .nao{font-size:11px;font-weight:700;color:#f97316}
-.vip-bw .nd{font-size:12px;color:#3f4c5f}
+.vip-bw .sim{font-size:11px;font-weight:800;color:#60a5fa;line-height:1.2}
+.vip-bw .nao{font-size:9px;font-weight:700;color:#f97316}
+.vip-bw .nd{font-size:10px;color:#3f4c5f}
 .vip-bw .rot{font-size:8px;color:#555}
 
 /* As bolinhas da chegada sao os .trap-badge t1..t6 do designTokens, com as
    cores reais das mangas. Aqui so o tamanho, que cada tela ajusta. */
-.vip-chegada{display:flex;align-items:center;gap:3px}
+.vip-chegada{display:flex;align-items:center;justify-content:center;gap:3px}
+/* Replay embaixo das bolinhas, no mesmo formato do botao do Historico. */
+.vip-replay{margin-top:5px}
+.vip-replay button{font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
+.vip-replay button:hover{background:rgba(96,165,250,.16)}
 .vip-chegada .trap-badge{width:20px;height:20px;font-size:10px;font-weight:700;flex-shrink:0}
 /* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
    pra ver onde o par chegou sem contornos competindo com a cor da manga. */
@@ -1577,9 +1599,12 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-chegada .aguarda{font-size:10px;color:#3f4c5f}
 
 .vip-taxa .nivel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
-.vip-taxa .pct{font-size:16px;font-weight:800;line-height:1.2}
+.vip-taxa .pct{font-size:14px;font-weight:800;line-height:1.2}
 .vip-taxa .rot{font-size:8px;color:#555;white-space:nowrap}
-.vip-acao .btn{display:inline-block;font-size:11px;font-weight:600;color:#22c55e;background:transparent;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 11px;text-decoration:none;white-space:nowrap;cursor:pointer;font-family:inherit}
+/* Espadas cruzadas: o simbolo de disputa. O rotulo em texto ocupava uma
+   coluna inteira pra dizer o que o icone diz, e o title cobre quem nao
+   reconhecer de cara. */
+.vip-acao .btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;font-size:15px;color:#22c55e;background:transparent;border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-family:inherit;line-height:1}
 .vip-acao .btn:hover{background:rgba(34,197,94,.12)}
 .vip-rodape{padding:12px 2px;font-size:11px;color:#555}
 @media(max-width:768px){
@@ -1614,6 +1639,19 @@ ${navBar(user, 'cargavip')}
   </div>
   <div class="vip-faixa"><div class="vip-legenda" id="vip-legenda"></div><div class="vip-kpis" id="vip-kpis"></div></div>
   <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
+</div>
+<div id="rv-modal">
+  <div id="rv-box">
+    <div id="rv-hdr">
+      <div id="rv-dot"></div>
+      <h3 id="rv-title">Replay</h3>
+      <a id="rv-newtab" href="#" target="_blank" rel="noopener">&#8599; Nova aba</a>
+      <button id="rv-xbtn" type="button">&#x2715;</button>
+    </div>
+    <div id="rv-crop">
+      <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
+    </div>
+  </div>
 </div>
 <div id="gv-modal"><div id="gv-box"><div id="gv-hdr"><h3 id="gv-title">Disputa</h3><button id="gv-xbtn" type="button" aria-label="Fechar">&#x2715;</button></div><div id="gv-body"></div></div></div>
 <script src="${BASE}/static/js/cardGalgo.js"></script>

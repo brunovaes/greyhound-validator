@@ -300,7 +300,9 @@
         + skipTag
         + '</div>'
         + '<div class="c-bw vip-bw">' + alvoBW + '</div>'
-        + '<div class="c-pod vip-chegada">' + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
+        + '<div class="c-pod"><div class="vip-chegada">'
+        + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
+        + '<div class="vip-replay"></div></div>'
         + '<div class="c-cha vip-taxa">'
         + '<div class="nivel" style="color:' + cor + '">' + esc(e.nivel || '') + '</div>'
         + (taxa != null
@@ -308,7 +310,8 @@
           : '')
         + '</div>'
         + '<div class="c-aca vip-acao"><button type="button" class="btn" data-disputa="1"'
-        + ' data-a="' + esc(e.pick_trap) + '" data-b="' + esc(e.outro_trap) + '">Analisar disputa</button></div>'
+        + ' title="Analisar disputa"'
+        + ' data-a="' + esc(e.pick_trap) + '" data-b="' + esc(e.outro_trap) + '">&#9876;</button></div>'
         + '</div>';
     }).join('');
 
@@ -477,6 +480,16 @@
         alvoCheg.title = explicaResultado(r, pick, outro);
       }
 
+      // O video so existe depois que o robo de resultados passa, entao o botao
+      // e' criado aqui, junto com a chegada, e nao na primeira pintura.
+      var alvoRep = lin.querySelector('.vip-replay');
+      if (alvoRep) {
+        alvoRep.innerHTML = r.video
+          ? '<button type="button" data-replay="' + esc(r.video) + '"'
+            + ' data-titulo="' + esc(lin.getAttribute('data-corrida') || 'Replay') + '">&#9654; Replay</button>'
+          : '';
+      }
+
       // Verde/vermelho SO quando a chegada resolveu a disputa. bateu null fica
       // neutro: nao e' acerto nem erro.
       // Grava na entrada tambem, senao os KPIs continuariam com a foto antiga.
@@ -545,9 +558,34 @@
       });
   }
 
+  function abrirReplay(url, titulo) {
+    var m = document.getElementById('rv-modal');
+    if (!m || !url) return;
+    document.getElementById('rv-title').textContent = '\u25B6 ' + (titulo || 'Replay');
+    document.getElementById('rv-newtab').href = url;
+    document.getElementById('rv-frame').src = url;
+    m.classList.add('open');
+  }
+  function fecharReplay() {
+    var m = document.getElementById('rv-modal');
+    if (!m) return;
+    m.classList.remove('open');
+    // Zera o src ao fechar: sem isso o video continua tocando por tras.
+    document.getElementById('rv-frame').src = 'about:blank';
+  }
+
   document.addEventListener('click', function (ev) {
     var t = ev.target;
     if (!t) return;
+    if (t.id === 'rv-xbtn' || t.id === 'rv-modal') { fecharReplay(); return; }
+    var rep = t.closest ? t.closest('[data-replay]') : null;
+    if (rep) {
+      ev.preventDefault();
+      if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      ev.stopPropagation();
+      abrirReplay(rep.getAttribute('data-replay'), rep.getAttribute('data-titulo'));
+      return;
+    }
     if (t.id === 'gv-xbtn' || t.id === 'gv-modal') { fecharDisputa(); return; }
     var btn = t.closest ? t.closest('[data-disputa]') : null;
     if (!btn) return;
@@ -565,7 +603,7 @@
   });
 
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') fecharDisputa();
+    if (ev.key === 'Escape') { fecharDisputa(); fecharReplay(); }
   });
 
   // Delegacao em vez de onclick inline: nome de galgo com apostrofo (comum)
@@ -574,7 +612,8 @@
     // O botao "Analisar disputa" e' um <a> de verdade: deixa o navegador levar.
     // Sem esta linha o clique nele cairia aqui tambem e a navegacao aconteceria
     // duas vezes.
-    if (ev.target && ev.target.closest && ev.target.closest('.vip-acao')) return;
+    if (ev.target && ev.target.closest
+        && (ev.target.closest('.vip-acao') || ev.target.closest('.vip-replay'))) return;
     var lin = ev.target && ev.target.closest ? ev.target.closest('.vip-lin') : null;
     if (!lin) return;
     var hora = lin.getAttribute('data-hora') || '';
