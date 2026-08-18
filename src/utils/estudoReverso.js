@@ -253,4 +253,84 @@ function mapa(db, opts) {
   };
 }
 
-module.exports = { rodar, mapa };
+// ── VALIDAÇÃO por contexto (o CÉREBRO do robô) ───────────────────────────────
+function _coletarRegs(db, spRatioMax) {
+  const rows = db.prepare(
+    "SELECT date(s.created_at,'-3 hours') AS dia, r.hora, r.corrida, r.dist, r.hist_all, r.finishing_order_json, r.race_card " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE r.hist_all IS NOT NULL AND r.finishing_order_json IS NOT NULL"
+  ).all();
+  const regs = [];
+  for (const row of rows) {
+    let hist = null, fo = null, rc = null;
+    try { hist = JSON.parse(row.hist_all); } catch (e) { continue; }
+    try { fo = JSON.parse(row.finishing_order_json); } catch (e) { continue; }
+    if (!Array.isArray(hist) || hist.length < 2 || !Array.isArray(fo) || !fo.length) continue;
+    try { rc = JSON.parse(row.race_card); } catch (e) { rc = null; }
+    const presentes = new Set();
+    (Array.isArray(rc) ? rc : hist).forEach(g => { if (g && g.trap != null) presentes.add(Number(g.trap)); });
+    const vaz = new Set(); for (let t = 1; t <= 6; t++) if (!presentes.has(t)) vaz.add(t);
+    const temVazia = t => vaz.has(t - 1) || vaz.has(t + 1);
+    const galgos = hist.map(_perfilGalgo).filter(g => g && g.oddMedia > 0 && g.trap > 0);
+    const ctx = { dia: row.dia, turno: _turno(row.hora), pista: _pista(row.corrida), dist: _distVal(row.dist), cat: _categoria(row.corrida) };
+    for (let i = 0; i < galgos.length; i++) for (let j = i + 1; j < galgos.length; j++) {
+      const X = galgos[i], Y = galgos[j];
+      if (Math.max(X.oddMedia, Y.oddMedia) / Math.min(X.oddMedia, Y.oddMedia) > spRatioMax) continue;
+      const res = bateuPar(fo, X.trap, Y.trap); if (res === null) continue;
+      regs.push({ dia: ctx.dia, turno: ctx.turno, pista: ctx.pista, dist: ctx.dist, cat: ctx.cat, winner: res ? 1 : -1, votos: _votos(X, Y, temVazia(X.trap), temVazia(Y.trap)) });
+    }
+  }
+  return regs;
+}
+
+function validar(db, opts) {
+  opts = opts || {};
+  const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15;
+  const minHalf = opts.minHalf > 0 ? opts.minHalf : 25;   // amostra mínima em CADA metade
+  const regs = _coletarRegs(db, spRatioMax);
+  const dias = Array.from(new Set(regs.map(r => r.dia))).sort();
+  const corte = dias[Math.floor(dias.length / 2)] || null;
+
+  const stat = (arr, sinal) => {
+    let n = 0, ok = 0;
+    for (const r of arr) { const v = r.votos[sinal]; if (v === 0) continue; n++; if (v === r.winner) ok++; }
+    const [lo, hi] = _wilson(ok, n);
+    return { n, taxa: n ? +(100 * ok / n).toFixed(1) : null, ic_low: +(100 * lo).toFixed(1), ic_high: +(100 * hi).toFixed(1) };
+  };
+  const DIMS = [{ k: 'pista', g: r => r.pista }, { k: 'turno', g: r => r.turno }, { k: 'dist', g: r => r.dist }, { k: 'cat', g: r => r.cat }];
+  const subsets = [];
+  for (let m = 1; m < (1 << DIMS.length); m++) { const s = []; for (let i = 0; i < DIMS.length; i++) if (m & (1 << i)) s.push(DIMS[i]); if (s.length <= 3) subsets.push(s); }
+
+  const validados = [], miragens = [], seen = new Set();
+  for (const sub of subsets) {
+    const grupos = {};
+    for (const r of regs) { const key = sub.map(d => d.k + '=' + (d.g(r) || '?')).join(' · '); (grupos[key] = grupos[key] || []).push(r); }
+    for (const key in grupos) {
+      const arr = grupos[key];
+      const tr = arr.filter(r => corte && r.dia < corte), te = arr.filter(r => corte && r.dia >= corte);
+      for (const sinal of SINAIS) {
+        const T = stat(tr, sinal), E = stat(te, sinal);
+        if (T.n < minHalf || E.n < minHalf) continue;
+        const dedup = key.replace(/[^=·]*=/g, '') + '|' + sinal + '|' + T.n + '|' + E.n + '|' + T.taxa + '|' + E.taxa;
+        if (seen.has(dedup)) continue; seen.add(dedup);
+        const cel = { contexto: key, profundidade: sub.length, sinal, n_treino: T.n, taxa_treino: T.taxa, n_teste: E.n, taxa_teste: E.taxa, teste_ic_low: E.ic_low, teste_ic_high: E.ic_high };
+        if (E.ic_low > 50) validados.push(cel);                              // sobreviveu fora da amostra
+        else if (T.taxa >= 60 && E.taxa < T.taxa - 6) miragens.push(cel);    // forte no treino, desmanchou
+      }
+    }
+  }
+  validados.sort((a, b) => b.teste_ic_low - a.teste_ic_low);
+  miragens.sort((a, b) => (b.taxa_treino - b.taxa_teste) - (a.taxa_treino - a.taxa_teste));
+
+  return {
+    parametros: { sp_ratio_max: spRatioMax, min_amostra_por_metade: minHalf, corte_treino_teste: corte, criterio: 'IC inferior do TESTE (fora da amostra) > 50%' },
+    total_pares: regs.length, dias: dias.length,
+    validados,                        // O CÉREBRO: contexto → sinal que se sustentou
+    miragens: miragens.slice(0, 15),  // pareciam ouro no treino, caíram no teste
+    legenda: 'validados = contextos onde o sinal se manteve CONFIANTEMENTE acima da moeda na 2a metade (fora da amostra) — a tabela-cérebro do robô, ordenada pelo pior caso do teste. '
+      + 'miragens = fortes no treino que desmancharam no teste (o que a validação existe pra jogar fora). '
+      + 'Cada metade precisa de >= ' + minHalf + ' pares; contexto pequeno demais nem aparece (falta dado pra validar — junta com o tempo).'
+  };
+}
+
+module.exports = { rodar, mapa, validar };

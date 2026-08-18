@@ -2690,6 +2690,18 @@ router.get('/diag/estudo-mapa', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// VALIDAÇÃO por contexto (cérebro do robô): treino/teste por gaveta. ?min=25
+// (amostra mínima por metade), ?sp=1.15.
+router.get('/diag/estudo-validar', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const es = require('../utils/estudoReverso');
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    const minHalf = parseInt(req.query.min) || 25;
+    res.json(es.validar(db, { spRatioMax, minHalf }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
