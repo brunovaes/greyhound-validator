@@ -303,11 +303,8 @@
         + '<div class="c-pod"><div class="vip-chegada">'
         + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
         + '<div class="vip-replay"></div></div>'
-        + '<div class="c-cha vip-taxa">'
-        + '<div class="nivel" style="color:' + cor + '">' + esc(e.nivel || '') + '</div>'
-        + (taxa != null
-          ? '<div class="pct" style="color:' + cor + '">~' + esc(taxa) + '%</div><div class="rot">histórico do filtro</div>'
-          : '')
+        + '<div class="c-cha vip-taxa" title="' + esc((e.nivel || '') + ': taxa histórica deste filtro em corridas parecidas, não a chance desta corrida') + '">'
+        + (taxa != null ? '<div class="pct" style="color:' + cor + '">' + esc(taxa) + '%</div>' : '')
         + '</div>'
         + '<div class="c-aca vip-acao"><button type="button" class="btn" data-disputa="1"'
         + ' title="Analisar disputa"'

@@ -1534,7 +1534,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
    sao as MESMAS: o alinhamento das colunas depende disso, entao mexer numa
    pede mexer na outra. */
 .vip-cab{display:flex;align-items:center;gap:14px;padding:10px 16px;background:#0D1117;border-bottom:1px solid #2a3140;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
-.vip-cab span{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8a94a6;text-align:center}
+.vip-cab span{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8a94a6;text-align:center}
 
 .vip-lin{display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid #1e2430;border-left:3px solid transparent;cursor:pointer;transition:background .15s}
 .vip-lin:last-child{border-bottom:none;border-radius:0 0 9px 9px}
@@ -1549,9 +1549,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-lin.errou:hover{background:rgba(239,68,68,.17)}
 
 /* larguras das colunas (cabecalho e linha usam as mesmas) */
-.c-hora{width:58px;flex-shrink:0;text-align:center}
+.c-hora{width:62px;flex-shrink:0;text-align:center}
+.c-cor{flex:1 1 0;min-width:130px}
 .c-avb{width:340px;flex-shrink:0}
-.c-det{flex:1 1 0;min-width:0}
 .c-bw{width:88px;flex-shrink:0;text-align:center}
 .c-pod{width:150px;flex-shrink:0}
 .c-cha{width:84px;flex-shrink:0}
@@ -1559,8 +1559,10 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 
 /* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
 .vip-lin > div{text-align:center}
-.vip-hora .br{font-size:16px;font-weight:800;color:#22c55e;line-height:1.1}
-.vip-hora .uk{font-size:11px;color:#3f8f5c}
+/* A de cima e' a maior. Hoje e' a UK; trocar a ordem no telaCargaVip.js
+   troca qual fica em destaque. */
+.vip-hora .grande{font-size:16px;font-weight:800;color:#22c55e;line-height:1.1}
+.vip-hora .peq{font-size:11px;color:#3f8f5c}
 
 .vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:6px}
 .vip-dog{width:112px;height:74px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
@@ -1573,8 +1575,8 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-galgo{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
 .vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.vip-det{font-size:12px;color:#888;line-height:1.5}
-.vip-det .selos{font-size:11px;color:#60a5fa;margin-top:2px}
+.vip-cor{font-size:13px;color:#f0f0f0;font-weight:600;line-height:1.4}
+.vip-cor .selos{font-size:11px;color:#60a5fa;font-weight:500;margin-top:2px}
 .vip-skip{font-size:11px;color:#c084fc;margin-top:2px}
 
 .vip-bw .sim{font-size:14px;font-weight:800;color:#60a5fa;line-height:1.2}
@@ -1599,7 +1601,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-chegada .aguarda{font-size:10px;color:#3f4c5f}
 
 .vip-taxa .nivel{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
-.vip-taxa .pct{font-size:17px;font-weight:800;line-height:1.2}
+.vip-taxa .pct{font-size:16px;font-weight:800;line-height:1.2}
 .vip-taxa .rot{font-size:9px;color:#555;white-space:nowrap}
 /* Espadas cruzadas: o simbolo de disputa. O rotulo em texto ocupava uma
    coluna inteira pra dizer o que o icone diz, e o title cobre quem nao
@@ -1617,7 +1619,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
   .vip-cab{display:none}
   .c-hora{width:46px}
   .c-avb{width:auto;flex:1 1 100%}
-  .c-det{flex:1 1 100%}
+  .c-cor{flex:1 1 100%}
   .c-bw{width:auto;text-align:left}
   .c-pod{width:auto;order:9}
   .c-cha{width:auto;text-align:left;margin-left:auto}
