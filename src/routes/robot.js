@@ -2711,7 +2711,8 @@ router.get('/diag/motor-cerebro', requireAdmin, (req, res) => {
     const mn = require('../utils/motorNota');
     const spRatioMax = parseFloat(req.query.sp) || 1.15;
     const minHalf = parseInt(req.query.min) || 25;
-    res.json(mn.construirCerebro(db, { spRatioMax, minHalf }));
+    const minTaxa = parseFloat(req.query.minTaxa) || 0;
+    res.json(mn.construirCerebro(db, { spRatioMax, minHalf, minTaxa }));
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -2725,8 +2726,9 @@ router.get('/diag/carga-vip-v2', requireAdmin, (req, res) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
     const spRatioMax = parseFloat(req.query.sp) || 1.15;
     const minHalf = parseInt(req.query.min) || 25;
+    const minTaxa = parseFloat(req.query.minTaxa) || 0;
     const soVip = req.query.base ? false : true;
-    res.json(mn.classificar(db, { date, spRatioMax, minHalf, soVip }));
+    res.json(mn.classificar(db, { date, spRatioMax, minHalf, minTaxa, soVip }));
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 

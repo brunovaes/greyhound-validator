@@ -37,23 +37,42 @@ const BASE = { sinal: 'caltm', tier: 'BASE', apelido: 'CalTm (base histórica)',
 const TIER_RANK = { ELITE: 0, VIP: 1, BASE: 2 };
 const NOTA_LETRA = t => (t === 'ELITE' ? 'A+' : (t === 'VIP' ? 'A' : 'B'));
 
+// Qualidade, não volume:
+// (1) CORTE_TAXA — o contexto só entra no cérebro se a taxa do TESTE (viva) >= isso.
+// (2) MIN_MARGEM — dentro do contexto, o sinal precisa DECIDIR com folga (não raspando).
+//     caltm em segundos; podio em fração de pódio nas últimas 5 (0.20 = 1 corrida a mais).
+const CORTE_TAXA = 63;
+const MIN_MARGEM = { caltm: 0.15, podio: 0.20, split: 0.15, consistencia: 0, categoria: 0, sp_mercado: 0, perfil: 0, boxe_menor: 0, trap_vazia: 0 };
+function _margem(sinal, X, Y) {
+  if (sinal === 'caltm') return Math.abs((X.caltm || 0) - (Y.caltm || 0));
+  if (sinal === 'podio') return Math.abs((X.podio || 0) - (Y.podio || 0));
+  if (sinal === 'split') return Math.abs((X.split || 0) - (Y.split || 0));
+  return Infinity; // sinal sem margem definida não é gateado por folga
+}
+
 // ── construir o cérebro do dia (validado ao vivo + curado) ───────────────────
 function construirCerebro(db, opts) {
   opts = opts || {};
   const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15;
+  const corteTaxa = opts.minTaxa > 0 ? opts.minTaxa : CORTE_TAXA;
   const v = ER.validar(db, { spRatioMax: opts.spRatioMax, minHalf: opts.minHalf });
 
   const porAssinatura = {};
   for (const c of (v.validados || [])) porAssinatura[c.contexto + '|' + c.sinal] = c;
 
   const cerebro = [];           // regras VIP ativas (números vivos)
-  const naoValidouHoje = [];    // whitelist que HOJE não bateu o critério (falta dado / caiu)
+  const naoValidouHoje = [];    // whitelist que HOJE não bateu o critério (falta dado / caiu / fraca)
   for (const assinatura in WHITELIST) {
     const meta = WHITELIST[assinatura];
     const barra = assinatura.lastIndexOf('|');
     const contexto = assinatura.slice(0, barra), sinal = assinatura.slice(barra + 1);
     const dados = porAssinatura[assinatura];
-    if (!dados) { naoValidouHoje.push({ contexto, sinal, tier: meta.tier, apelido: meta.apelido }); continue; }
+    if (!dados) { naoValidouHoje.push({ contexto, sinal, tier: meta.tier, apelido: meta.apelido, motivo: 'sem amostra suficiente hoje' }); continue; }
+    // corte de qualidade: o elite (A+) passa sempre; os VIP precisam >= corteTaxa
+    if (meta.tier !== 'ELITE' && dados.taxa_teste < corteTaxa) {
+      naoValidouHoje.push({ contexto, sinal, tier: meta.tier, apelido: meta.apelido, taxa_teste: dados.taxa_teste, motivo: 'abaixo do corte de qualidade (' + corteTaxa + '%)' });
+      continue;
+    }
     cerebro.push({
       id: assinatura, apelido: meta.apelido, tier: meta.tier,
       match: _parseContexto(contexto), sinal,
@@ -76,7 +95,7 @@ function construirCerebro(db, opts) {
     motivo: 'miragem: forte no treino, caiu no teste'
   }));
 
-  return { cerebro, naoValidouHoje, descartados, parametros: v.parametros, total_pares_estudo: v.total_pares, dias: v.dias };
+  return { cerebro, naoValidouHoje, descartados, corte_taxa: corteTaxa, parametros: v.parametros, total_pares_estudo: v.total_pares, dias: v.dias };
 }
 
 function _parseContexto(ctx) {
@@ -134,10 +153,16 @@ function classificar(db, opts) {
         if (ratio > spRatioMax) continue;                              // só odd colada
         const votos = _votos(X, Y, temVazia(X.trap), temVazia(Y.trap));
 
-        // primeira regra (já em ordem de prioridade) cujo sinal DECIDE este par
-        let regra = null, voto = 0;
-        for (const reg of regrasDaCorrida) { const vt = votos[reg.sinal]; if (vt !== 0) { regra = reg; voto = vt; break; } }
-        if (!regra) continue;                                          // nenhum sinal do cérebro separa o par
+        // primeira regra (já em ordem de prioridade) cujo sinal DECIDE este par COM FOLGA
+        let regra = null, voto = 0, margem = 0;
+        for (const reg of regrasDaCorrida) {
+          const vt = votos[reg.sinal]; if (vt === 0) continue;         // sinal não separa
+          const mg = _margem(reg.sinal, X, Y);
+          const minMg = (opts.margens && opts.margens[reg.sinal] != null) ? opts.margens[reg.sinal] : MIN_MARGEM[reg.sinal];
+          if (mg < minMg) continue;                                    // separa, mas raspando → não é VIP
+          regra = reg; voto = vt; margem = mg; break;
+        }
+        if (!regra) continue;                                          // nenhum sinal do cérebro decide o par com folga
         if (soVip && regra.tier === 'BASE') continue;                  // VIP é VIP
 
         const pick = voto > 0 ? X : Y;
@@ -155,6 +180,7 @@ function classificar(db, opts) {
           sinal: regra.sinal,                            // qual sinal separou
           taxa_validada_pct: regra.taxa,                 // % do TESTE (fora da amostra), ao vivo
           ic_low_pct: regra.ic_low,                      // pior caso honesto do edge
+          margem_sinal: +margem.toFixed(2),              // folga do sinal (caltm em s, podio em fração)
           // ── placar (a Carga VIP é o quadro de teste ao vivo) ──
           chegada: chegada,                              // [{pos,trap}] ou null
           bateu: bateuPar(chegada, pick.trap, outro.trap), // true|false|null
@@ -172,21 +198,23 @@ function classificar(db, opts) {
 
   // ELITE primeiro, depois VIP, depois BASE; dentro do tier, maior taxa validada
   const rank = { 'A+': 0, 'A': 1, 'B': 2 };
-  entradas.sort((a, b) => (rank[a.nota] - rank[b.nota]) || (b.taxa_validada_pct - a.taxa_validada_pct) || String(a.hora).localeCompare(String(b.hora)));
+  entradas.sort((a, b) => (rank[a.nota] - rank[b.nota]) || (b.taxa_validada_pct - a.taxa_validada_pct) || (b.margem_sinal - a.margem_sinal) || String(a.hora).localeCompare(String(b.hora)));
 
   const conta = t => entradas.filter(e => e.tier === t).length;
   return {
     date, total: entradas.length,
+    qualidade: { corte_taxa_pct: opts.minTaxa > 0 ? opts.minTaxa : CORTE_TAXA, margem_minima: (opts.margens && Object.keys(opts.margens).length) ? opts.margens : MIN_MARGEM },
     por_tier: { ELITE: conta('ELITE'), VIP: conta('VIP'), BASE: conta('BASE') },
     cerebro_ativo: cerebro.filter(r => r.tier !== 'BASE').map(r => ({ apelido: r.apelido, tier: r.tier, sinal: r.sinal, taxa_teste: r.taxa, ic_low: r.ic_low, n_teste: r.n_teste })),
     cerebro_nao_validou_hoje: naoValidouHoje,      // whitelist que hoje não tem dado/caiu
     descartados: descartados.slice(0, 12),         // miragens que a validação jogou fora
     entradas,
-    legenda: 'NOTA = tier do contexto validado que decidiu o par. A+ = ELITE (Yarmouth+CalTm, ~72% fora da amostra). '
-      + 'A = VIP (pockets validados, ~62-66%). B = BASE (CalTm global ~58%, só aparece com soVip=false). '
-      + 'taxa_validada_pct = taxa do TESTE (metade que o padrão NÃO viu) — número vivo, não chumbado. '
-      + 'ic_low_pct = pior caso honesto. bateu = o pick chegou na frente do outro (placar real). '
-      + 'Contextos-miragem entram em `descartados`: foram vistos e jogados fora, não escondidos.'
+    legenda: 'QUALIDADE, NÃO VOLUME: só entra par cujo CONTEXTO validado tem taxa de teste >= corte '
+      + '(elite A+ passa sempre) E cujo sinal DECIDE com folga (margem mínima). Edge raspando fica de fora. '
+      + 'NOTA = tier: A+ = ELITE (Yarmouth+CalTm, ~72% fora da amostra); A = VIP (~65-66%); B = BASE (só com soVip=false). '
+      + 'taxa_validada_pct = taxa do TESTE (metade que o padrão NÃO viu), número vivo. ic_low_pct = pior caso honesto. '
+      + 'margem_sinal = folga do sinal no par (caltm em s, podio em fração). bateu = o pick chegou na frente (placar real). '
+      + 'Whitelist que hoje não passou (fraca/sem dado) → cerebro_nao_validou_hoje. Miragens → descartados.'
   };
 }
 
