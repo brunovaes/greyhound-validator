@@ -2666,6 +2666,18 @@ router.get('/diag/carga-vip', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ESTUDO REVERSO (Fase 1): dado o pódio real, qual sinal separa o vencedor em
+// pares de odd colada — global e por turno/pista, com validação treino/teste.
+// ?sp=1.15 ajusta o que conta como "odd colada". Leitura pura sobre o histórico.
+router.get('/diag/estudo-reverso', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const es = require('../utils/estudoReverso');
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    res.json(es.rodar(db, { spRatioMax }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
