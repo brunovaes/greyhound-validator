@@ -1528,17 +1528,21 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 /* SEM overflow:hidden: ele cria um contexto de rolagem proprio e faz o
    position:sticky do cabecalho grudar nesta caixa, que nao rola, em vez de na
    janela. O arredondamento vem das pontas (cabecalho e ultima linha). */
-.vip-box{background:#1B2231;border:1px solid #2a3140;border-radius:10px}
+.vip-box{background:#1B2231;border:1px solid #333;border-radius:10px}
 
 /* Cabecalho de tabela, colado no topo ao rolar. As larguras aqui e na linha
    sao as MESMAS: o alinhamento das colunas depende disso, entao mexer numa
    pede mexer na outra. */
-.vip-cab{display:flex;align-items:center;gap:14px;padding:10px 16px;background:#0D1117;border-bottom:1px solid #2a3140;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
-.vip-cab span{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8a94a6;text-align:center}
+/* Tipografia copiada da tela Historico, pra as duas telas conversarem:
+   cabecalho em maiusculas pequenas e cinza, conteudo uniforme em 13px,
+   celulas com padding 10px 12px. A unica diferenca de proposito e' o tamanho
+   do cabecalho: la sao 9px, aqui ficou 11px a pedido. */
+.vip-cab{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
+.vip-cab span{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;text-align:center}
 
-.vip-lin{display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid #1e2430;border-left:3px solid transparent;cursor:pointer;transition:background .15s}
+.vip-lin{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #222;border-left:3px solid transparent;cursor:pointer;font-size:13px;transition:background .15s}
 .vip-lin:last-child{border-bottom:none;border-radius:0 0 9px 9px}
-.vip-lin:hover{background:rgba(255,255,255,.03)}
+.vip-lin:hover{background:rgba(255,255,255,.02)}
 .vip-lin.tem-skip{background:rgba(192,132,252,.06)}
 .vip-lin.tem-skip:hover{background:rgba(192,132,252,.11)}
 /* Resultado pinta a LINHA INTEIRA. Vem depois do tem-skip de proposito: numa
@@ -1549,19 +1553,19 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-lin.errou:hover{background:rgba(239,68,68,.17)}
 
 /* larguras das colunas (cabecalho e linha usam as mesmas) */
-.c-hora{width:62px;flex-shrink:0;text-align:center}
+.c-hora{width:66px;flex-shrink:0;text-align:center}
 .c-cor{flex:1 1 0;min-width:130px}
-.c-avb{width:340px;flex-shrink:0}
+.c-avb{width:330px;flex-shrink:0}
 .c-bw{width:88px;flex-shrink:0;text-align:center}
 .c-pod{width:150px;flex-shrink:0}
-.c-cha{width:84px;flex-shrink:0}
+.c-cha{width:74px;flex-shrink:0}
 .c-aca{width:46px;flex-shrink:0}
 
 /* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
 .vip-lin > div{text-align:center}
 /* A de cima e' a maior. Hoje e' a UK; trocar a ordem no telaCargaVip.js
    troca qual fica em destaque. */
-.vip-hora .grande{font-size:16px;font-weight:800;color:#22c55e;line-height:1.1}
+.vip-hora .grande{font-size:14px;font-weight:800;color:#22c55e;line-height:1.15}
 .vip-hora .peq{font-size:11px;color:#3f8f5c}
 
 .vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:6px}
@@ -1572,15 +1576,17 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-dog.espelha img{transform:scaleX(-1)}
 .vip-dog .semarte{width:34px;height:34px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .vip-vence{font-size:9px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:30px}
-.vip-galgo{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
-.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vip-galgo{display:flex;flex-direction:column;align-items:center;min-width:0}
+/* Margem negativa: a arte tem area transparente em volta, entao o nome
+   parecia solto mesmo com gap zero. Ele sobe por cima desse vazio. */
+.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-14px}
 
 .vip-cor{font-size:13px;color:#f0f0f0;font-weight:600;line-height:1.4}
 .vip-cor .selos{font-size:11px;color:#60a5fa;font-weight:500;margin-top:2px}
 .vip-skip{font-size:11px;color:#c084fc;margin-top:2px}
 
-.vip-bw .sim{font-size:14px;font-weight:800;color:#60a5fa;line-height:1.2}
-.vip-bw .nao{font-size:12px;font-weight:700;color:#f97316}
+.vip-bw .sim{font-size:13px;font-weight:800;color:#60a5fa;line-height:1.2}
+.vip-bw .nao{font-size:11px;font-weight:700;color:#f97316}
 .vip-bw .nd{font-size:13px;color:#3f4c5f}
 .vip-bw .rot{font-size:9px;color:#555}
 
@@ -1591,17 +1597,17 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-replay{margin-top:5px}
 .vip-replay button{font-size:10px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
 .vip-replay button:hover{background:rgba(96,165,250,.16)}
-.vip-chegada .trap-badge{width:23px;height:23px;font-size:11px;font-weight:700;flex-shrink:0}
+.vip-chegada .trap-badge{width:21px;height:21px;font-size:11px;font-weight:700;flex-shrink:0}
 /* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
    pra ver onde o par chegou sem contornos competindo com a cor da manga. */
 .vip-chegada .trap-badge{opacity:.4}
 .vip-chegada .trap-badge.nodisputa{opacity:1}
 /* Anel dourado no primeiro lugar. */
 .vip-chegada .trap-badge.p1{box-shadow:0 0 0 2px rgba(234,179,8,.85)}
-.vip-chegada .aguarda{font-size:10px;color:#3f4c5f}
+.vip-chegada .aguarda{font-size:11px;color:#3f4c5f}
 
-.vip-taxa .nivel{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
-.vip-taxa .pct{font-size:16px;font-weight:800;line-height:1.2}
+.vip-taxa .nivel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.vip-taxa .pct{font-size:15px;font-weight:800;line-height:1.2}
 .vip-taxa .rot{font-size:9px;color:#555;white-space:nowrap}
 /* Espadas cruzadas: o simbolo de disputa. O rotulo em texto ocupava uma
    coluna inteira pra dizer o que o icone diz, e o title cobre quem nao

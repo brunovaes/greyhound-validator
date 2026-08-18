@@ -62,26 +62,16 @@
     return txt;
   }
 
-  // Linha de detalhe: "08:09 / 12:09 - Dunstall Park A4 · 480m · odd 1.125 · Δt 0.28"
-  // A hora repete a coluna da esquerda de proposito, a pedido: lendo a linha
-  // corrida, o horario e' o primeiro dado que importa.
-  function detalhe(e, br, uk) {
-    var nums = [];
-    if (e.ratio_odd != null) nums.push('odd ' + esc(e.ratio_odd));
-    if (e.dt_caltm != null) nums.push('&Delta;t ' + esc(e.dt_caltm));
-    // A categoria so entra quando NAO esta no fim do nome da corrida, pra nao
-    // sair "Dunstall Park A4 · A4".
-    var corrida = pistaCompleta(e.corrida);
-    if (e.categoria && corrida.slice(-String(e.categoria).length) !== String(e.categoria)) {
-      nums.unshift(esc(e.categoria));
-    }
-    var horas = [br, uk].filter(Boolean).join(' / ');
-    // dist as vezes ja vem com o "m"
+  // O que saiu da coluna Detalhes e nao cabe na de Corrida vai pro tooltip:
+  // distancia, odd da analise e Delta t. Continua acessivel sem ocupar coluna.
+  function tooltipCorrida(e) {
+    var p = [];
     var dist = e.dist == null ? '' : String(e.dist);
     if (dist && !/m$/i.test(dist)) dist += 'm';
-    var partes = [esc(corrida)];
-    if (dist) partes.push(esc(dist));
-    return (horas ? esc(horas) + ' - ' : '') + partes.concat(nums).join(' \u00b7 ');
+    if (dist) p.push(dist);
+    if (e.ratio_odd != null) p.push('odd ' + e.ratio_odd);
+    if (e.dt_caltm != null) p.push('\u0394t ' + e.dt_caltm);
+    return p.join('  \u00b7  ');
   }
 
   // Escolhe a arte do galgo. O TRAP ja vem certo no nome do arquivo (a manga
@@ -247,14 +237,6 @@
       if (e.selo_pick_frente) selos.push('sai na frente');
       if (e.selo_outro_fuma) selos.push('outro fuma');
 
-
-
-      var nums = [];
-      // A categoria NAO entra: ela ja aparece no fim do nome da corrida
-      // ("Dunstall Park A4"), e repetir vira "A4 · A4".
-      if (e.ratio_odd != null) nums.push('odd ' + esc(e.ratio_odd));
-      if (e.dt_caltm != null) nums.push('&Delta;t ' + esc(e.dt_caltm));
-
       // Motivo do skip so aqui, na lista: e' onde voce decide se vale entrar.
       // Na Analisar o Bruno nao quer (pediria atencao no momento errado).
       var skipTag = e.skip
@@ -286,19 +268,21 @@
         + ' data-hora="' + esc(e.hora || '') + '" data-corrida="' + esc(e.corrida || '') + '"'
         + ' title="Clique para abrir esta corrida na tela Analisar">'
         // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
+        // A de cima e' a de fonte maior. Hoje: UK em cima, BR embaixo.
         + '<div class="c-hora vip-hora">'
-        + '<div class="br">' + esc(br || uk || '-') + '</div>'
-        + (br && uk && br !== uk ? '<div class="uk">' + esc(uk) + '</div>' : '')
+        + '<div class="grande">' + esc(uk || br || '-') + '</div>'
+        + (br && uk && br !== uk ? '<div class="peq">' + esc(br) + '</div>' : '')
+        + '</div>'
+        + '<div class="c-cor vip-cor" title="' + esc(tooltipCorrida(e)) + '">'
+        + esc(pistaCompleta(e.corrida))
+        + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
+        + skipTag
         + '</div>'
         + '<div class="c-avb"><div class="vip-conf">'
         + galgo(e.pick_trap, e.pick_nome, false)
         + '<div class="vip-vence">vence</div>'
         + galgo(e.outro_trap, e.outro_nome, true)
         + '</div></div>'
-        + '<div class="c-det vip-det">' + detalhe(e, br, uk)
-        + (selos.length ? '<div class="selos">' + esc(selos.join(' \u00b7 ')) + '</div>' : '')
-        + skipTag
-        + '</div>'
         + '<div class="c-bw vip-bw">' + alvoBW + '</div>'
         + '<div class="c-pod"><div class="vip-chegada">'
         + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
@@ -315,9 +299,9 @@
     // Cabecalho com as MESMAS classes de largura das colunas da linha. Fica
     // colado no topo ao rolar (position:sticky no CSS).
     var cabecalho = '<div class="vip-cab">'
-      + '<span class="c-hora">Hora</span>'
+      + '<span class="c-hora">Hora BR</span>'
+      + '<span class="c-cor">Corrida</span>'
       + '<span class="c-avb">AvB</span>'
-      + '<span class="c-det">Detalhes</span>'
       + '<span class="c-bw">Abriu na BW</span>'
       + '<span class="c-pod">Pódio</span>'
       + '<span class="c-cha">Chances</span>'
