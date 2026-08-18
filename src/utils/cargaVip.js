@@ -88,7 +88,8 @@ function listar(db, opts) {
   // e corrida 'skip' (margem insuficiente) é JUSTO onde as odds coladas moram —
   // além de que o backtest que mediu as taxas (62%/69%) não filtrava skip.
   const rows = db.prepare(
-    "SELECT r.hora, r.corrida, r.dist, r.nivel, r.obs, r.hist_all, r.finishing_order_json, r.race_card " +
+    "SELECT r.hora, r.corrida, r.dist, r.nivel, r.obs, r.hist_all, r.finishing_order_json, r.race_card, " +
+    "r.final_check_at, r.final_check_status, r.flag_atrasada " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
   ).all(date);
@@ -197,6 +198,11 @@ function listar(db, opts) {
           abriu: abriu,                                        // true|false|null (null = não monitorada)
           odd_abertura: oddAbertura,                           // odd capturada do par (~cedo) ou null
           odd_largada: null,                                   // não rastreado ainda (ver captador)
+          // ── status da checagem final do card (só informa, não dispara) ──
+          verificado: !!row.final_check_at,                    // corrida já passou pela checagem final?
+          verificado_em: row.final_check_at || null,           // quando (ou null)
+          verificacao_status: row.final_check_status || null,  // resultado da checagem (ou null)
+          atrasada: !!row.flag_atrasada,                       // corrida remarcada/atrasada
           // selos de bônus (EM OBSERVAÇÃO — amostra pequena, não filtram nada):
           selo_pick_frente: _FRONT.indexOf(pick.perfil) >= 0,
           selo_outro_fuma: other.perfil === 'fumador'
