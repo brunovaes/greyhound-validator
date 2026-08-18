@@ -1550,7 +1550,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 
 /* larguras das colunas (cabecalho e linha usam as mesmas) */
 .c-hora{width:58px;flex-shrink:0;text-align:center}
-.c-avb{width:290px;flex-shrink:0}
+.c-avb{width:340px;flex-shrink:0}
 .c-det{flex:1 1 0;min-width:0}
 .c-bw{width:88px;flex-shrink:0;text-align:center}
 .c-pod{width:150px;flex-shrink:0}
@@ -1559,37 +1559,37 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 
 /* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
 .vip-lin > div{text-align:center}
-.vip-hora .br{font-size:13px;font-weight:800;color:#22c55e;line-height:1.1}
-.vip-hora .uk{font-size:8px;color:#3f8f5c}
+.vip-hora .br{font-size:16px;font-weight:800;color:#22c55e;line-height:1.1}
+.vip-hora .uk{font-size:11px;color:#3f8f5c}
 
 .vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:6px}
-.vip-dog{width:88px;height:58px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.vip-dog{width:112px;height:74px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 /* A arte olha pra direita. Espelhar a da direita poe os dois de frente um pro
    outro, como na arena da tela Analisar. */
 .vip-dog.espelha img{transform:scaleX(-1)}
-.vip-dog .semarte{width:30px;height:30px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
-.vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:22px}
+.vip-dog .semarte{width:34px;height:34px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.vip-vence{font-size:9px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:30px}
 .vip-galgo{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
-.vip-galgo .nome{font-size:10px;color:#f0f0f0;font-weight:600;text-align:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.vip-det{font-size:9px;color:#888;line-height:1.5}
-.vip-det .selos{font-size:8px;color:#60a5fa;margin-top:2px}
-.vip-skip{font-size:8px;color:#c084fc;margin-top:2px}
+.vip-det{font-size:12px;color:#888;line-height:1.5}
+.vip-det .selos{font-size:11px;color:#60a5fa;margin-top:2px}
+.vip-skip{font-size:11px;color:#c084fc;margin-top:2px}
 
-.vip-bw .sim{font-size:11px;font-weight:800;color:#60a5fa;line-height:1.2}
-.vip-bw .nao{font-size:9px;font-weight:700;color:#f97316}
-.vip-bw .nd{font-size:10px;color:#3f4c5f}
-.vip-bw .rot{font-size:8px;color:#555}
+.vip-bw .sim{font-size:14px;font-weight:800;color:#60a5fa;line-height:1.2}
+.vip-bw .nao{font-size:12px;font-weight:700;color:#f97316}
+.vip-bw .nd{font-size:13px;color:#3f4c5f}
+.vip-bw .rot{font-size:9px;color:#555}
 
 /* As bolinhas da chegada sao os .trap-badge t1..t6 do designTokens, com as
    cores reais das mangas. Aqui so o tamanho, que cada tela ajusta. */
 .vip-chegada{display:flex;align-items:center;justify-content:center;gap:3px}
 /* Replay embaixo das bolinhas, no mesmo formato do botao do Historico. */
 .vip-replay{margin-top:5px}
-.vip-replay button{font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
+.vip-replay button{font-size:10px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
 .vip-replay button:hover{background:rgba(96,165,250,.16)}
-.vip-chegada .trap-badge{width:20px;height:20px;font-size:10px;font-weight:700;flex-shrink:0}
+.vip-chegada .trap-badge{width:23px;height:23px;font-size:11px;font-weight:700;flex-shrink:0}
 /* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
    pra ver onde o par chegou sem contornos competindo com a cor da manga. */
 .vip-chegada .trap-badge{opacity:.4}
@@ -1598,9 +1598,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-chegada .trap-badge.p1{box-shadow:0 0 0 2px rgba(234,179,8,.85)}
 .vip-chegada .aguarda{font-size:10px;color:#3f4c5f}
 
-.vip-taxa .nivel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
-.vip-taxa .pct{font-size:14px;font-weight:800;line-height:1.2}
-.vip-taxa .rot{font-size:8px;color:#555;white-space:nowrap}
+.vip-taxa .nivel{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.vip-taxa .pct{font-size:17px;font-weight:800;line-height:1.2}
+.vip-taxa .rot{font-size:9px;color:#555;white-space:nowrap}
 /* Espadas cruzadas: o simbolo de disputa. O rotulo em texto ocupava uma
    coluna inteira pra dizer o que o icone diz, e o title cobre quem nao
    reconhecer de cara. */
@@ -1622,7 +1622,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
   .c-pod{width:auto;order:9}
   .c-cha{width:auto;text-align:left;margin-left:auto}
   .c-aca{width:auto;order:10}
-  .vip-dog{width:60px;height:40px}
+  .vip-dog{width:74px;height:50px}
   .vip-hora{width:46px}
   .vip-taxa .pct{font-size:14px}
 }

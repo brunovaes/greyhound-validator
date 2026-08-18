@@ -389,9 +389,12 @@
   // Se um dia o motor passar a mandar chegada/bateu junto da lista, o que veio
   // dele tem prioridade e estas linhas simplesmente nao sao pedidas.
   function buscarResultados(d, ent) {
-    var faltam = ent.filter(function (e) { return !e.chegada; });
-    if (!d.date || !faltam.length) return;
-    var pares = faltam.map(function (e) {
+    if (!d.date || !ent.length) return;
+    // Pede pra TODAS as entradas, mesmo as que ja vieram com chegada do motor.
+    // O link do replay (races.video_url) nao esta no payload deles, entao sem
+    // esta chamada o botao nunca seria criado. O que vem do motor continua
+    // tendo prioridade: daqui so aproveitamos o que falta.
+    var pares = ent.map(function (e) {
       return { hora: e.hora, corrida: e.corrida, a: e.pick_trap, b: e.outro_trap };
     });
     fetch(BASE + '/carga-vip/resultados', {
@@ -471,17 +474,35 @@
       var r = mapa[chave + '|' + pick + 'x' + outro] || mapa[chave];
       if (!r) continue;
 
+      // Acha a entrada correspondente pra saber o que o motor ja tinha mandado.
+      var en = null;
+      for (var j = 0; j < ENTRADAS.length; j++) {
+        var c = ENTRADAS[j];
+        if (c.hora === lin.getAttribute('data-hora') && c.corrida === lin.getAttribute('data-corrida')
+            && String(c.pick_trap) === String(pick) && String(c.outro_trap) === String(outro)) { en = c; break; }
+      }
+
+      // Prioridade do motor: se ele mandou a chegada, e' a dele que vale, e a
+      // rota daqui serve so pro que ele nao manda (hoje, o link do replay).
+      var doMotor = !!(en && en.chegada);
+      var chegada = doMotor ? en.chegada : r.chegada;
+      var bateu = doMotor ? en.bateu : r.bateu;
+      var nomes = (en && en.nomes_por_trap) || r.nomes;
+
+      // Grava na entrada tambem, senao os KPIs ficariam com a foto antiga.
+      if (en) { en.chegada = chegada; en.bateu = bateu; en.nomes_por_trap = nomes; }
+
       var alvoCheg = lin.querySelector('.vip-chegada');
       if (alvoCheg) {
-        alvoCheg.innerHTML = bolinhasChegada(r.chegada, pick, outro, r.nomes);
+        alvoCheg.innerHTML = bolinhasChegada(chegada, pick, outro, nomes);
         // Deixa a conta a vista. Verde NAO quer dizer "venceu a corrida", e sim
-        // "o pick chegou a frente do outro do par" — que e' o que o AvB aposta.
+        // "o pick chegou a frente do outro do par", que e' o que o AvB aposta.
         // Sem isto, uma linha verde com o pick em 3o parece erro da tela.
-        alvoCheg.title = explicaResultado(r, pick, outro);
+        alvoCheg.title = explicaResultado({ chegada: chegada, bateu: bateu }, pick, outro);
       }
 
       // O video so existe depois que o robo de resultados passa, entao o botao
-      // e' criado aqui, junto com a chegada, e nao na primeira pintura.
+      // e' criado aqui e nao na primeira pintura.
       var alvoRep = lin.querySelector('.vip-replay');
       if (alvoRep) {
         alvoRep.innerHTML = r.video
@@ -490,19 +511,7 @@
           : '';
       }
 
-      // Verde/vermelho SO quando a chegada resolveu a disputa. bateu null fica
-      // neutro: nao e' acerto nem erro.
-      // Grava na entrada tambem, senao os KPIs continuariam com a foto antiga.
-      for (var j = 0; j < ENTRADAS.length; j++) {
-        var en = ENTRADAS[j];
-        if (en.hora === lin.getAttribute('data-hora') && en.corrida === lin.getAttribute('data-corrida')
-            && String(en.pick_trap) === String(pick) && String(en.outro_trap) === String(outro)) {
-          en.chegada = r.chegada; en.bateu = r.bateu; en.nomes_por_trap = en.nomes_por_trap || r.nomes;
-          break;
-        }
-      }
-
-      var v = veredito(r.chegada, r.bateu, pick, outro);
+      var v = veredito(chegada, bateu, pick, outro);
       lin.classList.remove('bateu', 'errou');
       if (v.classe) lin.classList.add(v.classe);
       if (v.aviso && window.console) console.warn('[carga-vip] ' + chave + ' -> ' + v.aviso);
