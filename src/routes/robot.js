@@ -2702,6 +2702,34 @@ router.get('/diag/estudo-validar', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// MOTOR DE NOTA (Carga VIP v2) — o cérebro CURADO ao vivo: só os contextos
+// validados que fazem sentido (whitelist), com números vivos do validar, mais o
+// que foi descartado (miragens) e a whitelist que hoje não tem dado. ?sp / ?min.
+router.get('/diag/motor-cerebro', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mn = require('../utils/motorNota');
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    const minHalf = parseInt(req.query.min) || 25;
+    res.json(mn.construirCerebro(db, { spRatioMax, minHalf }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// CARGA VIP v2 (motor de nota): classifica as corridas do dia por CONTEXTO
+// validado, com NOTA (A+/A/B) e placar (bateu). ?date=YYYY-MM-DD, ?sp, ?min.
+// ?base=1 inclui os pares BASE (CalTm global ~58%); por padrão VIP é VIP.
+router.get('/diag/carga-vip-v2', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mn = require('../utils/motorNota');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const spRatioMax = parseFloat(req.query.sp) || 1.15;
+    const minHalf = parseInt(req.query.min) || 25;
+    const soVip = req.query.base ? false : true;
+    res.json(mn.classificar(db, { date, spRatioMax, minHalf, soVip }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');

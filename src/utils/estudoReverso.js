@@ -333,4 +333,8 @@ function validar(db, opts) {
   };
 }
 
-module.exports = { rodar, mapa, validar };
+module.exports = {
+  rodar, mapa, validar,
+  // helpers expostos p/ o motor de nota (Carga VIP v2) reusar a MESMA lógica de sinal
+  _perfilGalgo, _votos, _turno, _pista, _categoria, _distVal, _wilson, SINAIS
+};
