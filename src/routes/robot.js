@@ -408,6 +408,7 @@ function _gravarFechamentoAvb(fech){
       aTrap:p.aTrap, aNome:p.aNome, bTrap:p.bTrap, bNome:p.bNome,
       odd:p.oddAvenceB, marketPct:p.marketPct,
       reanalisePct:p.reanalisePct, motorOrigPct:p.motorOrigPct, edge:p.edge,
+      obs:p.obs||null,
       origem:(p.reanalisePct!=null?'reanalise':'fallback'),
       gameId:fech.gameId, ts:fech.fechadoEm
     };
@@ -2760,6 +2761,60 @@ router.get('/diag/carga-vip-v2', requireAdmin, (req, res) => {
     const umPorCorrida = req.query.todos ? false : true;
     const trapVazia = req.query.vazia === '0' ? false : true;
     res.json(mn.classificar(db, { date, spRatioMax, minHalf, minTaxa, soVip, umPorCorrida, trapVazia }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAG (admin): primeiro palpite (avb_inicial) × palpite final (avb_fechamento),
+// lado a lado, por corrida do dia. Mede "recalcular perto da largada ajudou?":
+// entre as que MUDARAM e têm resultado, quantas o fechamento acertou vs o inicial.
+router.get('/diag/avb-inicial-fechamento', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const { bateuPar } = require('../utils/avbResultado');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.avb_inicial, r.avb_fechamento, r.finishing_order_json " +
+      "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND (r.avb_inicial IS NOT NULL OR r.avb_fechamento IS NOT NULL) ORDER BY r.hora"
+    ).all(date);
+    const parse = s => { try { return JSON.parse(s); } catch (e) { return null; } };
+    const linhas = []; let mudaram = 0, iguais = 0, ajudou = 0, atrapalhou = 0, empate = 0;
+    for (const row of rows) {
+      const ini = parse(row.avb_inicial), fec = parse(row.avb_fechamento);
+      let chegada = null; try { const a = JSON.parse(row.finishing_order_json); if (Array.isArray(a) && a.length) chegada = a; } catch (e) {}
+      const iniBateu = ini ? bateuPar(chegada, ini.aTrap, ini.bTrap) : null;
+      const fecBateu = fec ? bateuPar(chegada, fec.aTrap, fec.bTrap) : null;
+      let mudou = null, tipo = null;
+      if (ini && fec) {
+        const mesmoPar = [fec.aTrap, fec.bTrap].every(t => t === ini.aTrap || t === ini.bTrap);
+        if (ini.aTrap === fec.aTrap && ini.bTrap === fec.bTrap) { mudou = false; tipo = 'igual'; iguais++; }
+        else if (mesmoPar) { mudou = true; tipo = 'virou a direção'; mudaram++; }
+        else { mudou = true; tipo = 'trocou o par'; mudaram++; }
+        if (mudou && iniBateu !== null && fecBateu !== null) {
+          if (fecBateu && !iniBateu) ajudou++;
+          else if (iniBateu && !fecBateu) atrapalhou++;
+          else empate++;
+        }
+      }
+      linhas.push({
+        hora: row.hora, corrida: row.corrida,
+        inicial: ini ? { pick: ini.aTrap, outro: ini.bTrap, odd: ini.odd, pct: ini.reanalisePct, obs: ini.obs || null } : null,
+        fechamento: fec ? { pick: fec.aTrap, outro: fec.bTrap, odd: fec.odd, pct: fec.reanalisePct, obs: fec.obs || null } : null,
+        mudou, tipo, inicial_bateu: iniBateu, fechamento_bateu: fecBateu
+      });
+    }
+    res.json({
+      date, total: linhas.length,
+      com_inicial: linhas.filter(l => l.inicial).length,
+      com_fechamento: linhas.filter(l => l.fechamento).length,
+      mudaram, iguais,
+      medicao_recalculo: { ajudou, atrapalhou, empate },
+      linhas,
+      legenda: 'inicial = primeiro palpite (congelado); fechamento = palpite final na largada. pick vence outro. '
+        + 'bateu = o pick chegou na frente (placar real). medicao_recalculo (só entre as que MUDARAM e têm resultado nos dois): '
+        + 'ajudou = fechamento acertou e inicial errou; atrapalhou = o contrário; empate = deram o mesmo. '
+        + 'Amostra cresce com o tempo — 1-2 dias não conclui nada, é pra acompanhar a tendência.'
+    });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
