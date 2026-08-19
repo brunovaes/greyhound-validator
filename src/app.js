@@ -482,7 +482,7 @@ function isOldRaceCard(r) {
 // de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
 function shouldShowRace(r) {
   if (typeof _SIM_AVB !== 'undefined' && _SIM_AVB) return true;
-  // Skip que a Carga VIP destravou entra em tela dentro da janela, mesmo
+  // Skip que a lista VIP destravou entra em tela dentro da janela, mesmo
   // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
   // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
   if (_vipSkipLiberado(r)) return true;
@@ -860,30 +860,50 @@ function _parEmFoco(r){
 // Conjunto "hora|corrida" das corridas que passaram no filtro VIP. Carregado
 // no boot pra a arena poder se destacar mesmo quando voce chega na corrida
 // navegando normal, sem ter aberto a lista.
+// Duas listas, dois niveis: VIP Plus (/api/carga-vip) e VIP Premium
+// (/api/vip-do-vip). Premium vence quando a corrida esta nas duas: ela e' um
+// subconjunto mais exigente, entao mostrar "Plus" ali seria informacao a menos.
 var VIP_SET = new Set();
-// Config da Carga VIP (Configuracoes -> aba Alarme). Defaults iguais aos do
+var VIP_SET_PREMIUM = new Set();
+// Config das listas VIP (Configuracoes -> aba Alarme). Defaults iguais aos do
 // servidor pra a tela funcionar mesmo antes do /api/config responder.
-var VIP_CFG = { ativo:1, minAntes:5, alarme:1, corDestaque:'#c084fc', corFundo:'#140B2B' };
+// As cores do Premium ainda NAO vem do servidor: o /api/config devolve uma
+// lista fixa de campos, e acrescentar exige mexer no api.js (compartilhado).
+// Ate la valem estes defaults.
+var VIP_CFG = { ativo:1, minAntes:5, alarme:1, corDestaque:'#c084fc', corFundo:'#140B2B',
+                corDestaquePremium:'#22c55e', corFundoPremium:'#0A280E' };
 // Quais corridas do VIP estao marcadas como skip (e o motivo). O destrave so
 // vale pra elas: skip por falta de historico nem chega no filtro, entao aqui
 // so entram os de margem apertada.
 var VIP_SKIP = new Map();
 function carregarVipSet(){
-  fetch(BASE + '/api/carga-vip')
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d){
-      if(!d || !d.entradas) return;
-      VIP_SET = new Set(d.entradas.map(function(e){ return e.hora + '|' + e.corrida; }));
+  var pega = function(url){
+    return fetch(BASE + url)
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .catch(function(){ return null; });
+  };
+  // As duas listas em paralelo. Uma falhar nao pode derrubar a outra: sem o
+  // Premium a tela continua marcando o Plus, e vice-versa.
+  Promise.all([pega('/api/carga-vip'), pega('/api/vip-do-vip')]).then(function(res){
+    var plus = res[0], prem = res[1];
+    var chave = function(e){ return e.hora + '|' + e.corrida; };
+    if(plus && plus.entradas){
+      VIP_SET = new Set(plus.entradas.map(chave));
       VIP_SKIP = new Map();
-      d.entradas.forEach(function(e){ if(e.skip) VIP_SKIP.set(e.hora + '|' + e.corrida, e.skip_motivo || ''); });
-      // Redesenha o painel se a corrida em foco virou VIP agora.
-      var r = results[focusRaceIdx];
-      _cssVip();
-      if(r && _ehVip(r)) renderFocusPanel(r, focusRaceIdx);
-    })
-    .catch(function(){});
+      plus.entradas.forEach(function(e){ if(e.skip) VIP_SKIP.set(chave(e), e.skip_motivo || ''); });
+    }
+    if(prem && prem.entradas){
+      VIP_SET_PREMIUM = new Set(prem.entradas.map(chave));
+      // O skip vale pros dois: e' a mesma corrida e o mesmo destrave.
+      prem.entradas.forEach(function(e){ if(e.skip) VIP_SKIP.set(chave(e), e.skip_motivo || ''); });
+    }
+    // Redesenha o painel se a corrida em foco virou VIP agora.
+    var r = results[focusRaceIdx];
+    _cssVip();
+    if(r && _ehVip(r)) renderFocusPanel(r, focusRaceIdx);
+  });
 }
-// A corrida e' um skip que a Carga VIP destravou E ja esta dentro da janela?
+// A corrida e' um skip que a lista VIP destravou E ja esta dentro da janela?
 // Fora da janela ela continua escondida, como qualquer skip.
 // Alarme quando um skip destravado ENTRA em tela. Toca uma vez por corrida:
 // o ciclo de refresh chama isto de minuto em minuto, e sem a marca o alarme
@@ -895,9 +915,10 @@ function _avisarVipSkip(r){
   if(_vipAvisados.has(k)) return;
   _vipAvisados.add(k);
   try { playSom(ALARME_FILTRO.som || 'sino'); } catch(e){}
-  try { showToast('\u2B50 Carga VIP destravou ' + (r.corrida||'') + ' — o motor tinha marcado como skip por margem.', true); } catch(e){}
+  var rot = VIP_ROTULO[_vipTipo(r)] || 'VIP';
+  try { showToast('\u2B50 ' + rot + ' destravou ' + (r.corrida||'') + ', o motor tinha marcado como skip por margem.', true); } catch(e){}
   if (typeof window.ghTicker === 'function') {
-    try { window.ghTicker('Carga VIP: ' + (r.corrida||'') + ' liberada (skip por margem)'); } catch(e){}
+    try { window.ghTicker(rot + ': ' + (r.corrida||'') + ' liberada (skip por margem)'); } catch(e){}
   }
 }
 
@@ -913,21 +934,39 @@ function _cssVip(){
   var st = document.getElementById('vip-css');
   if(!st){ st = document.createElement('style'); st.id = 'vip-css'; document.head.appendChild(st); }
   var c = VIP_CFG.corDestaque || '#c084fc';
+  var cp = VIP_CFG.corDestaquePremium || '#22c55e';
   st.textContent =
     '.vip-selo{display:inline-flex;align-items:center;gap:6px;'
     + 'background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);color:#eab308;'
     + 'font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;'
     + 'padding:4px 12px;border-radius:14px;animation:vipPisca 1.6s ease-in-out infinite}'
+    // O Premium tem selo proprio: sao duas listas com criterios diferentes, e
+    // dar a mesma cara as duas apagaria a distincao.
+    + '.vip-selo.nivel-premium{background:rgba(34,197,94,.14);border-color:' + cp + ';color:' + cp + '}'
     + '.vip-selo.vip-skip{background:rgba(192,132,252,.14);border-color:' + c + ';color:' + c + '}'
     + '@keyframes vipPisca{0%,100%{opacity:1}50%{opacity:.5}}'
     // Respeita quem pediu menos animacao no sistema: o selo fica visivel, so parado.
     + '@media(prefers-reduced-motion:reduce){.vip-selo{animation:none}}';
 }
 
-function _ehVip(r){ return !!(r && VIP_SET.has(r.hora + '|' + r.corrida)); }
+// 'premium' | 'plus' | null. Premium ganha quando a corrida esta nas duas.
+function _vipTipo(r){
+  if(!r) return null;
+  var k = r.hora + '|' + r.corrida;
+  if(VIP_SET_PREMIUM.has(k)) return 'premium';
+  if(VIP_SET.has(k)) return 'plus';
+  return null;
+}
+function _ehVip(r){ return _vipTipo(r) !== null; }
+// Rotulo e cor de cada nivel, num lugar so.
+var VIP_ROTULO = { plus:'VIP Plus', premium:'VIP Premium' };
+function _vipCorFundo(tipo){
+  return tipo === 'premium' ? (VIP_CFG.corFundoPremium || '#0A280E')
+                            : (VIP_CFG.corFundo || '#140B2B');
+}
 
-// A lista da Carga VIP virou TELA propria (GET /carga-vip, servida pelo
-// main.js + public/js/cargaVip.js). Aqui ficou so o outro lado do caminho:
+// As listas VIP viraram TELAS proprias (GET /carga-vip e /vip-do-vip,
+// servidas pelo main.js + public/js/telaCargaVip.js). Aqui ficou so o outro lado do caminho:
 // clicar numa corrida la manda pra Analisar com ?vip=hora|corrida, e esta
 // funcao foca a corrida ao abrir.
 function _focoVipDaUrl(){
@@ -1135,7 +1174,11 @@ function renderFocusPanel(r, idx) {
     // Selo VIP centralizado no cabecalho: identifica a corrida de relance,
     // mesmo quando voce chegou nela navegando e nao pela lista.
     + (_ehVip(r)
-      ? '<div style="flex:1;text-align:center;padding-top:4px"><span class="vip-selo' + (_vipSkipLiberado(r)?' vip-skip':'') + '">&#11088; Carga VIP</span></div>'
+      ? '<div style="flex:1;text-align:center;padding-top:4px"><span class="vip-selo'
+        + (_vipTipo(r) === 'premium' ? ' nivel-premium' : '')
+        + (_vipSkipLiberado(r)?' vip-skip':'') + '">'
+        + (_vipTipo(r) === 'premium' ? '&#128142; ' : '&#11088; ')
+        + VIP_ROTULO[_vipTipo(r)] + '</span></div>'
       : '')
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
@@ -1202,11 +1245,11 @@ function renderFocusPanel(r, idx) {
         : '')
     + '<div id="fp-odds-live" style="display:none"></div>';
 
-  // Fundo roxo nas corridas da Carga VIP. Vai por style inline de proposito:
-  // a cor vem de var(--bg) no CSS da tela, e sobrescrever aqui evita depender
-  // de qual regra vence. Sempre reseta no else — senao a corrida seguinte
-  // herdaria o roxo da anterior.
-  focusCol.style.background = _ehVip(r) ? (VIP_CFG.corFundo || '#140B2B') : '';
+  // Fundo por nivel: roxo no VIP Plus, verde escuro no VIP Premium. Vai por
+  // style inline de proposito: a cor vem de var(--bg) no CSS da tela, e
+  // sobrescrever aqui evita depender de qual regra vence. Sempre reseta quando
+  // nao e' VIP, senao a corrida seguinte herdaria a cor da anterior.
+  focusCol.style.background = _ehVip(r) ? _vipCorFundo(_vipTipo(r)) : '';
   if (_vipSkipLiberado(r)) _avisarVipSkip(r);
 
   startOddsLive(r);
