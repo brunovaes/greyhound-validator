@@ -2729,7 +2729,8 @@ router.get('/diag/carga-vip-v2', requireAdmin, (req, res) => {
     const minTaxa = parseFloat(req.query.minTaxa) || 0;
     const soVip = req.query.base ? false : true;
     const umPorCorrida = req.query.todos ? false : true;
-    res.json(mn.classificar(db, { date, spRatioMax, minHalf, minTaxa, soVip, umPorCorrida }));
+    const trapVazia = req.query.vazia === '0' ? false : true;
+    res.json(mn.classificar(db, { date, spRatioMax, minHalf, minTaxa, soVip, umPorCorrida, trapVazia }));
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 

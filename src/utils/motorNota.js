@@ -123,6 +123,7 @@ function classificar(db, opts) {
   const { cerebro, naoValidouHoje, descartados } = construirCerebro(db, opts);
 
   const umPorCorrida = opts.umPorCorrida !== false;   // padrão: 1 AvB por corrida (não entra em 2)
+  const aplicaVazia = opts.trapVazia !== false;       // padrão: regra da trap vazia ligada
 
   const rows = db.prepare(
     "SELECT r.hora, r.corrida, r.dist, r.nivel, r.hist_all, r.finishing_order_json, r.race_card, " +
@@ -173,12 +174,19 @@ function classificar(db, opts) {
 
         const pick = voto > 0 ? X : Y;
         const outro = voto > 0 ? Y : X;
+        const vazioPick = temVazia(pick.trap);   // pick tem box vazio ao lado?
+        const vazioOutro = temVazia(outro.trap); // rival tem box vazio ao lado?
         entradas.push({
           hora: row.hora, corrida: row.corrida, dist: row.dist,
           pick_trap: pick.trap, pick_nome: (nomesPorTrap && nomesPorTrap[String(pick.trap)]) || '',
           outro_trap: outro.trap, outro_nome: (nomesPorTrap && nomesPorTrap[String(outro.trap)]) || '',
           categoria: ctx.cat, turno: ctx.turno, pista: ctx.pista,
           ratio_odd: +ratio.toFixed(3),
+          // ── trap vazia: vantagem do pick mantém; vantagem do rival descarta a corrida ──
+          pick_vazia_lado: vazioPick,
+          outro_vazia_lado: vazioOutro,
+          selo_vazia_pick: vazioPick && !vazioOutro,     // box vazio a favor do NOSSO pick
+          trap_vazia_conferida: !!row.final_check_at,    // veio de card já checado perto da largada?
           // ── a NOTA (o coração do v2) ──
           nota: NOTA_LETRA(regra.tier),                 // A+ / A / B
           tier: regra.tier,                              // ELITE / VIP / BASE
@@ -219,6 +227,17 @@ function classificar(db, opts) {
     entradas = Object.values(melhor);
   }
 
+  // Regra da TRAP VAZIA (aplicada sobre o AvB que ficou de cada corrida):
+  // - pick tem box vazio ao lado (e o rival não) → MANTÉM (vantagem a favor).
+  // - rival tem box vazio ao lado (e o pick não) → DESCARTA a corrida (risco do rival passar).
+  // - os dois têm, ou nenhum tem → neutro, mantém.
+  let descartados_trap_vazia = 0;
+  if (aplicaVazia) {
+    const antes = entradas.length;
+    entradas = entradas.filter(e => !(e.outro_vazia_lado && !e.pick_vazia_lado));
+    descartados_trap_vazia = antes - entradas.length;
+  }
+
   // ELITE primeiro, depois VIP, depois BASE; dentro do tier, maior taxa validada
   const rank = { 'A+': 0, 'A': 1, 'B': 2 };
   entradas.sort((a, b) => (rank[a.nota] - rank[b.nota]) || (b.taxa_validada_pct - a.taxa_validada_pct) || (b.margem_sinal - a.margem_sinal) || String(a.hora).localeCompare(String(b.hora)));
@@ -227,6 +246,7 @@ function classificar(db, opts) {
   return {
     date, total: entradas.length,
     um_por_corrida: umPorCorrida, pares_descartados_mesma_corrida: descartados_mesma_corrida,
+    trap_vazia_regra: aplicaVazia, corridas_descartadas_trap_vazia: descartados_trap_vazia,
     qualidade: { corte_taxa_pct: opts.minTaxa > 0 ? opts.minTaxa : CORTE_TAXA, margem_minima: (opts.margens && Object.keys(opts.margens).length) ? opts.margens : MIN_MARGEM },
     por_tier: { ELITE: conta('ELITE'), VIP: conta('VIP'), BASE: conta('BASE') },
     cerebro_ativo: cerebro.filter(r => r.tier !== 'BASE').map(r => ({ apelido: r.apelido, tier: r.tier, sinal: r.sinal, taxa_teste: r.taxa, ic_low: r.ic_low, n_teste: r.n_teste })),
@@ -238,6 +258,8 @@ function classificar(db, opts) {
       + 'NOTA = tier: A+ = ELITE (Yarmouth+CalTm, ~72% fora da amostra); A = VIP (~65-66%); B = BASE (só com soVip=false). '
       + 'taxa_validada_pct = taxa do TESTE (metade que o padrão NÃO viu), número vivo. ic_low_pct = pior caso honesto. '
       + 'margem_sinal = folga do sinal no par (caltm em s, podio em fração). bateu = o pick chegou na frente (placar real). '
+      + 'TRAP VAZIA: box vazio ao lado do PICK mantém (vantagem a favor, selo_vazia_pick); ao lado do RIVAL descarta a corrida '
+      + '(corridas_descartadas_trap_vazia). trap_vazia_conferida = se o card já passou pela checagem perto da largada. '
       + 'Whitelist que hoje não passou (fraca/sem dado) → cerebro_nao_validou_hoje. Miragens → descartados.'
   };
 }
