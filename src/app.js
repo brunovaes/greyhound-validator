@@ -478,6 +478,27 @@ function isOldRaceCard(r) {
   return r.dataCard < todayStr;
 }
 
+// A corrida que voce clicou numa das telas VIP. So ELA fica presa no topo
+// depois de ja ter largado, e so por um minuto.
+//
+// A primeira versao prendia qualquer corrida VIP, e o resultado foi a lista
+// entupida com as VIP da manha que ja tinham corrido, empurrando as proximas
+// pra fora da tela. "Veio de uma lista VIP" nao e' motivo pra ficar; "eu
+// acabei de clicar nela" e'.
+var VIP_FIXADA = null;   // { chave, tipo, ts }
+var VIP_FIXA_MS = 60000;
+function _ehVipFixada(r) {
+  if (!VIP_FIXADA || !r) return false;
+  if (VIP_FIXADA.chave !== r.hora + '|' + r.corrida) return false;
+  return (Date.now() - VIP_FIXADA.ts) < VIP_FIXA_MS;
+}
+// Solta a corrida presa e redesenha a lista, que volta a ordem normal.
+function _soltarVipFixada() {
+  if (!VIP_FIXADA) return;
+  VIP_FIXADA = null;
+  try { refreshFocusMode(); } catch(e){}
+}
+
 // Corrida VIP de HOJE que ja largou (mais de 1 minuto atras). Ela continua na
 // lista de proposito, porque veio das listas VIP e serve pra consulta, mas nao
 // e' uma corrida ao vivo: recebe o mesmo tratamento vermelho da corrida antiga
@@ -503,11 +524,13 @@ function shouldShowRace(r) {
   // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
   // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
   if (_vipSkipLiberado(r)) return true;
-  // Corrida das listas VIP nunca some: mesmo distante no horario ou ja
-  // largada, ela entra na lista. Sem isto, clicar numa VIP longe levava o
-  // painel de disputa pra ela mas a lista lateral seguia sem mostra-la, e nao
-  // dava pra voltar nela sem passar pela tela VIP de novo.
-  if (_ehVip(r)) return true;
+  // VIP que ainda vai correr entra sempre, mesmo distante no horario: sem
+  // isto, clicar numa VIP longe levava o painel de disputa pra ela mas a lista
+  // lateral seguia sem mostra-la.
+  if (_ehVip(r) && isUpcoming(r)) return true;
+  // VIP que JA largou so aparece se foi voce que acabou de clicar nela, e sai
+  // sozinha depois de um minuto.
+  if (_ehVipFixada(r)) return true;
   return isOldRaceCard(r) || isUpcoming(r);
 }
 
@@ -516,9 +539,14 @@ function shouldShowRace(r) {
 // haver seis corridas mais proximas na frente dela.
 // A ordem por horario e' preservada dentro de cada grupo (sort estavel).
 function _vipPrimeiro(lista) {
-  var vip = [], resto = [];
-  lista.forEach(function(r){ (_ehVip(r) ? vip : resto).push(r); });
-  return vip.concat(resto);
+  var fixa = [], vip = [], resto = [];
+  lista.forEach(function(r){
+    if (_ehVipFixada(r)) fixa.push(r);
+    else if (_ehVip(r)) vip.push(r);
+    else resto.push(r);
+  });
+  // A clicada vem antes de tudo; depois as outras VIP; depois o resto.
+  return fixa.concat(vip, resto);
 }
 
 function isDayClosed(avbs) {
@@ -1002,14 +1030,23 @@ function _vipCorFundo(tipo){
 // clicar numa corrida la manda pra Analisar com ?vip=hora|corrida, e esta
 // funcao foca a corrida ao abrir.
 function _focoVipDaUrl(){
-  var alvo = null;
-  try { alvo = new URLSearchParams(location.search).get('vip'); } catch(e){}
+  var alvo = null, tipo = null;
+  // Os DOIS parametros sao lidos ANTES de limpar a URL: o replaceState apaga a
+  // query, e ler o tipo depois dele traria sempre null.
+  try {
+    var q = new URLSearchParams(location.search);
+    alvo = q.get('vip'); tipo = q.get('tipo');
+  } catch(e){}
   if(!alvo) return;
   // Limpa o parametro da URL na hora: sem isso, um F5 daqui a pouco jogaria
   // voce de volta numa corrida que ja largou.
   try { history.replaceState(null, '', location.pathname); } catch(e){}
   var p = alvo.split('|');
   var hora = p[0], corrida = p.slice(1).join('|');
+  // Prende esta corrida no topo. O relogio conta do CLIQUE, nao do horario da
+  // largada: e' o tempo que voce tem pra olhar a corrida que acabou de abrir.
+  VIP_FIXADA = { chave: hora + '|' + corrida, tipo: tipo || 'plus', ts: Date.now() };
+  setTimeout(_soltarVipFixada, VIP_FIXA_MS + 1000);
   // As corridas do dia podem ainda estar carregando quando a pagina abre,
   // entao insiste por alguns segundos antes de desistir.
   var tent = 0;
@@ -2119,6 +2156,9 @@ function renderRaceListPanel(avbs) {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
       div.classList.add('rc-active');
       renderFocusPanel(r, rIdx);
+      // Clicar em OUTRA corrida solta a que estava presa no topo: voce ja
+      // terminou de olhar aquela. Clicar nela mesma nao solta.
+      if (VIP_FIXADA && !_ehVipFixada(r)) _soltarVipFixada();
     });
     col.appendChild(div);
   });
