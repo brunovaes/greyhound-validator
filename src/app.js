@@ -97,8 +97,13 @@ function injectStyles(){
     '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
     '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
     '.rc-suspect-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#000;background:#f59e0b;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
-    '.rc-vip-badge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:4px;margin-bottom:3px;background:rgba(234,179,8,.16);border:1px solid rgba(234,179,8,.5);color:#eab308;}',
+    '.rc-vip-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:10px;background:rgba(234,179,8,.16);border:1px solid rgba(234,179,8,.5);color:#eab308;white-space:nowrap;}',
     '.rc-vip-badge.nivel-premium{background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.5);color:#22c55e;}',
+    // Fundo da linha no tom do nivel. Discreto de proposito: o alarme da
+    // corrida proxima (rc-alert) precisa continuar sendo o que mais chama a
+    // atencao, senao a lista inteira grita e nada se destaca.
+    '.rc-vip{background:rgba(234,179,8,.05);}',
+    '.rc-vip-premium{background:rgba(34,197,94,.05);}',
     '.fp-old-banner{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
     '.fp-suspect-banner{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f59e0b;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
     '.old-row{background:rgba(239,68,68,.08)!important;}',
@@ -478,42 +483,6 @@ function isOldRaceCard(r) {
   return r.dataCard < todayStr;
 }
 
-// A corrida que voce clicou numa das telas VIP. So ELA fica presa no topo
-// depois de ja ter largado, e so por um minuto.
-//
-// A primeira versao prendia qualquer corrida VIP, e o resultado foi a lista
-// entupida com as VIP da manha que ja tinham corrido, empurrando as proximas
-// pra fora da tela. "Veio de uma lista VIP" nao e' motivo pra ficar; "eu
-// acabei de clicar nela" e'.
-var VIP_FIXADA = null;   // { chave, tipo, ts }
-var VIP_FIXA_MS = 60000;
-function _ehVipFixada(r) {
-  if (!VIP_FIXADA || !r) return false;
-  if (VIP_FIXADA.chave !== r.hora + '|' + r.corrida) return false;
-  return (Date.now() - VIP_FIXADA.ts) < VIP_FIXA_MS;
-}
-// Solta a corrida presa e redesenha a lista, que volta a ordem normal.
-function _soltarVipFixada() {
-  if (!VIP_FIXADA) return;
-  VIP_FIXADA = null;
-  try { refreshFocusMode(); } catch(e){}
-}
-
-// Corrida VIP de HOJE que ja largou (mais de 1 minuto atras). Ela continua na
-// lista de proposito, porque veio das listas VIP e serve pra consulta, mas nao
-// e' uma corrida ao vivo: recebe o mesmo tratamento vermelho da corrida antiga
-// e nao aceita registro de entrada.
-function _vipJaOcorreu(r) {
-  if (!_ehVip(r) || isOldRaceCard(r)) return false;
-  var min = minutesToRace(r);
-  return min !== null && min < -1;
-}
-
-// As duas situacoes em que a corrida esta na tela SO pra consulta: card de
-// data anterior, ou corrida VIP de hoje que ja largou. Quem decide travar
-// campo e pintar de vermelho pergunta aqui, num lugar so.
-function _soConsulta(r) { return isOldRaceCard(r) || _vipJaOcorreu(r); }
-
 // Corrida antiga (data anterior a hoje) SEMPRE deve continuar visivel,
 // independente do relogio bater ou nao com o horario dela no card — ela e
 // so pra consulta/estudo, nao participa da logica de "ja passou". Corridas
@@ -524,29 +493,7 @@ function shouldShowRace(r) {
   // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
   // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
   if (_vipSkipLiberado(r)) return true;
-  // VIP que ainda vai correr entra sempre, mesmo distante no horario: sem
-  // isto, clicar numa VIP longe levava o painel de disputa pra ela mas a lista
-  // lateral seguia sem mostra-la.
-  if (_ehVip(r) && isUpcoming(r)) return true;
-  // VIP que JA largou so aparece se foi voce que acabou de clicar nela, e sai
-  // sozinha depois de um minuto.
-  if (_ehVipFixada(r)) return true;
   return isOldRaceCard(r) || isUpcoming(r);
-}
-
-// Corridas VIP sobem pro topo da lista. O corte por RACAS_EM_TELA acontece
-// DEPOIS desta ordenacao, entao uma VIP distante deixa de ser cortada por
-// haver seis corridas mais proximas na frente dela.
-// A ordem por horario e' preservada dentro de cada grupo (sort estavel).
-function _vipPrimeiro(lista) {
-  var fixa = [], vip = [], resto = [];
-  lista.forEach(function(r){
-    if (_ehVipFixada(r)) fixa.push(r);
-    else if (_ehVip(r)) vip.push(r);
-    else resto.push(r);
-  });
-  // A clicada vem antes de tudo; depois as outras VIP; depois o resto.
-  return fixa.concat(vip, resto);
 }
 
 function isDayClosed(avbs) {
@@ -773,7 +720,7 @@ function refreshFocusMode() {
   // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja
   // passadas — exceto corridas antigas (data anterior a hoje), que ficam
   // sempre visiveis independente do horario.
-  var toShow = _vipPrimeiro(avbs.filter(shouldShowRace)).slice(0, RACAS_EM_TELA);
+  var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
 
@@ -836,7 +783,7 @@ function enterFocusMode() {
     return;
   }
 
-  var toShow = _vipPrimeiro(avbs.filter(shouldShowRace)).slice(0, RACAS_EM_TELA);
+  var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
   var next = toShow[0];
@@ -1030,23 +977,14 @@ function _vipCorFundo(tipo){
 // clicar numa corrida la manda pra Analisar com ?vip=hora|corrida, e esta
 // funcao foca a corrida ao abrir.
 function _focoVipDaUrl(){
-  var alvo = null, tipo = null;
-  // Os DOIS parametros sao lidos ANTES de limpar a URL: o replaceState apaga a
-  // query, e ler o tipo depois dele traria sempre null.
-  try {
-    var q = new URLSearchParams(location.search);
-    alvo = q.get('vip'); tipo = q.get('tipo');
-  } catch(e){}
+  var alvo = null;
+  try { alvo = new URLSearchParams(location.search).get('vip'); } catch(e){}
   if(!alvo) return;
   // Limpa o parametro da URL na hora: sem isso, um F5 daqui a pouco jogaria
   // voce de volta numa corrida que ja largou.
   try { history.replaceState(null, '', location.pathname); } catch(e){}
   var p = alvo.split('|');
   var hora = p[0], corrida = p.slice(1).join('|');
-  // Prende esta corrida no topo. O relogio conta do CLIQUE, nao do horario da
-  // largada: e' o tempo que voce tem pra olhar a corrida que acabou de abrir.
-  VIP_FIXADA = { chave: hora + '|' + corrida, tipo: tipo || 'plus', ts: Date.now() };
-  setTimeout(_soltarVipFixada, VIP_FIXA_MS + 1000);
   // As corridas do dia podem ainda estar carregando quando a pagina abre,
   // entao insiste por alguns segundos antes de desistir.
   var tent = 0;
@@ -1187,13 +1125,7 @@ function renderFocusPanel(r, idx) {
   // porque r.obs continua alimentando a tabela e o Historico — e' so esta
   // variavel local que ficou ociosa.
   var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');   // eslint-disable-line no-unused-vars
-  // Dois motivos pra estar so em consulta, e dois textos: dizer "data anterior
-  // a hoje" numa corrida de hoje que acabou de largar seria mentira.
-  var oldBanner = isOldRaceCard(r)
-    ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+'), apenas para consulta e estudo, não é uma corrida ao vivo.</div>'
-    : (_vipJaOcorreu(r)
-      ? '<div class="fp-old-banner">&#9888; Esta corrida já largou. Ficou na lista por ser ' + (VIP_ROTULO[_vipTipo(r)] || 'VIP') + ', apenas para consulta: não dá para registrar entrada nela.</div>'
-      : '');
+  var oldBanner = isOldRaceCard(r) ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+'), apenas para consulta e estudo, não é uma corrida ao vivo.</div>' : '';
   var suspectBanner = r.cardSuspect ? '<div class="fp-suspect-banner">&#9888; Essa corrida sumiu da lista ao vivo antes do horário — a pista pode ter sido cancelada hoje. Confira manualmente antes de confiar nesse AvB.</div>' : '';
 
   // Titulo: "3:44 - Newcastle (A3) - 480m" (hora UK, nome completo da pista,
@@ -1296,16 +1228,12 @@ function renderFocusPanel(r, idx) {
     // direto no banco, entao um numero digitado pela metade ja virava aposta
     // registrada. Agora ficam locais ate voce apertar "Entrei!", que e' o
     // unico momento em que a entrada vai pro Historico e pra Banca.
-    // Corrida so pra consulta nao aceita entrada: os campos aparecem, pra a
-    // tela nao mudar de forma, mas travados. Registrar aposta numa corrida que
-    // ja largou sujaria Historico e Banca com um numero que nunca existiu.
-    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="marcaEntradaSuja()"'+(_soConsulta(r)?' disabled title="Corrida apenas para consulta"':'')+' style="width:52px;text-align:center"></span>'
+    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="marcaEntradaSuja()" style="width:52px;text-align:center"></span>'
     // Stake ja vem com a unidade padrao configurada na Banca; da pra mudar na
     // hora sem alterar o padrao.
-    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Stake <input type="text" id="fp-stake" placeholder="-" value="'+(r.betUnidades!=null&&r.betUnidades!==''?r.betUnidades:(STAKE_PADRAO!=null?STAKE_PADRAO:''))+'" oninput="marcaEntradaSuja()"'+(_soConsulta(r)?' disabled':'')+' style="width:52px;text-align:center"></span>'
-    + '<button type="button" id="fp-entrei" onclick="confirmarEntrada()"'+(_soConsulta(r)?' disabled title="Corrida apenas para consulta"':'')+' style="font-size:11px;font-weight:700;padding:4px 14px;border-radius:5px;white-space:nowrap;'
-    +   (_soConsulta(r) ? 'cursor:not-allowed;opacity:.45;background:transparent;border:1px solid var(--bdr2);color:var(--mut)'
-        : 'cursor:pointer;' + (r.betEntrou ? 'background:#22c55e;border:1px solid #22c55e;color:#000' : 'background:transparent;border:1px solid #22c55e;color:#22c55e'))
+    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Stake <input type="text" id="fp-stake" placeholder="-" value="'+(r.betUnidades!=null&&r.betUnidades!==''?r.betUnidades:(STAKE_PADRAO!=null?STAKE_PADRAO:''))+'" oninput="marcaEntradaSuja()" style="width:52px;text-align:center"></span>'
+    + '<button type="button" id="fp-entrei" onclick="confirmarEntrada()" style="font-size:11px;font-weight:700;padding:4px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;'
+    +   (r.betEntrou ? 'background:#22c55e;border:1px solid #22c55e;color:#000' : 'background:transparent;border:1px solid #22c55e;color:#22c55e')
     +   '">'+(r.betEntrou ? '✓ Entrei' : 'Entrei !')+'</button>'
     // "AvB não aberto" oculto por enquanto (pedido do Bruno). O input continua
     // no DOM pra nao quebrar quem le o valor; so nao aparece.
@@ -1787,13 +1715,6 @@ function marcaEntradaSuja(){
 function confirmarEntrada(){
   var r = results[focusRaceIdx];
   if(!r) return;
-  // Segunda tranca. O botao ja vem desabilitado nesse caso, mas o disabled e'
-  // so aparencia: qualquer caminho que chame esta funcao (atalho, console,
-  // clique antes do redesenho) gravaria a entrada do mesmo jeito.
-  if(_soConsulta(r)){
-    showToast('Esta corrida está na tela apenas para consulta, não dá para registrar entrada.', false);
-    return;
-  }
   var elOdd = document.getElementById('fp-odd');
   var elStk = document.getElementById('fp-stake');
   var odd = elOdd ? String(elOdd.value||'').trim().replace(',','.') : '';
@@ -2102,24 +2023,19 @@ function renderRaceListPanel(avbs) {
     + '<span style="font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Próximas</span>'
     + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
+  var first = true;
   var tc = ['','t1','t2','t3','t4','t5','t6'];
-  // A "PROXIMA" e' a primeira corrida que ainda vai correr, nao a primeira da
-  // lista: com as VIP no topo, a posicao 0 pode ser uma corrida distante ou
-  // uma que ja largou, e o rotulo mentiria.
-  var idxProxima = -1;
-  avbs.forEach(function(r, i){
-    if (idxProxima < 0 && !_soConsulta(r) && isUpcoming(r)) idxProxima = i;
-  });
   avbs.forEach(function(r, i) {
-    var first = (i === idxProxima);
     var hbr = r.hora_br || convertHora(r.hora||'');
     var rIdx = results.indexOf(r);
     var div = document.createElement('div');
-    var isOld = _soConsulta(r);
+    var isOld = isOldRaceCard(r);
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     var alertCustom = isAlerting && matchAlarmeFiltro(r);
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
+    var vipTipo = _vipTipo(r);
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '')
+      + (vipTipo && !isOld ? ' rc-vip rc-vip-' + vipTipo : '');
     if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
     if (isAlerting) {
       var key = raceAlertKey(r);
@@ -2137,7 +2053,6 @@ function renderRaceListPanel(avbs) {
     div.innerHTML += '<div style="flex:1;min-width:0">'
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
-      + (_ehVip(r) && !isOld ? '<div class="rc-vip-badge nivel-' + _vipTipo(r) + '">' + VIP_ROTULO[_vipTipo(r)] + '</div>' : '')
       + (r.cardSuspect ? '<div class="rc-suspect-badge">⚠ PISTA PODE TER CANCELADO</div>' : '')
       + (r._reanaliseFlag && r._reanaliseFlag.type==='reanalise' && (Date.now()-r._reanaliseFlag.at)<300000 ? '<div class="rc-reanalise-badge">🔄 REANALISADA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
@@ -2151,16 +2066,19 @@ function renderRaceListPanel(avbs) {
       + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
       + '</div>'
       + top3Html
+      // Selo do nivel embaixo do top3, na coluna da direita: a corrida ja se
+      // identifica pelo horario e pelo nome, e o selo e' o que faz voce parar
+      // nela ao correr o olho pela lista.
+      + (_ehVip(r) ? '<div style="text-align:center;margin-top:3px"><span class="rc-vip-badge nivel-' + _vipTipo(r) + '">'
+          + (_vipTipo(r) === 'premium' ? '&#128142;' : '&#11088;') + ' ' + VIP_ROTULO[_vipTipo(r)] + '</span></div>' : '')
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
       div.classList.add('rc-active');
       renderFocusPanel(r, rIdx);
-      // Clicar em OUTRA corrida solta a que estava presa no topo: voce ja
-      // terminou de olhar aquela. Clicar nela mesma nao solta.
-      if (VIP_FIXADA && !_ehVipFixada(r)) _soltarVipFixada();
     });
     col.appendChild(div);
+    first = false;
   });
   if (!avbs.length) {
     col.innerHTML += '<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Nenhuma corrida futura</div>';

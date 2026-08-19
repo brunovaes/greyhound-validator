@@ -10,7 +10,7 @@ const { designTokensCSS } = require('../utils/designTokens');
 const { nomeCorridaCompleto, nomePista, NOMES_PISTAS } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
-const { CANONICO, aplicarPessoais, salvarPessoal } = require('../db/compartilhado');
+const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
 const { exigirAcesso } = require('../middleware/acesso');
 
 function getLogo() {
@@ -1302,35 +1302,6 @@ function catalogoGalgos() {
   _dogsCache = porTrap;
   return porTrap;
 }
-
-// Marca que o usuario mandou uma corrida das listas VIP pra tela Analisar.
-// Gravado como dado PESSOAL (race_user_data): a escolha e' de quem clicou.
-//
-// O clique na lista chama isto ANTES de navegar. Se falhar, a navegacao
-// acontece do mesmo jeito: perder a marca e' chato, nao chegar na corrida e'
-// pior.
-router.post('/carga-vip/marcar', exigirAcesso('analisar.carga_vip'), express.json(), (req, res) => {
-  try {
-    const { hora, corrida, tipo } = req.body || {};
-    if (!hora || !corrida) return res.status(400).json({ ok: false, error: 'corrida nao informada' });
-    if (tipo !== 'plus' && tipo !== 'premium') return res.status(400).json({ ok: false, error: 'tipo invalido' });
-
-    // Mesma chave que as listas usam, na sessao canonica. Mais recente primeiro,
-    // caso a corrida apareca em mais de uma sessao do dia.
-    const r = db.prepare(
-      "SELECT r.id FROM races r JOIN race_sessions s ON s.id = r.session_id " +
-      "WHERE s.user_id = ? AND r.hora = ? AND r.corrida = ? ORDER BY r.id DESC LIMIT 1"
-    ).get(CANONICO, String(hora), String(corrida));
-    if (!r) return res.status(404).json({ ok: false, error: 'corrida nao encontrada' });
-
-    salvarPessoal(db, r.id, req.user.id, 'vip_tipo', tipo);
-    salvarPessoal(db, r.id, req.user.id, 'vip_marcado_em', new Date().toISOString());
-    res.json({ ok: true, raceId: r.id });
-  } catch (e) {
-    console.error('[carga-vip/marcar]', e.message);
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
 
 // Chegada e resultado das corridas da Carga VIP.
 //

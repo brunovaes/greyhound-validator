@@ -712,22 +712,11 @@
     if (!lin) return;
     var hora = lin.getAttribute('data-hora') || '';
     var corrida = lin.getAttribute('data-corrida') || '';
-    var tipo = VIPVIP ? 'premium' : 'plus';
-    var destino = BASE + '/?vip=' + encodeURIComponent(hora + '|' + corrida) + '&tipo=' + tipo;
-
-    // Marca a corrida como vinda daqui ANTES de sair, pra a Analisar e o
-    // Historico saberem de qual lista ela veio. A navegacao acontece de
-    // qualquer jeito: perder a marca e' chato, nao chegar na corrida e' pior.
-    var irEmbora = function () { location.href = destino; };
-    var saiu = false;
-    var vai = function () { if (!saiu) { saiu = true; irEmbora(); } };
-    // Rede de seguranca: se a gravacao travar, nao deixa o clique morrer.
-    setTimeout(vai, 1200);
-    fetch(BASE + '/carga-vip/marcar', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hora: hora, corrida: corrida, tipo: tipo })
-    }).then(vai).catch(vai);
+    // So navega e foca. A marcacao por clique existiu e foi removida: as
+    // corridas VIP ja vem dentro da sessao carregada, entao a lista da tela
+    // Analisar as mostra sozinha, e empurrar corrida pra dentro dela so
+    // atrapalhava a ordem.
+    location.href = BASE + '/?vip=' + encodeURIComponent(hora + '|' + corrida);
   });
 
   carregar();
