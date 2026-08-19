@@ -54,6 +54,32 @@ function _margem(sinal, X, Y) {
   return Infinity; // sinal sem margem definida não é gateado por folga
 }
 
+// Valor do sinal num galgo + se "menor é melhor" — pra ranquear o pódio pela MESMA
+// condição que decidiu o AvB (o pódio nasce do mesmo critério, por construção).
+const _MENOR_MELHOR = { caltm: 1, split: 1, consistencia: 1, categoria: 1, sp_mercado: 1, boxe_menor: 1 };
+function _valSinal(g, sinal) {
+  switch (sinal) {
+    case 'caltm': return g.caltm;
+    case 'podio': return g.podio;
+    case 'split': return g.split;
+    case 'consistencia': return g.posStd;
+    case 'categoria': return g.catNivel;
+    case 'sp_mercado': return g.oddMedia;
+    case 'perfil': return g.perfil;
+    case 'boxe_menor': return g.trap;
+    default: return null;
+  }
+}
+// Pódio do VIP: campo inteiro ordenado pelo sinal que decidiu o AvB. topN=3 (o pódio).
+function _podioPorSinal(galgos, sinal, nomesPorTrap, topN) {
+  const menor = _MENOR_MELHOR[sinal] === 1;
+  const arr = galgos.filter(g => _valSinal(g, sinal) != null).map(g => ({ trap: g.trap, v: _valSinal(g, sinal) }));
+  arr.sort((a, b) => menor ? (a.v - b.v) : (b.v - a.v));
+  return arr.slice(0, topN || 3).map((x, i) => ({
+    pos: i + 1, trap: x.trap, nome: (nomesPorTrap && nomesPorTrap[String(x.trap)]) || ''
+  }));
+}
+
 // Cache do cérebro: validar() varre TODO o histórico (caro). Como o /vip-do-vip é
 // chamado a cada refresh (1 min) por usuário — inclusive pela tela Analisar — a
 // reconstrução do cérebro fica em cache curto. O placar do dia NÃO usa esse cache
@@ -238,6 +264,8 @@ function classificar(db, opts) {
           taxa_nivel_pct: regra.taxa,                    // apelido compat. c/ a tela v1 (mesmo número)
           ic_low_pct: regra.ic_low,                      // pior caso honesto do edge
           margem_sinal: +margem.toFixed(2),              // folga do sinal (caltm em s, podio em fração)
+          // ── pódio derivado da MESMA condição do AvB (1 verdade: pódio + AvB coerentes) ──
+          podio_vip: _podioPorSinal(galgos, regra.sinal, nomesPorTrap, 3),
           // ── placar (a Carga VIP é o quadro de teste ao vivo) ──
           chegada: chegada,                              // [{pos,trap}] ou null
           bateu: bateuPar(chegada, pick.trap, outro.trap), // true|false|null
