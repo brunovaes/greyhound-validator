@@ -145,44 +145,28 @@ function registrarAvisoGlobal(key){
 //   minha = os AvBs que voce escolheu   (numero grande, e' o que voce apostou)
 //   rean  = a principal da reanalise
 //   motor = o AvB da analise global original
-// A "minha" e' a principal porque reflete o que de fato foi jogado. As outras
-// duas ficam menores embaixo, como referencia — no card ha pouco espaco e ele
-// e' olhado de relance, no meio da operacao.
-// Enquanto voce nao escolher AvBs, "minha" vem vazia: e' o esperado, nao bug.
-// Dois valores lado a lado no card: Motor e Reanálise, com o rótulo pequeno
-// embaixo de cada um. A versão anterior repetia a informação — o número grande
-// era o mesmo "motor" que aparecia na linha de baixo, e o "sem escolhas ainda"
-// ocupava espaço sem dizer nada útil.
-// A taxa da SUA escolha não entra aqui de propósito: ela só ganha significado
-// depois de dezenas de corridas escolhidas, e num card pequeno um número que
-// fica vazio por semanas atrapalha mais do que ajuda. Ela vive no Histórico,
-// onde há espaço pra explicar.
+// Um numero so por card. Antes eram dois lado a lado (Motor e Reanalise), o
+// que so fazia sentido enquanto existiam dois AvBs guardados por corrida.
+// Agora ha um AvB por corrida — a sua escolha quando voce entrou, o do motor
+// quando nao entrou — entao comparar duas taxas nao quer dizer mais nada.
+//
+// Le 'geral' quando o servidor manda; enquanto o /api/acertos-resumo nao
+// devolver esse campo, cai no numero do topo (que hoje e' o do motor), pra o
+// card nunca ficar vazio.
 function _pintaAcertos(el, bloco){
   if(!el || !bloco) return;
   var t = bloco.tres;
-  var cor = function(p){ return p==null ? '#666' : (p>=50 ? '#22c55e' : '#ef4444'); };
-  var lado = function(rot, o){
-    var pct = (o && o.pct!=null) ? o.pct+'%' : '—';
-    return '<div style="flex:1;text-align:center;min-width:0">'
-      + '<div style="font-size:19px;font-weight:800;line-height:1.1;color:'+cor(o&&o.pct)+'">'+pct+'</div>'
-      + '<div style="font-size:8.5px;color:#777;margin-top:1px;white-space:nowrap">'+rot+'</div>'
-      + '</div>';
-  };
+  var o = (t && t.geral) ? t.geral : bloco;
+  var pct = (o && o.pct != null) ? o.pct : null;
 
-  // Sem o bloco das três taxas (servidor antigo), mantém o número único.
-  if(!t){
-    el.textContent = bloco.pct==null ? '-' : bloco.pct+'%';
-    el.style.color = cor(bloco.pct);
-    return;
-  }
-  el.style.display = 'flex';
-  el.style.gap = '10px';
-  el.style.alignItems = 'flex-start';
-  el.style.justifyContent = 'center';
-  el.innerHTML = lado('Motor', t.motor) + lado('Reanálise', t.rean);
+  // Volta ao render simples: um numero ocupando o card.
+  el.style.display = '';
+  el.style.gap = '';
+  el.textContent = pct == null ? '-' : pct + '%';
+  el.style.color = pct == null ? '#666' : (pct >= 50 ? '#22c55e' : '#ef4444');
+  el.title = (o && o.tot) ? (o.ok + ' de ' + o.tot + ' corridas resolvidas') : '';
 
-  // A linha de referência antiga vira desnecessária: os dois valores já estão
-  // no card. Remove pra não sobrar resíduo de render anterior.
+  // Residuo do render antigo, quando havia uma linha de referencia embaixo.
   var ref = document.getElementById(el.id + '-ref');
   if(ref) ref.remove();
 }

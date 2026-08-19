@@ -1859,6 +1859,47 @@ function _parBW(r){
 }
 // Celula do AvB BW, no MESMO formato visual da coluna do Motor: badge do trap,
 // nome embaixo, "vs" no meio. Se nao ha BW, celula vazia com um traco.
+// UMA celula de AvB por corrida. Resolve, nesta ordem:
+//   1) a sua escolha (race_user_data.avb_escolhido) — o par que voce apostou
+//   2) o fechamento do motor (races.avb_fechamento)
+//   3) o AvB da analise global (trap_fav x trap_und)
+// E' o MESMO par que manda no Bateu, na Odd e na Banca, entao a tela nao pode
+// mostrar outro: duas colunas obrigavam a decidir, a cada linha, qual ler.
+function _celulaAvb(r){
+  var lado = function(trap, nome, perfil){
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
+      + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
+      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
+      + (perfil ? '<div style="font-size:9px;color:#666;text-align:center">'+perfil+'</div>' : '')
+      + '</div>';
+  };
+  var esc = _jsonOuNull(r.avb_escolhido);
+  var fech = _jsonOuNull(r.avb_fechamento);
+  var av = esc || fech;
+  var a, b, pa = '', pb = '', origem;
+  if (av) {
+    a = { trap: av.aTrap, nome: av.aNome }; b = { trap: av.bTrap, nome: av.bNome };
+    origem = esc ? 'sua escolha' : 'motor';
+  } else if (r.trap_fav && r.trap_und) {
+    a = { trap: r.trap_fav, nome: r.name_fav }; b = { trap: r.trap_und, nome: r.name_und };
+    pa = r.perfil_fav || ''; pb = r.perfil_und || '';
+    origem = 'motor';
+  } else {
+    return '<td style="text-align:center;vertical-align:middle;color:#444;font-size:11px">&mdash;</td>';
+  }
+  return '<td style="text-align:center;vertical-align:middle">'
+    + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
+    +   lado(a.trap, a.nome, pa)
+    +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
+    +   lado(b.trap, b.nome, pb)
+    + '</div>'
+    // Diz de onde veio o par, discreto: sem isso nao da pra saber se a linha
+    // reflete a sua entrada ou a decisao do motor.
+    + '<div style="font-size:8px;color:' + (esc ? '#60a5fa' : '#555') + ';margin-top:2px;text-transform:uppercase;letter-spacing:.4px">' + origem + '</div>'
+    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ')">&#128269; ver historico</a>'
+    + '</td>';
+}
+
 function _celulaBW(r){
   var av = _parBW(r);
   if(!av){
@@ -1926,15 +1967,19 @@ function _blocoAvb(av, rotulo, cor){
     + '<div style="font-size:8.5px;color:#777">' + nums.join(' &middot; ') + edgeStr + '</div>'
     + '</div>';
 }
-// Devolve o HTML dos blocos conforme a regra de prioridade.
-function _avbsDoHistorico(r){
-  var fech = _jsonOuNull(r.avb_fechamento);
+// UMA coluna, UM AvB. Resolve para a sua escolha quando voce entrou na mao;
+// sem escolha, para o AvB do motor no fechamento.
+//
+// Antes esta funcao mostrava os DOIS quando divergiam, pra dar pra comparar.
+// A comparacao continua existindo, mas saiu da tela: ela agora vive so no
+// calculo das taxas, e a tela mostra apenas o par que valeu. Duas visoes lado
+// a lado obrigavam a decidir, a cada linha, qual delas ler.
+function _avbDoHistorico(r){
   var esc  = _jsonOuNull(r.avb_escolhido);
-  if(!fech && !esc) return '';
-  if(esc && !fech) return _blocoAvb(esc, 'sua escolha', '#1d4ed8');
-  if(fech && !esc) return _blocoAvb(fech, 'fechamento', '#22c55e');
-  if(_mesmoPar(esc, fech)) return _blocoAvb(esc, 'escolha = fechamento', '#22c55e');
-  return _blocoAvb(esc, 'sua escolha', '#1d4ed8') + _blocoAvb(fech, 'fechamento do motor', '#22c55e');
+  if(esc) return _blocoAvb(esc, 'sua escolha', '#1d4ed8');
+  var fech = _jsonOuNull(r.avb_fechamento);
+  if(fech) return _blocoAvb(fech, 'motor', '#22c55e');
+  return '';
 }
 
 router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
@@ -1992,49 +2037,43 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const _tx = (function(){
     const { bateuPar } = require('../utils/avbResultado');
     const z = () => ({ ok:0, tot:0, pct:null });
-    const o = { geral:z(), motor:z(), bw:z() };
+    const o = { geral:z() };
     for (const r of racesValidas) {
       const ordem = r.finishing_order_json;
       const bw = _parBW(r);
+      // Um AvB so: o que valeu. Sua escolha quando existe, senao o do motor.
       const par = {
-        motor: (r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null,
-        bw:    bw,
         geral: bw || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null)
       };
-      for (const k of ['geral','motor','bw']) {
+      for (const k of ['geral']) {
         if (!par[k]) continue;
         const v = bateuPar(ordem, par[k].aTrap, par[k].bTrap);
         if (v === null) continue;
         o[k].tot++; if (v) o[k].ok++;
       }
     }
-    for (const k of ['geral','motor','bw']) o[k].pct = o[k].tot ? Math.round(o[k].ok/o[k].tot*100) : null;
+    for (const k of ['geral']) o[k].pct = o[k].tot ? Math.round(o[k].ok/o[k].tot*100) : null;
     return o;
   })();
 
-  // ── Grafico por turno: motor x reanalise, acerto x erro ──────────────────
+  // ── Grafico por turno: acerto x erro do AvB que valeu ────────────────────
+  // Uma barra por turno, nao duas: com um AvB por corrida nao ha mais o que
+  // comparar entre motor e reanalise dentro do turno.
   // Mesmo corte de turno do dashboard de HR (6h e 13h BR) de proposito: se as
   // duas telas usassem cortes diferentes, os numeros discordariam sem motivo
   // aparente. Conta TODAS as corridas analisadas, nao so as apostadas.
   const _turnos = (function(){
     const { bateuPar } = require('../utils/avbResultado');
-    const vazio = () => ({ motor:{ok:0,err:0}, bw:{ok:0,err:0} });
-    const g = { 'Manhã':vazio(), 'Tarde':vazio() };
+    const g = { 'Manhã':{ok:0,err:0}, 'Tarde':{ok:0,err:0} };
     for (const r of racesValidas) {
       const h = parseInt(String(r.hora_br||'').split(':')[0], 10);
       if (isNaN(h)) continue;
       const t = h < 13 ? 'Manhã' : 'Tarde';
-      const bw = _parBW(r);
-      const pares = {
-        motor: (r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null,
-        bw: bw
-      };
-      for (const k of ['motor','bw']) {
-        if (!pares[k]) continue;
-        const v = bateuPar(r.finishing_order_json, pares[k].aTrap, pares[k].bTrap);
-        if (v === null) continue;      // indefinido fica fora
-        if (v) g[t][k].ok++; else g[t][k].err++;
-      }
+      const par = _parBW(r) || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null);
+      if (!par) continue;
+      const v = bateuPar(r.finishing_order_json, par.aTrap, par.bTrap);
+      if (v === null) continue;      // indefinido fica fora
+      if (v) g[t].ok++; else g[t].err++;
     }
     return g;
   })();
@@ -2114,22 +2153,10 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 <div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
-<div class="kpi" style="min-width:250px">
+<div class="kpi" title="o AvB que valeu em cada corrida: a sua escolha quando você entrou, o do motor quando não entrou">
   <div class="kpi-label">Taxa de acerto</div>
-  <div class="tx3">
-  ${[['Geral','geral','o AvB que valeu: BW quando há, motor quando não há'],
-     ['Pré-análise','motor','só o AvB do motor (análise global)'],
-     ['Análise BW','bw','só o AvB do fechamento da reanálise']]
-    .map(function(l){
-      var o=_tx[l[1]];
-      var cor = o.pct==null ? '#666' : (o.pct>=50 ? '#22C65E' : '#ef4444');
-      return '<div class="tx3-l" title="'+l[2]+'">'
-        + '<span class="tx3-rot">'+l[0]+'</span>'
-        + '<span class="tx3-num" style="color:'+cor+'">'+(o.pct==null?'—':o.pct+'%')+'</span>'
-        + '<span class="tx3-cnt">'+(o.tot?o.ok+'/'+o.tot:'')+'</span>'
-        + '</div>';
-    }).join('')}
-  </div>
+  <div class="kpi-val" style="color:${_tx.geral.pct==null?'#666':(_tx.geral.pct>=50?'#22C65E':'#ef4444')}">${_tx.geral.pct==null?'—':_tx.geral.pct+'%'}</div>
+  ${_tx.geral.tot?`<div style="font-size:9px;color:#666;margin-top:2px">${_tx.geral.ok}/${_tx.geral.tot}</div>`:''}
 </div>
 <div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
@@ -2152,12 +2179,12 @@ ${navBar(user, 'historico')}
         + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
     };
     return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'
-      + linha('Motor',d.motor) + linha('Reanálise',d.bw) + '</div>';
+      + linha('AvB',d) + '</div>';
   }).join('')}
   </div>
 </div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:50px">AvB Motor</th><th style="width:50px">AvB BW</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -2167,20 +2194,7 @@ ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
-<td style="text-align:center;vertical-align:middle"><div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">
-<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">
-<div class="trap-badge t${r.trap_fav}" style="width:20px;height:20px;font-size:11px">${r.trap_fav}</div>
-<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_fav||'').split(' ')[0]}</div>
-${r.perfil_fav?`<div style="font-size:9px;color:#666;text-align:center">${r.perfil_fav}</div>`:''}
-</div>
-<div style="font-size:10px;color:#555;padding-top:6px">vs</div>
-<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">
-<div class="trap-badge t${r.trap_und}" style="width:20px;height:20px;font-size:11px">${r.trap_und}</div>
-<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(r.name_und||'').split(' ')[0]}</div>
-${r.perfil_und?`<div style="font-size:9px;color:#666;text-align:center">${r.perfil_und}</div>`:''}
-</div></div>
-<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:4px" onclick="openSessValModal(${r.id})">&#128269; ver historico</a></td>
-${_celulaBW(r)}
+${_celulaAvb(r)}
 <td style="text-align:center"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>
 <option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
