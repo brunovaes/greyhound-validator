@@ -132,6 +132,17 @@ function classificar(db, opts) {
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
   ).all(date);
 
+  // Pares que o betwinner ABRIU, por corrida (captador avb_abertos) — mesmo contrato
+  // da Carga VIP. Corrida SEM linha aqui = não monitorada → abriu fica null (≠ false).
+  const abertosPorCorrida = {};
+  try {
+    const abrs = db.prepare("SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?").all(date);
+    for (const a of abrs) {
+      let pares = null; try { pares = JSON.parse(a.pares_json); } catch (e) {}
+      if (Array.isArray(pares)) abertosPorCorrida[String(a.corrida || '') + '|' + String(a.hora || '')] = pares;
+    }
+  } catch (e) {}
+
   let entradas = [];
   for (const row of rows) {
     let hist = null, chegada = null, rc = null;
@@ -176,6 +187,21 @@ function classificar(db, opts) {
         const outro = voto > 0 ? Y : X;
         const vazioPick = temVazia(pick.trap);   // pick tem box vazio ao lado?
         const vazioOutro = temVazia(outro.trap); // rival tem box vazio ao lado?
+        // O par pick×outro abriu no betwinner? A que odd? (mesmo contrato da Carga VIP)
+        const paresAbertos = abertosPorCorrida[String(row.corrida || '') + '|' + String(row.hora || '')];
+        let abriu = null, oddAbertura = null;
+        if (paresAbertos) {                                  // corrida foi monitorada
+          const par = paresAbertos.find(p =>
+            (Number(p.aTrap) === pick.trap && Number(p.bTrap) === outro.trap) ||
+            (Number(p.aTrap) === outro.trap && Number(p.bTrap) === pick.trap));
+          if (par) {
+            abriu = true;
+            const od = Number(Number(par.aTrap) === pick.trap ? par.oddAvenceB : par.oddBvenceA);
+            oddAbertura = Number.isFinite(od) && od > 0 ? od : null;
+          } else {
+            abriu = false;                                   // monitorada, mas esse par não abriu
+          }
+        }
         entradas.push({
           hora: row.hora, corrida: row.corrida, dist: row.dist,
           pick_trap: pick.trap, pick_nome: (nomesPorTrap && nomesPorTrap[String(pick.trap)]) || '',
@@ -200,6 +226,9 @@ function classificar(db, opts) {
           chegada: chegada,                              // [{pos,trap}] ou null
           bateu: bateuPar(chegada, pick.trap, outro.trap), // true|false|null
           nomes_por_trap: nomesPorTrap,
+          // ── o par abriu no BW e a que odd (captador avb_abertos) ──
+          abriu: abriu,                                  // true|false|null (null = não monitorada)
+          odd_abertura: oddAbertura,                     // odd capturada do par ou null
           // ── status card / near-post (trap vazia é checada perto da corrida) ──
           verificado: !!row.final_check_at,
           verificado_em: row.final_check_at || null,
