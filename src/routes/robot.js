@@ -421,6 +421,34 @@ function _gravarFechamentoAvb(fech){
   }catch(e){ console.error('[ODDS-FECHAMENTO] erro:', e.message); }
 }
 
+// Grava a foto da principal na PRIMEIRA analise da corrida (o "primeiro palpite"),
+// na coluna avb_inicial. CONGELADA: grava so UMA vez (guarda "avb_inicial IS NULL")
+// e as reconciliacoes near-post NUNCA a tocam. Escondida da tela — serve so p/ medir
+// depois se recalcular perto da largada ajuda ou atrapalha. Espelho do fechamento.
+function _gravarInicialAvb(inic){
+  try{
+    if(!inic || !inic.corrida || !inic.principal) return;
+    const { db } = require('../db/database');
+    const date=getTodayDate();
+    const p=inic.principal;
+    const registro={
+      aTrap:p.aTrap, aNome:p.aNome, bTrap:p.bTrap, bNome:p.bNome,
+      odd:p.oddAvenceB, marketPct:p.marketPct,
+      reanalisePct:p.reanalisePct, motorOrigPct:p.motorOrigPct, edge:p.edge,
+      obs:p.obs||null,
+      origem:(p.reanalisePct!=null?'reanalise':'fallback'),
+      gameId:inic.gameId, ts:inic.primeiroEm
+    };
+    const row = inic.hora
+      ? db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.hora=? AND r.avb_inicial IS NULL LIMIT 1").get(date, inic.corrida, inic.hora)
+      : db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.avb_inicial IS NULL LIMIT 1").get(date, inic.corrida);
+    if(row){
+      db.prepare('UPDATE races SET avb_inicial=? WHERE id=?').run(JSON.stringify(registro), row.id);
+      console.log('[ODDS-INICIAL] '+inic.corrida+' '+(inic.hora||'')+' -> T'+registro.aTrap+'xT'+registro.bTrap+' odd '+registro.odd+' ('+registro.origem+')');
+    }
+  }catch(e){ console.error('[ODDS-INICIAL] erro:', e.message); }
+}
+
 // Captador dos AvBs que o betwinner ABRE por corrida (todos os pares, nao so os
 // da reanalise). Grava na tabela avb_abertos, uma linha por game_id, guardando o
 // conjunto MAIS COMPLETO visto (upsert quando aparecem mais pares). Serve pra
@@ -463,6 +491,7 @@ function _iniciarOdds(){
     intervaloMs: c.intervaloSeg * 1000,
     podeRodar: _dentroJanelaOdds,
     onClose: _gravarFechamentoAvb,
+    onFirst: _gravarInicialAvb,
     onPairs: _gravarParesAbertos,
     getOddsCfg: () => { const x = getOddsConfig(); return { maxAvbs: x.maxAvbs, edgeMin: x.edgeMin }; },
     proxyUrl: c.proxyUrl,

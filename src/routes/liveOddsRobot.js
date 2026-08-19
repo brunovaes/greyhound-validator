@@ -471,6 +471,7 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
 // (robot.js), que tem acesso ao banco.
 let timer = null;
 let _onClose = null; // callback(fechamento) — grava a principal no banco no post (setado por iniciar)
+let _onFirst = null; // callback(inicial) — grava a principal na 1a analise (congelada), uma vez (setado por iniciar)
 let _onPairs = null; // callback(pares abertos) — captador de calibracao do avb_parelho (setado por iniciar)
 
 // Cache da DESCOBERTA de pistas/corridas. O GetSportsShortZip (a lista de quais
@@ -580,8 +581,19 @@ async function umCiclo(getScores) {
       analiseCorrida: analise ? (analise.corrida || null) : null, // casa com o front
       hora: (analise && analise.hora) || prev.hora || null,       // p/ casar a linha no banco no fechamento
       fechado: prev.fechado || false,                             // ja gravou o fechamento? (persiste entre ciclos)
+      inicialGravado: prev.inicialGravado || false,               // ja gravou o AvB inicial (1a analise)? (persiste)
       updatedAt: Date.now()
     };
+
+    // INICIAL: na 1a vez que a corrida tem principal, grava o AvB inicial (congelado).
+    // AUTOMATICO, sem depender de tela/login. O _onFirst (robot.js) grava so uma vez
+    // (guarda no proprio SQL), entao repetir e' inofensivo. Nunca derruba o ciclo.
+    const _ent = status.porCorrida[chave];
+    if (!_ent.inicialGravado && _ent.temAnalise && _ent.avbs && _ent.avbs.length && typeof _onFirst === 'function') {
+      _ent.inicialGravado = true;
+      try { _onFirst({ corrida: _ent.analiseCorrida, hora: _ent.hora, gameId: _ent.gameId, track: _ent.track, principal: _ent.avbs[0], primeiroEm: Math.floor(Date.now() / 1000) }); }
+      catch (err) { addLog('warn', 'onFirst ' + (_ent.analiseCorrida || _ent.gameId) + ': ' + err.message); }
+    }
   }
 
   // FECHAMENTO: no instante em que a corrida larga (agora >= startTs), grava a
@@ -617,6 +629,7 @@ function iniciar(getScores, opts) {
   opts = opts || {};
   const intervaloMs = opts.intervaloMs || 5000;
   _onClose = (typeof opts.onClose === 'function') ? opts.onClose : null; // grava o fechamento no banco
+  _onFirst = (typeof opts.onFirst === 'function') ? opts.onFirst : null; // grava o AvB inicial (1a analise)
   _onPairs = (typeof opts.onPairs === 'function') ? opts.onPairs : null; // captador de pares abertos (calibracao)
   _getOddsCfg = (typeof opts.getOddsCfg === 'function') ? opts.getOddsCfg : null; // config viva (maxAvbs/edgeMin)
   if (opts.proxyUrl !== undefined) setProxy(opts.proxyUrl || process.env.BETWINNER_PROXY_URL || ''); // config vence env
