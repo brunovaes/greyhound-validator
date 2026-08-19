@@ -193,6 +193,7 @@ function classificar(db, opts) {
           contexto_aplicado: regra.apelido,             // qual gaveta validada decidiu
           sinal: regra.sinal,                            // qual sinal separou
           taxa_validada_pct: regra.taxa,                 // % do TESTE (fora da amostra), ao vivo
+          taxa_nivel_pct: regra.taxa,                    // apelido compat. c/ a tela v1 (mesmo número)
           ic_low_pct: regra.ic_low,                      // pior caso honesto do edge
           margem_sinal: +margem.toFixed(2),              // folga do sinal (caltm em s, podio em fração)
           // ── placar (a Carga VIP é o quadro de teste ao vivo) ──

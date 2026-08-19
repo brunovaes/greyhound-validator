@@ -1397,6 +1397,25 @@ router.get('/carga-vip', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// VIP DO VIP — aba SEPARADA (não mexe na Carga VIP v1). Serve o motor de nota v2:
+// só contexto validado fora da amostra, corte de qualidade, 1 AvB por corrida e a
+// regra da trap vazia. É pra ACOMPANHAR o motor rodando ao lado, com placar ao vivo.
+// Mesma permissão da Carga VIP ('analisar.carga_vip').
+router.get('/vip-do-vip', (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+    const { podeAcessar } = require('../middleware/acesso');
+    if (!podeAcessar(req.user, 'analisar.carga_vip')) {
+      return res.status(403).json({ error: 'Sem permissão para a VIP do VIP.' });
+    }
+    const mn = require('../utils/motorNota');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+      ? req.query.date
+      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    res.json(mn.classificar(db, { date }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/sessions', (req, res) => {
   try {
     const sessions = db.prepare('SELECT id, name, created_at FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
