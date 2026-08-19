@@ -1526,13 +1526,13 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-abas a.on{background:rgba(34,197,94,.14);border-color:#22c55e;color:#22c55e}
 
 /* colunas exclusivas do VIP do VIP */
-.c-selo{width:104px;flex-shrink:0}
-.c-ctx{width:170px;flex-shrink:0}
-.vip-selo .nota{font-size:17px;font-weight:800;line-height:1.1}
+.c-selo{width:74px;flex-shrink:0}
+.c-ctx{width:138px;flex-shrink:0}
+.vip-selo .nota{font-size:15px;font-weight:800;line-height:1.1}
 .vip-selo .tier{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#666}
 .vip-selo .marcas{font-size:12px;margin-top:2px}
 .vip-selo .naoconf{font-size:9px;color:#f97316}
-.vip-ctx{font-size:12px;color:#ccc;line-height:1.4}
+.vip-ctx{font-size:11px;color:#ccc;line-height:1.4}
 .vip-ctx .sinal{font-size:10px;color:#666;margin-top:2px}
 .vip-val .pct{font-size:15px;font-weight:800;line-height:1.2;color:#22c55e}
 .vip-val .ic{font-size:10px;color:#666}
@@ -1563,10 +1563,10 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
    cabecalho em maiusculas pequenas e cinza, conteudo uniforme em 13px,
    celulas com padding 10px 12px. A unica diferenca de proposito e' o tamanho
    do cabecalho: la sao 9px, aqui ficou 11px a pedido. */
-.vip-cab{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
+.vip-cab{display:flex;align-items:center;gap:10px;padding:10px 10px;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
 .vip-cab span{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;text-align:center}
 
-.vip-lin{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #222;border-left:3px solid transparent;cursor:pointer;font-size:13px;transition:background .15s}
+.vip-lin{display:flex;align-items:center;gap:10px;padding:10px 10px;border-bottom:1px solid #222;border-left:3px solid transparent;cursor:pointer;font-size:13px;transition:background .15s}
 .vip-lin:last-child{border-bottom:none;border-radius:0 0 9px 9px}
 .vip-lin:hover{background:rgba(255,255,255,.02)}
 .vip-lin.tem-skip{background:rgba(192,132,252,.06)}
@@ -1579,13 +1579,16 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-lin.errou:hover{background:rgba(239,68,68,.17)}
 
 /* larguras das colunas (cabecalho e linha usam as mesmas) */
-.c-hora{width:66px;flex-shrink:0;text-align:center}
-.c-cor{flex:1 1 0;min-width:130px}
-.c-avb{width:330px;flex-shrink:0}
-.c-bw{width:88px;flex-shrink:0;text-align:center}
-.c-pod{width:150px;flex-shrink:0}
-.c-cha{width:74px;flex-shrink:0}
-.c-aca{width:46px;flex-shrink:0}
+/* As larguras somadas + os gaps + o padding tem que caber nos ~1192px que o
+   .content oferece. Com as colunas Selo e Contexto do VIP do VIP a conta dava
+   1194 e a ultima coluna vazava pra fora da caixa. */
+.c-hora{width:54px;flex-shrink:0;text-align:center}
+.c-cor{flex:1 1 0;min-width:104px}
+.c-avb{width:228px;flex-shrink:0}
+.c-bw{width:76px;flex-shrink:0;text-align:center}
+.c-pod{width:132px;flex-shrink:0}
+.c-cha{width:66px;flex-shrink:0}
+.c-aca{width:38px;flex-shrink:0}
 
 /* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
 .vip-lin > div{text-align:center}
@@ -1594,18 +1597,18 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-hora .grande{font-size:14px;font-weight:800;color:#22c55e;line-height:1.15}
 .vip-hora .peq{font-size:11px;color:#3f8f5c}
 
-.vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:6px}
-.vip-dog{width:112px;height:74px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:3px}
+.vip-dog{width:92px;height:62px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 /* A arte olha pra direita. Espelhar a da direita poe os dois de frente um pro
    outro, como na arena da tela Analisar. */
 .vip-dog.espelha img{transform:scaleX(-1)}
 .vip-dog .semarte{width:34px;height:34px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
-.vip-vence{font-size:9px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:30px}
+.vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:30px}
 .vip-galgo{display:flex;flex-direction:column;align-items:center;min-width:0}
 /* Margem negativa: a arte tem area transparente em volta, entao o nome
    parecia solto mesmo com gap zero. Ele sobe por cima desse vazio. */
-.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-14px}
+.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-14px}
 
 .vip-cor{font-size:13px;color:#f0f0f0;font-weight:600;line-height:1.4}
 .vip-cor .selos{font-size:11px;color:#60a5fa;font-weight:500;margin-top:2px}
@@ -1618,12 +1621,12 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 
 /* As bolinhas da chegada sao os .trap-badge t1..t6 do designTokens, com as
    cores reais das mangas. Aqui so o tamanho, que cada tela ajusta. */
-.vip-chegada{display:flex;align-items:center;justify-content:center;gap:3px}
+.vip-chegada{display:flex;align-items:center;justify-content:center;gap:2px}
 /* Replay embaixo das bolinhas, no mesmo formato do botao do Historico. */
 .vip-replay{margin-top:5px}
 .vip-replay button{font-size:10px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
 .vip-replay button:hover{background:rgba(96,165,250,.16)}
-.vip-chegada .trap-badge{width:21px;height:21px;font-size:11px;font-weight:700;flex-shrink:0}
+.vip-chegada .trap-badge{width:19px;height:19px;font-size:10px;font-weight:700;flex-shrink:0}
 /* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
    pra ver onde o par chegou sem contornos competindo com a cor da manga. */
 .vip-chegada .trap-badge{opacity:.4}
@@ -1641,7 +1644,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-acao .btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;font-size:15px;color:#22c55e;background:transparent;border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-family:inherit;line-height:1}
 .vip-acao .btn:hover{background:rgba(34,197,94,.12)}
 .vip-rodape{padding:12px 2px;font-size:11px;color:#555}
-@media(max-width:768px){
+/* 1080 e nao 768: entre 900 e 1100 a janela ainda e' desktop, mas as colunas
+   ja nao cabem lado a lado. Era ai que a lista vazava pra fora da caixa. */
+@media(max-width:1080px){
   html,body{overflow-x:hidden}
   .content{padding:14px 12px}
   .topo{flex-direction:column;gap:10px}
@@ -1653,6 +1658,8 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
   .c-avb{width:auto;flex:1 1 100%}
   .c-cor{flex:1 1 100%}
   .c-bw{width:auto;text-align:left}
+  .c-selo{width:auto}
+  .c-ctx{width:auto;flex:1 1 100%}
   .c-pod{width:auto;order:9}
   .c-cha{width:auto;text-align:left;margin-left:auto}
   .c-aca{width:auto;order:10}
