@@ -65,6 +65,18 @@
         return toks.slice(0, k).join(' ').trim();
       }
     }
+    // Ultimo recurso, pros codigos de cor que nao estao na lista (o
+    // /api/vip-do-vip trouxe "Limestone Fizz ltbd b Grangeview Ten-Tarastar",
+    // e "ltbd" nao estava). Nome de galgo vem em Maiusculas Iniciais, entao o
+    // primeiro token TODO em minusculas marca onde comeca o pedigree.
+    // As preposicoes ficam de fora da regra pra nao cortar nomes legitimos.
+    var LIGACAO = /^(?:of|the|de|da|do|la|le|el|di|du|van|von|mac|mc|and|a|o)$/i;
+    for (var m = 1; m < toks.length; m++) {
+      var w = toks[m];
+      if (w.length >= 2 && w === w.toLowerCase() && /^[a-z]+$/.test(w) && !LIGACAO.test(w)) {
+        return toks.slice(0, m).join(' ').trim();
+      }
+    }
     return txt;
   }
 
@@ -132,7 +144,9 @@
       // trap, a mesma bolinha usada no Historico e na tela de sessao.
       var cls = 'trap-badge t' + t + (pos === 1 ? ' p1' : '')
         + ((t === Number(pickTrap) || t === Number(outroTrap)) ? ' nodisputa' : '');
-      var nome = nomes && nomes[String(t)] ? ' ' + nomes[String(t)] : '';
+      // limpaNome aqui tambem: o /api/vip-do-vip manda nomes_por_trap com a
+      // linha de pedigree junto ("Limestone Fizz ltbd b Grangeview Ten-...").
+      var nome = nomes && nomes[String(t)] ? ' ' + limpaNome(nomes[String(t)]) : '';
       return '<span class="' + cls + '" title="' + esc(pos + 'o lugar: T' + t + nome) + '">' + esc(t) + '</span>';
     }).join('');
   }
@@ -209,10 +223,28 @@
     // No VIP do VIP a legenda vira a lista de gavetas validas do dia: e' o que
     // explica por que uma corrida entrou e outra nao.
     if (VIPVIP && Array.isArray(d.cerebro_ativo) && d.cerebro_ativo.length) {
-      legenda = '<b>Cérebro ativo hoje:</b> ' + d.cerebro_ativo.map(esc).join(' &middot; ');
+      // Cada gaveta vem como objeto: {apelido, tier, sinal, taxa_teste,
+      // ic_low, n_teste}. Na linha fica so o apelido; o resto vai pro title,
+      // porque taxa e tamanho de amostra sao o que dizem o quanto confiar.
+      legenda = '<b>Cérebro ativo hoje:</b> ' + d.cerebro_ativo.map(function (g) {
+        if (!g || typeof g !== 'object') return esc(g);
+        var det = [];
+        if (g.tier) det.push(g.tier);
+        if (g.sinal) det.push('sinal: ' + g.sinal);
+        if (g.taxa_teste != null) det.push('teste ' + g.taxa_teste + '%');
+        if (g.ic_low != null) det.push('pior ' + g.ic_low + '%');
+        if (g.n_teste != null) det.push('n=' + g.n_teste);
+        return '<span title="' + esc(det.join('  \u00b7  ')) + '">' + esc(g.apelido || '?') + '</span>';
+      }).join(' &middot; ');
     }
     var boxLeg = document.getElementById('vip-legenda');
-    if (boxLeg) { boxLeg.innerHTML = legenda; boxLeg.className = VIPVIP ? 'vip-cereb' : 'vip-legenda'; }
+    if (boxLeg) {
+      boxLeg.innerHTML = legenda;
+      boxLeg.className = VIPVIP ? 'vip-cereb' : 'vip-legenda';
+      // A explicacao longa do motor nao cabe na tela, mas nao merece sumir:
+      // fica no title da faixa, ao alcance de quem quiser conferir a regra.
+      boxLeg.title = d.legenda ? String(d.legenda) : '';
+    }
 
     if (!ent.length) {
       alvo.innerHTML = '<div class="vip-box" style="padding:30px 22px;text-align:center;color:#888;font-size:13px">'
@@ -278,10 +310,11 @@
       var selo = '<div class="nota" style="color:' + corNota + '">' + esc(e.nota || '-') + '</div>'
         + (e.tier ? '<div class="tier">' + esc(e.tier) + '</div>' : '')
         + (marcas.length ? '<div class="marcas">' + marcas.join(' ') + '</div>' : '')
-        // "ainda nao conferido" e' diferente de "conferido e nao tem box vazio".
-        // Sem esta marca, os dois casos ficariam iguais na tela.
-        + (e.selo_vazia_pick && !e.trap_vazia_conferida
-            ? '<div class="naoconf" title="O card ainda não passou pela checagem perto da largada">a conferir</div>' : '');
+        // A marca aparece sempre que a checagem NAO passou, tenha selo ou nao:
+        // sem ela, "conferido e nao tem box vazio" e "ainda nao olhamos" ficam
+        // iguais na tela, e sao coisas diferentes na hora de entrar.
+        + (e.trap_vazia_conferida === false
+            ? '<div class="naoconf" title="O card ainda não passou pela checagem de box vazio perto da largada">a conferir</div>' : '');
 
       var ctx = '<div>' + esc(e.contexto_aplicado || '-') + '</div>'
         + (e.sinal ? '<div class="sinal">' + esc(e.sinal) + '</div>' : '');
@@ -317,7 +350,8 @@
         + (VIPVIP
           ? '<div class="c-selo vip-selo">' + selo + '</div>'
             + '<div class="c-ctx vip-ctx" title="' + esc(e.margem_sinal != null ? 'margem do sinal: ' + e.margem_sinal : '') + '">' + ctx + '</div>'
-          : '<div class="c-bw vip-bw">' + alvoBW + '</div>')
+          : '')
+        + '<div class="c-bw vip-bw">' + alvoBW + '</div>'
         + '<div class="c-pod"><div class="vip-chegada">'
         + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
         + '<div class="vip-replay"></div></div>'
@@ -344,9 +378,8 @@
       + '<span class="c-hora">Hora BR</span>'
       + '<span class="c-cor">Corrida</span>'
       + '<span class="c-avb">AvB</span>'
-      + (VIPVIP
-        ? '<span class="c-selo">Selo</span><span class="c-ctx">Contexto</span>'
-        : '<span class="c-bw">Abriu na BW</span>')
+      + (VIPVIP ? '<span class="c-selo">Selo</span><span class="c-ctx">Contexto</span>' : '')
+      + '<span class="c-bw">Abriu na BW</span>'
       + '<span class="c-pod">Pódio</span>'
       + '<span class="c-cha">' + (VIPVIP ? 'Validada' : 'Chances') + '</span>'
       + '<span class="c-aca"></span>'
@@ -409,7 +442,10 @@
       var tiers = '';
       var pt = TOPO.por_tier;
       if (pt && typeof pt === 'object') {
-        tiers = Object.keys(pt).map(function (k) { return card('bw', k, pt[k], ''); }).join('');
+        // Tier zerado nao vira card: "ELITE 0" e "BASE 0" ocupavam a faixa
+        // inteira pra dizer que nao tem nada, empurrando o que importa.
+        tiers = Object.keys(pt).filter(function (k) { return Number(pt[k]) > 0; })
+          .map(function (k) { return card('bw', k, pt[k], ''); }).join('');
       }
       var desc = TOPO.corridas_descartadas_trap_vazia;
       box.innerHTML = comuns + tiers
