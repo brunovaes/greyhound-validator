@@ -332,10 +332,11 @@
         + ' data-hora="' + esc(e.hora || '') + '" data-corrida="' + esc(e.corrida || '') + '"'
         + ' title="Clique para abrir esta corrida na tela Analisar">'
         // Hora nas duas linhas, no formato do Historico: BR grande, UK menor.
-        // A de cima e' a de fonte maior. Hoje: UK em cima, BR embaixo.
+        // A de cima e' a de fonte maior. Hoje: BR em cima (a coluna se chama
+        // Hora BR), UK embaixo.
         + '<div class="c-hora vip-hora">'
-        + '<div class="grande">' + esc(uk || br || '-') + '</div>'
-        + (br && uk && br !== uk ? '<div class="peq">' + esc(br) + '</div>' : '')
+        + '<div class="grande">' + esc(br || uk || '-') + '</div>'
+        + (br && uk && br !== uk ? '<div class="peq">' + esc(uk) + '</div>' : '')
         + '</div>'
         + '<div class="c-cor vip-cor" title="' + esc(tooltipCorrida(e)) + '">'
         + esc(pistaCompleta(e.corrida))

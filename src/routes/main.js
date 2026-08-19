@@ -1582,12 +1582,15 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 /* As larguras somadas + os gaps + o padding tem que caber nos ~1192px que o
    .content oferece. Com as colunas Selo e Contexto do VIP do VIP a conta dava
    1194 e a ultima coluna vazava pra fora da caixa. */
-.c-hora{width:54px;flex-shrink:0;text-align:center}
-.c-cor{flex:1 1 0;min-width:104px}
-.c-avb{width:228px;flex-shrink:0}
-.c-bw{width:76px;flex-shrink:0;text-align:center}
-.c-pod{width:132px;flex-shrink:0}
-.c-cha{width:66px;flex-shrink:0}
+/* Corrida agora tem largura fixa e enxuta: o texto e' curto ("Kilkenny A7")
+   e antes ela era a unica flexivel, engolindo toda a sobra da linha.
+   Quem cresce agora sao Podio e Validada, que sao as colunas que a gente le. */
+.c-hora{width:66px;flex-shrink:0;text-align:center}
+.c-cor{width:96px;flex-shrink:0}
+.c-avb{width:240px;flex-shrink:0}
+.c-bw{width:84px;flex-shrink:0;text-align:center}
+.c-pod{flex:1 1 132px;min-width:132px}
+.c-cha{flex:1 1 66px;min-width:66px}
 .c-aca{width:38px;flex-shrink:0}
 
 /* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
@@ -1598,7 +1601,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-hora .peq{font-size:11px;color:#3f8f5c}
 
 .vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:3px}
-.vip-dog{width:92px;height:62px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.vip-dog{width:100px;height:68px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 /* A arte olha pra direita. Espelhar a da direita poe os dois de frente um pro
    outro, como na arena da tela Analisar. */
@@ -1608,9 +1611,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-galgo{display:flex;flex-direction:column;align-items:center;min-width:0}
 /* Margem negativa: a arte tem area transparente em volta, entao o nome
    parecia solto mesmo com gap zero. Ele sobe por cima desse vazio. */
-.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-14px}
+.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:108px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-14px}
 
-.vip-cor{font-size:13px;color:#f0f0f0;font-weight:600;line-height:1.4}
+.vip-cor{font-size:12px;color:#f0f0f0;font-weight:600;line-height:1.4}
 .vip-cor .selos{font-size:11px;color:#60a5fa;font-weight:500;margin-top:2px}
 .vip-skip{font-size:11px;color:#c084fc;margin-top:2px}
 
@@ -1621,12 +1624,12 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 
 /* As bolinhas da chegada sao os .trap-badge t1..t6 do designTokens, com as
    cores reais das mangas. Aqui so o tamanho, que cada tela ajusta. */
-.vip-chegada{display:flex;align-items:center;justify-content:center;gap:2px}
+.vip-chegada{display:flex;align-items:center;justify-content:center;gap:3px}
 /* Replay embaixo das bolinhas, no mesmo formato do botao do Historico. */
 .vip-replay{margin-top:5px}
 .vip-replay button{font-size:10px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
 .vip-replay button:hover{background:rgba(96,165,250,.16)}
-.vip-chegada .trap-badge{width:19px;height:19px;font-size:10px;font-weight:700;flex-shrink:0}
+.vip-chegada .trap-badge{width:21px;height:21px;font-size:11px;font-weight:700;flex-shrink:0}
 /* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
    pra ver onde o par chegou sem contornos competindo com a cor da manga. */
 .vip-chegada .trap-badge{opacity:.4}
@@ -1656,7 +1659,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
   .vip-cab{display:none}
   .c-hora{width:46px}
   .c-avb{width:auto;flex:1 1 100%}
-  .c-cor{flex:1 1 100%}
+  .c-cor{width:auto;flex:1 1 100%}
   .c-bw{width:auto;text-align:left}
   .c-selo{width:auto}
   .c-ctx{width:auto;flex:1 1 100%}
