@@ -10,7 +10,7 @@ const { designTokensCSS } = require('../utils/designTokens');
 const { nomeCorridaCompleto, nomePista, NOMES_PISTAS } = require('../utils/nomesPistas');
 
 const BASE = process.env.BASE_PATH || '/greyhound';
-const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
+const { CANONICO, aplicarPessoais, salvarPessoal } = require('../db/compartilhado');
 const { exigirAcesso } = require('../middleware/acesso');
 
 function getLogo() {
@@ -721,7 +721,7 @@ ${navBar(user, 'analisar')}
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregar PDF
         </label>
-        ${can(user,'analisar.carga_vip') ? `<a href="${BASE}/carga-vip" class="tabbtn" id="btn-carga-vip">&#11088; Carga VIP</a>` : ''}
+        ${can(user,'analisar.carga_vip') ? `<a href="${BASE}/carga-vip" class="tabbtn" id="btn-carga-vip">&#11088; VIP Plus</a>` : ''}
         <a href="${BASE}/historico" class="tabbtn">&#128220; Históricos</a>
       </div>
       <div class="flist" id="rlist"></div>
@@ -1303,6 +1303,35 @@ function catalogoGalgos() {
   return porTrap;
 }
 
+// Marca que o usuario mandou uma corrida das listas VIP pra tela Analisar.
+// Gravado como dado PESSOAL (race_user_data): a escolha e' de quem clicou.
+//
+// O clique na lista chama isto ANTES de navegar. Se falhar, a navegacao
+// acontece do mesmo jeito: perder a marca e' chato, nao chegar na corrida e'
+// pior.
+router.post('/carga-vip/marcar', exigirAcesso('analisar.carga_vip'), express.json(), (req, res) => {
+  try {
+    const { hora, corrida, tipo } = req.body || {};
+    if (!hora || !corrida) return res.status(400).json({ ok: false, error: 'corrida nao informada' });
+    if (tipo !== 'plus' && tipo !== 'premium') return res.status(400).json({ ok: false, error: 'tipo invalido' });
+
+    // Mesma chave que as listas usam, na sessao canonica. Mais recente primeiro,
+    // caso a corrida apareca em mais de uma sessao do dia.
+    const r = db.prepare(
+      "SELECT r.id FROM races r JOIN race_sessions s ON s.id = r.session_id " +
+      "WHERE s.user_id = ? AND r.hora = ? AND r.corrida = ? ORDER BY r.id DESC LIMIT 1"
+    ).get(CANONICO, String(hora), String(corrida));
+    if (!r) return res.status(404).json({ ok: false, error: 'corrida nao encontrada' });
+
+    salvarPessoal(db, r.id, req.user.id, 'vip_tipo', tipo);
+    salvarPessoal(db, r.id, req.user.id, 'vip_marcado_em', new Date().toISOString());
+    res.json({ ok: true, raceId: r.id });
+  } catch (e) {
+    console.error('[carga-vip/marcar]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Chegada e resultado das corridas da Carga VIP.
 //
 // POR QUE ISTO EXISTE AQUI, e nao no /api/carga-vip: o dado ja esta no banco.
@@ -1460,7 +1489,7 @@ router.get('/carga-vip/disputa', exigirAcesso('analisar.carga_vip'), (req, res) 
 function paginaVip(modo) {
   return (req, res) => {
   const vipvip = modo === 'vipdovip';
-  const TITULO = vipvip ? 'VIP do VIP' : 'Carga VIP';
+  const TITULO = vipvip ? 'VIP Premium' : 'VIP Plus';
   const ENDPOINT = vipvip ? '/api/vip-do-vip' : '/api/carga-vip';
   const user = req.user;
   const logoB64 = getLogo();
@@ -1525,7 +1554,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-abas a:hover{border-color:#22c55e;color:#ccc}
 .vip-abas a.on{background:rgba(34,197,94,.14);border-color:#22c55e;color:#22c55e}
 
-/* colunas exclusivas do VIP do VIP */
+/* colunas exclusivas do VIP Premium */
 .c-selo{width:74px;flex-shrink:0}
 .c-ctx{width:138px;flex-shrink:0}
 .vip-selo .nota{font-size:15px;font-weight:800;line-height:1.1}
@@ -1580,7 +1609,7 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 
 /* larguras das colunas (cabecalho e linha usam as mesmas) */
 /* As larguras somadas + os gaps + o padding tem que caber nos ~1192px que o
-   .content oferece. Com as colunas Selo e Contexto do VIP do VIP a conta dava
+   .content oferece. Com as colunas Selo e Contexto do VIP Premium a conta dava
    1194 e a ultima coluna vazava pra fora da caixa. */
 /* Corrida agora tem largura fixa e enxuta: o texto e' curto ("Kilkenny A7")
    e antes ela era a unica flexivel, engolindo toda a sobra da linha.
@@ -1682,8 +1711,8 @@ ${navBar(user, 'cargavip')}
     <a class="volta" href="${BASE}">&#8592; Voltar para Analisar</a>
   </div>
   <div class="vip-abas">
-    <a href="${BASE}/carga-vip" class="${vipvip ? '' : 'on'}">&#11088; Carga VIP</a>
-    <a href="${BASE}/vip-do-vip" class="${vipvip ? 'on' : ''}">&#128142; VIP do VIP</a>
+    <a href="${BASE}/carga-vip" class="${vipvip ? '' : 'on'}">&#11088; VIP Plus</a>
+    <a href="${BASE}/vip-do-vip" class="${vipvip ? 'on' : ''}">&#128142; VIP Premium</a>
   </div>
   <div class="vip-faixa"><div class="vip-legenda" id="vip-legenda"></div><div class="vip-kpis" id="vip-kpis"></div></div>
   <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>

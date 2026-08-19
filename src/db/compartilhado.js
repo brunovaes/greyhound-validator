@@ -27,6 +27,9 @@ let _colOk = false;
 function garantirColunas(db) {
   if (_colOk) return;
   try { db.prepare('ALTER TABLE race_user_data ADD COLUMN avb_escolhido TEXT').run(); } catch (e) { /* ja existe */ }
+  // vip_tipo e vip_marcado_em nascem aqui pelo mesmo motivo da anterior.
+  try { db.prepare('ALTER TABLE race_user_data ADD COLUMN vip_tipo TEXT').run(); } catch (e) { /* ja existe */ }
+  try { db.prepare('ALTER TABLE race_user_data ADD COLUMN vip_marcado_em TEXT').run(); } catch (e) { /* ja existe */ }
   _colOk = true;
 }
 
@@ -38,11 +41,20 @@ function garantirColunas(db) {
 // mesma corrida. Nao confundir com races.avb_fechamento, que e' objetivo (a
 // principal da reanalise no instante da largada), igual pra todos e escrito
 // SO pelo robo. A UI le os dois e da prioridade ao pessoal.
-const CAMPOS = ['odd', 'valor', 'bet_entrou', 'bet_unidades', 'avb_nao_aberto', 'flag_atrasada', 'avb_escolhido'];
+//
+// vip_tipo ('plus' | 'premium'): marca que ESTE usuario mandou a corrida das
+// listas VIP pra tela Analisar. E' pessoal porque a escolha e' de quem clicou:
+// dois usuarios podem mandar corridas diferentes no mesmo dia. Serve pra tela
+// Analisar e o Historico saberem de onde a corrida veio e pintarem de acordo.
+//
+// vip_marcado_em (ISO): quando o clique aconteceu. E' o relogio da regra de
+// corrida ja ocorrida, que sai da lista um minuto DEPOIS DO CLIQUE — contar a
+// partir da largada daria tempo diferente pra cada corrida.
+const CAMPOS = ['odd', 'valor', 'bet_entrou', 'bet_unidades', 'avb_nao_aberto', 'flag_atrasada', 'avb_escolhido', 'vip_tipo', 'vip_marcado_em'];
 
 // Valores usados quando o usuario nunca tocou naquela corrida. Nao herdam do
 // canonico de proposito: a aposta do usuario 1 nao e' a aposta dos outros.
-const VAZIO = { odd: null, valor: null, bet_entrou: 0, bet_unidades: null, avb_nao_aberto: 0, flag_atrasada: 0, avb_escolhido: null };
+const VAZIO = { odd: null, valor: null, bet_entrou: 0, bet_unidades: null, avb_nao_aberto: 0, flag_atrasada: 0, avb_escolhido: null, vip_tipo: null, vip_marcado_em: null };
 
 // Sobrepoe os campos pessoais em uma lista de corridas ja lida do banco.
 // Muta os objetos no lugar (as telas ja usam r.odd, r.flag_atrasada etc, entao

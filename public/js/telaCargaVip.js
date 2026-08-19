@@ -1,5 +1,5 @@
 // ============================================================================
-// public/js/telaCargaVip.js — monta a lista da tela Carga VIP.
+// public/js/telaCargaVip.js — monta a lista das telas VIP Plus e VIP Premium.
 //
 // Antes esta lista era um modal desenhado pelo src/app.js, por cima da tela
 // Analisar. Virou pagina propria (GET /carga-vip), entao o codigo saiu de la e
@@ -28,7 +28,10 @@
   // nomesPistas.js), nao copiado aqui: mapa duplicado fica pra tras quando
   // alguem adiciona uma pista nova.
   var PISTAS = window.VIP_PISTAS || {};
-  // Duas telas, um arquivo: 'carga' (Carga VIP) e 'vipdovip' (VIP do VIP).
+  // Duas telas, um arquivo: 'carga' (VIP Plus) e 'vipdovip' (VIP Premium).
+  // Os nomes internos ('carga', '/carga-vip', analisar.carga_vip) ficaram como
+  // estavam de proposito: a chave de permissao esta gravada por perfil no
+  // banco, e renomear faria todo perfil configurado perder a regra em silencio.
   // Mudam o endpoint, as colunas e os KPIs; o resto (artes, podio, replay,
   // painel de disputa, resultados) e' o mesmo e nao tem por que ser copiado.
   var MODO = window.VIP_MODO || 'carga';
@@ -709,7 +712,22 @@
     if (!lin) return;
     var hora = lin.getAttribute('data-hora') || '';
     var corrida = lin.getAttribute('data-corrida') || '';
-    location.href = BASE + '/?vip=' + encodeURIComponent(hora + '|' + corrida);
+    var tipo = VIPVIP ? 'premium' : 'plus';
+    var destino = BASE + '/?vip=' + encodeURIComponent(hora + '|' + corrida) + '&tipo=' + tipo;
+
+    // Marca a corrida como vinda daqui ANTES de sair, pra a Analisar e o
+    // Historico saberem de qual lista ela veio. A navegacao acontece de
+    // qualquer jeito: perder a marca e' chato, nao chegar na corrida e' pior.
+    var irEmbora = function () { location.href = destino; };
+    var saiu = false;
+    var vai = function () { if (!saiu) { saiu = true; irEmbora(); } };
+    // Rede de seguranca: se a gravacao travar, nao deixa o clique morrer.
+    setTimeout(vai, 1200);
+    fetch(BASE + '/carga-vip/marcar', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hora: hora, corrida: corrida, tipo: tipo })
+    }).then(vai).catch(vai);
   });
 
   carregar();
