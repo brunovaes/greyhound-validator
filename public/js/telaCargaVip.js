@@ -28,6 +28,12 @@
   // nomesPistas.js), nao copiado aqui: mapa duplicado fica pra tras quando
   // alguem adiciona uma pista nova.
   var PISTAS = window.VIP_PISTAS || {};
+  // Duas telas, um arquivo: 'carga' (Carga VIP) e 'vipdovip' (VIP do VIP).
+  // Mudam o endpoint, as colunas e os KPIs; o resto (artes, podio, replay,
+  // painel de disputa, resultados) e' o mesmo e nao tem por que ser copiado.
+  var MODO = window.VIP_MODO || 'carga';
+  var VIPVIP = MODO === 'vipdovip';
+  var ENDPOINT = window.VIP_ENDPOINT || '/api/carga-vip';
   var alvo = document.getElementById('vip-conteudo');
   if (!alvo) return;
 
@@ -164,23 +170,23 @@
   // sessao expirada, 500), o .json() estoura com "Unexpected token '<'", que
   // nao diz nada a quem esta usando.
   function carregar() {
-    fetch(BASE + '/api/carga-vip', { credentials: 'same-origin' })
+    fetch(BASE + ENDPOINT, { credentials: 'same-origin' })
       .then(function (r) { return r.text().then(function (t) { return { status: r.status, texto: t }; }); })
       .then(function (res) {
         var d = null;
         try { d = JSON.parse(res.texto); } catch (e) { /* nao era JSON */ }
         if (d) { pintar(d); return; }
-        var motivo = res.status === 404 ? 'a rota /api/carga-vip não existe neste servidor'
+        var motivo = res.status === 404 ? 'a rota ' + ENDPOINT + ' não existe neste servidor'
           : (res.status === 401 || res.status === 403) ? 'sem permissão, ou a sessão expirou (recarregue a página)'
           : res.status >= 500 ? 'o servidor falhou ao montar a lista'
           : 'o servidor respondeu algo que não é JSON';
-        erro('Não consegui carregar a Carga VIP', 'HTTP ' + res.status + ': ' + motivo + '.');
+        erro('Não consegui carregar a lista', 'HTTP ' + res.status + ': ' + motivo + '.');
       })
       .catch(function (e) { erro('Erro de conexão', e.message); });
   }
 
   function pintar(d) {
-    if (!d || d.error) { erro('Não consegui carregar a Carga VIP', (d && d.error) || 'resposta inesperada'); return; }
+    if (!d || d.error) { erro('Não consegui carregar a lista', (d && d.error) || 'resposta inesperada'); return; }
     var ent = d.entradas || [];
     setSub((d.date || '') + ' \u00b7 ' + (d.total != null ? d.total : ent.length) + ' corrida(s) no filtro');
 
@@ -200,12 +206,17 @@
       if (partes.length) legenda = partes.join('<br>');
     }
 
+    // No VIP do VIP a legenda vira a lista de gavetas validas do dia: e' o que
+    // explica por que uma corrida entrou e outra nao.
+    if (VIPVIP && Array.isArray(d.cerebro_ativo) && d.cerebro_ativo.length) {
+      legenda = '<b>Cérebro ativo hoje:</b> ' + d.cerebro_ativo.map(esc).join(' &middot; ');
+    }
     var boxLeg = document.getElementById('vip-legenda');
-    if (boxLeg) boxLeg.innerHTML = legenda;
+    if (boxLeg) { boxLeg.innerHTML = legenda; boxLeg.className = VIPVIP ? 'vip-cereb' : 'vip-legenda'; }
 
     if (!ent.length) {
       alvo.innerHTML = '<div class="vip-box" style="padding:30px 22px;text-align:center;color:#888;font-size:13px">'
-        + 'Nenhuma corrida passou no filtro hoje.</div>';
+        + (VIPVIP ? 'Nenhuma corrida com contexto validado hoje.' : 'Nenhuma corrida passou no filtro hoje.') + '</div>';
       return;
     }
 
@@ -231,7 +242,10 @@
       var cor = premium ? '#eab308' : '#22c55e';
       // taxa_nivel_pct e' o nome novo; taxa_estimada_pct o antigo. Lemos os
       // dois pra a tela nao ficar sem numero entre dois deploys.
-      var taxa = (e.taxa_nivel_pct != null) ? e.taxa_nivel_pct : e.taxa_estimada_pct;
+      // taxa_validada_pct e' o nome novo do VIP do VIP; taxa_nivel_pct e'
+      // apelido de compatibilidade; taxa_estimada_pct e' o nome antigo.
+      var taxa = (e.taxa_validada_pct != null) ? e.taxa_validada_pct
+        : (e.taxa_nivel_pct != null) ? e.taxa_nivel_pct : e.taxa_estimada_pct;
 
       var selos = [];
       if (e.selo_pick_frente) selos.push('sai na frente');
@@ -254,6 +268,23 @@
       var vd = veredito(e.chegada, e.bateu, e.pick_trap, e.outro_trap);
       var marca = vd.classe ? ' ' + vd.classe : '';
       if (vd.aviso && window.console) console.warn('[carga-vip] ' + e.hora + '|' + e.corrida + ' -> ' + vd.aviso);
+
+      // ── VIP do VIP: selo (nota/tier) e contexto ──────────────────────────
+      // A nota manda na cor: A+ dourado, A verde. O tier vira rotulo embaixo.
+      var corNota = String(e.nota || '').indexOf('+') !== -1 ? '#eab308' : '#22c55e';
+      var marcas = [];
+      // Box vazio a favor do nosso pick: vantagem de largada, por isso o selo.
+      if (e.selo_vazia_pick) marcas.push('<span title="Box vazio a favor do pick">&#127991;</span>');
+      var selo = '<div class="nota" style="color:' + corNota + '">' + esc(e.nota || '-') + '</div>'
+        + (e.tier ? '<div class="tier">' + esc(e.tier) + '</div>' : '')
+        + (marcas.length ? '<div class="marcas">' + marcas.join(' ') + '</div>' : '')
+        // "ainda nao conferido" e' diferente de "conferido e nao tem box vazio".
+        // Sem esta marca, os dois casos ficariam iguais na tela.
+        + (e.selo_vazia_pick && !e.trap_vazia_conferida
+            ? '<div class="naoconf" title="O card ainda não passou pela checagem perto da largada">a conferir</div>' : '');
+
+      var ctx = '<div>' + esc(e.contexto_aplicado || '-') + '</div>'
+        + (e.sinal ? '<div class="sinal">' + esc(e.sinal) + '</div>' : '');
 
       var alvoBW = e.abriu === true
         ? '<div class="sim">' + (e.odd_abertura != null ? esc(e.odd_abertura) : 'sim') + '</div>'
@@ -283,13 +314,24 @@
         + '<div class="vip-vence">vence</div>'
         + galgo(e.outro_trap, e.outro_nome, true)
         + '</div></div>'
-        + '<div class="c-bw vip-bw">' + alvoBW + '</div>'
+        + (VIPVIP
+          ? '<div class="c-selo vip-selo">' + selo + '</div>'
+            + '<div class="c-ctx vip-ctx" title="' + esc(e.margem_sinal != null ? 'margem do sinal: ' + e.margem_sinal : '') + '">' + ctx + '</div>'
+          : '<div class="c-bw vip-bw">' + alvoBW + '</div>')
         + '<div class="c-pod"><div class="vip-chegada">'
         + bolinhasChegada(e.chegada, e.pick_trap, e.outro_trap, e.nomes_por_trap) + '</div>'
         + '<div class="vip-replay"></div></div>'
-        + '<div class="c-cha vip-taxa" title="' + esc((e.nivel || '') + ': taxa histórica deste filtro em corridas parecidas, não a chance desta corrida') + '">'
-        + (taxa != null ? '<div class="pct" style="color:' + cor + '">' + esc(taxa) + '%</div>' : '')
-        + '</div>'
+        + (VIPVIP
+          // ic_low_pct e' o piso do intervalo de confianca: o pior caso que a
+          // amostra sustenta. Fica junto do numero principal de proposito, pra
+          // a taxa nao ser lida como se fosse exata.
+          ? '<div class="c-cha vip-val" title="' + esc('taxa validada neste contexto; o menor valor é o piso do intervalo de confiança') + '">'
+            + (taxa != null ? '<div class="pct">' + esc(taxa) + '%</div>' : '')
+            + (e.ic_low_pct != null ? '<div class="ic">pior ' + esc(e.ic_low_pct) + '%</div>' : '')
+            + '</div>'
+          : '<div class="c-cha vip-taxa" title="' + esc((e.nivel || '') + ': taxa histórica deste filtro em corridas parecidas, não a chance desta corrida') + '">'
+            + (taxa != null ? '<div class="pct" style="color:' + cor + '">' + esc(taxa) + '%</div>' : '')
+            + '</div>')
         + '<div class="c-aca vip-acao"><button type="button" class="btn" data-disputa="1"'
         + ' title="Analisar disputa"'
         + ' data-a="' + esc(e.pick_trap) + '" data-b="' + esc(e.outro_trap) + '">&#9876;</button></div>'
@@ -302,9 +344,11 @@
       + '<span class="c-hora">Hora BR</span>'
       + '<span class="c-cor">Corrida</span>'
       + '<span class="c-avb">AvB</span>'
-      + '<span class="c-bw">Abriu na BW</span>'
+      + (VIPVIP
+        ? '<span class="c-selo">Selo</span><span class="c-ctx">Contexto</span>'
+        : '<span class="c-bw">Abriu na BW</span>')
       + '<span class="c-pod">Pódio</span>'
-      + '<span class="c-cha">Chances</span>'
+      + '<span class="c-cha">' + (VIPVIP ? 'Validada' : 'Chances') + '</span>'
       + '<span class="c-aca"></span>'
       + '</div>';
 
@@ -312,6 +356,7 @@
       + '<div class="vip-rodape">Clique numa corrida para abri-la na tela Analisar. '
       + 'Borda verde: a disputa bateu. Vermelha: não bateu. Sem cor: ainda não correu, ou a chegada não resolveu a disputa.</div>';
 
+    TOPO = d;
     ENTRADAS = ent;
     pintarKpis();
 
@@ -326,6 +371,10 @@
   // chega na segunda etapa. Sem isso, eles ficariam congelados no que a lista
   // sabia no primeiro instante.
   var ENTRADAS = [];
+
+  // Guarda o cabecalho da resposta: o VIP do VIP traz por_tier, descartadas e
+  // cerebro_ativo, que nao dao pra recalcular a partir das entradas.
+  var TOPO = {};
 
   function pintarKpis() {
     var box = document.getElementById('vip-kpis');
@@ -350,10 +399,25 @@
       return '<div class="vip-kpi ' + cls + '"><div class="rot">' + rot + '</div>'
         + '<div class="val">' + val + (pct ? '<span class="pct">' + pct + '</span>' : '') + '</div></div>';
     };
-    box.innerHTML =
-        card('', 'Corridas', total, resolvidas < total ? '<span style="color:#666;font-weight:600">' + resolvidas + ' resolvidas</span>' : '')
+    var comuns = card('', 'Corridas', total, resolvidas < total ? '<span style="color:#666;font-weight:600">' + resolvidas + ' resolvidas</span>' : '')
       + card('ok', 'Vitórias', vit, pc(vit))
-      + card('ruim', 'Derrotas', der, pc(der))
+      + card('ruim', 'Derrotas', der, pc(der));
+
+    if (VIPVIP) {
+      // por_tier vem como objeto {ELITE: n, VIP: n}: um card por tier, na
+      // ordem que o motor mandou.
+      var tiers = '';
+      var pt = TOPO.por_tier;
+      if (pt && typeof pt === 'object') {
+        tiers = Object.keys(pt).map(function (k) { return card('bw', k, pt[k], ''); }).join('');
+      }
+      var desc = TOPO.corridas_descartadas_trap_vazia;
+      box.innerHTML = comuns + tiers
+        + (desc != null ? card('ruim', 'Descartadas', desc, '<span style="font-size:11px;color:#666">trap vazia</span>') : '');
+      return;
+    }
+
+    box.innerHTML = comuns
       + card('bw', 'Abriu na BW', abriu + (medidas ? '<span style="font-size:13px;color:#666">/' + medidas + '</span>' : ''), '');
   }
 

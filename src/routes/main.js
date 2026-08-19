@@ -1453,7 +1453,15 @@ router.get('/carga-vip/disputa', exigirAcesso('analisar.carga_vip'), (req, res) 
 // public/js/telaCargaVip.js, que le a MESMA rota de antes (GET /api/carga-vip).
 // Arquivo estatico de proposito, pra o JS da lista nao passar por template
 // literal (onde aspas e \n se resolvem errado com facilidade).
-router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
+// Duas telas, uma moldura so: Carga VIP e VIP do VIP mudam de endpoint e de
+// colunas, mas compartilham cabecalho, artes dos galgos, podio, replay e o
+// painel de disputa. Duplicar a pagina significaria manter tudo isso em dois
+// lugares. Quem decide o que muda e' o modo, lido pelo telaCargaVip.js.
+function paginaVip(modo) {
+  return (req, res) => {
+  const vipvip = modo === 'vipdovip';
+  const TITULO = vipvip ? 'VIP do VIP' : 'Carga VIP';
+  const ENDPOINT = vipvip ? '/api/vip-do-vip' : '/api/carga-vip';
   const user = req.user;
   const logoB64 = getLogo();
   const DOGS = JSON.stringify(catalogoGalgos());
@@ -1461,7 +1469,7 @@ router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), (req, res) => {
   // Passado pra tela em vez de copiado no JS do cliente: mapa duplicado e' mapa
   // que fica pra tras quando alguem adiciona uma pista nova.
   const PISTAS = JSON.stringify(NOMES_PISTAS);
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carga VIP - Greyhound Factory</title>
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${TITULO} - Greyhound Factory</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
 ${designTokensCSS()}
@@ -1512,6 +1520,24 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .volta{font-size:12px;color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:6px 12px;border-radius:6px;white-space:nowrap;flex-shrink:0}
 .volta:hover{background:rgba(34,197,94,.1)}
 .vip-aviso{padding:12px 15px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:12px;color:#eab308;line-height:1.6;margin-bottom:12px}
+.vip-abas{display:flex;gap:8px;margin-bottom:14px}
+.vip-abas a{padding:8px 16px;background:#161B27;border:1px solid #333;border-radius:20px;color:#888;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap}
+.vip-abas a:hover{border-color:#22c55e;color:#ccc}
+.vip-abas a.on{background:rgba(34,197,94,.14);border-color:#22c55e;color:#22c55e}
+
+/* colunas exclusivas do VIP do VIP */
+.c-selo{width:104px;flex-shrink:0}
+.c-ctx{width:170px;flex-shrink:0}
+.vip-selo .nota{font-size:17px;font-weight:800;line-height:1.1}
+.vip-selo .tier{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#666}
+.vip-selo .marcas{font-size:12px;margin-top:2px}
+.vip-selo .naoconf{font-size:9px;color:#f97316}
+.vip-ctx{font-size:12px;color:#ccc;line-height:1.4}
+.vip-ctx .sinal{font-size:10px;color:#666;margin-top:2px}
+.vip-val .pct{font-size:15px;font-weight:800;line-height:1.2;color:#22c55e}
+.vip-val .ic{font-size:10px;color:#666}
+.vip-cereb{font-size:11px;color:#888;line-height:1.7;padding:0 2px}
+.vip-cereb b{color:#aaa;font-weight:600}
 .vip-faixa{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
 .vip-legenda{font-size:11px;color:#888;line-height:1.7;padding:0 2px}
 
@@ -1640,10 +1666,14 @@ ${navBar(user, 'cargavip')}
 <div class="content">
   <div class="topo">
     <div>
-      <h1>&#11088; Carga VIP</h1>
+      <h1>&#11088; ${TITULO}</h1>
       <div class="sub" id="vip-sub">Carregando...</div>
     </div>
     <a class="volta" href="${BASE}">&#8592; Voltar para Analisar</a>
+  </div>
+  <div class="vip-abas">
+    <a href="${BASE}/carga-vip" class="${vipvip ? '' : 'on'}">&#11088; Carga VIP</a>
+    <a href="${BASE}/vip-do-vip" class="${vipvip ? 'on' : ''}">&#128142; VIP do VIP</a>
   </div>
   <div class="vip-faixa"><div class="vip-legenda" id="vip-legenda"></div><div class="vip-kpis" id="vip-kpis"></div></div>
   <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
@@ -1663,10 +1693,13 @@ ${navBar(user, 'cargavip')}
 </div>
 <div id="gv-modal"><div id="gv-box"><div id="gv-hdr"><h3 id="gv-title">Disputa</h3><button id="gv-xbtn" type="button" aria-label="Fechar">&#x2715;</button></div><div id="gv-body"></div></div></div>
 <script src="${BASE}/static/js/cardGalgo.js"></script>
-<script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};var VIP_PISTAS=${PISTAS};</script>
+<script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};var VIP_PISTAS=${PISTAS};var VIP_MODO='${modo}';var VIP_ENDPOINT='${ENDPOINT}';</script>
 <script src="${BASE}/static/js/telaCargaVip.js" defer></script>
 </body></html>`);
-});
+  };
+}
+router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), paginaVip('carga'));
+router.get('/vip-do-vip', exigirAcesso('analisar.carga_vip'), paginaVip('vipdovip'));
 
 // CSS do card de historico de galgo (.sv-*), usado pelo painel "Analisar
 // disputa". Vive numa funcao porque DUAS telas o injetam: /sessao/:id e
