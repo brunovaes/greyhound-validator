@@ -324,11 +324,13 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-automacao">
 
 <div class="section">
-<div class="sec-title">Carga VIP na tela Analisar</div>
-<p class="hint" style="margin-bottom:10px">Corridas que o motor marcou como <strong>skip</strong> mas que passaram no filtro de valor podem voltar pra tela perto da largada. O skip por margem apertada entra; o skip por falta de histórico nunca aparece no filtro, então não há esse risco.</p>
+<div class="sec-title">Corridas VIP na tela Analisar</div>
+<p class="hint" style="margin-bottom:10px">As corridas das listas <strong>VIP Plus</strong> e <strong>VIP Premium</strong> ganham selo piscando, cor de fundo própria na tela de disputa e destaque na lista lateral. Cada nível tem a sua configuração. Corridas que o motor marcou como <strong>skip</strong> mas passaram no filtro de valor podem voltar pra tela perto da largada: o skip por margem apertada entra, o por falta de histórico nunca chega no filtro.</p>
+
+<div class="sec-title" style="font-size:12px;opacity:.85">&#11088; VIP Plus</div>
 <div class="bloco-fields">
   <div class="field">
-    <label>Destravar skip da Carga VIP</label>
+    <label>Destravar skip perto da largada</label>
     <select name="vip_skip_ativo">
       <option value="1" ${config.vip_skip_ativo!=0?'selected':''}>Ativado</option>
       <option value="0" ${config.vip_skip_ativo==0?'selected':''}>Desativado</option>
@@ -346,12 +348,60 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     </select>
   </div>
   <div class="field">
-    <label>Cor do destaque (lista e selo)</label>
+    <label>Som do alarme</label>
+    <select name="vip_som">
+      <option value="sino" ${config.vip_som==='sino'||!config.vip_som?'selected':''}>Sino</option>
+      <option value="beep" ${config.vip_som==='beep'?'selected':''}>Beep</option>
+      <option value="alarme" ${config.vip_som==='alarme'?'selected':''}>Alarme</option>
+      <option value="suave" ${config.vip_som==='suave'?'selected':''}>Suave</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Cor do selo que pisca</label>
     <input type="text" name="vip_cor_destaque" placeholder="#c084fc" value="${config.vip_cor_destaque||'#c084fc'}">
   </div>
   <div class="field">
     <label>Cor de fundo da disputa</label>
     <input type="text" name="vip_cor_fundo" placeholder="#140B2B" value="${config.vip_cor_fundo||'#140B2B'}">
+  </div>
+</div>
+
+<div class="sec-title" style="font-size:12px;opacity:.85">&#128142; VIP Premium</div>
+<div class="bloco-fields">
+  <div class="field">
+    <label>Destravar skip perto da largada</label>
+    <select name="vip_premium_ativo">
+      <option value="1" ${config.vip_premium_ativo!=0?'selected':''}>Ativado</option>
+      <option value="0" ${config.vip_premium_ativo==0?'selected':''}>Desativado</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Minutos antes da largada</label>
+    <input type="number" name="vip_premium_min_antes" min="1" max="30" value="${config.vip_premium_min_antes!=null?config.vip_premium_min_antes:5}">
+  </div>
+  <div class="field">
+    <label>Alarme sonoro ao entrar em tela</label>
+    <select name="vip_premium_alarme">
+      <option value="1" ${config.vip_premium_alarme!=0?'selected':''}>Ativado</option>
+      <option value="0" ${config.vip_premium_alarme==0?'selected':''}>Desativado</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Som do alarme</label>
+    <select name="vip_premium_som">
+      <option value="sino" ${config.vip_premium_som==='sino'?'selected':''}>Sino</option>
+      <option value="beep" ${config.vip_premium_som==='beep'?'selected':''}>Beep</option>
+      <option value="alarme" ${config.vip_premium_som==='alarme'||!config.vip_premium_som?'selected':''}>Alarme</option>
+      <option value="suave" ${config.vip_premium_som==='suave'?'selected':''}>Suave</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Cor do selo que pisca</label>
+    <input type="text" name="vip_premium_cor_destaque" placeholder="#22c55e" value="${config.vip_premium_cor_destaque||'#22c55e'}">
+  </div>
+  <div class="field">
+    <label>Cor de fundo da disputa</label>
+    <input type="text" name="vip_premium_cor_fundo" placeholder="#0A280E" value="${config.vip_premium_cor_fundo||'#0A280E'}">
   </div>
 </div>
 
@@ -1214,9 +1264,20 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_skip_alarme INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_cor_destaque TEXT DEFAULT '#c084fc'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_cor_fundo TEXT DEFAULT '#140B2B'").run(); } catch(e) {}
+    // Som do alarme do VIP Plus (antes fixo em 'sino' no app.js) e o conjunto
+    // completo do VIP Premium. Cada nivel tem antecedencia, som e cores
+    // proprias: sao duas listas com criterios diferentes, e a graca de separar
+    // e' justamente poder reagir de forma diferente a cada uma.
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_som TEXT DEFAULT 'sino'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_min_antes INTEGER DEFAULT 5").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_alarme INTEGER DEFAULT 1").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_som TEXT DEFAULT 'alarme'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_destaque TEXT DEFAULT '#22c55e'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_fundo TEXT DEFAULT '#0A280E'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1246,6 +1307,13 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.vip_skip_alarme!=null?parseInt(d.vip_skip_alarme):1,
       d.vip_cor_destaque||'#c084fc',
       d.vip_cor_fundo||'#140B2B',
+      d.vip_som||'sino',
+      d.vip_premium_ativo!=null?parseInt(d.vip_premium_ativo):1,
+      d.vip_premium_min_antes!=null?parseInt(d.vip_premium_min_antes):5,
+      d.vip_premium_alarme!=null?parseInt(d.vip_premium_alarme):1,
+      d.vip_premium_som||'alarme',
+      d.vip_premium_cor_destaque||'#22c55e',
+      d.vip_premium_cor_fundo||'#0A280E',
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
