@@ -721,7 +721,7 @@ ${navBar(user, 'analisar')}
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregar PDF
         </label>
-        ${can(user,'analisar.carga_vip') ? `<a href="${BASE}/carga-vip" class="tabbtn" id="btn-carga-vip">&#11088; VIP Plus</a>` : ''}
+        ${can(user,'analisar.carga_vip') ? `<a href="${BASE}/carga-vip" class="tabbtn" id="btn-carga-vip">&#11088; Corridas VIP</a>` : ''}
         <a href="${BASE}/historico" class="tabbtn">&#128220; Históricos</a>
       </div>
       <div class="flist" id="rlist"></div>
@@ -1615,11 +1615,15 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
    e antes ela era a unica flexivel, engolindo toda a sobra da linha.
    Quem cresce agora sao Podio e Validada, que sao as colunas que a gente le. */
 .c-hora{width:66px;flex-shrink:0;text-align:center}
-.c-cor{width:96px;flex-shrink:0}
+.c-cor{flex:1 1 150px;min-width:150px}
 .c-avb{width:240px;flex-shrink:0}
-.c-bw{width:84px;flex-shrink:0;text-align:center}
+/* 96px pra "ABRIU NA BW" caber numa linha so no cabecalho: em 84 ele
+
+   quebrava em duas e desalinhava com o numero embaixo. */
+
+.c-bw{width:96px;flex-shrink:0;text-align:center}
 .c-pod{flex:1 1 132px;min-width:132px}
-.c-cha{flex:1 1 66px;min-width:66px}
+.c-cha{width:62px;flex-shrink:0}
 .c-aca{width:38px;flex-shrink:0}
 
 /* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
@@ -1645,6 +1649,8 @@ h1{font-size:20px;font-weight:700;margin-bottom:3px}
 .vip-cor{font-size:12px;color:#f0f0f0;font-weight:600;line-height:1.4}
 .vip-cor .selos{font-size:11px;color:#60a5fa;font-weight:500;margin-top:2px}
 .vip-skip{font-size:11px;color:#c084fc;margin-top:2px}
+
+.vip-bw{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 
 .vip-bw .sim{font-size:13px;font-weight:800;color:#60a5fa;line-height:1.2}
 .vip-bw .nao{font-size:11px;font-weight:700;color:#f97316}
