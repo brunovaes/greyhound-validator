@@ -1348,12 +1348,23 @@ router.get('/config', (req, res) => {
       // vazia e caia no filtro antigo — as regras salvavam no banco e nao
       // surtiam efeito na tela, em silencio (mesmo padrao do racas_em_tela).
       alarme_filtro_regras: config.alarme_filtro_regras || '',
-      // Carga VIP: destrave de skip perto da largada + cores do destaque.
+      // VIP Plus: destrave de skip perto da largada, som e cores do destaque.
       vip_skip_ativo: config.vip_skip_ativo != null ? config.vip_skip_ativo : 1,
       vip_skip_min_antes: config.vip_skip_min_antes != null ? config.vip_skip_min_antes : 5,
       vip_skip_alarme: config.vip_skip_alarme != null ? config.vip_skip_alarme : 1,
+      vip_som: config.vip_som || 'sino',
       vip_cor_destaque: config.vip_cor_destaque || '#c084fc',
-      vip_cor_fundo: config.vip_cor_fundo || '#140B2B'
+      vip_cor_fundo: config.vip_cor_fundo || '#140B2B',
+      // VIP Premium: mesmo conjunto, valores proprios. ESTA rota devolve uma
+      // lista FIXA de campos, nao SELECT *: campo que nao for listado aqui
+      // salva no banco e nunca chega na tela, em silencio (foi o que ja
+      // aconteceu com racas_em_tela e com as regras do alarme).
+      vip_premium_ativo: config.vip_premium_ativo != null ? config.vip_premium_ativo : 1,
+      vip_premium_min_antes: config.vip_premium_min_antes != null ? config.vip_premium_min_antes : 5,
+      vip_premium_alarme: config.vip_premium_alarme != null ? config.vip_premium_alarme : 1,
+      vip_premium_som: config.vip_premium_som || 'alarme',
+      vip_premium_cor_destaque: config.vip_premium_cor_destaque || '#22c55e',
+      vip_premium_cor_fundo: config.vip_premium_cor_fundo || '#0A280E'
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
