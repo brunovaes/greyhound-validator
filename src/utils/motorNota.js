@@ -54,11 +54,25 @@ function _margem(sinal, X, Y) {
   return Infinity; // sinal sem margem definida não é gateado por folga
 }
 
+// Cache do cérebro: validar() varre TODO o histórico (caro). Como o /vip-do-vip é
+// chamado a cada refresh (1 min) por usuário — inclusive pela tela Analisar — a
+// reconstrução do cérebro fica em cache curto. O placar do dia NÃO usa esse cache
+// (é recalculado a cada chamada em classificar), então continua ao vivo.
+let _cerebroCache = null;                 // { key, at, data }
+const _CEREBRO_TTL_MS = 5 * 60 * 1000;    // 5 min
+
 // ── construir o cérebro do dia (validado ao vivo + curado) ───────────────────
 function construirCerebro(db, opts) {
   opts = opts || {};
   const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : 1.15;
   const corteTaxa = opts.minTaxa > 0 ? opts.minTaxa : CORTE_TAXA;
+
+  const cacheKey = spRatioMax + '|' + (opts.minHalf || 25) + '|' + corteTaxa;
+  if (!opts.noCache && _cerebroCache && _cerebroCache.key === cacheKey
+      && (Date.now() - _cerebroCache.at) < _CEREBRO_TTL_MS) {
+    return _cerebroCache.data;             // cérebro quente: evita varrer o histórico de novo
+  }
+
   const v = ER.validar(db, { spRatioMax: opts.spRatioMax, minHalf: opts.minHalf });
 
   const porAssinatura = {};
@@ -99,7 +113,9 @@ function construirCerebro(db, opts) {
     motivo: 'miragem: forte no treino, caiu no teste'
   }));
 
-  return { cerebro, naoValidouHoje, descartados, corte_taxa: corteTaxa, parametros: v.parametros, total_pares_estudo: v.total_pares, dias: v.dias };
+  const resultado = { cerebro, naoValidouHoje, descartados, corte_taxa: corteTaxa, parametros: v.parametros, total_pares_estudo: v.total_pares, dias: v.dias };
+  _cerebroCache = { key: cacheKey, at: Date.now(), data: resultado };
+  return resultado;
 }
 
 function _parseContexto(ctx) {

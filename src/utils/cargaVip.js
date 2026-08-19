@@ -23,7 +23,8 @@ function _limpaNome(n) {
   const mSexo = txt.match(/^(.*?\((?:M|W)\))/);
   if (mSexo) return mSexo[1].trim();
   const toks = txt.split(/\s+/);
-  const CORES = /^(?:bk|bd|be|f|w|bkw|wbk|bdw|wbd|bew|wbe|bebdw|bkwtkd|bkbd|bebd|dkbd|lgbd|bkwbd)$/i;
+  // cores de galgo (opcional prefixo claro/escuro lt/dk/lg) — ex.: bd, ltbd, dkbd, bkw
+  const CORES = /^(?:lt|dk|lg)?(?:bk|bd|be|f|w|br|bkw|wbk|bdw|wbd|bew|wbe|bebdw|bkwtkd|bkbd|bebd|bkwbd)$/i;
   const MESANO = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2}$/i;
   for (let k = 1; k < toks.length; k++) {
     const t = toks[k];
