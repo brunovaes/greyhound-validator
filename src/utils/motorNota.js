@@ -15,7 +15,10 @@
 // Leitura pura: usa races.hist_all + finishing_order_json + race_card. Não grava.
 const { probImplicita } = require('./spEngine');
 const { bateuPar } = require('./avbResultado');
-const { _limpaNome } = require('./cargaVip');   // mesma limpeza de nome do v1 (fonte única)
+const _cv = require('./cargaVip');              // mesma limpeza de nome do v1 (fonte única)
+// blindado: se por algum motivo o export não estiver disponível, cai no nome cru
+// (nunca zera os nomes por causa de um require desalinhado no deploy)
+const _limpaNome = (typeof _cv._limpaNome === 'function') ? _cv._limpaNome : (n => (n == null ? '' : String(n)));
 const ER = require('./estudoReverso');
 const { _perfilGalgo, _votos, _turno, _pista, _categoria, _distVal } = ER;
 
