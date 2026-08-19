@@ -80,6 +80,21 @@ function _podioPorSinal(galgos, sinal, nomesPorTrap, topN) {
   }));
 }
 
+// Observação do VIP — recalculada a cada chamada, então sempre coerente com o pick
+// atual (pódio/AvB e obs nunca descolam). Regenerar isto é o que o Bruno pediu.
+const _SINAL_TXT = { caltm: 'tempo recente (CalTm)', podio: 'pódio recente', split: 'split', consistencia: 'consistência', categoria: 'categoria', sp_mercado: 'odd média', perfil: 'perfil de corrida', boxe_menor: 'boxe menor' };
+function _obsVip(pick, outro, regra, margem, seloVazia, abriu) {
+  const nomeP = (pick.nome || ('b' + pick.trap)), nomeO = (outro.nome || ('b' + outro.trap));
+  const partes = [
+    regra.nota_apelido || regra.apelido,
+    nomeP + ' (b' + pick.trap + ') na frente de ' + nomeO + ' (b' + outro.trap + ') por ' + (_SINAL_TXT[regra.sinal] || regra.sinal) + ' (+' + (+margem.toFixed(2)) + ')',
+    'validado ' + regra.taxa + '% (pior caso ' + regra.ic_low + '%)'
+  ];
+  if (seloVazia) partes.push('box vazio a favor do pick');
+  if (abriu === false) partes.push('⚠ não abriu na BW');
+  return partes.join(' · ');
+}
+
 // Cache do cérebro: validar() varre TODO o histórico (caro). Como o /vip-do-vip é
 // chamado a cada refresh (1 min) por usuário — inclusive pela tela Analisar — a
 // reconstrução do cérebro fica em cache curto. O placar do dia NÃO usa esse cache
@@ -229,6 +244,8 @@ function classificar(db, opts) {
         const outro = voto > 0 ? Y : X;
         const vazioPick = temVazia(pick.trap);   // pick tem box vazio ao lado?
         const vazioOutro = temVazia(outro.trap); // rival tem box vazio ao lado?
+        const pickNome = (nomesPorTrap && nomesPorTrap[String(pick.trap)]) || '';
+        const outroNome = (nomesPorTrap && nomesPorTrap[String(outro.trap)]) || '';
         // O par pick×outro abriu no betwinner? A que odd? (mesmo contrato da Carga VIP)
         const paresAbertos = abertosPorCorrida[String(row.corrida || '') + '|' + String(row.hora || '')];
         let abriu = null, oddAbertura = null;
@@ -246,8 +263,8 @@ function classificar(db, opts) {
         }
         entradas.push({
           hora: row.hora, corrida: row.corrida, dist: row.dist,
-          pick_trap: pick.trap, pick_nome: (nomesPorTrap && nomesPorTrap[String(pick.trap)]) || '',
-          outro_trap: outro.trap, outro_nome: (nomesPorTrap && nomesPorTrap[String(outro.trap)]) || '',
+          pick_trap: pick.trap, pick_nome: pickNome,
+          outro_trap: outro.trap, outro_nome: outroNome,
           categoria: ctx.cat, turno: ctx.turno, pista: ctx.pista,
           ratio_odd: +ratio.toFixed(3),
           // ── trap vazia: vantagem do pick mantém; vantagem do rival descarta a corrida ──
@@ -266,6 +283,8 @@ function classificar(db, opts) {
           margem_sinal: +margem.toFixed(2),              // folga do sinal (caltm em s, podio em fração)
           // ── pódio derivado da MESMA condição do AvB (1 verdade: pódio + AvB coerentes) ──
           podio_vip: _podioPorSinal(galgos, regra.sinal, nomesPorTrap, 3),
+          // ── obs recalculada agora (sempre coerente com o pick/pódio atual) ──
+          obs: _obsVip({ trap: pick.trap, nome: pickNome }, { trap: outro.trap, nome: outroNome }, regra, margem, vazioPick && !vazioOutro, abriu),
           // ── placar (a Carga VIP é o quadro de teste ao vivo) ──
           chegada: chegada,                              // [{pos,trap}] ou null
           bateu: bateuPar(chegada, pick.trap, outro.trap), // true|false|null
