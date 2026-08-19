@@ -15,6 +15,7 @@
 // Leitura pura: usa races.hist_all + finishing_order_json + race_card. Não grava.
 const { probImplicita } = require('./spEngine');
 const { bateuPar } = require('./avbResultado');
+const { _limpaNome } = require('./cargaVip');   // mesma limpeza de nome do v1 (fonte única)
 const ER = require('./estudoReverso');
 const { _perfilGalgo, _votos, _turno, _pista, _categoria, _distVal } = ER;
 
@@ -118,6 +119,8 @@ function classificar(db, opts) {
 
   const { cerebro, naoValidouHoje, descartados } = construirCerebro(db, opts);
 
+  const umPorCorrida = opts.umPorCorrida !== false;   // padrão: 1 AvB por corrida (não entra em 2)
+
   const rows = db.prepare(
     "SELECT r.hora, r.corrida, r.dist, r.nivel, r.hist_all, r.finishing_order_json, r.race_card, " +
     "r.final_check_at, r.final_check_status, r.flag_atrasada " +
@@ -125,14 +128,14 @@ function classificar(db, opts) {
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
   ).all(date);
 
-  const entradas = [];
+  let entradas = [];
   for (const row of rows) {
     let hist = null, chegada = null, rc = null;
     try { hist = JSON.parse(row.hist_all); } catch (e) { continue; }
     if (!Array.isArray(hist) || hist.length < 2) continue;
     try { const a = JSON.parse(row.finishing_order_json); if (Array.isArray(a) && a.length) chegada = a; } catch (e) {}
     let nomesPorTrap = null;
-    try { rc = JSON.parse(row.race_card); if (Array.isArray(rc) && rc.length) { nomesPorTrap = {}; for (const g of rc) if (g && g.trap != null) nomesPorTrap[String(g.trap)] = g.nome || ''; } } catch (e) {}
+    try { rc = JSON.parse(row.race_card); if (Array.isArray(rc) && rc.length) { nomesPorTrap = {}; for (const g of rc) if (g && g.trap != null) nomesPorTrap[String(g.trap)] = _limpaNome(g.nome); } } catch (e) {}
 
     // traps vazias (grid 6) p/ o sinal trap_vazia
     const presentes = new Set();
@@ -196,6 +199,23 @@ function classificar(db, opts) {
     }
   }
 
+  // Um AvB por corrida: dentre os pares da mesma corrida, fica o de MAIOR percentual
+  // validado; empatou no percentual, fica o de margem mais decisiva. (Bruno não entra
+  // em dois AvBs na mesma corrida.)
+  let descartados_mesma_corrida = 0;
+  if (umPorCorrida) {
+    const melhor = {};
+    for (const e of entradas) {
+      const k = e.hora + '|' + e.corrida;
+      const cur = melhor[k];
+      const ganha = !cur
+        || e.taxa_validada_pct > cur.taxa_validada_pct
+        || (e.taxa_validada_pct === cur.taxa_validada_pct && e.margem_sinal > cur.margem_sinal);
+      if (ganha) melhor[k] = e; else descartados_mesma_corrida++;
+    }
+    entradas = Object.values(melhor);
+  }
+
   // ELITE primeiro, depois VIP, depois BASE; dentro do tier, maior taxa validada
   const rank = { 'A+': 0, 'A': 1, 'B': 2 };
   entradas.sort((a, b) => (rank[a.nota] - rank[b.nota]) || (b.taxa_validada_pct - a.taxa_validada_pct) || (b.margem_sinal - a.margem_sinal) || String(a.hora).localeCompare(String(b.hora)));
@@ -203,6 +223,7 @@ function classificar(db, opts) {
   const conta = t => entradas.filter(e => e.tier === t).length;
   return {
     date, total: entradas.length,
+    um_por_corrida: umPorCorrida, pares_descartados_mesma_corrida: descartados_mesma_corrida,
     qualidade: { corte_taxa_pct: opts.minTaxa > 0 ? opts.minTaxa : CORTE_TAXA, margem_minima: (opts.margens && Object.keys(opts.margens).length) ? opts.margens : MIN_MARGEM },
     por_tier: { ELITE: conta('ELITE'), VIP: conta('VIP'), BASE: conta('BASE') },
     cerebro_ativo: cerebro.filter(r => r.tier !== 'BASE').map(r => ({ apelido: r.apelido, tier: r.tier, sinal: r.sinal, taxa_teste: r.taxa, ic_low: r.ic_low, n_teste: r.n_teste })),
