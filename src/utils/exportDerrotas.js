@@ -293,6 +293,12 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
       dia,
       ord: (dt ? dt.getTime() : 0) + hhmin * 60000,
       der, raw: r.bateu,
+      // Marcas gravadas pelo motor ANTES da largada e congeladas nela (o
+      // _marcarVip pula corrida que ja largou). Sao registro do que a lista
+      // dizia na hora de decidir, nao a lista de hoje aplicada ao passado —
+      // e' o que faz o HR por nivel valer alguma coisa.
+      vipPlus: !!r.vip_plus,
+      vipPremium: r.vip_premium || null,   // guarda a NOTA ('A+','A'), nao 1/0
       // Tres resultados sobre a MESMA chegada, todos via bateuPar (fonte unica):
       //   derMotor = AvB da analise global (fav x und)
       //   derRean  = principal da reanalise no fechamento
@@ -387,7 +393,15 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     turnos: uniq(todos.map(x => x.turno)).sort((a, b) => ordTurno(a) - ordTurno(b)),
     pistas: uniq(todos.map(x => x.pista)).sort(),
     caes: uniq(todos.map(x => x.nElig)).sort((a, b) => a - b),
-    classes: uniq(todos.map(x => x.classe)).sort(cmpClasse)
+    classes: uniq(todos.map(x => x.classe)).sort(cmpClasse),
+    // Quantas corridas RESOLVIDAS existem em cada nivel no periodo. A tela usa
+    // isso pra esconder a aba enquanto nao houver dado: painel zerado passa a
+    // impressao de que nao houve corrida VIP, e nao e' isso — e' que a marca
+    // so passou a ser gravada agora.
+    vip: {
+      plus: todos.filter(x => x.vipPlus).length,
+      premium: todos.filter(x => x.vipPremium).length
+    }
   };
 
   // Nomes completos das pistas disponiveis (pro filtro e o relatorio).
@@ -415,7 +429,17 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     });
   const casaPar = x => paresSel.some(p => p.pista === x.pista && (!p.classe || p.classe === x.classe));
 
+  // Filtro por nivel VIP. 'plus' = entrou na lista VIP Plus; 'premium' = tem
+  // nota de Premium. Uma corrida pode ser as duas coisas, entao os dois
+  // conjuntos se sobrepoem de proposito: cada aba responde "como foi o que
+  // ESTA lista apontou", nao "como foi o que so ela apontou".
+  const casaVip = x =>
+    f.vip === 'plus' ? x.vipPlus
+    : f.vip === 'premium' ? !!x.vipPremium
+    : true;
+
   const items = todos.filter(x =>
+    casaVip(x) &&
     (!f.turno || x.turno === f.turno) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
     (paresSel.length

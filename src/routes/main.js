@@ -1896,8 +1896,28 @@ function _celulaAvb(r){
     // Diz de onde veio o par, discreto: sem isso nao da pra saber se a linha
     // reflete a sua entrada ou a decisao do motor.
     + '<div style="font-size:8px;color:' + (esc ? '#60a5fa' : '#555') + ';margin-top:2px;text-transform:uppercase;letter-spacing:.4px">' + origem + '</div>'
+    + _seloVip(r)
     + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ')">&#128269; ver historico</a>'
     + '</td>';
+}
+
+// Selo do nivel VIP na linha do Historico.
+//
+// As marcas vem de races.vip_plus e races.vip_premium, gravadas pelo motor
+// ANTES da largada e congeladas nela. Ou seja: e' o que a lista dizia na hora
+// de decidir, nao a lista de hoje aplicada ao passado.
+//
+// vip_premium guarda a NOTA ('A+', 'A'), nao 1/0 — por isso ela aparece junto.
+// Premium tem prioridade: e' o subconjunto mais exigente, e mostrar "Plus"
+// numa corrida que tambem era Premium seria informacao a menos.
+function _seloVip(r){
+  var pill = function(cor, txt){
+    return '<div style="margin-top:3px"><span style="display:inline-block;font-size:8px;font-weight:800;letter-spacing:.4px;'
+      + 'padding:1px 6px;border-radius:9px;border:1px solid ' + cor + ';color:' + cor + '">' + txt + '</span></div>';
+  };
+  if (r.vip_premium) return pill('#D4AF37', '\u{1F48E} VIP ' + String(r.vip_premium));
+  if (r.vip_plus) return pill('#c084fc', '\u2B50 VIP');
+  return '';
 }
 
 function _celulaBW(r){
