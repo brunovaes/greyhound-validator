@@ -885,10 +885,10 @@ var VIP_SET_PREMIUM = new Set();
 // funcionar igual antes do /api/config responder (ou caso ele ainda nao
 // devolva os campos do Premium).
 var VIP_CFG = {
-  ativo:1, minAntes:5, alarme:1, som:'sino', corDestaque:'#c084fc', corFundo:'#140B2B', corAlerta:'roxo', corLinha:'#c084fc',
+  ativo:1, minAntes:5, alarme:1, som:'sino', corDestaque:'#c084fc', corFundo:'#140B2B', corAlerta:'roxo', corLinha:'#161B27',
   ativoPremium:1, minAntesPremium:5, alarmePremium:1, somPremium:'alarme',
   corDestaquePremium:'#D4AF37', corFundoPremium:'#0A280E', corAlertaPremium:'dourado',
-  corLinhaPremium:'#D4AF37'
+  corLinhaPremium:'#161B27'
 };
 // Le a configuracao do nivel da corrida, sem espalhar "if premium" pelo codigo.
 function _vipCfg(tipo) {
@@ -969,18 +969,19 @@ function _cssVip(){
   if(!st){ st = document.createElement('style'); st.id = 'vip-css'; document.head.appendChild(st); }
   var c = _vipCfg('plus').corDestaque || '#c084fc';
   var cp = _vipCfg('premium').corDestaque || '#D4AF37';
-  // Fundo da linha na lista: a mesma cor configurada, bem transparente. O
-  // alarme da corrida proxima precisa continuar sendo o que mais chama a
-  // atencao, senao a lista inteira grita e nada se destaca.
-  // Campo vazio = sem fundo nenhum, que e' uma escolha valida.
-  var rgba = function(hex, a){
+  // Fundo da linha na lista: a cor configurada, SOLIDA. Chegou a ser aplicada
+  // com 7% de opacidade, mas ai qualquer cor digitada ficava quase invisivel e
+  // o campo nao fazia nada — o que voce escreve tem que ser o que voce ve.
+  // O padrao #161B27 e' o proprio tom do card, entao a linha VIP fica neutra
+  // por padrao e quem quiser destaque escolhe uma cor de verdade.
+  // Campo vazio = sem fundo nenhum, que tambem e' escolha valida.
+  var corHex = function(hex){
     var h = String(hex||'').trim().replace('#','');
     if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-    if(!/^[0-9a-f]{6}$/i.test(h)) return '';
-    return 'rgba(' + parseInt(h.slice(0,2),16) + ',' + parseInt(h.slice(2,4),16) + ',' + parseInt(h.slice(4,6),16) + ',' + a + ')';
+    return /^[0-9a-f]{6}$/i.test(h) ? '#' + h : '';
   };
-  var fundoPlus = rgba(_vipCfg('plus').corLinha, .07);
-  var fundoPrem = rgba(_vipCfg('premium').corLinha, .07);
+  var fundoPlus = corHex(_vipCfg('plus').corLinha);
+  var fundoPrem = corHex(_vipCfg('premium').corLinha);
   st.textContent =
     '.vip-selo{display:inline-flex;align-items:center;gap:6px;'
     + 'background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);color:#eab308;'
