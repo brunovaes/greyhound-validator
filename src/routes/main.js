@@ -1919,13 +1919,17 @@ function _nivelVip(r){
 }
 
 function _celulaVip(r){
-  var pill = function(cor, txt){
-    return '<td style="text-align:center;vertical-align:middle"><span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;'
+  var pill = function(cor, txt, dica){
+    return '<td style="text-align:center;vertical-align:middle"' + (dica ? ' title="' + dica + '"' : '') + '>'
+      + '<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;'
       + 'padding:2px 7px;border-radius:10px;border:1px solid ' + cor + ';color:' + cor + ';white-space:nowrap">' + txt + '</span></td>';
   };
-  // vip_premium guarda a NOTA ('A+','A'), nao 1/0, entao ela aparece junto.
-  if (r.vip_premium) return pill('#D4AF37', '\u{1F48E} ' + String(r.vip_premium));
-  if (r.vip_plus) return pill('#c084fc', '\u2B50 Plus');
+  // O rotulo diz o NIVEL, nao a nota: "Premium" e' o que voce procura quando
+  // bate o olho na coluna. A nota (que vem gravada em vip_premium) vai pro
+  // title, pra nao se perder — ela ainda serve pra saber se o A+ rende mais
+  // que o A.
+  if (r.vip_premium) return pill('#D4AF37', '\u{1F48E} Premium', 'nota ' + String(r.vip_premium));
+  if (r.vip_plus) return pill('#60a5fa', '\u2B50 Plus');
   return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
 }
 
