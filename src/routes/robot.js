@@ -450,6 +450,35 @@ function _gravarInicialAvb(inic){
   }catch(e){ console.error('[ODDS-INICIAL] erro:', e.message); }
 }
 
+// Marca em races quem é VIP Plus (funil de valor) e a NOTA do VIP Premium ('A+'/'A').
+// races é a fonte de verdade (sem tabela paralela). Idempotente: recomputa as duas
+// listas do dia e reaplica — corrida que saiu do VIP volta a 0/null. Puramente aditivo
+// (só marca; a SOBRESCRITA do AvB pela prioridade VIP é passo à parte). Nunca derruba nada.
+function _marcarVip(date){
+  try{
+    const { db } = require('../db/database');
+    date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
+    let plus=[], prem=[];
+    try { plus = (require('../utils/cargaVip').listar(db,{date}).entradas)||[]; } catch(e){}
+    try { prem = (require('../utils/motorNota').classificar(db,{date}).entradas)||[]; } catch(e){}
+    const chave = e => String(e.corrida||'')+'|'+String(e.hora||'');
+    const plusSet = new Set(plus.map(chave));
+    const premNota = {}; for(const e of prem) premNota[chave(e)] = e.nota||null;
+    const rows = db.prepare("SELECT r.id, r.corrida, r.hora FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
+    const updP = db.prepare('UPDATE races SET vip_plus=? WHERE id=?');
+    const updM = db.prepare('UPDATE races SET vip_premium=? WHERE id=?');
+    let nPlus=0, nPrem=0;
+    for(const r of rows){
+      const k = String(r.corrida||'')+'|'+String(r.hora||'');
+      const p = plusSet.has(k) ? 1 : 0;
+      const nota = (k in premNota) ? premNota[k] : null;
+      updP.run(p, r.id); if(p) nPlus++;
+      updM.run(nota, r.id); if(nota) nPrem++;
+    }
+    return { date, total: rows.length, vip_plus: nPlus, vip_premium: nPrem };
+  }catch(e){ return { erro: e.message }; }
+}
+
 // Captador dos AvBs que o betwinner ABRE por corrida (todos os pares, nao so os
 // da reanalise). Grava na tabela avb_abertos, uma linha por game_id, guardando o
 // conjunto MAIS COMPLETO visto (upsert quando aparecem mais pares). Serve pra
@@ -502,6 +531,10 @@ function _iniciarOdds(){
 
 try { _iniciarOdds(); }
 catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
+
+// Marca VIP (Plus/Premium) em races a cada 4 min — races e' a fonte de verdade.
+try { _marcarVip(getTodayDate()); setInterval(() => { try { _marcarVip(getTodayDate()); } catch(e){} }, 4*60*1000); }
+catch(e){ console.error('[VIP-MARCA] falha ao agendar:', e.message); }
 
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
 // estao dentro da janela de X minutos antes do horario (configuravel,
@@ -2816,6 +2849,12 @@ router.get('/diag/avb-inicial-fechamento', requireAdmin, (req, res) => {
         + 'Amostra cresce com o tempo — 1-2 dias não conclui nada, é pra acompanhar a tendência.'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAG (admin): roda a marcação VIP (Plus/Premium) na hora e devolve o resumo.
+router.get('/diag/marcar-vip', requireAdmin, (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+  res.json(_marcarVip(date));
 });
 
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
