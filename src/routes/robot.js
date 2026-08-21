@@ -450,10 +450,22 @@ function _gravarInicialAvb(inic){
   }catch(e){ console.error('[ODDS-INICIAL] erro:', e.message); }
 }
 
-// Marca em races quem é VIP Plus (funil de valor) e a NOTA do VIP Premium ('A+'/'A').
-// races é a fonte de verdade (sem tabela paralela). Idempotente: recomputa as duas
-// listas do dia e reaplica — corrida que saiu do VIP volta a 0/null. Puramente aditivo
-// (só marca; a SOBRESCRITA do AvB pela prioridade VIP é passo à parte). Nunca derruba nada.
+// Monta o registro de AvB (formato do avb_fechamento) a partir de uma entrada VIP.
+function _regVip(e, origem, nota){
+  return JSON.stringify({
+    aTrap:e.pick_trap, aNome:e.pick_nome||'', bTrap:e.outro_trap, bNome:e.outro_nome||'',
+    odd:(e.odd_abertura!=null?e.odd_abertura:null), marketPct:null,
+    reanalisePct:(e.taxa_validada_pct!=null?e.taxa_validada_pct:(e.taxa_nivel_pct!=null?e.taxa_nivel_pct:null)),
+    motorOrigPct:null, edge:null, obs:e.obs||null,
+    origem:origem, nota:nota||null, ts:Math.floor(Date.now()/1000)
+  });
+}
+
+// races e' a fonte de verdade (sem tabela paralela). Marca vip_plus/vip_premium(nota)
+// E aplica a PRIORIDADE: o AvB do VIP reescreve o avb_fechamento (o corrente que a
+// tela mostra). Hierarquia Premium > Plus. Idempotente: recomputa as duas listas do
+// dia e reaplica. Se a corrida SAIU do VIP e o fechamento atual veio do VIP, limpa
+// pra a reanalise (onClose) repopular. O avb_inicial (congelado) NUNCA e' tocado.
 function _marcarVip(date){
   try{
     const { db } = require('../db/database');
@@ -462,20 +474,31 @@ function _marcarVip(date){
     try { plus = (require('../utils/cargaVip').listar(db,{date}).entradas)||[]; } catch(e){}
     try { prem = (require('../utils/motorNota').classificar(db,{date}).entradas)||[]; } catch(e){}
     const chave = e => String(e.corrida||'')+'|'+String(e.hora||'');
-    const plusSet = new Set(plus.map(chave));
-    const premNota = {}; for(const e of prem) premNota[chave(e)] = e.nota||null;
-    const rows = db.prepare("SELECT r.id, r.corrida, r.hora FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
+    const plusBy = {}; for(const e of plus) plusBy[chave(e)] = e;
+    const premBy = {}; for(const e of prem) premBy[chave(e)] = e;
+    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
     const updP = db.prepare('UPDATE races SET vip_plus=? WHERE id=?');
     const updM = db.prepare('UPDATE races SET vip_premium=? WHERE id=?');
-    let nPlus=0, nPrem=0;
+    const updF = db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?');
+    let nPlus=0, nPrem=0, nSobrescreveu=0, nReverteu=0;
     for(const r of rows){
       const k = String(r.corrida||'')+'|'+String(r.hora||'');
-      const p = plusSet.has(k) ? 1 : 0;
-      const nota = (k in premNota) ? premNota[k] : null;
+      const eP = plusBy[k], eM = premBy[k];
+      const p = eP ? 1 : 0;
+      const nota = eM ? (eM.nota||null) : null;
       updP.run(p, r.id); if(p) nPlus++;
       updM.run(nota, r.id); if(nota) nPrem++;
+      // PRIORIDADE: Premium ganha do Plus. O vencedor reescreve o avb_fechamento.
+      const venc = eM || eP || null;
+      if(venc){
+        updF.run(_regVip(venc, eM ? 'vip_premium' : 'vip_plus', nota), r.id);
+        nSobrescreveu++;
+      } else if(r.avb_fechamento){
+        // saiu do VIP: se o fechamento atual veio do VIP, limpa p/ a reanalise repopular
+        try { const o = JSON.parse(r.avb_fechamento); if(o && /^vip_/.test(String(o.origem||''))){ updF.run(null, r.id); nReverteu++; } } catch(e){}
+      }
     }
-    return { date, total: rows.length, vip_plus: nPlus, vip_premium: nPrem };
+    return { date, total: rows.length, vip_plus: nPlus, vip_premium: nPrem, avb_sobrescrito_vip: nSobrescreveu, avb_revertido: nReverteu };
   }catch(e){ return { erro: e.message }; }
 }
 
