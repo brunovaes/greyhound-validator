@@ -1101,7 +1101,7 @@ ${navBar(req.user, 'robot')}
       <div class="field"><label>Medidor: início (marco zero)</label><input type="date" id="odds-medidor-inicio" style="width:150px"></div>
       <div class="field"><label>Plano Decodo (GB) — teto dos alarmes</label><input type="number" id="odds-quota-gb" min="0.5" max="1000" step="0.5" style="width:110px"></div>
     </div>
-    <div style="font-size:11px;color:#64748b;margin-top:2px">Início = a partir de que dia o Consumo conta (dias antes somem do card, sem apagar do banco). Plano = teto em GB; os alarmes de 70/80/90/95/99% são calculados sobre ele. O consumo mostrado já inclui +26% de upload (como a Decodo cobra).</div>
+    <div style="font-size:11px;color:#64748b;margin-top:2px">Início = a partir de que dia o Consumo conta (dias antes somem do card, sem apagar do banco). Plano = teto em GB; os alarmes de 70/80/90/95/99% são calculados sobre ele. O consumo mostrado já inclui +27,5% de upload (como a Decodo cobra).</div>
     <div style="font-size:11px;color:#64748b;margin-top:2px">AvB parelho: o motor pareia os galgos mais colados de odd (SP das 2 últimas na pista) com favorito claro, em vez de melhor×pior — pra o par quase sempre abrir ao vivo. Vale na próxima análise. Desligado = volta ao melhor×pior.</div>
     <div id="odds-cfg-msg" style="font-size:12px;color:#94a3b8;margin-top:6px"></div>
     <div style="font-size:11px;color:#64748b;margin-top:4px">Intervalo e proxy reiniciam o robô ao salvar; nº de AvBs, edge e AvB parelho valem no próximo ciclo/análise.</div>
@@ -1115,7 +1115,7 @@ ${navBar(req.user, 'robot')}
   <div class="card">
     <div class="card-title">Consumo do proxy (Decodo) — reflete o gasto sem entrar no painel deles</div>
     <div id="odds-trafego"><div class="lin">Carregando…</div></div>
-    <div style="font-size:11px;color:#64748b;margin-top:4px">Download + overhead por requisição <b>+26% de upload</b> (como a Decodo cobra), cruzado com as corridas/AvBs capturados. Conta a partir do marco zero configurado; dias antes não entram. Ainda é estimativa (handshake/TLS variam), mas bate ~1% com o painel deles.</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Download + overhead por requisição <b>+27,5% de upload</b> (como a Decodo cobra), cruzado com as corridas/AvBs capturados. Conta a partir do marco zero configurado; dias antes não entram. Ainda é estimativa (handshake/TLS variam), mas bate ~1% com o painel deles.</div>
   </div>
 </div><!-- fim panel-odds -->
 
@@ -1693,7 +1693,7 @@ async function pollOddsHealth() {
           + tile('Requisições', (re.requisicoes != null ? re.requisicoes : '—'))
           + tile('Projeção 30d', proj)
           + '</div>'
-          + '<div style="font-size:11px;color:#64748b;margin-bottom:6px">Desde ' + (re.medidor_inicio || '—') + ' &middot; já com +26% upload &middot; Média: ' + (re.mb_por_corrida != null ? re.mb_por_corrida + ' MB/corrida' : '—') + ' &middot; ' + (re.mb_por_avb != null ? re.mb_por_avb + ' MB/AvB' : '—') + '</div>'
+          + '<div style="font-size:11px;color:#64748b;margin-bottom:6px">Desde ' + (re.medidor_inicio || '—') + ' &middot; já com +27,5% upload &middot; Média: ' + (re.mb_por_corrida != null ? re.mb_por_corrida + ' MB/corrida' : '—') + ' &middot; ' + (re.mb_por_avb != null ? re.mb_por_avb + ' MB/AvB' : '—') + '</div>'
           + (linhas
             ? '<table style="border-collapse:collapse;font-size:12px"><thead><tr style="color:#64748b;font-size:10px;text-transform:uppercase"><td style="padding:2px 12px 4px 0">Dia</td><td style="padding:2px 12px 4px;text-align:right">Consumo</td><td style="padding:2px 12px 4px;text-align:right">Corr.</td><td style="padding:2px 12px 4px;text-align:right">AvB</td><td style="padding:2px 0 4px;text-align:right">Req</td></tr></thead><tbody>' + linhas + '</tbody></table>'
             : '<div class="lin" style="color:#64748b">Sem consumo registrado ainda.</div>');
@@ -2592,7 +2592,7 @@ router.get('/odds/diag/variantes', requireAdmin, async (req, res) => {
 router.get('/odds/diag/uso', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
-    const F = liveOddsModule.FATOR_UPLOAD || 1.26;         // +26% upload (Decodo cobra download+upload)
+    const F = liveOddsModule.FATOR_UPLOAD || 1.275;        // +27,5% upload (Decodo cobra download+upload)
     const { inicio, quotaGb } = liveOddsModule._medidorCfg(); // marco zero + teto do plano
     // Filtra pelo marco zero: dias antes do "inicio" nao entram no card (limpa
     // dias de teste sem apagar o byte cru no banco). mb/gb ja saem COM upload.
@@ -2621,7 +2621,7 @@ router.get('/odds/diag/uso', requireAdmin, (req, res) => {
         medidor_inicio: inicio
       },
       por_dia,
-      obs: 'Consumo COM upload (+26%, como a Decodo cobra). Conta a partir de ' + inicio + ' (dias antes nao entram). Teto do plano: ' + quotaGb + ' GB. Alarmes em 70/80/90/95/99%.'
+      obs: 'Consumo COM upload (+27,5%, como a Decodo cobra). Conta a partir de ' + inicio + ' (dias antes nao entram). Teto do plano: ' + quotaGb + ' GB. Alarmes em 70/80/90/95/99%.'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });

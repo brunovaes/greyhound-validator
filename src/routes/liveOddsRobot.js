@@ -120,10 +120,10 @@ function headersPara(host) {
 const TRAFEGO_OVERHEAD_REQ = 5000; // bytes/req (handshake TLS rotativo + headers 2 vias)
 // A Decodo cobra download + UPLOAD. O nosso medidor conta so o que desce (corpo
 // comprimido + overhead), que bate ~certinho com o "download" do painel deles.
-// O upload foi ~26% do download num dia inteiro batido (13.47MB up / 51.47MB down),
-// entao multiplicamos por 1.26 SO NA EXIBICAO pra refletir o total que eles cobram.
+// O upload foi ~26% do download num dia inteiro batido (13.47MB up / 51.47MB down);
+// usamos 27,5% (uma margem a mais) SO NA EXIBICAO pra refletir o total que eles cobram.
 // O byte cru no banco (proxy_trafego) fica intacto p/ calibracao futura.
-const FATOR_UPLOAD = 1.26;
+const FATOR_UPLOAD = 1.275;
 // Le do config o marco zero do medidor (dias anteriores nao entram no card) e o
 // teto do plano em GB (base dos alarmes). Defaults se o banco/coluna falhar.
 function _medidorCfg() {
