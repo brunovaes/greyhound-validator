@@ -99,11 +99,9 @@ function injectStyles(){
     '.rc-suspect-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#000;background:#f59e0b;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
     '.rc-vip-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:10px;background:rgba(234,179,8,.16);border:1px solid rgba(234,179,8,.5);color:#eab308;white-space:nowrap;}',
     '.rc-vip-badge.nivel-premium{background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.5);color:#22c55e;}',
-    // Fundo da linha no tom do nivel. Discreto de proposito: o alarme da
-    // corrida proxima (rc-alert) precisa continuar sendo o que mais chama a
-    // atencao, senao a lista inteira grita e nada se destaca.
-    '.rc-vip{background:rgba(234,179,8,.05);}',
-    '.rc-vip-premium{background:rgba(34,197,94,.05);}',
+    // O fundo da linha VIP NAO fica aqui: ele vem da configuracao de cada
+    // nivel e e' injetado por _cssVip(). Deixar fixo aqui vencia a
+    // configuracao, porque este CSS carrega depois.
     '.fp-old-banner{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
     '.fp-suspect-banner{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f59e0b;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
     '.old-row{background:rgba(239,68,68,.08)!important;}',
@@ -205,6 +203,7 @@ async function loadSystemConfig() {
     if (c.vip_cor_destaque) VIP_CFG.corDestaque = c.vip_cor_destaque;
     if (c.vip_cor_fundo) VIP_CFG.corFundo = c.vip_cor_fundo;
     if (c.vip_cor_alerta) VIP_CFG.corAlerta = c.vip_cor_alerta;
+    if (c.vip_cor_linha != null) VIP_CFG.corLinha = c.vip_cor_linha;
     // VIP Premium. Enquanto o /api/config nao devolver estes campos, os
     // defaults do VIP_CFG seguem valendo e a tela funciona igual.
     if (c.vip_premium_ativo != null) VIP_CFG.ativoPremium = +c.vip_premium_ativo;
@@ -214,6 +213,7 @@ async function loadSystemConfig() {
     if (c.vip_premium_cor_destaque) VIP_CFG.corDestaquePremium = c.vip_premium_cor_destaque;
     if (c.vip_premium_cor_fundo) VIP_CFG.corFundoPremium = c.vip_premium_cor_fundo;
     if (c.vip_premium_cor_alerta) VIP_CFG.corAlertaPremium = c.vip_premium_cor_alerta;
+    if (c.vip_premium_cor_linha != null) VIP_CFG.corLinhaPremium = c.vip_premium_cor_linha;
     // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
     // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
     // descarta o estado de alerta atual (o aviso padrao e' descartado) e
@@ -885,19 +885,20 @@ var VIP_SET_PREMIUM = new Set();
 // funcionar igual antes do /api/config responder (ou caso ele ainda nao
 // devolva os campos do Premium).
 var VIP_CFG = {
-  ativo:1, minAntes:5, alarme:1, som:'sino', corDestaque:'#c084fc', corFundo:'#140B2B', corAlerta:'roxo',
+  ativo:1, minAntes:5, alarme:1, som:'sino', corDestaque:'#c084fc', corFundo:'#140B2B', corAlerta:'roxo', corLinha:'#c084fc',
   ativoPremium:1, minAntesPremium:5, alarmePremium:1, somPremium:'alarme',
-  corDestaquePremium:'#D4AF37', corFundoPremium:'#0A280E', corAlertaPremium:'dourado'
+  corDestaquePremium:'#D4AF37', corFundoPremium:'#0A280E', corAlertaPremium:'dourado',
+  corLinhaPremium:'#D4AF37'
 };
 // Le a configuracao do nivel da corrida, sem espalhar "if premium" pelo codigo.
 function _vipCfg(tipo) {
   return tipo === 'premium'
     ? { ativo:VIP_CFG.ativoPremium, minAntes:VIP_CFG.minAntesPremium, alarme:VIP_CFG.alarmePremium,
         som:VIP_CFG.somPremium, corDestaque:VIP_CFG.corDestaquePremium, corFundo:VIP_CFG.corFundoPremium,
-        corAlerta:VIP_CFG.corAlertaPremium }
+        corAlerta:VIP_CFG.corAlertaPremium, corLinha:VIP_CFG.corLinhaPremium }
     : { ativo:VIP_CFG.ativo, minAntes:VIP_CFG.minAntes, alarme:VIP_CFG.alarme,
         som:VIP_CFG.som, corDestaque:VIP_CFG.corDestaque, corFundo:VIP_CFG.corFundo,
-        corAlerta:VIP_CFG.corAlerta };
+        corAlerta:VIP_CFG.corAlerta, corLinha:VIP_CFG.corLinha };
 }
 // Quais corridas do VIP estao marcadas como skip (e o motivo). O destrave so
 // vale pra elas: skip por falta de historico nem chega no filtro, entao aqui
@@ -967,7 +968,19 @@ function _cssVip(){
   var st = document.getElementById('vip-css');
   if(!st){ st = document.createElement('style'); st.id = 'vip-css'; document.head.appendChild(st); }
   var c = _vipCfg('plus').corDestaque || '#c084fc';
-  var cp = _vipCfg('premium').corDestaque || '#22c55e';
+  var cp = _vipCfg('premium').corDestaque || '#D4AF37';
+  // Fundo da linha na lista: a mesma cor configurada, bem transparente. O
+  // alarme da corrida proxima precisa continuar sendo o que mais chama a
+  // atencao, senao a lista inteira grita e nada se destaca.
+  // Campo vazio = sem fundo nenhum, que e' uma escolha valida.
+  var rgba = function(hex, a){
+    var h = String(hex||'').trim().replace('#','');
+    if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    if(!/^[0-9a-f]{6}$/i.test(h)) return '';
+    return 'rgba(' + parseInt(h.slice(0,2),16) + ',' + parseInt(h.slice(2,4),16) + ',' + parseInt(h.slice(4,6),16) + ',' + a + ')';
+  };
+  var fundoPlus = rgba(_vipCfg('plus').corLinha, .07);
+  var fundoPrem = rgba(_vipCfg('premium').corLinha, .07);
   st.textContent =
     '.vip-selo{display:inline-flex;align-items:center;gap:6px;'
     + 'background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);color:#eab308;'
@@ -982,6 +995,8 @@ function _cssVip(){
     // de duas cores.
     + '.rc-vip-badge{border-color:' + c + ';color:' + c + ';background:transparent}'
     + '.rc-vip-badge.nivel-premium{border-color:' + cp + ';color:' + cp + ';background:transparent}'
+    + (fundoPlus ? '.rc-vip{background:' + fundoPlus + '}' : '')
+    + (fundoPrem ? '.rc-vip-premium{background:' + fundoPrem + '}' : '')
     + '.vip-selo.vip-skip{background:rgba(192,132,252,.14);border-color:' + c + ';color:' + c + '}'
     + '@keyframes vipPisca{0%,100%{opacity:1}50%{opacity:.5}}'
     // Respeita quem pediu menos animacao no sistema: o selo fica visivel, so parado.
