@@ -361,6 +361,17 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <input type="text" name="vip_cor_destaque" placeholder="#c084fc" value="${config.vip_cor_destaque||'#c084fc'}">
   </div>
   <div class="field">
+    <label>Cor do alerta na lista</label>
+    <select name="vip_cor_alerta">
+      <option value="azul" ${config.vip_cor_alerta==='azul'?'selected':''}>Azul</option>
+      <option value="roxo" ${config.vip_cor_alerta==='roxo'||!config.vip_cor_alerta?'selected':''}>Roxo</option>
+      <option value="laranja" ${config.vip_cor_alerta==='laranja'?'selected':''}>Laranja</option>
+      <option value="rosa" ${config.vip_cor_alerta==='rosa'?'selected':''}>Rosa</option>
+      <option value="verde" ${config.vip_cor_alerta==='verde'?'selected':''}>Verde</option>
+      <option value="dourado" ${config.vip_cor_alerta==='dourado'?'selected':''}>Dourado</option>
+    </select>
+  </div>
+  <div class="field">
     <label>Cor de fundo da disputa</label>
     <input type="text" name="vip_cor_fundo" placeholder="#140B2B" value="${config.vip_cor_fundo||'#140B2B'}">
   </div>
@@ -397,7 +408,18 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
   <div class="field">
     <label>Cor do selo que pisca</label>
-    <input type="text" name="vip_premium_cor_destaque" placeholder="#22c55e" value="${config.vip_premium_cor_destaque||'#22c55e'}">
+    <input type="text" name="vip_premium_cor_destaque" placeholder="#D4AF37" value="${config.vip_premium_cor_destaque||'#D4AF37'}">
+  </div>
+  <div class="field">
+    <label>Cor do alerta na lista</label>
+    <select name="vip_premium_cor_alerta">
+      <option value="azul" ${config.vip_premium_cor_alerta==='azul'?'selected':''}>Azul</option>
+      <option value="roxo" ${config.vip_premium_cor_alerta==='roxo'?'selected':''}>Roxo</option>
+      <option value="laranja" ${config.vip_premium_cor_alerta==='laranja'?'selected':''}>Laranja</option>
+      <option value="rosa" ${config.vip_premium_cor_alerta==='rosa'?'selected':''}>Rosa</option>
+      <option value="verde" ${config.vip_premium_cor_alerta==='verde'?'selected':''}>Verde</option>
+      <option value="dourado" ${config.vip_premium_cor_alerta==='dourado'||!config.vip_premium_cor_alerta?'selected':''}>Dourado</option>
+    </select>
   </div>
   <div class="field">
     <label>Cor de fundo da disputa</label>
@@ -1273,11 +1295,17 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_min_antes INTEGER DEFAULT 5").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_alarme INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_som TEXT DEFAULT 'alarme'").run(); } catch(e) {}
-    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_destaque TEXT DEFAULT '#22c55e'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_destaque TEXT DEFAULT '#D4AF37'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_fundo TEXT DEFAULT '#0A280E'").run(); } catch(e) {}
+    // Cor com que a LINHA da lista pisca quando a corrida VIP se aproxima —
+    // mesmo mecanismo do alarme de filtro (rc-alert-custom). E' outra coisa
+    // que a cor do selo: uma pinta a borda da linha inteira, a outra o
+    // rotulo. Por isso sao dois campos.
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_cor_alerta TEXT DEFAULT 'roxo'").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_alerta TEXT DEFAULT 'dourado'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1312,8 +1340,10 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.vip_premium_min_antes!=null?parseInt(d.vip_premium_min_antes):5,
       d.vip_premium_alarme!=null?parseInt(d.vip_premium_alarme):1,
       d.vip_premium_som||'alarme',
-      d.vip_premium_cor_destaque||'#22c55e',
+      d.vip_premium_cor_destaque||'#D4AF37',
       d.vip_premium_cor_fundo||'#0A280E',
+      d.vip_cor_alerta||'roxo',
+      d.vip_premium_cor_alerta||'dourado',
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
