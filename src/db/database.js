@@ -281,6 +281,7 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN avb_inicial TEXT", // foto da principal na PRIMEIRA análise (congelada, escondida da tela) — só p/ medir se o recálculo near-post ajuda
   "ALTER TABLE races ADD COLUMN vip_plus INTEGER DEFAULT 0", // 1 = corrida entrou na VIP Plus (funil de valor)
   "ALTER TABLE races ADD COLUMN vip_premium TEXT", // NOTA do VIP Premium ('A+','A') ou null — guarda a nota, não só 1/0
+  "ALTER TABLE races ADD COLUMN avb_reanalise TEXT", // o que a REANÁLISE disse na largada (o VIP nunca toca) — pra medir VIP x reanálise na MESMA corrida
 
   // 11/08 — Config do Robo de Odds (Painel Admin): intervalo, nº de AvBs, edge minimo, proxy
   "ALTER TABLE analysis_config ADD COLUMN odds_intervalo_seg INTEGER DEFAULT 5",

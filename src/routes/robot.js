@@ -413,11 +413,15 @@ function _gravarFechamentoAvb(fech){
       gameId:fech.gameId, ts:fech.fechadoEm
     };
     const row = fech.hora
-      ? db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.hora=? AND r.avb_fechamento IS NULL LIMIT 1").get(date, fech.corrida, fech.hora)
-      : db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.avb_fechamento IS NULL LIMIT 1").get(date, fech.corrida);
+      ? db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.hora=? LIMIT 1").get(date, fech.corrida, fech.hora)
+      : db.prepare("SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? LIMIT 1").get(date, fech.corrida);
     if(row){
-      db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?').run(JSON.stringify(registro), row.id);
-      console.log('[ODDS-FECHAMENTO] '+fech.corrida+' '+(fech.hora||'')+' -> T'+registro.aTrap+'xT'+registro.bTrap+' odd '+registro.odd+' ('+registro.origem+')');
+      const js = JSON.stringify(registro);
+      // avb_reanalise: SEMPRE a reanalise (o VIP nunca toca). Grava uma vez (guarda IS NULL).
+      db.prepare('UPDATE races SET avb_reanalise=? WHERE id=? AND avb_reanalise IS NULL').run(js, row.id);
+      // avb_fechamento: o corrente. Se o VIP ja sobrescreveu, nao mexe (guarda IS NULL).
+      const inf = db.prepare('UPDATE races SET avb_fechamento=? WHERE id=? AND avb_fechamento IS NULL').run(js, row.id);
+      if(inf.changes) console.log('[ODDS-FECHAMENTO] '+fech.corrida+' '+(fech.hora||'')+' -> T'+registro.aTrap+'xT'+registro.bTrap+' odd '+registro.odd+' ('+registro.origem+')');
     }
   }catch(e){ console.error('[ODDS-FECHAMENTO] erro:', e.message); }
 }
@@ -476,12 +480,17 @@ function _marcarVip(date){
     const chave = e => String(e.corrida||'')+'|'+String(e.hora||'');
     const plusBy = {}; for(const e of plus) plusBy[chave(e)] = e;
     const premBy = {}; for(const e of prem) premBy[chave(e)] = e;
-    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
+    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento, r.final_check_at, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
     const updP = db.prepare('UPDATE races SET vip_plus=? WHERE id=?');
     const updM = db.prepare('UPDATE races SET vip_premium=? WHERE id=?');
     const updF = db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?');
-    let nPlus=0, nPrem=0, nSobrescreveu=0, nReverteu=0;
+    let nPlus=0, nPrem=0, nSobrescreveu=0, nReverteu=0, nCongelou=0;
     for(const r of rows){
+      // FREEZE na largada: corrida que ja largou (checagem final rodou OU ja tem
+      // resultado) nao e' mais recomputada — o ultimo valor antes da largada e' o
+      // que o Bruno viu ao decidir. Depois disso a marca vira registro, nao estado.
+      // (evita a miragem: recomputar com o cerebro que ja inclui o resultado dela.)
+      if(r.final_check_at || r.finishing_order_json){ nCongelou++; continue; }
       const k = String(r.corrida||'')+'|'+String(r.hora||'');
       const eP = plusBy[k], eM = premBy[k];
       const p = eP ? 1 : 0;
@@ -498,7 +507,7 @@ function _marcarVip(date){
         try { const o = JSON.parse(r.avb_fechamento); if(o && /^vip_/.test(String(o.origem||''))){ updF.run(null, r.id); nReverteu++; } } catch(e){}
       }
     }
-    return { date, total: rows.length, vip_plus: nPlus, vip_premium: nPrem, avb_sobrescrito_vip: nSobrescreveu, avb_revertido: nReverteu };
+    return { date, total: rows.length, congeladas_ja_largaram: nCongelou, vip_plus: nPlus, vip_premium: nPrem, avb_sobrescrito_vip: nSobrescreveu, avb_revertido: nReverteu };
   }catch(e){ return { erro: e.message }; }
 }
 
