@@ -2184,8 +2184,8 @@ ${navBar(user, 'historico')}
 <div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
 <div class="kpi" title="o AvB que valeu em cada corrida: a sua escolha quando você entrou, o do motor quando não entrou">
   <div class="kpi-label">Taxa de acerto</div>
-  <div class="kpi-val" style="color:${_tx.geral.pct==null?'#666':(_tx.geral.pct>=50?'#22C65E':'#ef4444')}">${_tx.geral.pct==null?'—':_tx.geral.pct+'%'}</div>
-  ${_tx.geral.tot?`<div style="font-size:9px;color:#666;margin-top:2px">${_tx.geral.ok}/${_tx.geral.tot}</div>`:''}
+  <div class="kpi-val" id="kpi-taxa" style="color:${_tx.geral.pct==null?'#666':(_tx.geral.pct>=50?'#22C65E':'#ef4444')}">${_tx.geral.pct==null?'—':_tx.geral.pct+'%'}</div>
+  <div id="kpi-taxa-cnt" style="font-size:9px;color:#666;margin-top:2px">${_tx.geral.tot?`${_tx.geral.ok}/${_tx.geral.tot}`:''}</div>
 </div>
 <div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
@@ -2193,7 +2193,7 @@ ${navBar(user, 'historico')}
 
 <div class="kpi gtn">
   <div class="kpi-label">Acerto por turno</div>
-  <div class="gtn-cols">
+  <div class="gtn-cols" id="kpi-turnos">
   ${['Manhã','Tarde'].map(function(t){
     var d=_turnos[t];
     var linha=function(rot,o){
@@ -2409,6 +2409,41 @@ function openReplay(id){
 }
 // ===== Filtros do cabecalho do historico (Hora BR / Corrida / Bateu) =====
 function _histSet(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+// Refaz o "Acerto por turno" com as linhas que estao na tela. O grafico nascia
+// do servidor sobre TODAS as corridas, entao filtrar por pista ou por VIP
+// mudava a tabela inteira e deixava o grafico contando o que nao estava mais
+// visivel — dois numeros discordando na mesma tela.
+//
+// O turno vem do data-turno, o mesmo atributo que o filtro de turno usa, e o
+// resultado do data-bateu, que o servidor ja derivou com bateuPar sobre o AvB
+// que valeu. Nada e' recalculado aqui: so recontado.
+function redesenhaTurnos(vis){
+  var box=document.getElementById('kpi-turnos');
+  if(!box) return;
+  var g={'Manhã':{ok:0,err:0},'Tarde':{ok:0,err:0}};
+  vis.forEach(function(tr){
+    var t=tr.getAttribute('data-turno')||'';
+    if(!g[t]) return;
+    var b=tr.getAttribute('data-bateu')||'';
+    if(b==='sim') g[t].ok++; else if(b==='nao') g[t].err++;
+  });
+  box.innerHTML=['Manhã','Tarde'].map(function(t){
+    var o=g[t], tot=o.ok+o.err, lin;
+    if(!tot){
+      lin='<div class="gtn-lin"><span class="gtn-rot">AvB</span>'
+        + '<span class="gtn-bar"></span><span class="gtn-pct" style="color:#555">—</span></div>';
+    } else {
+      var pct=Math.round(o.ok/tot*100);
+      lin='<div class="gtn-lin" title="AvB '+t+': '+o.ok+' acerto(s), '+o.err+' erro(s)">'
+        + '<span class="gtn-rot">AvB</span>'
+        + '<span class="gtn-bar"><span class="gtn-ok" style="width:'+pct+'%"></span>'
+        +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
+        + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
+    }
+    return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'+lin+'</div>';
+  }).join('');
+}
+
 function recalcKpisHist(){
   var vis=Array.prototype.filter.call(document.querySelectorAll('tr[data-race]'),function(tr){return tr.style.display!=='none';});
   var resolv=vis.filter(function(tr){return tr.getAttribute('data-bateu');});
@@ -2417,7 +2452,16 @@ function recalcKpisHist(){
   var green=apost.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
   _histSet('kpi-corridas',vis.length);
   _histSet('kpi-acertos',ac);
-  _histSet('kpi-taxa',(resolv.length?Math.round(ac/resolv.length*100):0)+'%');
+  // A taxa e o contador saem das MESMAS linhas visiveis. Antes o "33/64"
+  // embaixo do numero era fixo do servidor: filtrar mudava a porcentagem e
+  // deixava a fracao antiga, dizendo uma coisa diferente logo abaixo.
+  var pctTaxa = resolv.length ? Math.round(ac/resolv.length*100) : null;
+  _histSet('kpi-taxa', pctTaxa==null ? '—' : pctTaxa+'%');
+  var elTaxa = document.getElementById('kpi-taxa');
+  if(elTaxa) elTaxa.style.color = pctTaxa==null ? '#666' : (pctTaxa>=50 ? '#22C65E' : '#ef4444');
+  var elCnt = document.getElementById('kpi-taxa-cnt');
+  if(elCnt) elCnt.textContent = resolv.length ? (ac+'/'+resolv.length) : '';
+  redesenhaTurnos(vis);
   _histSet('kpi-apostas',apost.length);
   _histSet('kpi-green',green);
   _histSet('kpi-pctgreen',(apost.length?Math.round(green/apost.length*100):0)+'%');
@@ -2444,6 +2488,15 @@ function aplicarFiltroHist(){
   });
   recalcKpisHist();
 }
+
+// Recalcula UMA vez ao abrir, antes de qualquer filtro.
+//
+// Sem isto os cards nascem do servidor e passam a ser recalculados so no
+// primeiro filtro — e as duas contagens nao sao a mesma: Acertos/Corridas
+// contam de um jeito, a Taxa de outro. Enquanto ninguem filtrava, os dois
+// numeros conviviam discordando na mesma tela.
+// Recalculando na abertura, todo mundo passa a sair das MESMAS linhas.
+document.addEventListener('DOMContentLoaded', recalcKpisHist);
 </script>
 </div></body></html>`);
 });
