@@ -1944,8 +1944,21 @@ function _nivelVip(r){
 // uma origem: e' voce trocando qual par daquele mesmo motor prevalece. Marcar
 // a linha como "manual" diria que a analise foi sua, e nao foi.
 function _motorDoAvb(r){
-  var fech = _jsonOuNull(r.avb_fechamento);
-  if (fech) return String(fech.origem || '').indexOf('vip') === 0 ? 'bw' : 'reanalise';
+  // A reanalise e a camada BW so decidem PERTO DA LARGADA. Antes disso o
+  // avb_fechamento ate existe — o VIP reescreve a lista inteira do dia a cada
+  // 4 minutos —, mas ele e' palpite corrente, nao etapa cumprida. Ler a
+  // presenca do campo como se fosse a etapa fazia corrida das 20h aparecer
+  // como "Valida BW" as 14h, quando so a analise inicial tinha rodado.
+  //
+  // final_check_at e' a checagem final (near-post); finishing_order_json e' o
+  // resultado. Qualquer um dos dois significa que a corrida ja passou do ponto
+  // em que esses motores decidem. E' o mesmo gatilho que o motor usa pra
+  // congelar as marcas VIP.
+  var passou = !!(r.final_check_at || r.finishing_order_json);
+  if (passou) {
+    var fech = _jsonOuNull(r.avb_fechamento);
+    if (fech) return String(fech.origem || '').indexOf('vip') === 0 ? 'bw' : 'reanalise';
+  }
   if (r.trap_fav && r.trap_und) return 'analise';
   return '';
 }
@@ -1955,7 +1968,7 @@ function _celulaMotor(r){
   var mapa = {
     bw:        ['#D4AF37', 'Valida BW',  'a camada VIP, orientada pelo que abre na BW, escreveu o AvB desta corrida'],
     reanalise: ['#22c55e', 'Reanálise',  'a reanálise reescreveu o AvB perto da largada'],
-    analise:   ['#8a94a6', 'Análise',    'vale o AvB da análise inicial: não houve fechamento nesta corrida']
+    analise:   ['#8a94a6', 'Análise',    'só a análise inicial rodou nesta corrida: a reanálise e a validação na BW só decidem perto da largada']
   };
   var v = mapa[m];
   if (!v) return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
