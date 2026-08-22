@@ -58,7 +58,8 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   (Array.isArray(raceCard) ? raceCard : histFull).forEach(g => { if (g && g.trap != null) presentes.add(Number(g.trap)); });
   const vaz = new Set(); for (let t = 1; t <= 6; t++) if (!presentes.has(t)) vaz.add(t);
   const trapsVazias = Array.from(vaz);
-  const temVaziaAoLado = t => vaz.has(t - 1) || vaz.has(t + 1);
+  // QUAIS traps vazias estao ao lado (nao so "tem/nao tem") — pra a nota dizer o numero.
+  const vaziasAoLado = t => [t - 1, t + 1].filter(x => x >= 1 && x <= 6 && vaz.has(x));
   const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: {} };
 
   const oddMedia = _oddMediaPorTrap(histAll);
@@ -94,9 +95,12 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
       pct: pct,
       pct_pick: pct, pct_outro: 100 - pct,
       parelho: pct <= parelhoAte,                         // <= 60% = nota "corrida parelha"
-      // ITEM 5 — nota de trap vazia ao lado (atualiza tardio: le o card fresco a cada chamada)
-      pick_vazia_lado: temVaziaAoLado(av.aTrap),
-      outro_vazia_lado: temVaziaAoLado(av.bTrap),
+      // ITEM 5 — nota de trap vazia ao lado, indicando QUAL trap (atualiza tardio: le o
+      // card fresco a cada chamada). pick_vazia_traps = ex.: [3] (box 3 vazio ao lado do pick).
+      pick_vazia_lado: vaziasAoLado(av.aTrap).length > 0,
+      pick_vazia_traps: vaziasAoLado(av.aTrap),
+      outro_vazia_lado: vaziasAoLado(av.bTrap).length > 0,
+      outro_vazia_traps: vaziasAoLado(av.bTrap),
       obs: av.obs || null,
       flags: av.flags || null
     });
