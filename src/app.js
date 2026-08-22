@@ -1248,6 +1248,9 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-vence-lbl">VENCE</div>'
     + '<div class="fp-vence-arrow">&#9658;</div>'
     + '<button type="button" class="alt-analisar" data-a="'+tf+'" data-b="'+tu+'" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
+    // Inverter o sentido do par. Fica junto do "vence" porque e' exatamente o
+    // que ele muda: quem vence quem.
+    + '<button type="button" id="btn-inverter" onclick="inverterAvb()" title="trocar o sentido: T'+tu+' vence T'+tf+'" style="margin-top:6px;font-size:10px;font-weight:600;color:#8a94a6;background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 10px;cursor:pointer;white-space:nowrap;display:block;margin-left:auto;margin-right:auto">&#8646; inverter</button>'
     + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
     + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
     + '</div>'
@@ -1527,9 +1530,36 @@ function escolherAvb(trapA, trapB, odd){
   }
 
   r.avbEscolhido={ a:trapA, b:trapB, odd:(odd||null), em:Date.now() };
+  // Grava no banco. Estava faltando: so o "desfazer" persistia, entao escolher
+  // um par vivia so em memoria — recarregar a pagina perdia a escolha, e o
+  // Historico e a Banca nunca viam nada. O _snapshotDoPar ja existia pronto e
+  // nao era chamado por ninguem.
+  _persistirEscolha(r, _snapshotDoPar(r, trapA, trapB, odd));
   _aplicarOdd(odd);
   saveSessionState();
   renderFocusPanel(r, idx);   // redesenha arena + alternativas com o novo estado
+}
+
+// Inverte o par em foco: 1v2 vira 2v1. Nao e' cosmetico — e' outra aposta.
+// O bateuPar devolve o oposto, e o Historico e a Banca passam a contar pelo
+// par invertido. Por isso grava como escolha pessoal (o mesmo caminho do
+// botao Entrar) e a coluna AvB do Historico marca "sua escolha" na linha.
+function inverterAvb(){
+  var idx=focusRaceIdx, r=results[idx];
+  if(!r) return;
+  var p=_parEmFoco(r);
+  if(!p || !p.a || !p.b) return;
+  _confirmarNaTela(
+    'Inverter o AvB?',
+    'O par passa a ser T' + p.b + ' vence T' + p.a + '. Isso muda a aposta: o resultado, o Histórico e a Banca passam a contar por esse sentido.',
+    'Inverter',
+    function(){
+      // A odd do par invertido e' outra: a do sentido A vence B nao serve.
+      // Se nao houver odd pro sentido novo, limpa em vez de manter a antiga.
+      var novaOdd=_parOddAtual(r, p.b, p.a);
+      escolherAvb(p.b, p.a, novaOdd);
+    }
+  );
 }
 
 // Link pra corrida no betwinner. O robo ainda nao entrega a URL real — quando
