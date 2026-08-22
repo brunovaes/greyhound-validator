@@ -1918,6 +1918,37 @@ function _nivelVip(r){
   return '';
 }
 
+// Coluna "Aberto?": a MEDICAO do captador como base, a marca pessoal por cima.
+//
+// races.abriu vem do motor: 1 = o par abriu na BW, 0 = corrida monitorada e o
+// par nao abriu, null = corrida nao monitorada. O null e' repassado puro de
+// proposito — "nao medimos" nao e' "nao abriu", e juntar os dois esconderia
+// buraco de cobertura do monitoramento.
+//
+// races.abriu_par diz a QUAL par o abriu se refere. Ele entra no rotulo porque
+// "nao abriu" sozinho seria ambiguo: se o Bruno entrou num par diferente, a
+// medicao nao fala da aposta dele.
+//
+// race_user_data.avb_nao_aberto continua sendo dele ("tentei e nao estava la").
+// Os dois convivem: quando discordam, e' informacao, nao erro.
+function _celulaAberto(r){
+  var par = r.abriu_par ? ' (' + String(r.abriu_par) + ')' : '';
+  var base;
+  if (r.abriu === 1 || r.abriu === '1') {
+    base = '<div style="font-size:10px;font-weight:700;color:#60a5fa" title="o par indicado' + par + ' abriu na BW">abriu'
+      + (r.odd_abertura != null ? ' <span style="color:#888;font-weight:400">' + r.odd_abertura + '</span>' : '') + '</div>';
+  } else if (r.abriu === 0 || r.abriu === '0') {
+    base = '<div style="font-size:10px;font-weight:700;color:#f97316" title="a corrida foi monitorada e o par indicado' + par + ' não abriu">não abriu</div>';
+  } else {
+    base = '<div style="font-size:10px;color:#444" title="corrida não monitorada: não dá pra saber se abriu">&mdash;</div>';
+  }
+  // A marca pessoal so aparece quando existe: ela e' excecao, nao estado.
+  var manual = r.avb_nao_aberto
+    ? '<div style="font-size:9px;color:#f97316;margin-top:2px" title="você marcou esta corrida como não aberta">&#10003; marquei</div>'
+    : '';
+  return '<td style="text-align:center">' + base + manual + '</td>';
+}
+
 function _celulaVip(r){
   var pill = function(cor, txt, dica){
     return '<td style="text-align:center;vertical-align:middle"' + (dica ? ' title="' + dica + '"' : '') + '>'
@@ -2217,14 +2248,14 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:78px">VIP<br><select id="fh-vip" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="qualquer">VIP (qualquer)</option><option value="plus">Plus</option><option value="premium">Premium</option><option value="nao">Não VIP</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="nao">Não abriu</option><option value="sim">Abriu</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:78px">VIP<br><select id="fh-vip" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="qualquer">VIP (qualquer)</option><option value="plus">Plus</option><option value="premium">Premium</option><option value="nao">Não VIP</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="nao">Não abriu</option><option value="sim">Abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
   var _brh=(function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
   var turnoBR=_brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-vip="${_nivelVip(r)}" data-naoaberto="${r.avb_nao_aberto?'1':''}">
+  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-vip="${_nivelVip(r)}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 ${_celulaAvb(r)}${_celulaVip(r)}
@@ -2237,7 +2268,7 @@ ${_celulaAvb(r)}${_celulaVip(r)}
 <td style="text-align:center">${!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':'')}</td>
 ${_celulaObs(r)}
 <td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
-<td style="text-align:center"><label style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:${r.avb_nao_aberto?'#f97316':'#666'};cursor:default"><input type="checkbox" class="hist-inp" ${r.avb_nao_aberto?'checked':''} data-id="${r.id}" data-f="avb_nao_aberto" disabled> Não aberto</label></td>
+${_celulaAberto(r)}
 <td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
 </tr>`;}).join('')}
 ${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
@@ -2487,11 +2518,17 @@ function aplicarFiltroHist(){
     var p=tr.getAttribute('data-pista')||'';
     var b=tr.getAttribute('data-bateu')||'';
     var v=tr.getAttribute('data-vip')||'';
-    // 'nao' = marcada como nao aberta; 'sim' = tudo o que NAO esta marcado.
-    // Enquanto a marca for manual, "Abriu" quer dizer "nao foi marcado como
-    // nao aberto", que nao e' a mesma coisa que ter aberto de fato.
+    // 'nao'/'sim' olham a MEDICAO do captador; 'semdado' e' corrida nao
+    // monitorada, que nao e' a mesma coisa que nao ter aberto; 'manual' e' a
+    // marca pessoal, que existe em paralelo e pode discordar da medicao.
     var na=tr.getAttribute('data-naoaberto')==='1';
-    var casaAberto=(!fa)||(fa==='nao'?na:!na);
+    var ab=tr.getAttribute('data-abriu')||'';
+    var casaAberto = !fa ? true
+      : fa==='nao' ? ab==='0'
+      : fa==='sim' ? ab==='1'
+      : fa==='semdado' ? ab===''
+      : fa==='manual' ? na
+      : true;
     var ok=casaVip(v)&&casaAberto&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
     tr.style.display=ok?'':'none';
   });
