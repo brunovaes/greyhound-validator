@@ -56,11 +56,15 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   // traps vazias (grid 6) p/ o modificador de trap vazia da reanálise
   const presentes = new Set();
   (Array.isArray(raceCard) ? raceCard : histFull).forEach(g => { if (g && g.trap != null) presentes.add(Number(g.trap)); });
-  const trapsVazias = []; for (let t = 1; t <= 6; t++) if (!presentes.has(t)) trapsVazias.push(t);
+  const vaz = new Set(); for (let t = 1; t <= 6; t++) if (!presentes.has(t)) vaz.add(t);
+  const trapsVazias = Array.from(vaz);
+  const temVaziaAoLado = t => vaz.has(t - 1) || vaz.has(t + 1);
   const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: {} };
 
   const oddMedia = _oddMediaPorTrap(histAll);
-  const traps = Object.keys(dogsByTrap).map(Number).filter(t => oddMedia[t] > 0);
+  // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card (galgo
+  // retirado sai do pareamento; o proximo par colado assume o slot automaticamente).
+  const traps = Object.keys(dogsByTrap).map(Number).filter(t => oddMedia[t] > 0 && presentes.has(t));
 
   // todos os pares de SP colada, ordenados do mais colado (menor razão) pro menos
   const pares = [];
@@ -90,6 +94,9 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
       pct: pct,
       pct_pick: pct, pct_outro: 100 - pct,
       parelho: pct <= parelhoAte,                         // <= 60% = nota "corrida parelha"
+      // ITEM 5 — nota de trap vazia ao lado (atualiza tardio: le o card fresco a cada chamada)
+      pick_vazia_lado: temVaziaAoLado(av.aTrap),
+      outro_vazia_lado: temVaziaAoLado(av.bTrap),
       obs: av.obs || null,
       flags: av.flags || null
     });
@@ -97,12 +104,25 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   return slots;
 }
 
+// Pódio COERENTE (item 3+c): base = top3 do Motor 1 (ex.: "5-3-6"); se o AvB principal
+// (pick firme, não parelho) contradiz a ordem, inverte os dois no pódio (o 5-1-6 com
+// AvB 6v5 vira 6-1-5). Nunca sai pódio que briga com o AvB.
+function _podioCoerente(top3Str, principal) {
+  const podio = String(top3Str || '').split('-').map(n => parseInt(n)).filter(n => n > 0);
+  let ajustado = false;
+  if (principal && !principal.parelho && principal.pick_trap && principal.outro_trap) {
+    const ip = podio.indexOf(principal.pick_trap), io = podio.indexOf(principal.outro_trap);
+    if (ip >= 0 && io >= 0 && io < ip) { const t = podio[ip]; podio[ip] = podio[io]; podio[io] = t; ajustado = true; }
+  }
+  return { podio, ajustado };
+}
+
 // Lista os slots de todas as corridas do dia (preview de admin).
 function listar(db, opts) {
   opts = opts || {};
   const date = opts.date;
   const rows = db.prepare(
-    "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.nivel " +
+    "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.nivel, r.top3 " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
   ).all(date);
@@ -116,11 +136,16 @@ function listar(db, opts) {
     if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) continue;
     const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
     const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
+    const pod = _podioCoerente(row.top3, slots[0] || null);
+    // galgos que a reanálise CONSIDEROU (pra ninguém sumir do pódio na revisão do skip)
+    const considerados = Array.from(new Set(slots.flatMap(s => [s.pick_trap, s.outro_trap]))).sort((a, b) => a - b);
     corridas.push({
       hora: row.hora, corrida: row.corrida, dist: row.dist, nivel: row.nivel,
       principal: slots[0] || null,
       secundarios: slots.slice(1),
-      slots
+      slots,
+      podio: pod.podio, podio_base_top3: row.top3 || null, podio_ajustado_pelo_avb: pod.ajustado,
+      galgos_considerados: considerados
     });
   }
 
