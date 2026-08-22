@@ -21,7 +21,10 @@ const DEFAULTS = {
   bonusTrapVazia: 0.10,   // seg-equiv de bonus quando ha trap vazia ao lado
   penalCio: 0.15,         // seg-equiv de penalidade p/ femea em cio recente
   cioDias: 90,            // janela de cio (mesma regra ja feita)
-  outlierSeg: 1.0         // linha com tempo > (media 2 melhores) + isto -> descartada (problema)
+  outlierSeg: 1.0,        // linha com tempo > (media 2 melhores) + isto -> descartada (problema)
+  descartaAtrapalhoSeg: 0.40 // SO NO CALTM: corrida >= (media 2 melhores)+isto E com remark
+                             // de atrapalho (Bmp/Crd/Ck/Blk/Baulk/Stmb) sai do tempo — nao e' o
+                             // galgo lento, foi a corrida. 0 = desliga a regra.
 };
 
 // nivel numerico da categoria: A1=1 ... A9=9 (menor = mais forte). Nao-A -> null.
@@ -39,6 +42,10 @@ function ehTrial(l) {
 // acidente GRAVE (nao segura a corrida ruim contra o galgo). Crd/Bmp leves NAO entram
 // (o Bruno frisou: Crd1 do #4 nao e grave — foi so split ruim).
 const GRAVE = /(Fll|KO|BdStt|BBlk|SnBlk|Blk1|Stmb|Baulk)/i;
+// ATRAPALHO (regra ago/2026): remark que EXPLICA um tempo ruim. Mais amplo que GRAVE —
+// pega tambem os "leves" (Bmp/Crd/Ck/Blk) que so contam quando a corrida foi bem mais
+// lenta que o padrao do galgo (a combinacao lento+desculpa e' que exclui, nao o remark so).
+const ATRAPALHO = /(Bmp|Crd|Ck|Blk|Baulk|Stmb|Fll|KO|BBlk|SnBlk|BdStt)/i;
 
 // ── Descarte de linha-PROBLEMA (regra do Bruno, ago/2026) ────────────────────
 // Regua = media dos 2 MELHORES tempos (mais rapidos, NAO-trial) nas corridas de
@@ -85,7 +92,15 @@ function resumoGalgo(hist, o) {
   // TEMPO: 2 mais recentes nao-trial e sem acidente grave, ajustadas por categoria.
   // ajuste = caltm + segPorNivelCat * nivelCategoria  (a constante de referencia
   // some na diferenca A-B; o que importa e que categoria mais forte "vale" mais).
-  const paraTempo = naoTrial.filter(l => !GRAVE.test(l.remarks || '')).slice(0, 2);
+  // ALEM do GRAVE, tira a corrida "lenta COM desculpa": bem mais lenta que o padrao do
+  // galgo (media das 2 melhores + descartaAtrapalhoSeg) E com remark de atrapalho. Nao e'
+  // o galgo lento, foi a corrida — so vale pro CALTM, os outros sinais nao mexem.
+  const tOrd = naoTrial.map(l => l.caltm).filter(v => v > 0).sort((a, b) => a - b);
+  const base2 = tOrd.length >= 2 ? (tOrd[0] + tOrd[1]) / 2 : (tOrd.length ? tOrd[0] : null);
+  const limAtr = (o.descartaAtrapalhoSeg > 0) ? o.descartaAtrapalhoSeg : 0;
+  const lentaComDesculpa = l => limAtr > 0 && base2 != null && l.caltm > 0
+    && l.caltm >= base2 + limAtr && ATRAPALHO.test(l.remarks || '');
+  const paraTempo = naoTrial.filter(l => !GRAVE.test(l.remarks || '') && !lentaComDesculpa(l)).slice(0, 2);
   const aj = l => l.caltm + o.segPorNivelCat * (nivelCat(l.classe) || 4);
   let caltmEf = null;
   if (paraTempo.length >= 2) caltmEf = o.pesoUltima * aj(paraTempo[0]) + o.pesoPenultima * aj(paraTempo[1]);
