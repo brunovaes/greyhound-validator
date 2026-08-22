@@ -564,8 +564,12 @@ function _iniciarOdds(){
 try { _iniciarOdds(); }
 catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
 
-// Marca VIP (Plus/Premium) em races a cada 4 min — races e' a fonte de verdade.
-try { _marcarVip(getTodayDate()); setInterval(() => { try { _marcarVip(getTodayDate()); } catch(e){} }, 4*60*1000); }
+// Marca VIP (Plus/Premium) e abriu/odd_abertura em races a cada 4 min — races e' a
+// fonte de verdade. _marcarAbriu roda DEPOIS do _marcarVip (le o avb_fechamento ja atualizado).
+try {
+  const _ciclo = () => { try { _marcarVip(getTodayDate()); _marcarAbriu(getTodayDate()); } catch(e){} };
+  _ciclo(); setInterval(_ciclo, 4*60*1000);
+}
 catch(e){ console.error('[VIP-MARCA] falha ao agendar:', e.message); }
 
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
@@ -2883,10 +2887,52 @@ router.get('/diag/avb-inicial-fechamento', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Grava em races se o par do AvB CORRENTE (avb_fechamento) abriu na BW e a que odd,
+// cruzando com o captador avb_abertos. 'abriu' e' sempre relativo AO PAR — por isso
+// grava tambem abriu_par (a tela rotula "o par indicado X×Y nao abriu"). NAO toca no
+// avb_nao_aberto (marca manual, pessoal, do Bruno). Congela na largada (igual ao VIP).
+function _marcarAbriu(date){
+  try{
+    const { db } = require('../db/database');
+    date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
+    const abertos = {};
+    try {
+      const abrs = db.prepare("SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?").all(date);
+      for(const a of abrs){ let p=null; try{p=JSON.parse(a.pares_json);}catch(e){} if(Array.isArray(p)) abertos[String(a.corrida||'')+'|'+String(a.hora||'')]=p; }
+    } catch(e){}
+    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento, r.final_check_at, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
+    const upd = db.prepare('UPDATE races SET abriu=?, odd_abertura=?, abriu_par=? WHERE id=?');
+    let nAbriu=0, nCong=0;
+    for(const r of rows){
+      if(r.final_check_at || r.finishing_order_json){ nCong++; continue; } // FREEZE na largada
+      let fech=null; try{ fech=JSON.parse(r.avb_fechamento); }catch(e){}
+      if(!fech || fech.aTrap==null || fech.bTrap==null){ upd.run(null,null,null,r.id); continue; }
+      const pares = abertos[String(r.corrida||'')+'|'+String(r.hora||'')];
+      let abriu=null, odd=null;
+      if(pares){                                            // corrida foi monitorada
+        const par = pares.find(p =>
+          (Number(p.aTrap)===Number(fech.aTrap)&&Number(p.bTrap)===Number(fech.bTrap)) ||
+          (Number(p.aTrap)===Number(fech.bTrap)&&Number(p.bTrap)===Number(fech.aTrap)));
+        if(par){ abriu=1; const od=Number(Number(par.aTrap)===Number(fech.aTrap)?par.oddAvenceB:par.oddBvenceA); odd=(Number.isFinite(od)&&od>0)?od:null; }
+        else { abriu=0; }                                   // monitorada, mas esse par nao abriu
+      }
+      upd.run(abriu, odd, fech.aTrap+'x'+fech.bTrap, r.id);
+      if(abriu!=null) nAbriu++;
+    }
+    return { date, total: rows.length, congeladas: nCong, com_abriu: nAbriu };
+  }catch(e){ return { erro: e.message }; }
+}
+
 // DIAG (admin): roda a marcação VIP (Plus/Premium) na hora e devolve o resumo.
 router.get('/diag/marcar-vip', requireAdmin, (req, res) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
   res.json(_marcarVip(date));
+});
+
+// DIAG (admin): roda a marcação de abriu/odd_abertura na hora e devolve o resumo.
+router.get('/diag/marcar-abriu', requireAdmin, (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+  res.json(_marcarAbriu(date));
 });
 
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
