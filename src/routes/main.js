@@ -2217,14 +2217,14 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:78px">VIP<br><select id="fh-vip" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="qualquer">VIP (qualquer)</option><option value="plus">Plus</option><option value="premium">Premium</option><option value="nao">Não VIP</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?</th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:78px">VIP<br><select id="fh-vip" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="qualquer">VIP (qualquer)</option><option value="plus">Plus</option><option value="premium">Premium</option><option value="nao">Não VIP</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">Aberto?<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="nao">Não abriu</option><option value="sim">Abriu</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
   var _brh=(function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
   var turnoBR=_brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-vip="${_nivelVip(r)}">
+  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-vip="${_nivelVip(r)}" data-naoaberto="${r.avb_nao_aberto?'1':''}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 ${_celulaAvb(r)}${_celulaVip(r)}
@@ -2472,8 +2472,8 @@ function recalcKpisHist(){
 }
 function aplicarFiltroHist(){
   var et=document.getElementById('fh-turno'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
-  var ev=document.getElementById('fh-vip');
-  var ft=et?et.value:'', fc=ec?ec.value:'', fb=eb?eb.value:'', fv=ev?ev.value:'';
+  var ev=document.getElementById('fh-vip'), ea=document.getElementById('fh-aberto');
+  var ft=et?et.value:'', fc=ec?ec.value:'', fb=eb?eb.value:'', fv=ev?ev.value:'', fa=ea?ea.value:'';
   // 'qualquer' = Plus OU Premium; 'nao' = nenhum dos dois. Sem essas duas
   // opcoes, olhar "tudo que foi VIP" exigiria conferir as duas separadas.
   var casaVip=function(v){
@@ -2487,7 +2487,12 @@ function aplicarFiltroHist(){
     var p=tr.getAttribute('data-pista')||'';
     var b=tr.getAttribute('data-bateu')||'';
     var v=tr.getAttribute('data-vip')||'';
-    var ok=casaVip(v)&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
+    // 'nao' = marcada como nao aberta; 'sim' = tudo o que NAO esta marcado.
+    // Enquanto a marca for manual, "Abriu" quer dizer "nao foi marcado como
+    // nao aberto", que nao e' a mesma coisa que ter aberto de fato.
+    var na=tr.getAttribute('data-naoaberto')==='1';
+    var casaAberto=(!fa)||(fa==='nao'?na:!na);
+    var ok=casaVip(v)&&casaAberto&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
     tr.style.display=ok?'':'none';
   });
   recalcKpisHist();
