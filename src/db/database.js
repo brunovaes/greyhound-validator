@@ -285,6 +285,7 @@ const migrations = [
   "ALTER TABLE races ADD COLUMN abriu INTEGER", // o par do AvB da corrida abriu na BW? 1=sim, 0=nao (monitorada), null=nao monitorada. NAO confundir com avb_nao_aberto (marca manual do Bruno)
   "ALTER TABLE races ADD COLUMN odd_abertura REAL", // odd capturada do par na abertura, ou null
   "ALTER TABLE races ADD COLUMN abriu_par TEXT", // a QUAL par o 'abriu' se refere (ex.: '6x1') — 'abriu' e' sempre relativo a UM par, nao a corrida
+  "ALTER TABLE analysis_config ADD COLUMN avb_parelho_pct INTEGER DEFAULT 60", // corte do Motor da Manha: pct <= isto = "corrida parelha" (nota em vez de pick firme)
 
   // 11/08 — Config do Robo de Odds (Painel Admin): intervalo, nº de AvBs, edge minimo, proxy
   "ALTER TABLE analysis_config ADD COLUMN odds_intervalo_seg INTEGER DEFAULT 5",

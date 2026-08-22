@@ -125,6 +125,10 @@ function _podioCoerente(top3Str, principal) {
 function listar(db, opts) {
   opts = opts || {};
   const date = opts.date;
+  // corte de parelho: ?opts vence; senao a config do Painel (avb_parelho_pct); senao 60.
+  if (!(opts.parelhoAte > 0)) {
+    try { const c = db.prepare("SELECT avb_parelho_pct FROM analysis_config WHERE user_id=1").get(); if (c && c.avb_parelho_pct > 0) opts = Object.assign({}, opts, { parelhoAte: c.avb_parelho_pct }); } catch (e) {}
+  }
   const rows = db.prepare(
     "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.nivel, r.top3 " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
