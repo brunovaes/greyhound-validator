@@ -1,0 +1,138 @@
+'use strict';
+// src/utils/motorManha.js
+//
+// MOTOR DA MANHÃ (v2) — roda as REGRAS DA REANÁLISE já de manhã, sobre as SPs do
+// PDF, sem esperar o near-post. Pra cada corrida, pega os 3 pares de SP mais COLADA
+// (os que vão abrir na BW) e avalia cada um com o reanaliseEngine.avaliarPar. Devolve
+// 3 slots (principal + 2 secundários):
+//   - pick > 60%  -> AvB firme (pick × outro, com a %).
+//   - pick <= 60% -> "parelho": nota, com o % de cada galgo (a UI decide mostrar).
+//
+// Pareamento pela SP colada = média das 2 últimas SPs (hist_all.sp), razão <= spRatioMax
+// (mesma regra de hoje). Avaliação = avaliarPar (categoria->tempo->split/bends->pódio +
+// trap vazia/cio/trial + a regra do tempo-ruim-com-desculpa). Leitura pura, não grava.
+const { probImplicita } = require('./spEngine');
+const reanalise = require('./reanaliseEngine');
+const { _limpaNome } = require('./cargaVip');
+
+const PARELHO_ATE = 60;    // pct <= isto = parelho (nota); > isto = pick firme
+const SP_RATIO_MAX = 1.15; // "SP colada" (o par que abre na BW)
+const N_SLOTS = 3;         // principal + 2 secundários
+
+function _oddDecimal(sp) {
+  if (!sp) return null;
+  const p = probImplicita(String(sp).replace(/[A-Za-z]+$/, ''));
+  return (p && p > 0) ? 1 / p : null;
+}
+function _isTrial(c) { const s = String(c || '').trim().toUpperCase(); return s === 'T' || s === 'S' || s.startsWith('T ') || s.startsWith('S '); }
+function _avg(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; }
+
+// oddMedia (SP média das 2 últimas não-trial) por trap, a partir do hist_all.
+function _oddMediaPorTrap(histAll) {
+  const out = {};
+  for (const g of (Array.isArray(histAll) ? histAll : [])) {
+    if (!g || g.trap == null) continue;
+    const u = (g.historico || []).filter(l => l && !_isTrial(l.classe) && Number(l.caltm) > 0).slice(0, 2);
+    const odds = u.map(l => _oddDecimal(l.sp)).filter(v => v != null);
+    if (odds.length) out[Number(g.trap)] = _avg(odds);
+  }
+  return out;
+}
+
+function _distNum(d) { return parseInt(String(d || '').replace(/[^0-9]/g, '')) || 0; }
+function _pista(corrida) { return String(corrida || '').trim().split(/\s+/)[0] || '?'; }
+
+// Monta os slots (principal + 2 secundários) de UMA corrida.
+// histFull: [{trap,nome,brtClasse,ssnDate,historico}]  histAll: [{trap,historico:[{sp,...}]}]
+// raceCard: [{trap,nome}] (p/ traps vazias)  ctxBase: {dataCorrida,trackCorrida,distCorrida}
+function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
+  opts = opts || {};
+  const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX;
+  const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE;
+
+  const dogsByTrap = {};
+  for (const g of (Array.isArray(histFull) ? histFull : [])) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g;
+
+  // traps vazias (grid 6) p/ o modificador de trap vazia da reanálise
+  const presentes = new Set();
+  (Array.isArray(raceCard) ? raceCard : histFull).forEach(g => { if (g && g.trap != null) presentes.add(Number(g.trap)); });
+  const trapsVazias = []; for (let t = 1; t <= 6; t++) if (!presentes.has(t)) trapsVazias.push(t);
+  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: {} };
+
+  const oddMedia = _oddMediaPorTrap(histAll);
+  const traps = Object.keys(dogsByTrap).map(Number).filter(t => oddMedia[t] > 0);
+
+  // todos os pares de SP colada, ordenados do mais colado (menor razão) pro menos
+  const pares = [];
+  for (let i = 0; i < traps.length; i++) for (let j = i + 1; j < traps.length; j++) {
+    const a = traps[i], b = traps[j];
+    const ratio = Math.max(oddMedia[a], oddMedia[b]) / Math.min(oddMedia[a], oddMedia[b]);
+    if (ratio > spRatioMax) continue;
+    pares.push({ a, b, ratio });
+  }
+  pares.sort((x, y) => x.ratio - y.ratio);
+
+  const nomeLimpo = (av, lado) => _limpaNome(lado === 'a' ? av.aNome : av.bNome) || '';
+  const nomeTrap = t => { const g = dogsByTrap[t]; return g ? (_limpaNome(g.nome) || '') : ''; };
+
+  const slots = [];
+  const rotulos = ['principal', 'secundario_1', 'secundario_2'];
+  for (const par of pares) {
+    if (slots.length >= N_SLOTS) break;
+    const av = reanalise.avaliarPar(dogsByTrap[par.a], dogsByTrap[par.b], ctx);
+    if (!av || av.descartar) continue;                    // sem histórico p/ avaliar → pula pro próximo par
+    const pct = av.avaliacao;                             // % do favorito (av.aTrap) vencer
+    slots.push({
+      slot: rotulos[slots.length],
+      ratio_sp: +par.ratio.toFixed(3),
+      pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap) || nomeLimpo(av, 'a'),
+      outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap) || nomeLimpo(av, 'b'),
+      pct: pct,
+      pct_pick: pct, pct_outro: 100 - pct,
+      parelho: pct <= parelhoAte,                         // <= 60% = nota "corrida parelha"
+      obs: av.obs || null,
+      flags: av.flags || null
+    });
+  }
+  return slots;
+}
+
+// Lista os slots de todas as corridas do dia (preview de admin).
+function listar(db, opts) {
+  opts = opts || {};
+  const date = opts.date;
+  const rows = db.prepare(
+    "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.nivel " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+  ).all(date);
+
+  const corridas = [];
+  for (const row of rows) {
+    let histFull = null, histAll = null, raceCard = null;
+    try { histFull = JSON.parse(row.hist_full); } catch (e) { continue; }
+    try { histAll = JSON.parse(row.hist_all); } catch (e) {}
+    try { raceCard = JSON.parse(row.race_card); } catch (e) {}
+    if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) continue;
+    const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
+    const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
+    corridas.push({
+      hora: row.hora, corrida: row.corrida, dist: row.dist, nivel: row.nivel,
+      principal: slots[0] || null,
+      secundarios: slots.slice(1),
+      slots
+    });
+  }
+
+  return {
+    date, total_corridas: corridas.length,
+    parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, parelho_ate_pct: opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE, n_slots: N_SLOTS },
+    corridas,
+    legenda: 'Motor da manhã = regras da reanálise sobre as SPs do PDF. 3 pares de SP mais colada por corrida '
+      + '(principal + 2 secundários). pct = % do pick (favorito) vencer o outro. parelho=true quando pct <= '
+      + PARELHO_ATE + '% (mostrar nota com os dois %). pct_pick/pct_outro = os dois percentuais. '
+      + 'Perto da largada a reanálise atualiza isto com o card fresco (trap vazia, retirada).'
+  };
+}
+
+module.exports = { listar, slotsDaCorrida, PARELHO_ATE, SP_RATIO_MAX };

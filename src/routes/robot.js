@@ -2888,6 +2888,57 @@ router.get('/diag/marcar-vip', requireAdmin, (req, res) => {
   res.json(_marcarVip(date));
 });
 
+// DIAG (admin): MOTOR DA MANHA v2 — as regras da reanalise ja de manha, sobre as SPs.
+// 3 pares de SP mais colada por corrida (principal + 2 secundarios), cada um pick (>60%)
+// ou parelho (<=60%, com os dois %). ?date, ?sp (razao SP), ?parelho (corte %).
+router.get('/diag/avbs-manha', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const spRatioMax = parseFloat(req.query.sp) || 0;
+    const parelhoAte = parseFloat(req.query.parelho) || 0;
+    res.json(mm.listar(db, { date, spRatioMax, parelhoAte }));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAG (admin, uso pontual): limpa o fechamento de origem VIP que ficou preso na janela
+// curta em que a sobrescrita esteve no ar. Restaura da reanalise quando ela existe
+// (e recomputa o abriu contra o par dela); onde nao existe, zera o valor VIP (branco
+// honesto no lugar de um pick errado). Roda so quando voce chamar.
+router.get('/diag/limpar-fechamento-vip', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const abertos = {};
+    try { const abrs = db.prepare("SELECT corrida,hora,pares_json FROM avb_abertos WHERE data=?").all(date);
+      for(const a of abrs){ let pp=null; try{pp=JSON.parse(a.pares_json);}catch(e){} if(Array.isArray(pp)) abertos[String(a.corrida||'')+'|'+String(a.hora||'')]=pp; } } catch(e){}
+    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento, r.avb_reanalise FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.avb_fechamento IS NOT NULL").all(date);
+    let vip=0, restaurados=0, zerados=0;
+    for(const r of rows){
+      let o=null; try{o=JSON.parse(r.avb_fechamento);}catch(e){}
+      if(!o || !/^vip_/.test(String(o.origem||''))) continue;
+      vip++;
+      if(r.avb_reanalise){
+        db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?').run(r.avb_reanalise, r.id);
+        let re=null; try{re=JSON.parse(r.avb_reanalise);}catch(e){}
+        if(re && re.aTrap!=null){
+          let abriu=null, odd=null;
+          const pares=abertos[String(r.corrida||'')+'|'+String(r.hora||'')];
+          if(pares){ const par=pares.find(pp=>(Number(pp.aTrap)===Number(re.aTrap)&&Number(pp.bTrap)===Number(re.bTrap))||(Number(pp.aTrap)===Number(re.bTrap)&&Number(pp.bTrap)===Number(re.aTrap)));
+            if(par){ abriu=1; const od=Number(Number(par.aTrap)===Number(re.aTrap)?par.oddAvenceB:par.oddBvenceA); odd=(Number.isFinite(od)&&od>0)?od:null; } else abriu=0; }
+          db.prepare('UPDATE races SET abriu=?, odd_abertura=?, abriu_par=? WHERE id=?').run(abriu, odd, re.aTrap+'x'+re.bTrap, r.id);
+        }
+        restaurados++;
+      } else {
+        db.prepare('UPDATE races SET avb_fechamento=NULL, abriu=NULL, odd_abertura=NULL, abriu_par=NULL WHERE id=?').run(r.id);
+        zerados++;
+      }
+    }
+    res.json({ date, fechamentos_vip: vip, restaurados_da_reanalise: restaurados, zerados_sem_reanalise: zerados });
+  } catch(e){ res.status(500).json({ erro: e.message }); }
+});
+
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
