@@ -561,10 +561,16 @@ function _iniciarOdds(){
 try { _iniciarOdds(); }
 catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
 
-// Marca VIP (Plus/Premium) em races a cada 4 min — races e' a fonte de verdade.
-// (abriu/odd_abertura e' gravado no onClose, na largada, contra o par da reanalise.)
-try { const _ciclo = () => { try { _marcarVip(getTodayDate()); } catch(e){} }; _ciclo(); setInterval(_ciclo, 4*60*1000); }
-catch(e){ console.error('[VIP-MARCA] falha ao agendar:', e.message); }
+// Ciclo de 4 min — races e' a fonte de verdade:
+//  1) PERSISTE o Motor da Manha (principal -> trap_fav/und + companheiros + avb_fechamento
+//     + top3), so corrida COM principal, congelando na largada. E' a verdade que a disputa,
+//     o Historico, o HR e a Banca leem.
+//  2) marca VIP (Plus/Premium). (abriu/odd_abertura e' gravado no onClose, na largada.)
+try {
+  const _ciclo = () => { try { _persistirManha(getTodayDate(), true); } catch(e){} try { _marcarVip(getTodayDate()); } catch(e){} };
+  _ciclo(); setInterval(_ciclo, 4*60*1000);
+}
+catch(e){ console.error('[CICLO-MARCA] falha ao agendar:', e.message); }
 
 // ─── CRON CHECAGEM FINAL — roda a cada 5 min, so processa corridas que
 // estao dentro da janela de X minutos antes do horario (configuravel,

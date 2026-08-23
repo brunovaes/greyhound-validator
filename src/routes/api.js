@@ -1373,7 +1373,9 @@ router.get('/config', (req, res) => {
       // escolha valida (sem fundo), e com || ela cairia no default e a linha
       // voltaria a ser pintada sem o usuario entender por que.
       vip_cor_linha: config.vip_cor_linha != null ? config.vip_cor_linha : '#161B27',
-      vip_premium_cor_linha: config.vip_premium_cor_linha != null ? config.vip_premium_cor_linha : '#161B27'
+      vip_premium_cor_linha: config.vip_premium_cor_linha != null ? config.vip_premium_cor_linha : '#161B27',
+      // Motor da Manha: corte de "corrida parelha" (pct <= isto = nota em vez de pick firme).
+      avb_parelho_pct: config.avb_parelho_pct != null ? config.avb_parelho_pct : 60
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
@@ -1433,6 +1435,20 @@ router.get('/vip-do-vip', (req, res) => {
       ? req.query.date
       : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
     res.json(mn.classificar(db, { date }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// MOTOR DA MANHA v2 — os AvBs do dia (principal + 2 secundarios) por corrida, com nota
+// de parelho (pct <= avb_parelho_pct), trap vazia (o box) e podio coerente (com podio_ok).
+// Analise base (alimenta a disputa), entao exige so login. ?date=YYYY-MM-DD.
+router.get('/avbs-manha', (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+      ? req.query.date
+      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    res.json(mm.listar(db, { date }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
