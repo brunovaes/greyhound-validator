@@ -128,7 +128,7 @@ function montarObs(A, B, R, Rb, vantTempoAbs, flags) {
   if (vantTempoAbs > 0.02) partes.push(`mais rapido (~${vantTempoAbs.toFixed(2)}s aj. categoria)`);
   if (R.splitEf != null && Rb.splitEf != null && R.splitEf < Rb.splitEf - 0.03) partes.push('arranca melhor');
   if (R.bendEf != null && Rb.bendEf != null && R.bendEf < Rb.bendEf - 0.5) partes.push('corre mais na frente');
-  if (flags.trapVazia && flags.trapVazia.length) partes.push(`trap vazia ao lado (${flags.trapVazia.join(',')})`);
+  if (flags.trapVaziaBox && flags.trapVaziaBox.length) partes.push(`box vazio ao lado (${flags.trapVaziaBox.join(',')})`);
   if (flags.cioRecente) partes.push(`atencao: cio recente T${flags.cioRecente}`);
   if (flags.trialPromovido) partes.push('trial recente muito forte');
   return partes.join(' · ') + '.';
@@ -162,9 +162,14 @@ function avaliarPar(d1, d2, ctx) {
   if (r1.trialSuperior) net += 0.10;
   if (r2.trialSuperior) net -= 0.10;
 
-  const flags = { trapVazia: [], cioRecente: null, trialPromovido: !!(r1.trialSuperior || r2.trialSuperior) };
+  const flags = { trapVazia: [], trapVaziaBox: [], cioRecente: null, trialPromovido: !!(r1.trialSuperior || r2.trialSuperior) };
   const vazias = (ctx && ctx.trapsVazias) || [];
-  const adjVazia = (dog, sinal) => { if (vazias.some(v => Math.abs(v - dog.trap) === 1)) { net += sinal * o.bonusTrapVazia; flags.trapVazia.push(dog.trap); } };
+  // flags.trapVazia = trap do GALGO com box vazio ao lado (retrocompat). flags.trapVaziaBox
+  // = o BOX vazio em si (o que a obs e a tela mostram — o numero do box que esta vazio).
+  const adjVazia = (dog, sinal) => {
+    const boxes = vazias.filter(v => Math.abs(v - dog.trap) === 1);
+    if (boxes.length) { net += sinal * o.bonusTrapVazia; flags.trapVazia.push(dog.trap); boxes.forEach(b => { if (!flags.trapVaziaBox.includes(b)) flags.trapVaziaBox.push(b); }); }
+  };
   adjVazia(d1, +1); adjVazia(d2, -1);
   const adjCio = (dog, sinal) => {
     if (dog.ssnDate && ctx && ctx.dataCorrida) {

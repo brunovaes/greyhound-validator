@@ -42,6 +42,16 @@ function _oddMediaPorTrap(histAll) {
 function _distNum(d) { return parseInt(String(d || '').replace(/[^0-9]/g, '')) || 0; }
 function _pista(corrida) { return String(corrida || '').trim().split(/\s+/)[0] || '?'; }
 
+// Alguns galgos vêm SEM nome na origem (só cor+cria, ex.: "bdw b Sire-Dam"). Quando o
+// nome limpo começa com código de cor, não há nome de verdade → mascara pra "b{trap} (sem nome)".
+const _CORES_INICIO = /^(?:lt|dk|lg)?(?:bk|bd|be|f|w|br|bkw|wbk|bdw|wbd|bew|wbe|bebd|bkbd)$/i;
+function _nomeMascara(nomeCru, trap) {
+  const n = (_limpaNome(nomeCru) || '').trim();
+  const primeiro = n.split(/\s+/)[0] || '';
+  if (!n || _CORES_INICIO.test(primeiro)) return 'b' + trap + ' (sem nome)';
+  return n;
+}
+
 // Monta os slots (principal + 2 secundários) de UMA corrida.
 // histFull: [{trap,nome,brtClasse,ssnDate,historico}]  histAll: [{trap,historico:[{sp,...}]}]
 // raceCard: [{trap,nome}] (p/ traps vazias)  ctxBase: {dataCorrida,trackCorrida,distCorrida}
@@ -77,8 +87,7 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   }
   pares.sort((x, y) => x.ratio - y.ratio);
 
-  const nomeLimpo = (av, lado) => _limpaNome(lado === 'a' ? av.aNome : av.bNome) || '';
-  const nomeTrap = t => { const g = dogsByTrap[t]; return g ? (_limpaNome(g.nome) || '') : ''; };
+  const nomeTrap = t => { const g = dogsByTrap[t]; return g ? _nomeMascara(g.nome, t) : ('b' + t + ' (sem nome)'); };
 
   const slots = [];
   const rotulos = ['principal', 'secundario_1', 'secundario_2'];
@@ -90,8 +99,8 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
     slots.push({
       slot: rotulos[slots.length],
       ratio_sp: +par.ratio.toFixed(3),
-      pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap) || nomeLimpo(av, 'a'),
-      outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap) || nomeLimpo(av, 'b'),
+      pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
+      outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
       pct: pct,
       pct_pick: pct, pct_outro: 100 - pct,
       parelho: pct <= parelhoAte,                         // <= 60% = nota "corrida parelha"
