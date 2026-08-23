@@ -13,7 +13,7 @@
 // trap vazia/cio/trial + a regra do tempo-ruim-com-desculpa). Leitura pura, não grava.
 const { probImplicita } = require('./spEngine');
 const reanalise = require('./reanaliseEngine');
-const { _limpaNome } = require('./cargaVip');
+const { _limpaNome, _perfilDeHist } = require('./cargaVip');
 
 const PARELHO_ATE = 60;    // pct <= isto = parelho (nota); > isto = pick firme
 const SP_RATIO_MAX = 1.15; // "SP colada" (o par que abre na BW)
@@ -177,4 +177,48 @@ function listar(db, opts) {
   };
 }
 
-module.exports = { listar, slotsDaCorrida, PARELHO_ATE, SP_RATIO_MAX };
+// Registros PRONTOS PRA GRAVAR (persistência). Só corridas COM principal. Traz o
+// principal, o pódio coerente, e hist/perfil dos dois traps (do hist_all — mesmo
+// formato do hist_fav). `largou` = já passou pela checagem final / tem resultado
+// (o marcador congela isso). Puro: não grava, só monta.
+function paraPersistir(db, opts) {
+  opts = opts || {};
+  const date = opts.date;
+  if (!(opts.parelhoAte > 0)) {
+    try { const c = db.prepare("SELECT avb_parelho_pct FROM analysis_config WHERE user_id=1").get(); if (c && c.avb_parelho_pct > 0) opts = Object.assign({}, opts, { parelhoAte: c.avb_parelho_pct }); } catch (e) {}
+  }
+  const rows = db.prepare(
+    "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.top3, r.final_check_at, r.finishing_order_json " +
+    "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+  ).all(date);
+
+  const out = [];
+  for (const row of rows) {
+    let histFull = null, histAll = null, raceCard = null;
+    try { histFull = JSON.parse(row.hist_full); } catch (e) { continue; }
+    try { histAll = JSON.parse(row.hist_all); } catch (e) {}
+    try { raceCard = JSON.parse(row.race_card); } catch (e) {}
+    if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) continue;
+    const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
+    const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
+    const principal = slots[0] || null;
+    if (!principal) continue;                                  // só corrida COM principal (decisão do Bruno)
+    const pod = _podioCoerente(row.top3, principal);
+    const histByTrap = {}; for (const g of histAll) if (g && g.trap != null) histByTrap[Number(g.trap)] = g;
+    const gP = histByTrap[principal.pick_trap], gO = histByTrap[principal.outro_trap];
+    out.push({
+      id: row.id, hora: row.hora, corrida: row.corrida,
+      largou: !!(row.final_check_at || row.finishing_order_json),
+      principal,
+      podio_str: pod.podio.join('-'),
+      hist_fav: gP ? (gP.historico || null) : null,
+      hist_und: gO ? (gO.historico || null) : null,
+      perfil_fav: gP ? _perfilDeHist(gP.historico || []) : null,
+      perfil_und: gO ? _perfilDeHist(gO.historico || []) : null
+    });
+  }
+  return out;
+}
+
+module.exports = { listar, slotsDaCorrida, paraPersistir, PARELHO_ATE, SP_RATIO_MAX };

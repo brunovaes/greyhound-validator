@@ -228,4 +228,4 @@ function listar(db, opts) {
   };
 }
 
-module.exports = { listar, _limpaNome, TAXA_VALOR, TAXA_PREMIUM, DT_VALOR, DT_PREMIUM };
+module.exports = { listar, _limpaNome, _perfilDeHist, TAXA_VALOR, TAXA_PREMIUM, DT_VALOR, DT_PREMIUM };

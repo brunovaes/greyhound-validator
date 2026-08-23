@@ -2888,6 +2888,44 @@ router.get('/diag/marcar-vip', requireAdmin, (req, res) => {
   res.json(_marcarVip(date));
 });
 
+// PERSISTENCIA do Motor da Manha: grava o PRINCIPAL nos campos que as telas leem —
+// trap_fav/trap_und + companheiros (name/perfil/hist), avb_fechamento e top3 (podio
+// coerente). So corrida COM principal. Congela na largada. avb_inicial/avb_reanalise
+// intocados. aplicar=false => DRY-RUN (so mostra o que gravaria, nao escreve).
+function _persistirManha(date, aplicar){
+  try{
+    const { db } = require('../db/database');
+    date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
+    const mm = require('../utils/motorManha');
+    const recs = mm.paraPersistir(db, { date });
+    const upd = aplicar ? db.prepare(
+      'UPDATE races SET trap_fav=?, name_fav=?, trap_und=?, name_und=?, perfil_fav=?, perfil_und=?, '
+      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=? WHERE id=?') : null;
+    let n=0, cong=0; const preview=[];
+    for(const r of recs){
+      if(r.largou){ cong++; continue; }                      // FREEZE na largada
+      const p = r.principal;
+      const registro = JSON.stringify({
+        aTrap:p.pick_trap, aNome:p.pick_nome, bTrap:p.outro_trap, bNome:p.outro_nome,
+        odd:null, marketPct:null, reanalisePct:p.pct, motorOrigPct:null, edge:null,
+        obs:p.obs||null, origem:'reanalise', parelho:!!p.parelho, ts:Math.floor(Date.now()/1000)
+      });
+      if(aplicar){
+        upd.run(
+          p.pick_trap, p.pick_nome, p.outro_trap, p.outro_nome,
+          r.perfil_fav||'', r.perfil_und||'',
+          r.hist_fav?JSON.stringify(r.hist_fav):null, r.hist_und?JSON.stringify(r.hist_und):null,
+          p.pct, p.obs||null, r.podio_str||null, registro, r.id
+        );
+      } else if(preview.length < 20){
+        preview.push({ hora:r.hora, corrida:r.corrida, trap_fav:p.pick_trap, name_fav:p.pick_nome, trap_und:p.outro_trap, name_und:p.outro_nome, pct:p.pct, parelho:p.parelho, top3:r.podio_str, perfil_fav:r.perfil_fav, perfil_und:r.perfil_und });
+      }
+      n++;
+    }
+    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_principal: n, congeladas_ja_largaram: cong, preview: aplicar?undefined:preview };
+  }catch(e){ return { erro: e.message }; }
+}
+
 // DIAG (admin): MOTOR DA MANHA v2 — as regras da reanalise ja de manha, sobre as SPs.
 // 3 pares de SP mais colada por corrida (principal + 2 secundarios), cada um pick (>60%)
 // ou parelho (<=60%, com os dois %). ?date, ?sp (razao SP), ?parelho (corte %).
@@ -2900,6 +2938,14 @@ router.get('/diag/avbs-manha', requireAdmin, (req, res) => {
     const parelhoAte = parseFloat(req.query.parelho) || 0;
     res.json(mm.listar(db, { date, spRatioMax, parelhoAte }));
   } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// DIAG (admin): PERSISTIR o Motor da Manha nos campos das telas. Sem ?aplicar => DRY-RUN
+// (mostra o que gravaria, nao escreve). ?aplicar=1 grava de verdade. ?date=YYYY-MM-DD.
+router.get('/diag/persistir-manha', requireAdmin, (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+  const aplicar = req.query.aplicar === '1';
+  res.json(_persistirManha(date, aplicar));
 });
 
 // DIAG (admin, uso pontual): limpa o fechamento de origem VIP que ficou preso na janela
