@@ -23,12 +23,14 @@ function _limpaNome(n) {
   const mSexo = txt.match(/^(.*?\((?:M|W)\))/);
   if (mSexo) return mSexo[1].trim();
   const toks = txt.split(/\s+/);
-  // cores de galgo (opcional prefixo claro/escuro lt/dk/lg) — ex.: bd, ltbd, dkbd, bkw
-  const CORES = /^(?:lt|dk|lg)?(?:bk|bd|be|f|w|br|bkw|wbk|bdw|wbd|bew|wbe|bebdw|bkwtkd|bkbd|bebd|bkwbd)$/i;
   const MESANO = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2}$/i;
+  // cor de galgo = token MINÚSCULO só com letras de cor (b/d/e/f/g/k/l/r/t/w), 2 a 6
+  // letras — ex.: bd, ltbd, dkbd, bkw, wbebd. Nome é Title Case, então token minúsculo
+  // depois do nome é a cor/cria → corta ali. Regra geral (não precisa listar cada combo).
+  const CORGEN = /^[bdefgklrtw]{2,6}$/;
   for (let k = 1; k < toks.length; k++) {
     const t = toks[k];
-    if (CORES.test(t) || MESANO.test(t) || /^\(Ssn/i.test(t)) return toks.slice(0, k).join(' ').trim();
+    if ((t === t.toLowerCase() && CORGEN.test(t)) || MESANO.test(t) || /^\(Ssn/i.test(t)) return toks.slice(0, k).join(' ').trim();
   }
   return txt;
 }
