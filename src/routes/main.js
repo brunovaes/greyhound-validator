@@ -2117,10 +2117,39 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   {
     const { bateuPar } = require('../utils/avbResultado');
     for (const r of races) {
-      const bw = _parBW(r);
+      // O par que VALEU, com a mesma queda da coluna AvB e da taxa: escolha,
+      // senao fechamento, senao a analise inicial.
+      //
+      // O "senao a analise inicial" estava faltando. Corrida sem escolha e sem
+      // fechamento pulava o recalculo e exibia o bateu CRU do banco, enquanto a
+      // taxa de acerto (que ja caia no par da analise) calculava por outro
+      // caminho. Resultado: a coluna dizia uma coisa e o KPI outra, na mesma
+      // linha, e ninguem via porque nada estourava.
+      const bw = _parBW(r) || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null);
       if (!bw) continue;
       const b = bateuPar(r.finishing_order_json, bw.aTrap, bw.bTrap);
       r.bateu = (b === null) ? '' : (b ? 'sim' : 'nao');
+      // Guarda a CONTA, nao so o veredito: sem isso, discordancia entre o
+      // bateu e a coluna Resultado vira caca ao tesouro. Vai pro title da
+      // celula, entao da pra auditar passando o mouse.
+      r._bateuConta = (function(){
+        var ordem = null;
+        try { ordem = typeof r.finishing_order_json === 'string' ? JSON.parse(r.finishing_order_json) : r.finishing_order_json; }
+        catch(e) { ordem = null; }
+        var pos = function(t){
+          if (!Array.isArray(ordem)) return null;
+          for (const f of ordem) if (f && f.pos != null && Number(f.trap) === Number(t)) return Number(f.pos);
+          return null;
+        };
+        var pa = pos(bw.aTrap), pb = pos(bw.bTrap);
+        var lugar = function(t, p){ return 'T' + t + ': ' + (p == null ? 'fora da chegada' : p + 'o'); };
+        var top3 = [r.resultado_1, r.resultado_2, r.resultado_3].filter(Boolean).join('-');
+        return 'par ' + bw.aTrap + ' x ' + bw.bTrap
+          + '  |  ' + lugar(bw.aTrap, pa) + '  |  ' + lugar(bw.bTrap, pb)
+          + '  |  veredito: ' + (b === null ? 'indefinido' : (b ? 'bateu' : 'não bateu'))
+          + (top3 ? '  |  coluna Resultado: ' + top3 : '')
+          + (Array.isArray(ordem) ? '  |  chegada gravada: ' + ordem.slice().sort(function(x,y){return x.pos-y.pos;}).map(function(f){return f.trap;}).join('-') : '  |  sem chegada gravada');
+      })();
       // A Odd NAO e' mais sobrescrita pela do fechamento. Antes esta linha
       // fazia "r.odd = bw.odd" quando a odd pessoal estava vazia, o que
       // quebrava a regra de que Odd so existe depois do "Entrei!" — e, pior,
@@ -2310,7 +2339,7 @@ ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
 ${_celulaAvb(r)}${_celulaVip(r)}${_celulaMotor(r)}
-<td style="text-align:center"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
+<td style="text-align:center" title="${(r._bateuConta||'').replace(/"/g,'&quot;')}"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>
 <option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
 <option value="nao" style="color:#ef4444" ${r.bateu==='nao'?'selected':''}>✗ Não</option>
