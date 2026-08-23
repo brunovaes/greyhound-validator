@@ -1138,6 +1138,104 @@ function _avbMotorOrig(a){
 }
 function _avbMotor(a){ return _avbRean(a) != null ? _avbRean(a) : _avbMotorOrig(a); }
 
+// ── Motor da Manha: notas de corrida parelha e de box vazio ───────────────
+//
+// Consulta UMA corrida (a que esta em foco), nao o dia inteiro: as notas sao
+// do painel de disputa, que mostra uma corrida por vez, e a de box vazio so
+// muda nos minutos finais DAQUELA corrida.
+//
+// A chave e' hora+corrida, a mesma da Carga VIP e do VIP do VIP. Passamos
+// r.corrida CRU (o codigo curto, "Kinsly A6"), nunca o nome bonito da tela:
+// o banco guarda o codigo, e o nome completo e' aplicado so na exibicao.
+var MM_CACHE = {};        // chave -> { dados, em }
+var MM_PULSO = null;      // timer da corrida em foco
+
+function _mmChave(r){ return (r.hora||'') + '|' + (r.corrida||''); }
+
+function _mmBuscar(r, aoTerminar){
+  var chave = _mmChave(r);
+  var url = BASE + '/api/avbs-manha?hora=' + encodeURIComponent(r.hora||'')
+          + '&corrida=' + encodeURIComponent(r.corrida||'');
+  fetch(url, { credentials:'same-origin' })
+    .then(function(res){ return res.ok ? res.json() : null; })
+    .then(function(d){
+      // encontrada:false vem com erro explicito. Guardamos assim mesmo, pra
+      // a tela poder DIZER que nao achou em vez de ficar muda.
+      MM_CACHE[chave] = { dados: d || null, em: Date.now() };
+      if (aoTerminar) aoTerminar();
+    })
+    .catch(function(){ /* sem notas: a tela segue sem elas */ });
+}
+
+// Pulso so perto da largada: e' quando retirada de ultima hora abre um box novo
+// e a nota muda. Fora dessa janela a nota nao muda, entao repetir e' gasto a toa.
+function _mmAgendarPulso(r){
+  if (MM_PULSO) { clearInterval(MM_PULSO); MM_PULSO = null; }
+  var chave = _mmChave(r);
+  MM_PULSO = setInterval(function(){
+    var atual = results[focusRaceIdx];
+    // Trocou de corrida: o pulso morre com ela.
+    if (!atual || _mmChave(atual) !== chave) { clearInterval(MM_PULSO); MM_PULSO = null; return; }
+    var min = minutesToRace(atual);
+    if (min === null || min > 12 || min < -2) return;   // fora da janela
+    _mmBuscar(atual, function(){ _mmPintarNotas(atual); });
+  }, 75000);
+}
+
+// 'exato' e 'traduzido' sao casamento seguro. 'aproximado' e' LIKE no codigo:
+// pode ter casado com outra corrida, e uma nota de box vazio errada e' pior que
+// nota nenhuma — entao avisa em vez de fingir certeza.
+function _mmSlotPrincipal(r){
+  var c = MM_CACHE[_mmChave(r)];
+  if (!c || !c.dados || !c.dados.encontrada) return null;
+  return { slot: c.dados.corrida_obj && c.dados.corrida_obj.principal, match: c.dados.match };
+}
+
+function _mmPintarNotas(r){
+  var box = document.getElementById('fp-notas');
+  if (!box) return;
+  var info = _mmSlotPrincipal(r);
+  var sl = info && info.slot;
+  if (!sl) { box.innerHTML = ''; return; }
+
+  var nota = function(cor, txt, dica){
+    return '<div title="' + (dica||'') + '" style="display:inline-flex;align-items:center;gap:6px;'
+      + 'font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px;'
+      + 'background:' + cor + '22;border:1px solid ' + cor + '66;color:' + cor + '">' + txt + '</div>';
+  };
+  var out = [];
+
+  // Corrida parelha: os DOIS percentuais, rotulados "no confronto". Sozinho,
+  // "56%" seria lido como chance de vencer a prova de 6 galgos — e nao e' isso,
+  // pct_pick e pct_outro somam 100 entre os dois.
+  if (sl.parelho) {
+    out.push(nota('#f59e0b',
+      'corrida parelha: T' + sl.pick_trap + ' ' + sl.pct_pick + '% x T' + sl.outro_trap + ' ' + sl.pct_outro + '% no confronto',
+      'os dois percentuais somam 100: e a chance dentro do par, nao de vencer a corrida'));
+  }
+
+  // Box vazio. O numero vem de *_vazia_traps (o BOX), nunca do trap do galgo.
+  // O mesmo box pode estar entre os dois: nesse caso e' UM box, nao dois —
+  // desenhar duas notas faria voce ler como se houvesse dois vazios.
+  var bp = (sl.pick_vazia_lado && sl.pick_vazia_traps) ? sl.pick_vazia_traps : [];
+  var bo = (sl.outro_vazia_lado && sl.outro_vazia_traps) ? sl.outro_vazia_traps : [];
+  var compartilhado = bp.filter(function(b){ return bo.indexOf(b) >= 0; });
+  if (compartilhado.length) {
+    out.push(nota('#c084fc', '&#9888; box ' + compartilhado.join(', ') + ' vazio entre T' + sl.pick_trap + ' e T' + sl.outro_trap,
+      'o mesmo box vazio esta entre os dois galgos do par'));
+  }
+  var soPick = bp.filter(function(b){ return bo.indexOf(b) < 0; });
+  var soOutro = bo.filter(function(b){ return bp.indexOf(b) < 0; });
+  if (soPick.length) out.push(nota('#c084fc', '&#9888; box ' + soPick.join(', ') + ' vazio ao lado de T' + sl.pick_trap, ''));
+  if (soOutro.length) out.push(nota('#c084fc', '&#9888; box ' + soOutro.join(', ') + ' vazio ao lado de T' + sl.outro_trap, ''));
+
+  if (out.length && info.match === 'aproximado') {
+    out.push(nota('#8a94a6', 'casamento aproximado',
+      'a corrida foi encontrada por semelhanca de nome, nao exatamente: confira antes de confiar nestes avisos'));
+  }
+  box.innerHTML = out.join('');
+}
+
 function renderFocusPanel(r, idx) {
   var focusCol = document.getElementById('focus-col');
   if (!focusCol) return;
@@ -1234,6 +1332,9 @@ function renderFocusPanel(r, idx) {
       : '')
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
+    // Notas do Motor da Manha (parelha / box vazio). Ficam ACIMA da arena, que
+    // e' onde voce olha antes de decidir; no rodape chegariam tarde.
+    + '<div id="fp-notas" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 8px"></div>'
     + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:flex-start">'
     + '<div class="fp-arena-col" style="flex:1 1 auto;min-width:0">'
     + '<div class="fp-arena" style="flex:1 1 70%">'
@@ -1306,6 +1407,13 @@ function renderFocusPanel(r, idx) {
   // nao e' VIP, senao a corrida seguinte herdaria a cor da anterior.
   focusCol.style.background = _ehVip(r) ? _vipCorFundo(_vipTipo(r)) : '';
   if (_vipSkipLiberado(r)) _avisarVipSkip(r);
+
+  // Notas do Motor da Manha. Pinta na hora com o que ja estiver em cache (pra
+  // nao piscar ao voltar numa corrida) e busca uma vez; o pulso so entra perto
+  // da largada, que e' quando a nota de box vazio pode mudar.
+  _mmPintarNotas(r);
+  if (!MM_CACHE[_mmChave(r)]) _mmBuscar(r, function(){ _mmPintarNotas(r); });
+  _mmAgendarPulso(r);
 
   startOddsLive(r);
 }
