@@ -148,41 +148,55 @@ function _podioOk(podio, principal) {
   return ip >= 0 && ip < io;                              // pick presente e à frente
 }
 
-// Lista os slots de todas as corridas do dia (preview de admin).
-function listar(db, opts) {
-  opts = opts || {};
-  const date = opts.date;
-  // corte de parelho: ?opts vence; senao a config do Painel (avb_parelho_pct); senao 60.
+// corte de parelho: ?opts vence; senao a config do Painel (avb_parelho_pct); senao 60.
+function _aplicaParelhoConfig(db, opts) {
   if (!(opts.parelhoAte > 0)) {
     try { const c = db.prepare("SELECT avb_parelho_pct FROM analysis_config WHERE user_id=1").get(); if (c && c.avb_parelho_pct > 0) opts = Object.assign({}, opts, { parelhoAte: c.avb_parelho_pct }); } catch (e) {}
   }
+  return opts;
+}
+
+// Monta o objeto de UMA corrida a partir da row do banco (mesma forma pra listar e
+// umaCorrida). Devolve null quando a row nao tem histórico avaliável (pula).
+function _corridaDeRow(row, date, opts) {
+  let histFull = null, histAll = null, raceCard = null;
+  try { histFull = JSON.parse(row.hist_full); } catch (e) { return null; }
+  try { histAll = JSON.parse(row.hist_all); } catch (e) {}
+  try { raceCard = JSON.parse(row.race_card); } catch (e) {}
+  if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) return null;
+  const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
+  const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
+  const pod = _podioCoerente(row.top3, slots[0] || null);
+  // galgos que a reanálise CONSIDEROU (pra ninguém sumir do pódio na revisão do skip)
+  const considerados = Array.from(new Set(slots.flatMap(s => [s.pick_trap, s.outro_trap]))).sort((a, b) => a - b);
+  return {
+    hora: row.hora, corrida: row.corrida, dist: row.dist, nivel: row.nivel,
+    principal: slots[0] || null,
+    secundarios: slots.slice(1),
+    slots,
+    podio: pod.podio, podio_base_top3: row.top3 || null, podio_ajustado_pelo_avb: pod.ajustado,
+    podio_ok: _podioOk(pod.podio, slots[0] || null),   // invariante: pódio não contradiz o AvB
+    galgos_considerados: considerados
+  };
+}
+
+const _SELECT_CORRIDA = "r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.nivel, r.top3";
+
+// Lista os slots de todas as corridas do dia (LISTA lateral / preview de admin).
+function listar(db, opts) {
+  opts = opts || {};
+  const date = opts.date;
+  opts = _aplicaParelhoConfig(db, opts);
   const rows = db.prepare(
-    "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.nivel, r.top3 " +
+    "SELECT " + _SELECT_CORRIDA + " " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
   ).all(date);
 
   const corridas = [];
   for (const row of rows) {
-    let histFull = null, histAll = null, raceCard = null;
-    try { histFull = JSON.parse(row.hist_full); } catch (e) { continue; }
-    try { histAll = JSON.parse(row.hist_all); } catch (e) {}
-    try { raceCard = JSON.parse(row.race_card); } catch (e) {}
-    if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) continue;
-    const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
-    const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
-    const pod = _podioCoerente(row.top3, slots[0] || null);
-    // galgos que a reanálise CONSIDEROU (pra ninguém sumir do pódio na revisão do skip)
-    const considerados = Array.from(new Set(slots.flatMap(s => [s.pick_trap, s.outro_trap]))).sort((a, b) => a - b);
-    corridas.push({
-      hora: row.hora, corrida: row.corrida, dist: row.dist, nivel: row.nivel,
-      principal: slots[0] || null,
-      secundarios: slots.slice(1),
-      slots,
-      podio: pod.podio, podio_base_top3: row.top3 || null, podio_ajustado_pelo_avb: pod.ajustado,
-      podio_ok: _podioOk(pod.podio, slots[0] || null),   // invariante: pódio não contradiz o AvB
-      galgos_considerados: considerados
-    });
+    const c = _corridaDeRow(row, date, opts);
+    if (c) corridas.push(c);
   }
 
   return {
@@ -193,6 +207,45 @@ function listar(db, opts) {
       + '(principal + 2 secundários). pct = % do pick (favorito) vencer o outro. parelho=true quando pct <= '
       + PARELHO_ATE + '% (mostrar nota com os dois %). pct_pick/pct_outro = os dois percentuais. '
       + 'Perto da largada a reanálise atualiza isto com o card fresco (trap vazia, retirada).'
+  };
+}
+
+// UMA corrida só — pro PAINEL DE DISPUTA (uma corrida por vez). Chave = hora + corrida,
+// a MESMA que a Carga VIP / VIP do VIP / resultados já usam (o que a tela tem em mãos
+// direto do objeto da corrida). Roda o slotsDaCorrida só dessa corrida, não o dia inteiro
+// (custo ~1/N do listar). Devolve o MESMO objeto de uma entrada de corridas[] do listar,
+// dentro de { date, hora, corrida, encontrada, match, corrida_obj }.
+//
+// Casamento NÃO-silencioso (o que já mordeu duas vezes): tenta EXATO (hora+corrida);
+// se falhar, cai pra hora + corrida LIKE '%<pista>%' e marca match:'aproximado' pra a
+// tela saber que casou por aproximação. Se nada casar, encontrada:false explícito — a
+// resposta grita em vez de vir vazia.
+function umaCorrida(db, opts) {
+  opts = opts || {};
+  const date = opts.date;
+  const hora = String(opts.hora || '').trim();
+  const corrida = String(opts.corrida || '').trim();
+  opts = _aplicaParelhoConfig(db, opts);
+  if (!hora || !corrida) {
+    return { date, hora, corrida, encontrada: false, match: null, erro: 'hora e corrida são obrigatórios', corrida_obj: null };
+  }
+  const base = "SELECT " + _SELECT_CORRIDA + " FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+    "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL AND r.hora=? ";
+  let match = 'exato';
+  let row = db.prepare(base + "AND r.corrida=? LIMIT 1").get(date, hora, corrida);
+  if (!row) {
+    const pista = corrida.split(/\s+/)[0] || corrida;   // "Romfd A11" -> "Romfd"
+    row = db.prepare(base + "AND r.corrida LIKE ? LIMIT 1").get(date, hora, '%' + pista + '%');
+    match = row ? 'aproximado' : null;
+  }
+  if (!row) {
+    return { date, hora, corrida, encontrada: false, match: null, erro: 'corrida não encontrada (hora+corrida não casou)', corrida_obj: null };
+  }
+  const c = _corridaDeRow(row, date, opts);
+  return {
+    date, hora, corrida, encontrada: !!c, match: c ? match : null,
+    corrida_obj: c,   // null quando a corrida existe mas não tem histórico avaliável
+    parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, parelho_ate_pct: opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE, n_slots: N_SLOTS }
   };
 }
 
@@ -240,4 +293,4 @@ function paraPersistir(db, opts) {
   return out;
 }
 
-module.exports = { listar, slotsDaCorrida, paraPersistir, PARELHO_ATE, SP_RATIO_MAX };
+module.exports = { listar, umaCorrida, slotsDaCorrida, paraPersistir, PARELHO_ATE, SP_RATIO_MAX };

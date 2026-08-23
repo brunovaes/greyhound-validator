@@ -1441,6 +1441,11 @@ router.get('/vip-do-vip', (req, res) => {
 // MOTOR DA MANHA v2 — os AvBs do dia (principal + 2 secundarios) por corrida, com nota
 // de parelho (pct <= avb_parelho_pct), trap vazia (o box) e podio coerente (com podio_ok).
 // Analise base (alimenta a disputa), entao exige so login. ?date=YYYY-MM-DD.
+//
+// DUAS FORMAS na MESMA rota:
+//   ?hora=HH:MM&corrida=NOME  -> UMA corrida (painel de disputa, uma por vez). Custo ~1/N.
+//                                Mesma chave da Carga VIP / VIP do VIP / resultados.
+//   sem hora+corrida          -> DIA INTEIRO (listar), pra LISTA lateral (cadencia 3-4 min).
 router.get('/avbs-manha', (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
@@ -1448,6 +1453,11 @@ router.get('/avbs-manha', (req, res) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
       ? req.query.date
       : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const hora = (req.query.hora || '').trim();
+    const corrida = (req.query.corrida || '').trim();
+    if (hora && corrida) {
+      return res.json(mm.umaCorrida(db, { date, hora, corrida }));
+    }
     res.json(mm.listar(db, { date }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
