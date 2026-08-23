@@ -1364,7 +1364,16 @@ router.get('/config', (req, res) => {
       vip_premium_alarme: config.vip_premium_alarme != null ? config.vip_premium_alarme : 1,
       vip_premium_som: config.vip_premium_som || 'alarme',
       vip_premium_cor_destaque: config.vip_premium_cor_destaque || '#22c55e',
-      vip_premium_cor_fundo: config.vip_premium_cor_fundo || '#0A280E'
+      vip_premium_cor_fundo: config.vip_premium_cor_fundo || '#0A280E',
+      // Cor com que a LINHA da lista pisca quando a corrida VIP se aproxima
+      // (o mesmo mecanismo do alarme de filtro).
+      vip_cor_alerta: config.vip_cor_alerta || 'roxo',
+      vip_premium_cor_alerta: config.vip_premium_cor_alerta || 'dourado',
+      // Fundo da linha na lista lateral. Usa != null e NAO ||: string vazia e'
+      // escolha valida (sem fundo), e com || ela cairia no default e a linha
+      // voltaria a ser pintada sem o usuario entender por que.
+      vip_cor_linha: config.vip_cor_linha != null ? config.vip_cor_linha : '#161B27',
+      vip_premium_cor_linha: config.vip_premium_cor_linha != null ? config.vip_premium_cor_linha : '#161B27'
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
