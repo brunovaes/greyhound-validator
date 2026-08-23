@@ -1432,7 +1432,8 @@ document.addEventListener('click', function(ev){
   if(t.classList.contains('alt-analisar')){
     openValModalPar(key, parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10));
   } else if(t.classList.contains('alt-entrar')){
-    escolherAvb(parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10), t.getAttribute('data-odd'));
+    // Veio da coluna de alternativas: sao os pares que a camada BW trouxe.
+    escolherAvb(parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10), t.getAttribute('data-odd'), 'bw');
   }
 });
 
@@ -1505,7 +1506,11 @@ function _snapshotDoPar(r, ta, tb, odd){
   };
 }
 
-function escolherAvb(trapA, trapB, odd){
+// origem: 'bw' quando veio da coluna de alternativas (a camada que le a BW),
+// 'inversao' quando voce inverteu o sentido, e 'principal' quando e' o par que
+// a analise ja tinha posto na arena. Fica gravado no snapshot pra a coluna
+// Motor do Historico poder dizer qual motor valeu naquela linha.
+function escolherAvb(trapA, trapB, odd, origem){
   var idx=focusRaceIdx, r=results[idx];
   if(!r) return;
   var jaEra = r.avbEscolhido && String(r.avbEscolhido.a)===String(trapA) && String(r.avbEscolhido.b)===String(trapB);
@@ -1530,11 +1535,11 @@ function escolherAvb(trapA, trapB, odd){
   }
 
   r.avbEscolhido={ a:trapA, b:trapB, odd:(odd||null), em:Date.now() };
-  // Grava no banco. Estava faltando: so o "desfazer" persistia, entao escolher
-  // um par vivia so em memoria — recarregar a pagina perdia a escolha, e o
-  // Historico e a Banca nunca viam nada. O _snapshotDoPar ja existia pronto e
-  // nao era chamado por ninguem.
-  _persistirEscolha(r, _snapshotDoPar(r, trapA, trapB, odd));
+  // NAO grava aqui. Escolher um secundario ou inverter muda so a tela; quem
+  // grava e' o botao "Entrei !". Mesma logica da odd e da stake, que ja ficam
+  // locais ate a confirmacao: enquanto voce nao entrou, nao ha aposta, e o
+  // Historico deve continuar mostrando o principal da analise.
+  r._avbOrigem = origem || 'principal';
   _aplicarOdd(odd);
   saveSessionState();
   renderFocusPanel(r, idx);   // redesenha arena + alternativas com o novo estado
@@ -1557,7 +1562,7 @@ function inverterAvb(){
       // A odd do par invertido e' outra: a do sentido A vence B nao serve.
       // Se nao houver odd pro sentido novo, limpa em vez de manter a antiga.
       var novaOdd=_parOddAtual(r, p.b, p.a);
-      escolherAvb(p.b, p.a, novaOdd);
+      escolherAvb(p.b, p.a, novaOdd, 'inversao');
     }
   );
 }
@@ -1803,6 +1808,17 @@ function confirmarEntrada(){
   }
   if(isNaN(parseFloat(odd))){ showToast('Odd inválida.', false); return; }
   if(stk && isNaN(parseFloat(stk))){ showToast('Stake inválida.', false); return; }
+
+  // O PAR e' gravado aqui, junto com a entrada. Ate este clique, inverter ou
+  // escolher um secundario mudava so a tela — e' o "Entrei !" que transforma
+  // aquilo em registro. Sem ele, o Historico segue mostrando o principal da
+  // analise, que e' a regra do Bruno.
+  var pe = _parEmFoco(r);
+  if (pe && pe.a && pe.b) {
+    var snap = _snapshotDoPar(r, pe.a, pe.b, odd);
+    snap.origem = r._avbOrigem || 'principal';
+    _persistirEscolha(r, snap);
+  }
 
   // Grava os tres juntos: odd, stake e a marca de que houve entrada. E' o
   // bet_entrou que faz a corrida contar como aposta no Historico e na Banca.

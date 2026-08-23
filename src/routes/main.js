@@ -1850,11 +1850,23 @@ function _celulaObs(r){
     + '</td>';
 }
 
+// O par que VALE na corrida.
+//
+// O avb_fechamento SAIU desta conta de proposito. Ele e' escrito pelo backend
+// perto da largada e estava sobrescrevendo, no Historico, o AvB que a tela
+// mostrou o dia inteiro: a Analisar exibia 3v4 e o Historico gravava 2v3, sem
+// o Bruno ter tocado em nada.
+//
+// A regra e' dele: o principal da analise permanece, e so muda quando ELE age
+// (inverte, escolhe um secundario ou entra num par da camada BW). Essa acao
+// grava avb_escolhido — que continua tendo prioridade aqui.
+//
+// O avb_fechamento nao some do banco: ele segue gravado e serve pra medicao
+// (junto com avb_inicial e avb_reanalise). So nao decide mais o que a tela
+// mostra nem o que a Banca conta.
 function _parBW(r){
   var esc = _jsonOuNull(r.avb_escolhido);
   if (esc) { esc._origem = 'sua escolha'; return esc; }
-  var fec = _jsonOuNull(r.avb_fechamento);
-  if (fec) { fec._origem = 'reanálise'; return fec; }
   return null;
 }
 // Celula do AvB BW, no MESMO formato visual da coluna do Motor: badge do trap,
@@ -1873,13 +1885,12 @@ function _celulaAvb(r){
       + (perfil ? '<div style="font-size:9px;color:#666;text-align:center">'+perfil+'</div>' : '')
       + '</div>';
   };
+  // Sem o fechamento: ou foi voce que apontou, ou vale o par da analise.
   var esc = _jsonOuNull(r.avb_escolhido);
-  var fech = _jsonOuNull(r.avb_fechamento);
-  var av = esc || fech;
   var a, b, pa = '', pb = '', origem;
-  if (av) {
-    a = { trap: av.aTrap, nome: av.aNome }; b = { trap: av.bTrap, nome: av.bNome };
-    origem = esc ? 'sua escolha' : 'motor';
+  if (esc) {
+    a = { trap: esc.aTrap, nome: esc.aNome }; b = { trap: esc.bTrap, nome: esc.bNome };
+    origem = 'sua escolha';
   } else if (r.trap_fav && r.trap_und) {
     a = { trap: r.trap_fav, nome: r.name_fav }; b = { trap: r.trap_und, nome: r.name_und };
     pa = r.perfil_fav || ''; pb = r.perfil_und || '';
@@ -1921,8 +1932,8 @@ function _nivelVip(r){
 // QUAL MOTOR analisou esta corrida. Nao confundir com a coluna AvB, que diz
 // qual PAR valeu e se foi voce que apontou.
 //
-//   'bw'       o fechamento foi escrito pela camada BW (origem vip_plus/vip_premium)
-//   'analise'  todo o resto
+//   'bw'       voce entrou num par que a camada BW trouxe (ou inverteu sobre ele)
+//   'analise'  vale o par da analise, com ou sem escolha sua por cima
 //
 // "Reanalise" era um terceiro valor e foi retirado: o Motor da Manha passou a
 // rodar as REGRAS DA REANALISE sobre as SPs desde cedo, entao analise e
@@ -1945,12 +1956,11 @@ function _motorDoAvb(r){
   // resultado. Qualquer um dos dois significa que a corrida ja passou do ponto
   // em que esses motores decidem. E' o mesmo gatilho que o motor usa pra
   // congelar as marcas VIP.
-  var passou = !!(r.final_check_at || r.finishing_order_json);
-  if (passou) {
-    var fech = _jsonOuNull(r.avb_fechamento);
-    if (fech && String(fech.origem || '').indexOf('vip') === 0) return 'bw';
-  }
-  if (r.trap_fav && r.trap_und) return 'analise';
+  // A camada BW so conta quando VOCE entrou num par dela: e' a regra do Bruno,
+  // o fechamento sozinho nao troca o AvB da corrida.
+  var esc = _jsonOuNull(r.avb_escolhido);
+  if (esc && String(esc.origem || '') === 'bw') return 'bw';
+  if (esc || (r.trap_fav && r.trap_und)) return 'analise';
   return '';
 }
 
