@@ -120,14 +120,32 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
 // Pódio COERENTE (item 3+c): base = top3 do Motor 1 (ex.: "5-3-6"); se o AvB principal
 // (pick firme, não parelho) contradiz a ordem, inverte os dois no pódio (o 5-1-6 com
 // AvB 6v5 vira 6-1-5). Nunca sai pódio que briga com o AvB.
+// Coerência vale SEMPRE que há principal (inclusive parelho — o pick é o favorito,
+// por mais apertado que seja). Regra do Bruno: o pick tem que estar À FRENTE do outro
+// no pódio, OU o outro não aparecer. Três casos:
+//   A) os dois no pódio, outro na frente        -> troca os dois.
+//   B) outro no pódio e o pick FORA             -> insere o pick logo antes do outro (corta em 3).
+//   C) pick presente e outro fora / os dois fora -> sem contradição, não mexe.
 function _podioCoerente(top3Str, principal) {
-  const podio = String(top3Str || '').split('-').map(n => parseInt(n)).filter(n => n > 0);
+  let podio = String(top3Str || '').split('-').map(n => parseInt(n)).filter(n => n > 0);
   let ajustado = false;
-  if (principal && !principal.parelho && principal.pick_trap && principal.outro_trap) {
-    const ip = podio.indexOf(principal.pick_trap), io = podio.indexOf(principal.outro_trap);
-    if (ip >= 0 && io >= 0 && io < ip) { const t = podio[ip]; podio[ip] = podio[io]; podio[io] = t; ajustado = true; }
+  if (principal && principal.pick_trap && principal.outro_trap) {
+    const pick = principal.pick_trap, outro = principal.outro_trap;
+    const ip = podio.indexOf(pick), io = podio.indexOf(outro);
+    if (io >= 0 && ip >= 0 && io < ip) {                 // A) troca
+      podio[ip] = outro; podio[io] = pick; ajustado = true;
+    } else if (io >= 0 && ip < 0) {                       // B) pick fora, entra antes do outro
+      podio.splice(io, 0, pick); podio = podio.slice(0, 3); ajustado = true;
+    }
   }
   return { podio, ajustado };
+}
+// invariante: o pódio NÃO contradiz o AvB (pick à frente do outro, ou outro ausente).
+function _podioOk(podio, principal) {
+  if (!principal || !principal.pick_trap || !principal.outro_trap) return true;
+  const ip = podio.indexOf(principal.pick_trap), io = podio.indexOf(principal.outro_trap);
+  if (io < 0) return true;                                // outro ausente = ok
+  return ip >= 0 && ip < io;                              // pick presente e à frente
 }
 
 // Lista os slots de todas as corridas do dia (preview de admin).
@@ -162,6 +180,7 @@ function listar(db, opts) {
       secundarios: slots.slice(1),
       slots,
       podio: pod.podio, podio_base_top3: row.top3 || null, podio_ajustado_pelo_avb: pod.ajustado,
+      podio_ok: _podioOk(pod.podio, slots[0] || null),   // invariante: pódio não contradiz o AvB
       galgos_considerados: considerados
     });
   }
