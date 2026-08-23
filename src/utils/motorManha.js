@@ -14,6 +14,7 @@
 const { probImplicita } = require('./spEngine');
 const reanalise = require('./reanaliseEngine');
 const { _limpaNome, _perfilDeHist } = require('./cargaVip');
+const { NOMES_PISTAS } = require('./nomesPistas');
 
 const PARELHO_ATE = 60;    // pct <= isto = parelho (nota); > isto = pick firme
 const SP_RATIO_MAX = 1.15; // "SP colada" (o par que abre na BW)
@@ -210,16 +211,40 @@ function listar(db, opts) {
   };
 }
 
+// O banco guarda o CÓDIGO curto da pista ("Kinsly A6"), mas as telas mostram o
+// nome COMPLETO ("Kinsley A6") — traduzido só na exibição pelo nomesPistas.js. Se a
+// chave chegar com o nome completo, o casamento por igualdade e o LIKE '%pista%' falham
+// (a diferença é no MEIO da palavra: Kinsley≠Kinsly). Aqui traduzimos nome→código antes
+// de casar. NOMES_PISTAS = { codigo: nomeCompleto }; alguns nomes têm 2 palavras
+// ("Central Park", "Star Pelaw"), então casamos o nome como PREFIXO e preservamos o
+// resto (" A6"). Se já vier como código, passa direto.
+function _paraCodigoCorrida(corridaParam) {
+  const s = String(corridaParam || '').trim();
+  if (!s) return s;
+  const primeiro = s.split(/\s+/)[0] || '';
+  if (NOMES_PISTAS[primeiro]) return s;                  // já é código (ex.: "Kinsly A6")
+  const low = s.toLowerCase();
+  for (const code in NOMES_PISTAS) {
+    const full = String(NOMES_PISTAS[code]);
+    const f = full.toLowerCase();
+    if (low === f) return code;                          // só o nome, sem classe
+    if (low.startsWith(f + ' ')) return code + s.slice(full.length);  // "Kinsley A6" -> "Kinsly A6"
+  }
+  return s;                                              // não reconheceu — devolve original
+}
+
 // UMA corrida só — pro PAINEL DE DISPUTA (uma corrida por vez). Chave = hora + corrida,
 // a MESMA que a Carga VIP / VIP do VIP / resultados já usam (o que a tela tem em mãos
 // direto do objeto da corrida). Roda o slotsDaCorrida só dessa corrida, não o dia inteiro
 // (custo ~1/N do listar). Devolve o MESMO objeto de uma entrada de corridas[] do listar,
-// dentro de { date, hora, corrida, encontrada, match, corrida_obj }.
+// dentro de { date, hora, corrida, encontrada, match, corrida_casada, corrida_obj }.
 //
-// Casamento NÃO-silencioso (o que já mordeu duas vezes): tenta EXATO (hora+corrida);
-// se falhar, cai pra hora + corrida LIKE '%<pista>%' e marca match:'aproximado' pra a
-// tela saber que casou por aproximação. Se nada casar, encontrada:false explícito — a
-// resposta grita em vez de vir vazia.
+// Casamento NÃO-silencioso (o que já mordeu). Ordem:
+//   1) EXATO com a chave crua               -> match:'exato'
+//   2) EXATO traduzindo nome-completo->código (nomesPistas) -> match:'traduzido'
+//   3) hora + corrida LIKE '%<código>%'      -> match:'aproximado'
+// Nada casou -> encontrada:false com erro explícito (grita, não vem vazio calado).
+// corrida_casada = o valor de r.corrida que de fato bateu (pra a tela conferir).
 function umaCorrida(db, opts) {
   opts = opts || {};
   const date = opts.date;
@@ -227,24 +252,35 @@ function umaCorrida(db, opts) {
   const corrida = String(opts.corrida || '').trim();
   opts = _aplicaParelhoConfig(db, opts);
   if (!hora || !corrida) {
-    return { date, hora, corrida, encontrada: false, match: null, erro: 'hora e corrida são obrigatórios', corrida_obj: null };
+    return { date, hora, corrida, encontrada: false, match: null, corrida_casada: null, erro: 'hora e corrida são obrigatórios', corrida_obj: null };
   }
   const base = "SELECT " + _SELECT_CORRIDA + " FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL AND r.hora=? ";
-  let match = 'exato';
-  let row = db.prepare(base + "AND r.corrida=? LIMIT 1").get(date, hora, corrida);
+  const cod = _paraCodigoCorrida(corrida);
+
+  let row = null, match = null;
+  // 1) exato com a chave crua
+  row = db.prepare(base + "AND r.corrida=? LIMIT 1").get(date, hora, corrida);
+  if (row) match = 'exato';
+  // 2) exato com o nome-completo traduzido pra código (Kinsley A6 -> Kinsly A6)
+  if (!row && cod !== corrida) {
+    row = db.prepare(base + "AND r.corrida=? LIMIT 1").get(date, hora, cod);
+    if (row) match = 'traduzido';
+  }
+  // 3) fallback LIKE no token de código (drift de classe/espaço)
   if (!row) {
-    const pista = corrida.split(/\s+/)[0] || corrida;   // "Romfd A11" -> "Romfd"
-    row = db.prepare(base + "AND r.corrida LIKE ? LIMIT 1").get(date, hora, '%' + pista + '%');
-    match = row ? 'aproximado' : null;
+    const codTok = cod.split(/\s+/)[0] || cod;
+    row = db.prepare(base + "AND r.corrida LIKE ? LIMIT 1").get(date, hora, '%' + codTok + '%');
+    if (row) match = 'aproximado';
   }
   if (!row) {
-    return { date, hora, corrida, encontrada: false, match: null, erro: 'corrida não encontrada (hora+corrida não casou)', corrida_obj: null };
+    return { date, hora, corrida, encontrada: false, match: null, corrida_casada: null, erro: 'corrida não encontrada (hora+corrida não casou, nem por nome completo)', corrida_obj: null };
   }
   const c = _corridaDeRow(row, date, opts);
   return {
     date, hora, corrida, encontrada: !!c, match: c ? match : null,
-    corrida_obj: c,   // null quando a corrida existe mas não tem histórico avaliável
+    corrida_casada: row.corrida,   // o r.corrida que bateu (código cru do banco)
+    corrida_obj: c,                // null quando a corrida existe mas não tem histórico avaliável
     parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, parelho_ate_pct: opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE, n_slots: N_SLOTS }
   };
 }
