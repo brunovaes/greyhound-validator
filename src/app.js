@@ -2149,7 +2149,7 @@ function renderRaceListPanel(avbs) {
       + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
       + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
       + (r.cardSuspect ? '<div class="rc-suspect-badge">⚠ PISTA PODE TER CANCELADO</div>' : '')
-      + (r._reanaliseFlag && r._reanaliseFlag.type==='reanalise' && (Date.now()-r._reanaliseFlag.at)<300000 ? '<div class="rc-reanalise-badge">🔄 REANALISADA</div>' : '')
+      + (r._reanaliseFlag && r._reanaliseFlag.type==='reanalise' && (Date.now()-r._reanaliseFlag.at)<300000 ? '<div class="rc-reanalise-badge">REANALISADA</div>' : '')
       + '<div class="rc-time">'+hbr+'</div>'
       + '<div class="rc-name">'+corridaDisplay(r)+'</div>'
       + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
