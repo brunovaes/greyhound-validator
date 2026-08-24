@@ -169,7 +169,12 @@ function montarObs(A, B, R, Rb, vantTempoAbs, flags) {
   if (vantTempoAbs > 0.02) partes.push(`mais rapido (~${vantTempoAbs.toFixed(2)}s aj. categoria)`);
   if (R.splitEf != null && Rb.splitEf != null && R.splitEf < Rb.splitEf - 0.03) partes.push('arranca melhor');
   if (R.bendEf != null && Rb.bendEf != null && R.bendEf < Rb.bendEf - 0.5) partes.push('corre mais na frente');
-  if (flags.trapVaziaBox && flags.trapVaziaBox.length) partes.push(`box vazio ao lado (${flags.trapVaziaBox.join(',')})`);
+  // trap vazia — AVISA dos DOIS lados, dizendo de quem e' o box (favorito vs rival).
+  // Bruno ago/2026: so aviso, nao descarta. vaziaBoxPorTrap = { trap: [boxes vazios ao lado] }.
+  const vpt = flags.vaziaBoxPorTrap || {};
+  const boxesPick = vpt[A.trap] || [], boxesRival = vpt[B.trap] || [];
+  if (boxesPick.length) partes.push(`box vazio ao lado do favorito (${boxesPick.join(',')})`);
+  if (boxesRival.length) partes.push(`⚠ box vazio ao lado do rival (${boxesRival.join(',')})`);
   if (flags.cioRecente) partes.push(`atencao: cio recente T${flags.cioRecente}`);
   if (flags.trialPromovido) partes.push('trial recente muito forte');
   return partes.join(' · ') + '.';
@@ -203,13 +208,19 @@ function avaliarPar(d1, d2, ctx) {
   if (r1.trialSuperior) net += 0.10;
   if (r2.trialSuperior) net -= 0.10;
 
-  const flags = { trapVazia: [], trapVaziaBox: [], cioRecente: null, trialPromovido: !!(r1.trialSuperior || r2.trialSuperior) };
+  const flags = { trapVazia: [], trapVaziaBox: [], vaziaBoxPorTrap: {}, cioRecente: null, trialPromovido: !!(r1.trialSuperior || r2.trialSuperior) };
   const vazias = (ctx && ctx.trapsVazias) || [];
   // flags.trapVazia = trap do GALGO com box vazio ao lado (retrocompat). flags.trapVaziaBox
-  // = o BOX vazio em si (o que a obs e a tela mostram — o numero do box que esta vazio).
+  // = o BOX vazio em si (retrocompat, merge dos dois). flags.vaziaBoxPorTrap = { trap: [boxes] }
+  // POR galgo, pra a obs avisar de quem e' o lado (favorito vs rival) — Bruno pediu os dois.
   const adjVazia = (dog, sinal) => {
     const boxes = vazias.filter(v => Math.abs(v - dog.trap) === 1);
-    if (boxes.length) { net += sinal * o.bonusTrapVazia; flags.trapVazia.push(dog.trap); boxes.forEach(b => { if (!flags.trapVaziaBox.includes(b)) flags.trapVaziaBox.push(b); }); }
+    if (boxes.length) {
+      net += sinal * o.bonusTrapVazia;
+      flags.trapVazia.push(dog.trap);
+      flags.vaziaBoxPorTrap[dog.trap] = boxes;
+      boxes.forEach(b => { if (!flags.trapVaziaBox.includes(b)) flags.trapVaziaBox.push(b); });
+    }
   };
   adjVazia(d1, +1); adjVazia(d2, -1);
   const adjCio = (dog, sinal) => {
