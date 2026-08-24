@@ -1057,6 +1057,14 @@ function _mmPintarNotas(r){
   // No lugar dela, mostramos POR QUE o par passou: os quatro eixos e a
   // vantagem de CalTm. Sem isso o pick vira caixa-preta, e a nota antiga pelo
   // menos dizia quando desconfiar.
+  // nao_segura: galgo que lidera e desaba na reta. Pick reprovado por isso nao
+  // chega na tela — o gate ja filtrou. Se chegar, e' divergencia do payload, e
+  // e' o tipo de coisa que voce quer ver ANTES de entrar, nao depois.
+  if (sl.nao_segura) {
+    out.push(nota('#ef4444', '&#9888; pick marcado como não-segura',
+      'o payload trouxe um pick reprovado por desabamento; confira antes de entrar'));
+  }
+
   if (sl.top && sl.eixos) {
     var e = sl.eixos;
     var quatro = (e.categoria && e.caltm && e.split && e.podio);

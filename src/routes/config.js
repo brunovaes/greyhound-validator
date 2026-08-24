@@ -325,7 +325,7 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 
 <div class="section">
 <div class="sec-title">Motor de análise</div>
-<p class="hint" style="margin-bottom:10px">Os dois cortes que calibram o motor. Um par só vira indicação quando o favorito ganha nos quatro eixos: categoria, CalTm, split e pódio.</p>
+<p class="hint" style="margin-bottom:10px">Os cortes que calibram o motor. Um par só vira indicação quando o favorito ganha nos quatro eixos (categoria, CalTm, split e pódio) e não é um galgo que costuma desabar na reta.</p>
 <div class="bloco-fields">
   <div class="field">
     <label>SP colado (máximo)</label>
@@ -336,6 +336,16 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
     <label>Corte de CalTm (segundos)</label>
     <input type="number" step="0.01" min="0" max="2" name="caltm_min_dif" value="${config.caltm_min_dif != null ? config.caltm_min_dif : 0.20}">
     <div class="hint" style="margin-top:3px">Vantagem mínima de tempo, ajustada por categoria, para o eixo de CalTm passar. Maior = menos indicações e mais folga em cada uma.</div>
+  </div>
+  <div class="field">
+    <label>Desabamento: posições perdidas</label>
+    <input type="number" step="1" min="1" max="5" name="desaba_queda" value="${config.desaba_queda != null ? config.desaba_queda : 2}">
+    <div class="hint" style="margin-top:3px">Quantas posições o galgo precisa perder da última curva até a chegada para aquela corrida contar como desabamento.</div>
+  </div>
+  <div class="field">
+    <label>Desabamento: quantas das últimas 5</label>
+    <input type="number" step="1" min="1" max="5" name="desaba_min" value="${config.desaba_min != null ? config.desaba_min : 2}">
+    <div class="hint" style="margin-top:3px">Quantas das últimas cinco corridas precisam ter desabamento para o galgo ser reprovado como pick. Menor = mais exigente.</div>
   </div>
 </div>
 
@@ -1223,7 +1233,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_linha TEXT DEFAULT '#161B27'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=?,caltm_min_dif=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=?,caltm_min_dif=?,desaba_queda=?,desaba_min=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1268,6 +1278,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       // Os dois cortes do motor unico. O motor le direto da analysis_config.
       d.sp_ratio_max != null && d.sp_ratio_max !== '' ? parseFloat(d.sp_ratio_max) : 1.15,
       d.caltm_min_dif != null && d.caltm_min_dif !== '' ? parseFloat(d.caltm_min_dif) : 0.20,
+      // Desabamento: o galgo que lidera e cai na reta. Reprova o pick.
+      d.desaba_queda != null && d.desaba_queda !== '' ? parseInt(d.desaba_queda) : 2,
+      d.desaba_min != null && d.desaba_min !== '' ? parseInt(d.desaba_min) : 2,
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
