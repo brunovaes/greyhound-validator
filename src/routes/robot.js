@@ -471,42 +471,10 @@ function _gravarInicialAvb(inic){
   }catch(e){ console.error('[ODDS-INICIAL] erro:', e.message); }
 }
 
-// races e' a fonte de verdade. Marca vip_plus/vip_premium(nota) — e SO isso. O VIP
-// NAO reescreve mais o avb_fechamento (regra revertida): a reanalise principal manda,
-// mesmo que nao abra na BW; o VIP oferece alternativas no painel lateral (avb_escolhido),
-// nunca troca o principal. Se sobrou fechamento de origem VIP (do teste anterior), limpa
-// pra a reanalise (onClose) repopular. Freeze na largada. avb_inicial NUNCA e' tocado.
-function _marcarVip(date){
-  try{
-    const { db } = require('../db/database');
-    date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
-    let plus=[], prem=[];
-    try { plus = (require('../utils/cargaVip').listar(db,{date}).entradas)||[]; } catch(e){}
-    try { prem = (require('../utils/motorNota').classificar(db,{date}).entradas)||[]; } catch(e){}
-    const chave = e => String(e.corrida||'')+'|'+String(e.hora||'');
-    const plusBy = {}; for(const e of plus) plusBy[chave(e)] = e;
-    const premBy = {}; for(const e of prem) premBy[chave(e)] = e;
-    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento, r.final_check_at, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
-    const updP = db.prepare('UPDATE races SET vip_plus=? WHERE id=?');
-    const updM = db.prepare('UPDATE races SET vip_premium=? WHERE id=?');
-    const updFnull = db.prepare('UPDATE races SET avb_fechamento=NULL WHERE id=?');
-    let nPlus=0, nPrem=0, nLimpou=0, nCongelou=0;
-    for(const r of rows){
-      // FREEZE na largada: corrida que ja largou (checagem final rodou OU ja tem
-      // resultado) nao e' mais recomputada — a marca vira registro, nao estado.
-      if(r.final_check_at || r.finishing_order_json){ nCongelou++; continue; }
-      const k = String(r.corrida||'')+'|'+String(r.hora||'');
-      const p = plusBy[k] ? 1 : 0;
-      const nota = premBy[k] ? (premBy[k].nota||null) : null;
-      updP.run(p, r.id); if(p) nPlus++;
-      updM.run(nota, r.id); if(nota) nPrem++;
-      // VIP nao mexe no fechamento. So limpa fechamento residual de origem VIP (teste
-      // antigo), pra a reanalise (onClose) repopular — avb_fechamento = sempre reanalise.
-      if(r.avb_fechamento){ try{ const o=JSON.parse(r.avb_fechamento); if(o && /^vip_/.test(String(o.origem||''))){ updFnull.run(r.id); nLimpou++; } }catch(e){} }
-    }
-    return { date, total: rows.length, congeladas_ja_largaram: nCongelou, vip_plus: nPlus, vip_premium: nPrem, fechamentos_vip_limpos: nLimpou };
-  }catch(e){ return { erro: e.message }; }
-}
+// VIP REMOVIDO (Bruno ago/2026): a função _marcarVip (que gravava vip_plus/vip_premium)
+// saiu junto com o conceito de VIP. O motor único (gate dos 4 eixos) é a única fonte de AvB.
+// As colunas races.vip_plus/vip_premium ficam no banco como REGISTRO do período em que o VIP
+// existiu (não são mais escritas). avb_fechamento é sempre a reanálise (onClose), como já era.
 
 // Captador dos AvBs que o betwinner ABRE por corrida (todos os pares, nao so os
 // da reanalise). Grava na tabela avb_abertos, uma linha por game_id, guardando o
@@ -562,12 +530,13 @@ try { _iniciarOdds(); }
 catch(e){ console.error('[ODDS] falha ao iniciar:', e.message); }
 
 // Ciclo de 4 min — races e' a fonte de verdade:
-//  1) PERSISTE o Motor da Manha (principal -> trap_fav/und + companheiros + avb_fechamento
-//     + top3), so corrida COM principal, congelando na largada. E' a verdade que a disputa,
-//     o Historico, o HR e a Banca leem.
-//  2) marca VIP (Plus/Premium). (abriu/odd_abertura e' gravado no onClose, na largada.)
+//  PERSISTE o Motor da Manha (o motor unico: principal do gate dos 4 eixos -> trap_fav/und
+//  + companheiros + avb_fechamento + top3), so corrida COM principal, congelando na largada.
+//  E' a verdade que a disputa, o Historico, o HR e a Banca leem.
+//  (VIP removido ago/2026: o marcador _marcarVip saiu; nao ha mais vip_plus/vip_premium novo.)
+//  (abriu/odd_abertura e' gravado no onClose, na largada.)
 try {
-  const _ciclo = () => { try { _persistirManha(getTodayDate(), true); } catch(e){} try { _marcarVip(getTodayDate()); } catch(e){} };
+  const _ciclo = () => { try { _persistirManha(getTodayDate(), true); } catch(e){} };
   _ciclo(); setInterval(_ciclo, 4*60*1000);
 }
 catch(e){ console.error('[CICLO-MARCA] falha ao agendar:', e.message); }
@@ -2753,17 +2722,7 @@ router.get('/diag/backtest-vip', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
-// CARGA VIP — lista de entradas fortes das corridas de HOJE (preview de admin,
-// antes de virar botão na tela Analisar). ?date=YYYY-MM-DD pra outro dia.
-router.get('/diag/carga-vip', requireAdmin, (req, res) => {
-  try {
-    const { db } = require('../db/database');
-    const cv = require('../utils/cargaVip');
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-    const spRatioMax = parseFloat(req.query.sp) || 1.15;
-    res.json(cv.listar(db, { date, spRatioMax }));
-  } catch (e) { res.status(500).json({ erro: e.message }); }
-});
+// (VIP removido ago/2026 — /diag/carga-vip saiu junto.)
 
 // ESTUDO REVERSO (Fase 1): dado o pódio real, qual sinal separa o vencedor em
 // pares de odd colada — global e por turno/pista, com validação treino/teste.
@@ -2801,37 +2760,8 @@ router.get('/diag/estudo-validar', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
-// MOTOR DE NOTA (Carga VIP v2) — o cérebro CURADO ao vivo: só os contextos
-// validados que fazem sentido (whitelist), com números vivos do validar, mais o
-// que foi descartado (miragens) e a whitelist que hoje não tem dado. ?sp / ?min.
-router.get('/diag/motor-cerebro', requireAdmin, (req, res) => {
-  try {
-    const { db } = require('../db/database');
-    const mn = require('../utils/motorNota');
-    const spRatioMax = parseFloat(req.query.sp) || 1.15;
-    const minHalf = parseInt(req.query.min) || 25;
-    const minTaxa = parseFloat(req.query.minTaxa) || 0;
-    res.json(mn.construirCerebro(db, { spRatioMax, minHalf, minTaxa }));
-  } catch (e) { res.status(500).json({ erro: e.message }); }
-});
-
-// CARGA VIP v2 (motor de nota): classifica as corridas do dia por CONTEXTO
-// validado, com NOTA (A+/A/B) e placar (bateu). ?date=YYYY-MM-DD, ?sp, ?min.
-// ?base=1 inclui os pares BASE (CalTm global ~58%); por padrão VIP é VIP.
-router.get('/diag/carga-vip-v2', requireAdmin, (req, res) => {
-  try {
-    const { db } = require('../db/database');
-    const mn = require('../utils/motorNota');
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-    const spRatioMax = parseFloat(req.query.sp) || 1.15;
-    const minHalf = parseInt(req.query.min) || 25;
-    const minTaxa = parseFloat(req.query.minTaxa) || 0;
-    const soVip = req.query.base ? false : true;
-    const umPorCorrida = req.query.todos ? false : true;
-    const trapVazia = req.query.vazia === '0' ? false : true;
-    res.json(mn.classificar(db, { date, spRatioMax, minHalf, minTaxa, soVip, umPorCorrida, trapVazia }));
-  } catch (e) { res.status(500).json({ erro: e.message }); }
-});
+// (VIP removido ago/2026 — /diag/motor-cerebro e /diag/carga-vip-v2 saíram junto.
+// A pesquisa por trás continua acessível em /diag/estudo-validar e /diag/estudo-mapa.)
 
 // DIAG (admin): primeiro palpite (avb_inicial) × palpite final (avb_fechamento),
 // lado a lado, por corrida do dia. Mede "recalcular perto da largada ajudou?":
@@ -2887,12 +2817,7 @@ router.get('/diag/avb-inicial-fechamento', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
-// DIAG (admin): roda a marcação VIP (Plus/Premium) na hora e devolve o resumo.
-// (o abriu/odd_abertura e' gravado no onClose, na largada, contra o par da reanalise.)
-router.get('/diag/marcar-vip', requireAdmin, (req, res) => {
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-  res.json(_marcarVip(date));
-});
+// (VIP removido ago/2026 — /diag/marcar-vip saiu junto com a função _marcarVip.)
 
 // PERSISTENCIA do Motor da Manha: grava o PRINCIPAL nos campos que as telas leem —
 // trap_fav/trap_und + companheiros (name/perfil/hist), avb_fechamento e top3 (podio
@@ -2954,42 +2879,8 @@ router.get('/diag/persistir-manha', requireAdmin, (req, res) => {
   res.json(_persistirManha(date, aplicar));
 });
 
-// DIAG (admin, uso pontual): limpa o fechamento de origem VIP que ficou preso na janela
-// curta em que a sobrescrita esteve no ar. Restaura da reanalise quando ela existe
-// (e recomputa o abriu contra o par dela); onde nao existe, zera o valor VIP (branco
-// honesto no lugar de um pick errado). Roda so quando voce chamar.
-router.get('/diag/limpar-fechamento-vip', requireAdmin, (req, res) => {
-  try {
-    const { db } = require('../db/database');
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-    const abertos = {};
-    try { const abrs = db.prepare("SELECT corrida,hora,pares_json FROM avb_abertos WHERE data=?").all(date);
-      for(const a of abrs){ let pp=null; try{pp=JSON.parse(a.pares_json);}catch(e){} if(Array.isArray(pp)) abertos[String(a.corrida||'')+'|'+String(a.hora||'')]=pp; } } catch(e){}
-    const rows = db.prepare("SELECT r.id, r.corrida, r.hora, r.avb_fechamento, r.avb_reanalise FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.avb_fechamento IS NOT NULL").all(date);
-    let vip=0, restaurados=0, zerados=0;
-    for(const r of rows){
-      let o=null; try{o=JSON.parse(r.avb_fechamento);}catch(e){}
-      if(!o || !/^vip_/.test(String(o.origem||''))) continue;
-      vip++;
-      if(r.avb_reanalise){
-        db.prepare('UPDATE races SET avb_fechamento=? WHERE id=?').run(r.avb_reanalise, r.id);
-        let re=null; try{re=JSON.parse(r.avb_reanalise);}catch(e){}
-        if(re && re.aTrap!=null){
-          let abriu=null, odd=null;
-          const pares=abertos[String(r.corrida||'')+'|'+String(r.hora||'')];
-          if(pares){ const par=pares.find(pp=>(Number(pp.aTrap)===Number(re.aTrap)&&Number(pp.bTrap)===Number(re.bTrap))||(Number(pp.aTrap)===Number(re.bTrap)&&Number(pp.bTrap)===Number(re.aTrap)));
-            if(par){ abriu=1; const od=Number(Number(par.aTrap)===Number(re.aTrap)?par.oddAvenceB:par.oddBvenceA); odd=(Number.isFinite(od)&&od>0)?od:null; } else abriu=0; }
-          db.prepare('UPDATE races SET abriu=?, odd_abertura=?, abriu_par=? WHERE id=?').run(abriu, odd, re.aTrap+'x'+re.bTrap, r.id);
-        }
-        restaurados++;
-      } else {
-        db.prepare('UPDATE races SET avb_fechamento=NULL, abriu=NULL, odd_abertura=NULL, abriu_par=NULL WHERE id=?').run(r.id);
-        zerados++;
-      }
-    }
-    res.json({ date, fechamentos_vip: vip, restaurados_da_reanalise: restaurados, zerados_sem_reanalise: zerados });
-  } catch(e){ res.status(500).json({ erro: e.message }); }
-});
+// (VIP removido ago/2026 — /diag/limpar-fechamento-vip saiu junto. O avb_fechamento
+// é sempre a reanálise, então não há mais fechamento de origem VIP pra limpar.)
 
 router.get('/diag/perfil-corridas', requireAdmin, (req, res) => {
   try {

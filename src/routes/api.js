@@ -1374,8 +1374,14 @@ router.get('/config', (req, res) => {
       // voltaria a ser pintada sem o usuario entender por que.
       vip_cor_linha: config.vip_cor_linha != null ? config.vip_cor_linha : '#161B27',
       vip_premium_cor_linha: config.vip_premium_cor_linha != null ? config.vip_premium_cor_linha : '#161B27',
-      // Motor da Manha: corte de "corrida parelha" (pct <= isto = nota em vez de pick firme).
-      avb_parelho_pct: config.avb_parelho_pct != null ? config.avb_parelho_pct : 60
+      // Motor da Manha: corte de "corrida parelha" (LEGADO — o motor unico nao usa mais
+      // parelho; mantido so p/ compat ate o UI tirar o controle da tela).
+      avb_parelho_pct: config.avb_parelho_pct != null ? config.avb_parelho_pct : 60,
+      // MOTOR UNICO (a nata das natas): os DOIS unicos botoes que calibram o motor.
+      // sp_ratio_max = SP colado (razao max das odds medias do par). caltm_min_dif =
+      // corte de CalTm (aj. categoria, em s) p/ o pick "ganhar" o eixo do tempo.
+      sp_ratio_max: config.sp_ratio_max != null ? config.sp_ratio_max : 1.15,
+      caltm_min_dif: config.caltm_min_dif != null ? config.caltm_min_dif : 0.20
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });
@@ -1400,43 +1406,12 @@ router.get('/session/:id/races', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// CARGA VIP — lista de entradas fortes do dia p/ a tela Analisar. Gated pela
-// permissão 'analisar.carga_vip' (padrão liberado; restringe quem configurar a
-// regra em Acessos). Filtro de VALOR, não certeza — a etiqueta na tela diz isso.
-router.get('/carga-vip', (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
-    const { podeAcessar } = require('../middleware/acesso');
-    if (!podeAcessar(req.user, 'analisar.carga_vip')) {
-      return res.status(403).json({ error: 'Sem permissão para a Carga VIP.' });
-    }
-    const cv = require('../utils/cargaVip');
-    // "hoje" em BRT (bate com date(s.created_at,'-3 hours') usado na query)
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
-      ? req.query.date
-      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
-    res.json(cv.listar(db, { date }));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// VIP DO VIP — aba SEPARADA (não mexe na Carga VIP v1). Serve o motor de nota v2:
-// só contexto validado fora da amostra, corte de qualidade, 1 AvB por corrida e a
-// regra da trap vazia. É pra ACOMPANHAR o motor rodando ao lado, com placar ao vivo.
-// Mesma permissão da Carga VIP ('analisar.carga_vip').
-router.get('/vip-do-vip', (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
-    const { podeAcessar } = require('../middleware/acesso');
-    if (!podeAcessar(req.user, 'analisar.carga_vip')) {
-      return res.status(403).json({ error: 'Sem permissão para a VIP do VIP.' });
-    }
-    const mn = require('../utils/motorNota');
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
-      ? req.query.date
-      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
-    res.json(mn.classificar(db, { date }));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// VIP REMOVIDO (Bruno ago/2026): as rotas /carga-vip e /vip-do-vip saíram junto com o
+// conceito de VIP. O motor único (a nata das natas, gate dos 4 eixos) é a única fonte de
+// AvB agora — servido por /avbs-manha. Os módulos cargaVip.js/motorNota.js seguem no repo
+// (cargaVip ainda exporta _limpaNome/_perfilDeHist usados pelo motorManha), mas não têm
+// mais rota. As colunas races.vip_plus/vip_premium ficam no banco como registro histórico
+// (não são mais escritas — o marcador _marcarVip foi removido).
 
 // MOTOR DA MANHA v2 — os AvBs do dia (principal + 2 secundarios) por corrida, com nota
 // de parelho (pct <= avb_parelho_pct), trap vazia (o box) e podio coerente (com podio_ok).
