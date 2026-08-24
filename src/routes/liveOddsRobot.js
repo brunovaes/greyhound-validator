@@ -408,7 +408,20 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     // track/dist de hoje p/ a regra de descarte de linha-problema (mesma pista+dist).
     // track = 1a palavra do corrida ("Newc A8" -> "Newc"); dist vem do casamento.
     const _trackHoje = (dados && dados.corrida) ? String(dados.corrida).split(' ')[0] : null;
-    const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, trackCorrida: _trackHoje, distCorrida: (dados && dados.dist) || null, config: {} };
+    // config do motor unico (mesma que a manha usa): corte de CalTm + regra do "nao-segura".
+    // Sem isso, o BW gateava com os defaults do engine e divergiria da manha se o Bruno
+    // ajustasse a config. Defensivo: falhou a leitura -> {} -> defaults do engine.
+    let _cfgMotor = {};
+    try {
+      const { db } = require('../db/database');
+      const c = db.prepare("SELECT caltm_min_dif, desaba_queda, desaba_min FROM analysis_config WHERE user_id=1").get();
+      if (c) {
+        if (c.caltm_min_dif > 0) _cfgMotor.caltmMinDif = c.caltm_min_dif;
+        if (c.desaba_queda > 0) _cfgMotor.desabaQueda = c.desaba_queda;
+        if (c.desaba_min > 0) _cfgMotor.desabaMin = c.desaba_min;
+      }
+    } catch (e) {}
+    const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, trackCorrida: _trackHoje, distCorrida: (dados && dados.dist) || null, config: _cfgMotor };
     // MOTOR UNICO (Bruno ago/2026, opcao A): o BW so abre AvB — principal E secundarios —
     // que passa no gate dos 4 eixos. Corrida sem nenhum par top -> avbs vazio -> nao mostra
     // e nao grava fechamento (onClose pula quando avbs.length==0). Mesma nata da manha.

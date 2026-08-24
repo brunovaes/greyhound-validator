@@ -1381,7 +1381,10 @@ router.get('/config', (req, res) => {
       // sp_ratio_max = SP colado (razao max das odds medias do par). caltm_min_dif =
       // corte de CalTm (aj. categoria, em s) p/ o pick "ganhar" o eixo do tempo.
       sp_ratio_max: config.sp_ratio_max != null ? config.sp_ratio_max : 1.15,
-      caltm_min_dif: config.caltm_min_dif != null ? config.caltm_min_dif : 0.20
+      caltm_min_dif: config.caltm_min_dif != null ? config.caltm_min_dif : 0.20,
+      // "nao-segura" (fumador): pick que lidera e desaba na reta e' reprovado.
+      desaba_queda: config.desaba_queda != null ? config.desaba_queda : 2,
+      desaba_min: config.desaba_min != null ? config.desaba_min : 2
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });

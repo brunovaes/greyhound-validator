@@ -18,6 +18,14 @@ const DEFAULTS = {
   //    quem chama). ──
   caltmMinDif: 0.20,      // pick precisa ser >= isto mais rapido (aj. categoria) p/ "ganhar" o CalTm
   splitEps: 0.01,         // pick precisa arrancar melhor (split) por pelo menos isto
+  // ── "NAO-SEGURA" (fumador — Bruno ago/2026): galgo que lidera na ultima curva e
+  //    DESABA na reta. Compara a posicao na ULTIMA curva (ultimo digito de bends) com a
+  //    CHEGADA (FIN). queda = FIN - ultimaCurva. Conta "desabou" quando queda >= desabaQueda
+  //    E sem remark de atrapalho (se levou toco, a queda e' desculpavel). Galgo que desabou
+  //    em >= desabaMin das ultimas 5 NAO pode ser pick (o gate reprova). Engana o motor
+  //    justamente no split/bends/caltm — so a chegada conta a verdade.
+  desabaQueda: 2,         // posicoes perdidas da ultima curva pra linha p/ contar como desabamento
+  desabaMin: 2,           // quantas das ultimas 5 corridas com desabamento p/ reprovar o galgo
   escalaPct: 85,          // conversao vantagem-liquida(seg) -> % (0,10s ~ +8,5%)
   kSplit: 0.15,           // peso do split (arranque)
   kBends: 0.05,           // peso dos bends (como correu)
@@ -75,6 +83,28 @@ function limparHistorico(hist, track, dist, limiarS) {
     base = base.filter(l => !(l.caltm > 0 && l.caltm > teto)); // linha-problema fora
   }
   return base;
+}
+
+// "NAO-SEGURA" (fumador): o galgo lidera/vai bem na ULTIMA curva e afunda na reta.
+// Olha as ultimas 5 corridas reais (nao-trial, com caltm): queda = FIN - ultima curva
+// (ultimo digito de bends). Conta "desabou" quando queda >= desabaQueda E SEM remark de
+// atrapalho (se levou toco, a queda e' desculpavel, nao e' o galgo). True = desabou em
+// >= desabaMin das ultimas 5 -> nao pode ser pick. Roda no historico CRU (as ultimas
+// corridas de verdade que o Bruno ve na tela), nao no ja filtrado por tempo.
+function ehNaoSegura(hist, o) {
+  const q = (o && o.desabaQueda > 0) ? o.desabaQueda : 2;
+  const minN = (o && o.desabaMin > 0) ? o.desabaMin : 2;
+  const recentes = (hist || []).filter(l => l && l.caltm > 0 && !ehTrial(l)).slice(0, 5);
+  let desabou = 0;
+  for (const l of recentes) {
+    const ds = String(l.bends || '').match(/\d/g);
+    if (!ds || !ds.length) continue;
+    const ultimaCurva = Number(ds[ds.length - 1]);
+    const fin = Number(l.pos);
+    if (!(ultimaCurva > 0) || !(fin > 0)) continue;
+    if ((fin - ultimaCurva) >= q && !ATRAPALHO.test(l.remarks || '')) desabou++;
+  }
+  return desabou >= minN;
 }
 
 // media das posicoes por curva a partir da string de bends ("3222" -> 2.25).
@@ -209,13 +239,19 @@ function avaliarPar(d1, d2, ctx) {
   const eixoSplit     = (R.splitEf != null && Rb.splitEf != null) ? (R.splitEf < Rb.splitEf - o.splitEps) : false;
   const eixoPodio     = (R.podioRate > Rb.podioRate);
   const eixos = { categoria: eixoCategoria, caltm: eixoCaltm, split: eixoSplit, podio: eixoPodio };
-  const top = eixoCategoria && eixoCaltm && eixoSplit && eixoPodio;
+  // desqualificador do PICK: se o favorito e' "nao-segura" (lidera e desaba na reta),
+  // reprova por mais que ganhe os 4 eixos — o CalTm/split/bends dele mentem, so a
+  // chegada e' honesta. Roda no historico CRU do favorito.
+  const favHist = (A === d1) ? d1.historico : d2.historico;
+  const naoSeguraPick = ehNaoSegura(favHist, o);
+  const top = eixoCategoria && eixoCaltm && eixoSplit && eixoPodio && !naoSeguraPick;
 
   return {
     descartar: false,
     aTrap: A.trap, aNome: A.nome, bTrap: B.trap, bNome: B.nome,
     avaliacao: pct, favoritoTrap: A.trap, flags,
-    top: top, eixos: eixos,                       // GATE nata: passou nos 4 eixos?
+    top: top, eixos: eixos,                       // GATE nata: passou nos 4 eixos (e nao e' fumador)?
+    nao_segura: naoSeguraPick,                    // pick lidera e desaba na reta? (reprova mesmo ganhando os 4)
     caltm_dif: +vantTempoA.toFixed(3),            // vantagem de tempo do pick (aj. categoria)
     cat_pick: R.catNivel, cat_outro: Rb.catNivel, // niveis de categoria (menor = mais forte)
     obs: montarObs(A, B, R, Rb, Math.abs(vantTempo), flags),
@@ -268,4 +304,4 @@ function rankearAvbs(pares, dogsByTrap, ctx, topN, opts) {
   return out.slice(0, topN).map((a, i) => Object.assign({}, a, { pos: i + 1 }));
 }
 
-module.exports = { avaliarPar, rankearAvbs, rankPodio, resumoGalgo, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };
+module.exports = { avaliarPar, rankearAvbs, rankPodio, resumoGalgo, ehNaoSegura, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };

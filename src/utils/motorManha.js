@@ -61,6 +61,9 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX;
   // corte de CalTm do gate da nata (aj. categoria). Vem da config; senao o default do engine.
   const caltmMinDif = opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif;
+  // regra do "nao-segura" (fumador): vem da config; senao os defaults do engine.
+  const desabaQueda = opts.desabaQueda > 0 ? opts.desabaQueda : reanalise.DEFAULTS.desabaQueda;
+  const desabaMin = opts.desabaMin > 0 ? opts.desabaMin : reanalise.DEFAULTS.desabaMin;
 
   const dogsByTrap = {};
   for (const g of (Array.isArray(histFull) ? histFull : [])) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g;
@@ -72,7 +75,7 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   const trapsVazias = Array.from(vaz);
   // QUAIS traps vazias estao ao lado (nao so "tem/nao tem") — pra a nota dizer o numero.
   const vaziasAoLado = t => [t - 1, t + 1].filter(x => x >= 1 && x <= 6 && vaz.has(x));
-  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: { caltmMinDif } };
+  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: { caltmMinDif, desabaQueda, desabaMin } };
 
   const oddMedia = _oddMediaPorTrap(histAll);
   // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card (galgo
@@ -158,10 +161,12 @@ function _podioOk(podio, principal) {
 // cai nos defaults (SP_RATIO_MAX 1.15 / engine caltmMinDif 0.20).
 function _aplicaConfigMotor(db, opts) {
   try {
-    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif FROM analysis_config WHERE user_id=1").get();
+    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, desaba_queda, desaba_min FROM analysis_config WHERE user_id=1").get();
     if (c) {
       if (!(opts.spRatioMax > 0) && c.sp_ratio_max > 0) opts = Object.assign({}, opts, { spRatioMax: c.sp_ratio_max });
       if (!(opts.caltmMinDif > 0) && c.caltm_min_dif > 0) opts = Object.assign({}, opts, { caltmMinDif: c.caltm_min_dif });
+      if (!(opts.desabaQueda > 0) && c.desaba_queda > 0) opts = Object.assign({}, opts, { desabaQueda: c.desaba_queda });
+      if (!(opts.desabaMin > 0) && c.desaba_min > 0) opts = Object.assign({}, opts, { desabaMin: c.desaba_min });
     }
   } catch (e) {}
   return opts;
