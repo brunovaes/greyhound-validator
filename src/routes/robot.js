@@ -2879,6 +2879,51 @@ router.get('/diag/persistir-manha', requireAdmin, (req, res) => {
   res.json(_persistirManha(date, aplicar));
 });
 
+// LISTA DO DIA (admin): os AvBs do MOTOR UNICO (gate dos 4 eixos + nao-segura) de hoje,
+// com hora/pista, o AvB (pick x outro), pct, a ODD da BW (abertura), se ABRIU e se BATEU.
+// Junta motorManha.paraPersistir (os picks recalculados agora) com abriu/odd_abertura +
+// finishing_order_json de cada corrida. ?date=YYYY-MM-DD. So-leitura.
+router.get('/diag/lista-dia', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const { bateuPar } = require('../utils/avbResultado');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const recs = mm.paraPersistir(db, { date });
+    const q = db.prepare('SELECT abriu, odd_abertura, avb_fechamento, finishing_order_json FROM races WHERE id=?');
+    let nAbriu = 0, nComResultado = 0, nBateu = 0;
+    const linhas = recs.map(r => {
+      const p = r.principal;
+      const row = q.get(r.id) || {};
+      let oddFech = null; try { const o = JSON.parse(row.avb_fechamento); if (o && o.odd > 0) oddFech = o.odd; } catch (e) {}
+      const oddBW = (row.odd_abertura > 0) ? row.odd_abertura : oddFech;
+      let chegada = null; try { const a = JSON.parse(row.finishing_order_json); if (Array.isArray(a) && a.length) chegada = a; } catch (e) {}
+      const bateu = chegada ? bateuPar(chegada, p.pick_trap, p.outro_trap) : null;
+      if (row.abriu === 1) nAbriu++;
+      if (bateu !== null) nComResultado++;
+      if (bateu === true) nBateu++;
+      return {
+        hora: r.hora, pista: String(r.corrida || '').split(' ')[0], corrida: r.corrida,
+        avb: 'T' + p.pick_trap + ' ' + (p.pick_nome || '') + '  x  T' + p.outro_trap + ' ' + (p.outro_nome || ''),
+        pct: p.pct, caltm_dif: p.caltm_dif,
+        odd_bw: oddBW,
+        abriu: row.abriu === 1 ? 'abriu' : (row.abriu === 0 ? 'monitorada, nao abriu' : 'nao monitorada'),
+        bateu: bateu === true ? 'BATEU' : (bateu === false ? 'nao bateu' : 'aguardando'),
+        largou: !!r.largou
+      };
+    });
+    res.json({
+      date, total_avbs: linhas.length,
+      abriram_na_bw: nAbriu, com_resultado: nComResultado, bateram: nBateu,
+      taxa_acerto_pct: nComResultado ? Math.round(nBateu / nComResultado * 100) : null,
+      linhas,
+      legenda: 'AvBs do motor unico (4 eixos + nao-segura). odd_bw = odd de abertura na BW '
+        + '(ou a do fechamento se nao capturou a abertura). abriu = o par abriu na BW. '
+        + 'bateu = o pick chegou na frente do outro (placar real); aguardando = sem resultado ainda.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // (VIP removido ago/2026 — /diag/limpar-fechamento-vip saiu junto. O avb_fechamento
 // é sempre a reanálise, então não há mais fechamento de origem VIP pra limpar.)
 
