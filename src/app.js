@@ -1082,19 +1082,35 @@ function _mmPintarNotas(r){
   }
 
   // Box vazio. O numero vem de *_vazia_traps (o BOX), nunca do trap do galgo.
-  // O mesmo box pode estar entre os dois: nesse caso e' UM box, nao dois —
-  // desenhar duas notas faria voce ler como se houvesse dois vazios.
+  //
+  // Os dois lados sao mostrados, e com SIGNIFICADOS OPOSTOS — foi o que o
+  // motor esclareceu e o que a versao anterior desta tela errava, pintando os
+  // dois de roxo como se fossem a mesma coisa:
+  //   ao lado do FAVORITO -> vantagem: ele tem espaco livre pra abrir
+  //   ao lado do RIVAL    -> risco: o rival pode furar pelo buraco
+  // Cores diferentes de proposito. Ler "box vazio" sem saber de que lado nao
+  // ajuda a decidir nada.
+  //
+  // O mesmo box pode estar ENTRE os dois: ai ele e' as duas coisas ao mesmo
+  // tempo, e vira uma nota so, neutra. Duas notas fariam voce ler como se
+  // houvesse dois vazios.
   var bp = (sl.pick_vazia_lado && sl.pick_vazia_traps) ? sl.pick_vazia_traps : [];
   var bo = (sl.outro_vazia_lado && sl.outro_vazia_traps) ? sl.outro_vazia_traps : [];
   var compartilhado = bp.filter(function(b){ return bo.indexOf(b) >= 0; });
   if (compartilhado.length) {
-    out.push(nota('#c084fc', '&#9888; box ' + compartilhado.join(', ') + ' vazio entre T' + sl.pick_trap + ' e T' + sl.outro_trap,
-      'o mesmo box vazio esta entre os dois galgos do par'));
+    out.push(nota('#c084fc', 'box ' + compartilhado.join(', ') + ' livre entre T' + sl.pick_trap + ' e T' + sl.outro_trap,
+      'o mesmo box vazio está entre os dois: serve aos dois lados'));
   }
   var soPick = bp.filter(function(b){ return bo.indexOf(b) < 0; });
   var soOutro = bo.filter(function(b){ return bp.indexOf(b) < 0; });
-  if (soPick.length) out.push(nota('#c084fc', '&#9888; box ' + soPick.join(', ') + ' vazio ao lado de T' + sl.pick_trap, ''));
-  if (soOutro.length) out.push(nota('#c084fc', '&#9888; box ' + soOutro.join(', ') + ' vazio ao lado de T' + sl.outro_trap, ''));
+  if (soPick.length) {
+    out.push(nota('#22c55e', 'box ' + soPick.join(', ') + ' livre ao lado do favorito T' + sl.pick_trap,
+      'espaço livre ao lado do pick: vantagem na largada'));
+  }
+  if (soOutro.length) {
+    out.push(nota('#f97316', '&#9888; box ' + soOutro.join(', ') + ' livre ao lado do rival T' + sl.outro_trap,
+      'o rival tem espaço livre e pode furar pelo buraco: atenção'));
+  }
 
   if (out.length && info.match === 'aproximado') {
     out.push(nota('#8a94a6', 'casamento aproximado',
