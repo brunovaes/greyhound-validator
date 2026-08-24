@@ -97,8 +97,6 @@ function injectStyles(){
     '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
     '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
     '.rc-suspect-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#000;background:#f59e0b;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
-    '.rc-vip-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:10px;background:rgba(234,179,8,.16);border:1px solid rgba(234,179,8,.5);color:#eab308;white-space:nowrap;}',
-    '.rc-vip-badge.nivel-premium{background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.5);color:#22c55e;}',
     // O fundo da linha VIP NAO fica aqui: ele vem da configuracao de cada
     // nivel e e' injetado por _cssVip(). Deixar fixo aqui vencia a
     // configuracao, porque este CSS carrega depois.
@@ -195,25 +193,6 @@ async function loadSystemConfig() {
     ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
     ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
     try { ALARME_FILTRO.regras = c.alarme_filtro_regras ? JSON.parse(c.alarme_filtro_regras) : []; } catch(e){ ALARME_FILTRO.regras = []; }
-    // VIP Plus
-    if (c.vip_skip_ativo != null) VIP_CFG.ativo = +c.vip_skip_ativo;
-    if (c.vip_skip_min_antes != null) VIP_CFG.minAntes = +c.vip_skip_min_antes;
-    if (c.vip_skip_alarme != null) VIP_CFG.alarme = +c.vip_skip_alarme;
-    if (c.vip_som) VIP_CFG.som = c.vip_som;
-    if (c.vip_cor_destaque) VIP_CFG.corDestaque = c.vip_cor_destaque;
-    if (c.vip_cor_fundo) VIP_CFG.corFundo = c.vip_cor_fundo;
-    if (c.vip_cor_alerta) VIP_CFG.corAlerta = c.vip_cor_alerta;
-    if (c.vip_cor_linha != null) VIP_CFG.corLinha = c.vip_cor_linha;
-    // VIP Premium. Enquanto o /api/config nao devolver estes campos, os
-    // defaults do VIP_CFG seguem valendo e a tela funciona igual.
-    if (c.vip_premium_ativo != null) VIP_CFG.ativoPremium = +c.vip_premium_ativo;
-    if (c.vip_premium_min_antes != null) VIP_CFG.minAntesPremium = +c.vip_premium_min_antes;
-    if (c.vip_premium_alarme != null) VIP_CFG.alarmePremium = +c.vip_premium_alarme;
-    if (c.vip_premium_som) VIP_CFG.somPremium = c.vip_premium_som;
-    if (c.vip_premium_cor_destaque) VIP_CFG.corDestaquePremium = c.vip_premium_cor_destaque;
-    if (c.vip_premium_cor_fundo) VIP_CFG.corFundoPremium = c.vip_premium_cor_fundo;
-    if (c.vip_premium_cor_alerta) VIP_CFG.corAlertaPremium = c.vip_premium_cor_alerta;
-    if (c.vip_premium_cor_linha != null) VIP_CFG.corLinhaPremium = c.vip_premium_cor_linha;
     // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
     // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
     // descarta o estado de alerta atual (o aviso padrao e' descartado) e
@@ -661,16 +640,8 @@ function checkRaceAlerts() {
     var mins = minutesToRace(r);
     var shouldAlert = mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     if (shouldAlert) {
-      // Corrida VIP tem prioridade sobre o alarme de filtro: ela e' o sinal
-      // mais especifico dos dois, e se os dois pintassem a mesma linha o
-      // filtro esconderia justamente o que voce mais quer ver.
-      var tipoVip = _vipTipo(r);
-      var cfgVip = tipoVip ? _vipCfg(tipoVip) : null;
       var custom = matchAlarmeFiltro(r);
-      if (cfgVip && cfgVip.alarme) {
-        el.classList.remove('rc-alert'); el.classList.add('rc-alert-custom');
-        el.style.setProperty('--alert-col', CORES_ALARME[cfgVip.corAlerta] || '#8b5cf6');
-      } else if (custom) {
+      if (custom) {
         el.classList.remove('rc-alert'); el.classList.add('rc-alert-custom');
         el.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6');
       } else {
@@ -871,156 +842,29 @@ function _parEmFoco(r){
 // Conjunto "hora|corrida" das corridas que passaram no filtro VIP. Carregado
 // no boot pra a arena poder se destacar mesmo quando voce chega na corrida
 // navegando normal, sem ter aberto a lista.
-// Duas listas, dois niveis: VIP Plus (/api/carga-vip) e VIP Premium
-// (/api/vip-do-vip). Premium vence quando a corrida esta nas duas: ela e' um
-// subconjunto mais exigente, entao mostrar "Plus" ali seria informacao a menos.
-var VIP_SET = new Set();
-var VIP_SET_PREMIUM = new Set();
-// Config das listas VIP (Configuracoes -> aba Alarme). Defaults iguais aos do
-// servidor pra a tela funcionar mesmo antes do /api/config responder.
-// As cores do Premium ainda NAO vem do servidor: o /api/config devolve uma
-// lista fixa de campos, e acrescentar exige mexer no api.js (compartilhado).
-// Ate la valem estes defaults.
-// Um conjunto por nivel. Os defaults sao os mesmos do servidor, pra a tela
-// funcionar igual antes do /api/config responder (ou caso ele ainda nao
-// devolva os campos do Premium).
-var VIP_CFG = {
-  ativo:1, minAntes:5, alarme:1, som:'sino', corDestaque:'#c084fc', corFundo:'#140B2B', corAlerta:'roxo', corLinha:'#161B27',
-  ativoPremium:1, minAntesPremium:5, alarmePremium:1, somPremium:'alarme',
-  corDestaquePremium:'#D4AF37', corFundoPremium:'#0A280E', corAlertaPremium:'dourado',
-  corLinhaPremium:'#161B27'
-};
-// Le a configuracao do nivel da corrida, sem espalhar "if premium" pelo codigo.
-function _vipCfg(tipo) {
-  return tipo === 'premium'
-    ? { ativo:VIP_CFG.ativoPremium, minAntes:VIP_CFG.minAntesPremium, alarme:VIP_CFG.alarmePremium,
-        som:VIP_CFG.somPremium, corDestaque:VIP_CFG.corDestaquePremium, corFundo:VIP_CFG.corFundoPremium,
-        corAlerta:VIP_CFG.corAlertaPremium, corLinha:VIP_CFG.corLinhaPremium }
-    : { ativo:VIP_CFG.ativo, minAntes:VIP_CFG.minAntes, alarme:VIP_CFG.alarme,
-        som:VIP_CFG.som, corDestaque:VIP_CFG.corDestaque, corFundo:VIP_CFG.corFundo,
-        corAlerta:VIP_CFG.corAlerta, corLinha:VIP_CFG.corLinha };
-}
-// Quais corridas do VIP estao marcadas como skip (e o motivo). O destrave so
-// vale pra elas: skip por falta de historico nem chega no filtro, entao aqui
-// so entram os de margem apertada.
-var VIP_SKIP = new Map();
-function carregarVipSet(){
-  var pega = function(url){
-    return fetch(BASE + url)
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .catch(function(){ return null; });
-  };
-  // As duas listas em paralelo. Uma falhar nao pode derrubar a outra: sem o
-  // Premium a tela continua marcando o Plus, e vice-versa.
-  Promise.all([pega('/api/carga-vip'), pega('/api/vip-do-vip')]).then(function(res){
-    var plus = res[0], prem = res[1];
-    var chave = function(e){ return e.hora + '|' + e.corrida; };
-    if(plus && plus.entradas){
-      VIP_SET = new Set(plus.entradas.map(chave));
-      VIP_SKIP = new Map();
-      plus.entradas.forEach(function(e){ if(e.skip) VIP_SKIP.set(chave(e), e.skip_motivo || ''); });
-    }
-    if(prem && prem.entradas){
-      VIP_SET_PREMIUM = new Set(prem.entradas.map(chave));
-      // O skip vale pros dois: e' a mesma corrida e o mesmo destrave.
-      prem.entradas.forEach(function(e){ if(e.skip) VIP_SKIP.set(chave(e), e.skip_motivo || ''); });
-    }
-    // Redesenha o painel se a corrida em foco virou VIP agora.
-    var r = results[focusRaceIdx];
-    _cssVip();
-    if(r && _ehVip(r)) renderFocusPanel(r, focusRaceIdx);
-  });
-}
-// A corrida e' um skip que a lista VIP destravou E ja esta dentro da janela?
-// Fora da janela ela continua escondida, como qualquer skip.
-// Alarme quando um skip destravado ENTRA em tela. Toca uma vez por corrida:
-// o ciclo de refresh chama isto de minuto em minuto, e sem a marca o alarme
-// repetiria ate a largada.
-var _vipAvisados = new Set();
-function _avisarVipSkip(r){
-  if(!r) return;
-  var cfg = _vipCfg(_vipTipo(r));
-  if(!cfg.alarme) return;
-  var k = r.hora + '|' + r.corrida;
-  if(_vipAvisados.has(k)) return;
-  _vipAvisados.add(k);
-  // Som do NIVEL. Antes vinha do alarme de filtro, entao configurar o som do
-  // VIP nao surtia efeito nenhum: os dois avisos tocavam igual.
-  try { playSom(cfg.som || 'sino'); } catch(e){}
-  var rot = VIP_ROTULO[_vipTipo(r)] || 'VIP';
-  try { showToast('\u2B50 ' + rot + ' destravou ' + (r.corrida||'') + ', o motor tinha marcado como skip por margem.', true); } catch(e){}
-  if (typeof window.ghTicker === 'function') {
-    try { window.ghTicker(rot + ': ' + (r.corrida||'') + ' liberada (skip por margem)'); } catch(e){}
-  }
-}
+// ── VIP desligado ─────────────────────────────────────────────────────────
+// O VIP (Plus e Premium) saiu do backend: as rotas /api/carga-vip e
+// /api/vip-do-vip nao existem mais, e o marcador parou de gravar. Todo o bloco
+// que consultava essas rotas foi removido — ele daria 404 a cada ciclo de
+// refresh, de graca.
+//
+// As tres funcoes abaixo viram no-op em vez de sumir: elas sao chamadas em
+// varios pontos do render, e caçar cada chamada num arquivo deste tamanho e'
+// mais arriscado que deixa-las devolvendo "nao e VIP". O motor unico de 4
+// eixos nao tem niveis.
+//
+// As colunas vip_plus/vip_premium continuam no banco como registro do periodo
+// em que o VIP existiu; so nao recebem dado novo.
+function _vipTipo(r){ return null; }
+function _ehVip(r){ return false; }
+function _vipCorFundo(tipo){ return ''; }
+function _vipSkipLiberado(r){ return false; }
+function _avisarVipSkip(r){}
+function _cssVip(){}
+function carregarVipSet(){}
 
-function _vipSkipLiberado(r){
-  if(!r) return false;
-  var cfg = _vipCfg(_vipTipo(r));
-  if(!cfg.ativo) return false;
-  if(!VIP_SKIP.has(r.hora + '|' + r.corrida)) return false;
-  var min = minutesToRace(r);
-  return min !== null && min <= cfg.minAntes && min >= -2;
-}
-// CSS do selo VIP, injetado uma vez. Anima OPACIDADE, nao display: piscar
-// escondendo empurra o layout a cada meio segundo e cansa a vista.
-function _cssVip(){
-  var st = document.getElementById('vip-css');
-  if(!st){ st = document.createElement('style'); st.id = 'vip-css'; document.head.appendChild(st); }
-  var c = _vipCfg('plus').corDestaque || '#c084fc';
-  var cp = _vipCfg('premium').corDestaque || '#D4AF37';
-  // Fundo da linha na lista: a cor configurada, SOLIDA. Chegou a ser aplicada
-  // com 7% de opacidade, mas ai qualquer cor digitada ficava quase invisivel e
-  // o campo nao fazia nada — o que voce escreve tem que ser o que voce ve.
-  // O padrao #161B27 e' o proprio tom do card, entao a linha VIP fica neutra
-  // por padrao e quem quiser destaque escolhe uma cor de verdade.
-  // Campo vazio = sem fundo nenhum, que tambem e' escolha valida.
-  var corHex = function(hex){
-    var h = String(hex||'').trim().replace('#','');
-    if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-    return /^[0-9a-f]{6}$/i.test(h) ? '#' + h : '';
-  };
-  var fundoPlus = corHex(_vipCfg('plus').corLinha);
-  var fundoPrem = corHex(_vipCfg('premium').corLinha);
-  st.textContent =
-    '.vip-selo{display:inline-flex;align-items:center;gap:6px;'
-    + 'background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);color:#eab308;'
-    + 'font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;'
-    + 'padding:4px 12px;border-radius:14px;animation:vipPisca 1.6s ease-in-out infinite}'
-    // O Premium tem selo proprio: sao duas listas com criterios diferentes, e
-    // dar a mesma cara as duas apagaria a distincao.
-    + '.vip-selo.nivel-premium{background:rgba(34,197,94,.14);border-color:' + cp + ';color:' + cp + '}'
-    // Selo da lista lateral tambem segue a cor configurada de cada nivel.
-    // Fundo, borda e texto na mesma cor do nivel. Antes so a borda e o texto
-    // trocavam, e o fundo continuava amarelo do CSS base, o que dava um selo
-    // de duas cores.
-    + '.rc-vip-badge{border-color:' + c + ';color:' + c + ';background:transparent}'
-    + '.rc-vip-badge.nivel-premium{border-color:' + cp + ';color:' + cp + ';background:transparent}'
-    + (fundoPlus ? '.rc-vip{background:' + fundoPlus + '}' : '')
-    + (fundoPrem ? '.rc-vip-premium{background:' + fundoPrem + '}' : '')
-    + '.vip-selo.vip-skip{background:rgba(192,132,252,.14);border-color:' + c + ';color:' + c + '}'
-    + '@keyframes vipPisca{0%,100%{opacity:1}50%{opacity:.5}}'
-    // Respeita quem pediu menos animacao no sistema: o selo fica visivel, so parado.
-    + '@media(prefers-reduced-motion:reduce){.vip-selo{animation:none}}';
-}
-
-// 'premium' | 'plus' | null. Premium ganha quando a corrida esta nas duas.
-function _vipTipo(r){
-  if(!r) return null;
-  var k = r.hora + '|' + r.corrida;
-  if(VIP_SET_PREMIUM.has(k)) return 'premium';
-  if(VIP_SET.has(k)) return 'plus';
-  return null;
-}
-function _ehVip(r){ return _vipTipo(r) !== null; }
-// Rotulo e cor de cada nivel, num lugar so.
-var VIP_ROTULO = { plus:'VIP Plus', premium:'VIP Premium' };
-function _vipCorFundo(tipo){ return _vipCfg(tipo).corFundo; }
-
-// As listas VIP viraram TELAS proprias (GET /carga-vip e /vip-do-vip,
-// servidas pelo main.js + public/js/telaCargaVip.js). Aqui ficou so o outro lado do caminho:
-// clicar numa corrida la manda pra Analisar com ?vip=hora|corrida, e esta
-// funcao foca a corrida ao abrir.
+// Foco por URL: ?vip=hora|corrida. As telas VIP sairam, mas o parametro segue
+// util — qualquer link que aponte pra uma corrida especifica cai aqui.
 function _focoVipDaUrl(){
   var alvo = null;
   try { alvo = new URLSearchParams(location.search).get('vip'); } catch(e){}
@@ -1336,15 +1180,6 @@ function renderFocusPanel(r, idx) {
     '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
     + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
-    // Selo VIP centralizado no cabecalho: identifica a corrida de relance,
-    // mesmo quando voce chegou nela navegando e nao pela lista.
-    + (_ehVip(r)
-      ? '<div style="flex:1;text-align:center;padding-top:4px"><span class="vip-selo'
-        + (_vipTipo(r) === 'premium' ? ' nivel-premium' : '')
-        + (_vipSkipLiberado(r)?' vip-skip':'') + '">'
-        + (_vipTipo(r) === 'premium' ? '&#128142; ' : '&#11088; ')
-        + VIP_ROTULO[_vipTipo(r)] + '</span></div>'
-      : '')
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
     // Notas do Motor da Manha (parelha / box vazio). Ficam ACIMA da arena, que
@@ -2159,11 +1994,7 @@ function prepararSonsAudio(){
 }
 // Dispara todos os avisos de uma corrida que entrou na janela de alerta.
 function avisarCorrida(r, custom){
-  // Som na mesma ordem de prioridade da cor: nivel VIP, depois alarme de
-  // filtro, depois o som geral.
-  var tipoVip = _vipTipo(r);
-  var cfgVip = tipoVip ? _vipCfg(tipoVip) : null;
-  playSom((cfgVip && cfgVip.alarme) ? cfgVip.som : (custom ? ALARME_FILTRO.som : SOM_ALERTA));
+  playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
   notificarCorrida(r, custom);
   flashTituloAlerta();
   registrarAvisoGlobal(raceAlertKey(r));
@@ -2251,9 +2082,7 @@ function renderRaceListPanel(avbs) {
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     var alertCustom = isAlerting && matchAlarmeFiltro(r);
-    var vipTipo = _vipTipo(r);
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '')
-      + (vipTipo && !isOld ? ' rc-vip rc-vip-' + vipTipo : '');
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
     if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
     if (isAlerting) {
       var key = raceAlertKey(r);
@@ -2287,10 +2116,6 @@ function renderRaceListPanel(avbs) {
       // Selo do nivel embaixo do top3, na coluna da direita: a corrida ja se
       // identifica pelo horario e pelo nome, e o selo e' o que faz voce parar
       // nela ao correr o olho pela lista.
-      // So "VIP" no rotulo: o icone e a cor ja dizem o nivel, e o nome por
-      // extenso ocupava a largura da coluna inteira.
-      + (_ehVip(r) ? '<div style="text-align:center;margin-top:3px"><span class="rc-vip-badge nivel-' + _vipTipo(r) + '">'
-          + (_vipTipo(r) === 'premium' ? '&#128142;' : '&#11088;') + ' VIP</span></div>' : '')
       + '</div>';
     div.addEventListener('click', function() {
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});

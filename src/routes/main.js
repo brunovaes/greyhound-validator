@@ -753,7 +753,6 @@ ${navBar(user, 'analisar')}
           <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
           &#128193; Carregar PDF
         </label>
-        ${can(user,'analisar.carga_vip') ? `<a href="${BASE}/carga-vip" class="tabbtn" id="btn-carga-vip">&#11088; Corridas VIP</a>` : ''}
         <a href="${BASE}/historico" class="tabbtn">&#128220; Históricos</a>
       </div>
       <div class="flist" id="rlist"></div>
@@ -1305,474 +1304,16 @@ applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
 </body></html>`);
 });
 
-// Catalogo das artes dos galgos, usado pela tela Carga VIP. Os arquivos vivem
-// em public/img/dogs, nomeados Trap<N>_<pelagem>.png: o TRAP ja vem certo no
-// arquivo (manga da cor certa) e o que varia e' a pelagem.
-// Prefere a pasta mini/ (gerada por tools/miniaturasDogs.js): os originais tem
-// ~2,3 MB cada, o que passa na Analisar (uma corrida por vez) mas nao numa
-// lista com dezenas de linhas.
-// Lido do disco uma vez e guardado: a pasta so muda em deploy.
-let _dogsCache = null;
-function catalogoGalgos() {
-  if (_dogsCache) return _dogsCache;
-  const base = path.join(__dirname, '../../public/img/dogs');
-  const mini = path.join(base, 'mini');
-  let dir = base, url = BASE + '/static/img/dogs/';
-  try {
-    if (fs.existsSync(mini) && fs.readdirSync(mini).some(f => /\.png$/i.test(f))) {
-      dir = mini; url = BASE + '/static/img/dogs/mini/';
-    }
-  } catch (e) { /* sem mini: fica no original */ }
-  const porTrap = {};
-  try {
-    fs.readdirSync(dir).filter(f => /\.png$/i.test(f)).sort().forEach(f => {
-      const m = f.match(/^Trap(\d)_/i);
-      if (!m) return;
-      (porTrap[m[1]] = porTrap[m[1]] || []).push(url + encodeURIComponent(f));
-    });
-  } catch (e) { /* sem pasta: a tela cai na bolinha com o numero do trap */ }
-  _dogsCache = porTrap;
-  return porTrap;
-}
-
-// Chegada e resultado das corridas da Carga VIP.
+// As telas VIP (Plus e Premium) foram removidas junto com o backend: as rotas
+// /api/carga-vip e /api/vip-do-vip nao existem mais, e o motor virou unico (4
+// eixos, sem niveis). Sairam daqui:
+//   GET /carga-vip e GET /vip-do-vip (a fabrica paginaVip)
+//   POST /carga-vip/resultados e GET /carga-vip/disputa
+//   o catalogo das artes dos galgos, que so aquelas telas usavam
+// O public/js/telaCargaVip.js tambem pode ser apagado do repositorio.
 //
-// POR QUE ISTO EXISTE AQUI, e nao no /api/carga-vip: o dado ja esta no banco.
-// O robo de resultados grava races.finishing_order_json, e e' de la que a tela
-// Historico tira o "Bateu". Esta rota so faz o mesmo caminho pras corridas da
-// lista VIP, sem esperar mudanca no motor.
-//
-// O resultado NAO e' recalculado aqui: usamos bateuPar(), a mesma funcao do
-// Historico e dos KPIs. Se a tela fizesse a propria conta, uma divergencia
-// entre ela e o Historico seria impossivel de arbitrar depois.
-//
-// Recebe os pares porque quem sabe qual disputa vale e' a lista (o pick e o
-// outro vem do motor, e nao sao necessariamente o fav e o und da corrida).
-router.post('/carga-vip/resultados', exigirAcesso('analisar.carga_vip'), express.json(), (req, res) => {
-  try {
-    const { date, pares } = req.body || {};
-    if (!Array.isArray(pares) || !pares.length) return res.json({});
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return res.status(400).json({ error: 'data invalida' });
-
-    const { bateuPar } = require('../utils/avbResultado');
-
-    // Uma consulta so pro dia inteiro, em vez de uma por corrida. Mesmo filtro
-    // de dia usado no resto do sistema: sessao canonica, hora de Brasilia.
-    const linhas = db.prepare(
-      "SELECT r.id, r.hora, r.corrida, r.finishing_order_json, r.race_card, r.video_url " +
-      "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
-      "WHERE s.user_id = ? AND date(s.created_at,'-3 hours') = ?"
-    ).all(CANONICO, date);
-
-    // A mesma corrida pode aparecer em mais de uma sessao do dia (PDF
-    // reimportado). Preferimos a linha que TEM chegada gravada e, entre duas
-    // com chegada, a mais recente. Sem este criterio, pegar a linha errada
-    // devolve 'sem resultado' pra corrida que ja correu, ou uma chegada velha.
-    const porChave = new Map();
-    for (const l of linhas) {
-      const k = l.hora + '|' + l.corrida;
-      const atual = porChave.get(k);
-      if (!atual) { porChave.set(k, l); continue; }
-      const temNova = !!l.finishing_order_json, temVelha = !!atual.finishing_order_json;
-      if (temNova && !temVelha) porChave.set(k, l);
-      else if (temNova === temVelha && l.id > atual.id) porChave.set(k, l);
-    }
-
-    const json = (t) => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
-
-    const out = {};
-    for (const p of pares) {
-      // A resposta e' indexada por corrida + PAR, nao so por corrida. A mesma
-      // corrida pode ter mais de uma entrada na lista VIP, com pares
-      // diferentes; indexando so por hora|corrida, a segunda sobrescrevia a
-      // primeira e as duas linhas recebiam a conta de um par so. O podio ficava
-      // certo (e' o mesmo pras duas) e a cor de uma delas vinha do par errado.
-      const corridaChave = String(p.hora || '') + '|' + String(p.corrida || '');
-      const chave = corridaChave + '|' + p.a + 'x' + p.b;
-      const l = porChave.get(corridaChave);
-      if (!l) continue;
-      const chegada = json(l.finishing_order_json);
-      if (!Array.isArray(chegada) || !chegada.length) { out[chave] = { chegada: null, bateu: null, video: l.video_url || null }; continue; }
-
-      // bateu: true | false | null. O null (galgo fora da chegada, dead heat)
-      // e' repassado como null de proposito: na tela ele fica NEUTRO, igual ao
-      // "-" do Historico. Virar false pintaria de vermelho o que ninguem errou.
-      const b = bateuPar(l.finishing_order_json, p.a, p.b);
-
-      // nome por trap, so pro tooltip das bolinhas. Melhor esforco: o formato
-      // do race_card varia entre analises antigas e novas.
-      const nomes = {};
-      const card = json(l.race_card);
-      const lista = Array.isArray(card) ? card : (card && card.galgos) || [];
-      for (const g of lista) {
-        if (g && g.trap != null) nomes[String(g.trap)] = String(g.nome || g.name || '').trim();
-      }
-
-      out[chave] = { chegada, bateu: b, nomes, video: l.video_url || null };
-    }
-    res.json(out);
-  } catch (e) {
-    console.error('[carga-vip/resultados]', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Dados dos dois galgos de uma disputa, pro painel "Analisar disputa" da tela
-// Carga VIP. Sob demanda de proposito: mandar o historico de todos os galgos
-// junto com a lista deixaria a tela pesada a toa (dezenas de corridas).
-//
-// FONTE DO HISTORICO, e a ressalva que vem junto:
-// usamos hist_fav/hist_und quando o trap pedido e' o favorito ou o underdog da
-// analise, e hist_all para os demais. Nao e' a mesma fonte da tela Analisar,
-// que prefere o aHist/bHist vindo do robo ao vivo (mais completo) e que nao
-// fica gravado no banco. Ou seja: para a MESMA disputa, este painel pode
-// mostrar algumas linhas a menos que o da Analisar. E' a mesma fonte que a
-// tela /sessao ja usa, entao pelo menos as duas telas de consulta concordam.
-router.get('/carga-vip/disputa', exigirAcesso('analisar.carga_vip'), (req, res) => {
-  try {
-    const hora = String(req.query.hora || '');
-    const corrida = String(req.query.corrida || '');
-    const a = parseInt(req.query.a, 10), b = parseInt(req.query.b, 10);
-    if (!hora || !corrida || !a || !b) return res.status(400).json({ error: 'parametros faltando' });
-
-    // Mesma chave que a lista usa (hora + corrida), na sessao canonica do dia.
-    // Pega a mais recente caso a corrida apareca em mais de uma sessao.
-    const r = db.prepare(
-      "SELECT r.* FROM races r JOIN race_sessions s ON s.id = r.session_id " +
-      "WHERE s.user_id = ? AND r.hora = ? AND r.corrida = ? " +
-      "ORDER BY r.id DESC LIMIT 1"
-    ).get(CANONICO, hora, corrida);
-    if (!r) return res.status(404).json({ error: 'corrida nao encontrada' });
-
-    const json = (t) => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
-    const todos = json(r.hist_all) || [];
-    const scores = json(r.scores_json) || [];
-
-    const doTrap = (trap) => {
-      const igual = (x) => String(x) === String(trap);
-      // 1) fav/und tem coluna propria, que e' o historico usado pela /sessao
-      if (igual(r.trap_fav)) {
-        const h = json(r.hist_fav);
-        if (h && h.length) return { trap, nome: r.name_fav, perfil: r.perfil_fav, hist: h };
-      }
-      if (igual(r.trap_und)) {
-        const h = json(r.hist_und);
-        if (h && h.length) return { trap, nome: r.name_und, perfil: r.perfil_und, hist: h };
-      }
-      // 2) qualquer outro galgo: hist_all
-      const g = todos.find(x => igual(x.trap));
-      const sc = scores.find(x => igual(x.trap));
-      return {
-        trap,
-        nome: (g && g.nome) || (sc && sc.nome) || (igual(r.trap_fav) ? r.name_fav : igual(r.trap_und) ? r.name_und : ''),
-        perfil: (g && g.perfil) || (sc && sc.perfil) || '',
-        hist: (g && g.historico) || null
-      };
-    };
-
-    res.json({ corrida: r.corrida, hora: r.hora, a: doTrap(a), b: doTrap(b) });
-  } catch (e) {
-    console.error('[carga-vip/disputa]', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ── CARGA VIP ───────────────────────────────────────────────────────────────
-// Era um modal desenhado pelo app.js por cima da tela Analisar: cobria o
-// cabecalho e o menu, nao tinha URL propria e o botao voltar do navegador nao
-// servia pra sair. Virou tela propria, com a mesma moldura do Historico.
-// Aqui vai SO a moldura: a lista e' montada no navegador por
-// public/js/telaCargaVip.js, que le a MESMA rota de antes (GET /api/carga-vip).
-// Arquivo estatico de proposito, pra o JS da lista nao passar por template
-// literal (onde aspas e \n se resolvem errado com facilidade).
-// Duas telas, uma moldura so: Carga VIP e VIP do VIP mudam de endpoint e de
-// colunas, mas compartilham cabecalho, artes dos galgos, podio, replay e o
-// painel de disputa. Duplicar a pagina significaria manter tudo isso em dois
-// lugares. Quem decide o que muda e' o modo, lido pelo telaCargaVip.js.
-function paginaVip(modo) {
-  return (req, res) => {
-  const vipvip = modo === 'vipdovip';
-  const TITULO = vipvip ? 'VIP Premium' : 'VIP Plus';
-  const ENDPOINT = vipvip ? '/api/vip-do-vip' : '/api/carga-vip';
-  const user = req.user;
-  const logoB64 = getLogo();
-  const DOGS = JSON.stringify(catalogoGalgos());
-  // Nome completo das pistas vem do src/utils/nomesPistas.js, a fonte unica.
-  // Passado pra tela em vez de copiado no JS do cliente: mapa duplicado e' mapa
-  // que fica pra tras quando alguem adiciona uma pista nova.
-  const PISTAS = JSON.stringify(NOMES_PISTAS);
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${TITULO} - Greyhound Factory</title>
-<link rel="stylesheet" href="${BASE}/static/css/shared.css">
-<style>
-${designTokensCSS()}
-${cssCardGalgo()}
-/* Painel "Analisar disputa": mesmo card da tela /sessao, mesmo CSS. */
-#gv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000;padding:10px}
-#gv-modal.open{display:flex}
-/* Cor de dentro do painel: #161B27, a mesma dos cards do resto do app
-   (.vip-box aqui, .form-card em Usuarios, .section em Acessos). Antes era
-   #0f1319, quase preto, que destoava. Trocar aqui muda so este painel. */
-#gv-box{background:#161B27;border:1px solid #2a3140;border-radius:12px;max-width:1100px;width:100%;max-height:96vh;display:flex;flex-direction:column;overflow:hidden}
-#gv-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 18px;border-bottom:1px solid #2a3140;flex-shrink:0}
-#gv-hdr h3{font-size:14px;font-weight:700;color:#f0f0f0;margin:0}
-#gv-xbtn{background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
-#gv-xbtn:hover{color:#f0f0f0}
-#gv-body{padding:12px 16px;overflow:auto;-webkit-overflow-scrolling:touch}
-/* Aperta um pouco as linhas SO deste painel, pra caber mais historico sem
-   rolar. As classes .sv-* sao compartilhadas com a tela /sessao, por isso
-   tudo aqui vai sob #gv-body: la continua com o espacamento de sempre. */
-#gv-body .sv-tbl td{padding:4px 4px}
-#gv-body .sv-tbl th{padding:4px}
-#gv-body .sv-dog-hdr{margin-bottom:5px}
-#gv-body .sv-sep{margin:7px 0}
-@media(max-width:800px){#gv-modal{padding:6px}#gv-body{padding:10px;overflow-x:auto}#gv-body .sv-tbl{table-layout:auto;width:auto;min-width:560px}}
-/* Replay: mesma moldura da tela /sessao (iframe recortado no topo pra esconder
-   a barra do player) e o mesmo link de nova aba, pra quando o site recusar ser
-   embutido. */
-#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
-#rv-modal.open{display:flex}
-#rv-box{background:#0d0d0d;border:1px solid rgba(96,165,250,.25);border-radius:14px;width:988px;max-width:100%;height:824px;max-height:95vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 80px rgba(96,165,250,.08)}
-#rv-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#111;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
-#rv-dot{width:8px;height:8px;border-radius:50%;background:#60a5fa;flex-shrink:0}
-#rv-title{font-size:13px;font-weight:700;color:#60a5fa;flex:1;margin:0}
-#rv-newtab{font-size:11px;color:#555;text-decoration:none;padding:4px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap}
-#rv-newtab:hover{color:#aaa;border-color:#555}
-#rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
-#rv-xbtn:hover{color:#f0f0f0}
-#rv-crop{flex:1;overflow:hidden;position:relative}
-#rv-frame{position:absolute;top:-51px;left:0;width:100%;height:calc(100% + 51px);border:none;background:#000}
-@media(max-width:800px){#rv-modal{padding:6px}}
-body{background:#161B27}
-/* Com o fundo da tela em #161B27, os paineis precisam de um tom acima pra nao
-   sumirem: mesma cor de fundo e de card viraria uma chapa so. */
-.content{padding:24px;max-width:1240px;margin:0 auto}
-.topo{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
-h1{font-size:20px;font-weight:700;margin-bottom:3px}
-.sub{font-size:12px;color:#888}
-.volta{font-size:12px;color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:6px 12px;border-radius:6px;white-space:nowrap;flex-shrink:0}
-.volta:hover{background:rgba(34,197,94,.1)}
-.vip-aviso{padding:12px 15px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:8px;font-size:12px;color:#eab308;line-height:1.6;margin-bottom:12px}
-.vip-abas{display:flex;gap:8px;margin-bottom:14px}
-.vip-abas a{padding:8px 16px;background:#161B27;border:1px solid #333;border-radius:20px;color:#888;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap}
-.vip-abas a:hover{border-color:#22c55e;color:#ccc}
-.vip-abas a.on{background:rgba(34,197,94,.14);border-color:#22c55e;color:#22c55e}
-
-/* colunas exclusivas do VIP Premium */
-.c-selo{width:74px;flex-shrink:0}
-.c-ctx{width:138px;flex-shrink:0}
-.vip-selo .nota{font-size:15px;font-weight:800;line-height:1.1}
-.vip-selo .tier{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#666}
-.vip-selo .marcas{font-size:12px;margin-top:2px}
-.vip-selo .naoconf{font-size:9px;color:#f97316}
-.vip-ctx{font-size:11px;color:#ccc;line-height:1.4}
-.vip-ctx .sinal{font-size:10px;color:#666;margin-top:2px}
-.vip-val .pct{font-size:15px;font-weight:800;line-height:1.2;color:#22c55e}
-.vip-val .ic{font-size:10px;color:#666}
-.vip-cereb{font-size:11px;color:#888;line-height:1.7;padding:0 2px}
-.vip-cereb b{color:#aaa;font-weight:600}
-.vip-faixa{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
-.vip-legenda{font-size:11px;color:#888;line-height:1.7;padding:0 2px}
-
-/* KPIs do dia, no alto e a direita, no formato dos cards do Historico. */
-.vip-kpis{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
-.vip-kpi{background:#1B2231;border:1px solid #2a3140;border-top:2px solid #22c55e;border-radius:8px;padding:9px 14px;min-width:104px}
-.vip-kpi .rot{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#666;margin-bottom:3px}
-.vip-kpi .val{font-size:19px;font-weight:800;line-height:1.1;color:#f0f0f0}
-.vip-kpi .pct{font-size:11px;font-weight:700;margin-left:5px}
-.vip-kpi.ok{border-top-color:#22c55e}.vip-kpi.ok .val{color:#22c55e}
-.vip-kpi.ruim{border-top-color:#ef4444}.vip-kpi.ruim .val{color:#ef4444}
-.vip-kpi.bw{border-top-color:#60a5fa}.vip-kpi.bw .val{color:#60a5fa}
-
-/* SEM overflow:hidden: ele cria um contexto de rolagem proprio e faz o
-   position:sticky do cabecalho grudar nesta caixa, que nao rola, em vez de na
-   janela. O arredondamento vem das pontas (cabecalho e ultima linha). */
-.vip-box{background:#1B2231;border:1px solid #333;border-radius:10px}
-
-/* Cabecalho de tabela, colado no topo ao rolar. As larguras aqui e na linha
-   sao as MESMAS: o alinhamento das colunas depende disso, entao mexer numa
-   pede mexer na outra. */
-/* Tipografia copiada da tela Historico, pra as duas telas conversarem:
-   cabecalho em maiusculas pequenas e cinza, conteudo uniforme em 13px,
-   celulas com padding 10px 12px. A unica diferenca de proposito e' o tamanho
-   do cabecalho: la sao 9px, aqui ficou 11px a pedido. */
-.vip-cab{display:flex;align-items:center;gap:10px;padding:10px 10px;background:#1a1a1a;border-bottom:1px solid #333;position:sticky;top:0;z-index:5;border-radius:9px 9px 0 0}
-.vip-cab span{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;text-align:center}
-
-.vip-lin{display:flex;align-items:center;gap:10px;padding:10px 10px;border-bottom:1px solid #222;border-left:3px solid transparent;cursor:pointer;font-size:13px;transition:background .15s}
-.vip-lin:last-child{border-bottom:none;border-radius:0 0 9px 9px}
-.vip-lin:hover{background:rgba(255,255,255,.02)}
-.vip-lin.tem-skip{background:rgba(192,132,252,.06)}
-.vip-lin.tem-skip:hover{background:rgba(192,132,252,.11)}
-/* Resultado pinta a LINHA INTEIRA. Vem depois do tem-skip de proposito: numa
-   corrida que era skip E ja correu, o que interessa e' o resultado. */
-.vip-lin.bateu{background:rgba(34,197,94,.13);border-left-color:#22c55e}
-.vip-lin.bateu:hover{background:rgba(34,197,94,.19)}
-.vip-lin.errou{background:rgba(239,68,68,.11);border-left-color:#ef4444}
-.vip-lin.errou:hover{background:rgba(239,68,68,.17)}
-
-/* larguras das colunas (cabecalho e linha usam as mesmas) */
-/* As larguras somadas + os gaps + o padding tem que caber nos ~1192px que o
-   .content oferece. Com as colunas Selo e Contexto do VIP Premium a conta dava
-   1194 e a ultima coluna vazava pra fora da caixa. */
-/* Corrida agora tem largura fixa e enxuta: o texto e' curto ("Kilkenny A7")
-   e antes ela era a unica flexivel, engolindo toda a sobra da linha.
-   Quem cresce agora sao Podio e Validada, que sao as colunas que a gente le. */
-.c-hora{width:66px;flex-shrink:0;text-align:center}
-.c-cor{flex:1 1 150px;min-width:150px}
-.c-avb{width:240px;flex-shrink:0}
-/* 96px pra "ABRIU NA BW" caber numa linha so no cabecalho: em 84 ele
-
-   quebrava em duas e desalinhava com o numero embaixo. */
-
-.c-bw{width:96px;flex-shrink:0;text-align:center}
-.c-pod{flex:1 1 132px;min-width:132px}
-.c-cha{width:62px;flex-shrink:0}
-.c-aca{width:38px;flex-shrink:0}
-
-/* O conteudo das colunas acompanha o cabecalho, que e' centralizado. */
-.vip-lin > div{text-align:center}
-/* A de cima e' a maior. Hoje e' a UK; trocar a ordem no telaCargaVip.js
-   troca qual fica em destaque. */
-.vip-hora .grande{font-size:14px;font-weight:800;color:#22c55e;line-height:1.15}
-.vip-hora .peq{font-size:11px;color:#3f8f5c}
-
-.vip-conf{display:flex;align-items:flex-start;justify-content:center;gap:3px}
-.vip-dog{width:100px;height:68px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.vip-dog img{max-width:100%;max-height:100%;object-fit:contain;display:block}
-/* A arte olha pra direita. Espelhar a da direita poe os dois de frente um pro
-   outro, como na arena da tela Analisar. */
-.vip-dog.espelha img{transform:scaleX(-1)}
-.vip-dog .semarte{width:34px;height:34px;border-radius:50%;background:#1e2430;border:1px solid #2a3342;color:#8a94a6;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
-.vip-vence{font-size:8px;font-weight:800;letter-spacing:.6px;color:#3f4c5f;text-transform:uppercase;text-align:center;flex-shrink:0;margin-top:30px}
-.vip-galgo{display:flex;flex-direction:column;align-items:center;min-width:0}
-/* Margem negativa: a arte tem area transparente em volta, entao o nome
-   parecia solto mesmo com gap zero. Ele sobe por cima desse vazio. */
-.vip-galgo .nome{font-size:13px;color:#f0f0f0;font-weight:600;text-align:center;max-width:108px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-14px}
-
-.vip-cor{font-size:12px;color:#f0f0f0;font-weight:600;line-height:1.4}
-.vip-cor .selos{font-size:11px;color:#60a5fa;font-weight:500;margin-top:2px}
-.vip-skip{font-size:11px;color:#c084fc;margin-top:2px}
-
-.vip-bw{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-
-.vip-bw .sim{font-size:13px;font-weight:800;color:#60a5fa;line-height:1.2}
-.vip-bw .nao{font-size:11px;font-weight:700;color:#f97316}
-.vip-bw .nd{font-size:13px;color:#3f4c5f}
-.vip-bw .rot{font-size:9px;color:#555}
-
-/* As bolinhas da chegada sao os .trap-badge t1..t6 do designTokens, com as
-   cores reais das mangas. Aqui so o tamanho, que cada tela ajusta. */
-.vip-chegada{display:flex;align-items:center;justify-content:center;gap:3px}
-/* Replay embaixo das bolinhas, no mesmo formato do botao do Historico. */
-.vip-replay{margin-top:5px}
-.vip-replay button{font-size:10px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px;display:inline-flex;align-items:center;gap:3px;font-family:inherit}
-.vip-replay button:hover{background:rgba(96,165,250,.16)}
-.vip-chegada .trap-badge{width:21px;height:21px;font-size:11px;font-weight:700;flex-shrink:0}
-/* Os dois galgos da disputa ficam em destaque; os demais recuam. Assim da
-   pra ver onde o par chegou sem contornos competindo com a cor da manga. */
-.vip-chegada .trap-badge{opacity:.4}
-.vip-chegada .trap-badge.nodisputa{opacity:1}
-/* Anel dourado no primeiro lugar. */
-.vip-chegada .trap-badge.p1{box-shadow:0 0 0 2px rgba(234,179,8,.85)}
-.vip-chegada .aguarda{font-size:11px;color:#3f4c5f}
-
-.vip-taxa .nivel{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
-.vip-taxa .pct{font-size:15px;font-weight:800;line-height:1.2}
-.vip-taxa .rot{font-size:9px;color:#555;white-space:nowrap}
-/* Espadas cruzadas: o simbolo de disputa. O rotulo em texto ocupava uma
-   coluna inteira pra dizer o que o icone diz, e o title cobre quem nao
-   reconhecer de cara. */
-.vip-acao .btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;font-size:15px;color:#22c55e;background:transparent;border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-family:inherit;line-height:1}
-.vip-acao .btn:hover{background:rgba(34,197,94,.12)}
-.vip-rodape{padding:12px 2px;font-size:11px;color:#555}
-/* 1080 e nao 768: entre 900 e 1100 a janela ainda e' desktop, mas as colunas
-   ja nao cabem lado a lado. Era ai que a lista vazava pra fora da caixa. */
-@media(max-width:1080px){
-  html,body{overflow-x:hidden}
-  .content{padding:14px 12px}
-  .topo{flex-direction:column;gap:10px}
-  .vip-lin{padding:11px 10px;gap:8px;flex-wrap:wrap}
-  /* Cabecalho de colunas so faz sentido com as colunas alinhadas. No estreito
-     a linha quebra, entao ele sai de cena em vez de apontar pra lugar nenhum. */
-  .vip-cab{display:none}
-  .c-hora{width:46px}
-  .c-avb{width:auto;flex:1 1 100%}
-  .c-cor{width:auto;flex:1 1 100%}
-  .c-bw{width:auto;text-align:left}
-  .c-selo{width:auto}
-  .c-ctx{width:auto;flex:1 1 100%}
-  .c-pod{width:auto;order:9}
-  .c-cha{width:auto;text-align:left;margin-left:auto}
-  .c-aca{width:auto;order:10}
-  .vip-dog{width:74px;height:50px}
-  .vip-hora{width:46px}
-  .vip-taxa .pct{font-size:14px}
-}
-</style></head><body>
-<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Factory">` : '<div style="height:130px;background:#000"></div>'}</div>
-${navBar(user, 'cargavip')}
-<div class="content">
-  <div class="topo">
-    <div>
-      <h1>&#11088; ${TITULO}</h1>
-      <div class="sub" id="vip-sub">Carregando...</div>
-    </div>
-    <a class="volta" href="${BASE}">&#8592; Voltar para Analisar</a>
-  </div>
-  <div class="vip-abas">
-    <a href="${BASE}/carga-vip" class="${vipvip ? '' : 'on'}">&#11088; VIP Plus</a>
-    <a href="${BASE}/vip-do-vip" class="${vipvip ? 'on' : ''}">&#128142; VIP Premium</a>
-  </div>
-  <div class="vip-faixa"><div class="vip-legenda" id="vip-legenda"></div><div class="vip-kpis" id="vip-kpis"></div></div>
-  <div id="vip-conteudo"><div class="vip-box" style="padding:22px;color:#888;font-size:13px">Carregando...</div></div>
-</div>
-<div id="rv-modal">
-  <div id="rv-box">
-    <div id="rv-hdr">
-      <div id="rv-dot"></div>
-      <h3 id="rv-title">Replay</h3>
-      <a id="rv-newtab" href="#" target="_blank" rel="noopener">&#8599; Nova aba</a>
-      <button id="rv-xbtn" type="button">&#x2715;</button>
-    </div>
-    <div id="rv-crop">
-      <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
-    </div>
-  </div>
-</div>
-<div id="gv-modal"><div id="gv-box"><div id="gv-hdr"><h3 id="gv-title">Disputa</h3><button id="gv-xbtn" type="button" aria-label="Fechar">&#x2715;</button></div><div id="gv-body"></div></div></div>
-<script src="${BASE}/static/js/cardGalgo.js"></script>
-<script>var VIP_BASE='${BASE}';var VIP_DOGS=${DOGS};var VIP_PISTAS=${PISTAS};var VIP_MODO='${modo}';var VIP_ENDPOINT='${ENDPOINT}';</script>
-<script src="${BASE}/static/js/telaCargaVip.js" defer></script>
-</body></html>`);
-  };
-}
-router.get('/carga-vip', exigirAcesso('analisar.carga_vip'), paginaVip('carga'));
-router.get('/vip-do-vip', exigirAcesso('analisar.carga_vip'), paginaVip('vipdovip'));
-
-// CSS do card de historico de galgo (.sv-*), usado pelo painel "Analisar
-// disputa". Vive numa funcao porque DUAS telas o injetam: /sessao/:id e
-// /carga-vip. O JS que monta o card esta em public/js/cardGalgo.js.
-function cssCardGalgo() {
-  return `.sv-dog{width:100%}
-.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
-.sv-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
-.sv-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
-.sv-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
-.sv-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
-.sv-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:sans-serif}
-.sv-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
-.sv-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:sans-serif}
-.sv-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:sans-serif;font-size:12px}
-.sv-tbl tr:last-child td{border-bottom:none}
-.sv-tbl tr:hover td{background:rgba(255,255,255,.025)}
-.sv-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:sans-serif}
-.sv-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:sans-serif}
-.sv-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:sans-serif}
-.sv-bends{font-family:sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
-.sv-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:sans-serif;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sv-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:sans-serif}
-.sv-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:sans-serif}`;
-}
+// O que NAO saiu: as colunas races.vip_plus / races.vip_premium continuam no
+// banco como registro do periodo em que o VIP existiu.
 
 router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
@@ -1952,44 +1493,16 @@ function _celulaAvb(r){
 // vip_premium guarda a NOTA ('A+', 'A'), nao 1/0 — por isso ela aparece junto.
 // Premium tem prioridade: e' o subconjunto mais exigente, e mostrar "Plus"
 // numa corrida que tambem era Premium seria informacao a menos.
-// 'premium' | 'plus' | '' — o valor que o filtro da coluna compara.
-// Premium tem prioridade: e' o subconjunto mais exigente, e classificar como
-// Plus uma corrida que tambem era Premium seria informacao a menos.
-function _nivelVip(r){
-  if (r.vip_premium) return 'premium';
-  if (r.vip_plus) return 'plus';
-  return '';
-}
-
 // QUAL MOTOR analisou esta corrida. Nao confundir com a coluna AvB, que diz
 // qual PAR valeu e se foi voce que apontou.
 //
 //   'bw'       voce entrou num par que a camada BW trouxe (ou inverteu sobre ele)
 //   'analise'  vale o par da analise, com ou sem escolha sua por cima
 //
-// "Reanalise" era um terceiro valor e foi retirado: o Motor da Manha passou a
-// rodar as REGRAS DA REANALISE sobre as SPs desde cedo, entao analise e
-// reanalise viraram o mesmo motor. A reanalise perto da largada so atualiza os
-// numeros dele. Manter os dois separados seria oferecer um filtro que nao
-// separa nada.
-//
-// O avb_escolhido NAO entra aqui de proposito. A reanalise (e a camada BW)
-// oferecem de 1 a 3 pares, um principal e os outros secundarios; escolher um
-// secundario promove ELE a principal daquele motor. Ou seja, a escolha nao e'
-// uma origem: e' voce trocando qual par daquele mesmo motor prevalece.
+// O avb_escolhido e' quem decide aqui: o fechamento sozinho nao troca o AvB da
+// corrida. A camada BW continua existindo (a coluna de alternativas da tela
+// Analisar le as odds ao vivo), mesmo com o VIP fora.
 function _motorDoAvb(r){
-  // A reanalise e a camada BW so decidem PERTO DA LARGADA. Antes disso o
-  // avb_fechamento ate existe — o VIP reescreve a lista inteira do dia a cada
-  // 4 minutos —, mas ele e' palpite corrente, nao etapa cumprida. Ler a
-  // presenca do campo como se fosse a etapa fazia corrida das 20h aparecer
-  // como "Valida BW" as 14h, quando so a analise inicial tinha rodado.
-  //
-  // final_check_at e' a checagem final (near-post); finishing_order_json e' o
-  // resultado. Qualquer um dos dois significa que a corrida ja passou do ponto
-  // em que esses motores decidem. E' o mesmo gatilho que o motor usa pra
-  // congelar as marcas VIP.
-  // A camada BW so conta quando VOCE entrou num par dela: e' a regra do Bruno,
-  // o fechamento sozinho nao troca o AvB da corrida.
   var esc = _jsonOuNull(r.avb_escolhido);
   if (esc && String(esc.origem || '') === 'bw') return 'bw';
   if (esc || (r.trap_fav && r.trap_und)) return 'analise';
@@ -1999,8 +1512,8 @@ function _motorDoAvb(r){
 function _celulaMotor(r){
   var m = _motorDoAvb(r);
   var mapa = {
-    bw:      ['#D4AF37', 'BW',       'a camada orientada pelo que abre na BW escreveu o AvB desta corrida'],
-    analise: ['#8a94a6', 'Análise',  'vale o AvB do motor de análise: a validação na BW não trocou o par (ou só decide perto da largada)']
+    bw:      ['#D4AF37', 'BW',       'você entrou num par que a camada orientada pela BW trouxe'],
+    analise: ['#8a94a6', 'Análise',  'vale o par do motor de análise']
   };
   var v = mapa[m];
   if (!v) return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
@@ -2009,20 +1522,6 @@ function _celulaMotor(r){
     + 'border-radius:10px;border:1px solid ' + v[0] + '55;color:' + v[0] + ';white-space:nowrap">' + v[1] + '</span></td>';
 }
 
-// Coluna "AvB na BW": o AvB da corrida chegou a abrir na casa?
-//
-// races.abriu vem do motor e e' relativo ao PAR corrente (races.abriu_par):
-//   1    o AvB abriu na BW  -> check, e a odd exibida e' a REAL de abertura
-//   0    corrida monitorada e o AvB nao abriu
-//   null corrida nao monitorada
-//
-// O null continua separado do 0 de proposito. Visualmente os dois ficam
-// discretos (so o check chama atencao, a pedido), mas o tooltip e o filtro
-// distinguem: "nao abriu" e "nao medimos" nao sao a mesma coisa, e juntar os
-// dois esconderia buraco de cobertura do monitoramento.
-//
-// race_user_data.avb_nao_aberto continua sendo a marca pessoal ("tentei e nao
-// estava la"). Fica em texto, sem check, pra nao competir com a medicao.
 function _celulaAberto(r){
   var par = r.abriu_par ? ' (' + String(r.abriu_par) + ')' : '';
   var base;
@@ -2040,21 +1539,6 @@ function _celulaAberto(r){
     ? '<div style="font-size:9px;color:#f97316;margin-top:2px" title="você marcou esta corrida como não aberta">marquei</div>'
     : '';
   return '<td style="text-align:center">' + base + manual + '</td>';
-}
-
-function _celulaVip(r){
-  var pill = function(cor, txt, dica){
-    return '<td style="text-align:center;vertical-align:middle"' + (dica ? ' title="' + dica + '"' : '') + '>'
-      + '<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;'
-      + 'padding:2px 7px;border-radius:10px;border:1px solid ' + cor + ';color:' + cor + ';white-space:nowrap">' + txt + '</span></td>';
-  };
-  // O rotulo diz o NIVEL, nao a nota: "Premium" e' o que voce procura quando
-  // bate o olho na coluna. A nota (que vem gravada em vip_premium) vai pro
-  // title, pra nao se perder — ela ainda serve pra saber se o A+ rende mais
-  // que o A.
-  if (r.vip_premium) return pill('#D4AF37', '\u{1F48E} Premium', 'nota ' + String(r.vip_premium));
-  if (r.vip_plus) return pill('#60a5fa', '\u2B50 Plus');
-  return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
 }
 
 function _celulaBW(r){
@@ -2370,17 +1854,17 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:78px">VIP<br><select id="fh-vip" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="qualquer">VIP (qualquer)</option><option value="plus">Plus</option><option value="premium">Premium</option><option value="nao">Não VIP</option></select></th><th style="width:88px">Motor<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="analise">Análise</option><option value="bw">BW</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:88px">Motor<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="analise">Análise</option><option value="bw">BW</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
   var _brh=(function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
   var turnoBR=_brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-vip="${_nivelVip(r)}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}" data-motor="${_motorDoAvb(r)}">
+  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}" data-motor="${_motorDoAvb(r)}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
-${_celulaAvb(r)}${_celulaVip(r)}${_celulaMotor(r)}
+${_celulaAvb(r)}${_celulaMotor(r)}
 <td style="text-align:center" title="${(r._bateuConta||'').replace(/"/g,'&quot;')}"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>
 <option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
@@ -2625,22 +2109,13 @@ function recalcKpisHist(){
 }
 function aplicarFiltroHist(){
   var et=document.getElementById('fh-turno'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
-  var ev=document.getElementById('fh-vip'), ea=document.getElementById('fh-aberto');
+  var ea=document.getElementById('fh-aberto');
   var em=document.getElementById('fh-motor');
-  var ft=et?et.value:'', fc=ec?ec.value:'', fb=eb?eb.value:'', fv=ev?ev.value:'', fa=ea?ea.value:'', fm=em?em.value:'';
-  // 'qualquer' = Plus OU Premium; 'nao' = nenhum dos dois. Sem essas duas
-  // opcoes, olhar "tudo que foi VIP" exigiria conferir as duas separadas.
-  var casaVip=function(v){
-    if(!fv) return true;
-    if(fv==='qualquer') return v==='plus'||v==='premium';
-    if(fv==='nao') return v==='';
-    return v===fv;
-  };
+  var ft=et?et.value:'', fc=ec?ec.value:'', fb=eb?eb.value:'', fa=ea?ea.value:'', fm=em?em.value:'';
   document.querySelectorAll('tr[data-race]').forEach(function(tr){
     var t=tr.getAttribute('data-turno')||'';
     var p=tr.getAttribute('data-pista')||'';
     var b=tr.getAttribute('data-bateu')||'';
-    var v=tr.getAttribute('data-vip')||'';
     // 'nao'/'sim' olham a MEDICAO do captador; 'semdado' e' corrida nao
     // monitorada, que nao e' a mesma coisa que nao ter aberto; 'manual' e' a
     // marca pessoal, que existe em paralelo e pode discordar da medicao.
@@ -2653,7 +2128,7 @@ function aplicarFiltroHist(){
       : fa==='manual' ? na
       : true;
     var mo=tr.getAttribute('data-motor')||'';
-    var ok=casaVip(v)&&casaAberto&&(!fm||mo===fm)&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
+    var ok=casaAberto&&(!fm||mo===fm)&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
     tr.style.display=ok?'':'none';
   });
   recalcKpisHist();

@@ -324,116 +324,18 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-automacao">
 
 <div class="section">
-<div class="sec-title">Corridas VIP na tela Analisar</div>
-<p class="hint" style="margin-bottom:10px">As corridas das listas <strong>VIP Plus</strong> e <strong>VIP Premium</strong> ganham selo piscando, cor de fundo própria na tela de disputa e destaque na lista lateral. Cada nível tem a sua configuração. Corridas que o motor marcou como <strong>skip</strong> mas passaram no filtro de valor podem voltar pra tela perto da largada: o skip por margem apertada entra, o por falta de histórico nunca chega no filtro.</p>
-
-<div class="sec-title" style="font-size:12px;opacity:.85">&#11088; VIP Plus</div>
+<div class="sec-title">Motor de análise</div>
+<p class="hint" style="margin-bottom:10px">Os dois cortes que calibram o motor. Um par só vira indicação quando o favorito ganha nos quatro eixos: categoria, CalTm, split e pódio.</p>
 <div class="bloco-fields">
   <div class="field">
-    <label>Destravar skip perto da largada</label>
-    <select name="vip_skip_ativo">
-      <option value="1" ${config.vip_skip_ativo!=0?'selected':''}>Ativado</option>
-      <option value="0" ${config.vip_skip_ativo==0?'selected':''}>Desativado</option>
-    </select>
+    <label>SP colado (máximo)</label>
+    <input type="number" step="0.01" min="1" max="2" name="sp_ratio_max" value="${config.sp_ratio_max != null ? config.sp_ratio_max : 1.15}">
+    <div class="hint" style="margin-top:3px">O quanto as SPs dos dois galgos podem estar distantes para o par ainda ser considerado colado. Menor = mais exigente.</div>
   </div>
   <div class="field">
-    <label>Minutos antes da largada</label>
-    <input type="number" name="vip_skip_min_antes" min="1" max="30" value="${config.vip_skip_min_antes!=null?config.vip_skip_min_antes:5}">
-  </div>
-  <div class="field">
-    <label>Alarme sonoro ao entrar em tela</label>
-    <select name="vip_skip_alarme">
-      <option value="1" ${config.vip_skip_alarme!=0?'selected':''}>Ativado</option>
-      <option value="0" ${config.vip_skip_alarme==0?'selected':''}>Desativado</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Som do alarme</label>
-    <select name="vip_som">
-      <option value="sino" ${config.vip_som==='sino'||!config.vip_som?'selected':''}>Sino</option>
-      <option value="beep" ${config.vip_som==='beep'?'selected':''}>Beep</option>
-      <option value="alarme" ${config.vip_som==='alarme'?'selected':''}>Alarme</option>
-      <option value="suave" ${config.vip_som==='suave'?'selected':''}>Suave</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Cor do selo que pisca</label>
-    <input type="text" name="vip_cor_destaque" placeholder="#c084fc" value="${config.vip_cor_destaque||'#c084fc'}">
-  </div>
-  <div class="field">
-    <label>Cor do alerta na lista</label>
-    <select name="vip_cor_alerta">
-      <option value="azul" ${config.vip_cor_alerta==='azul'?'selected':''}>Azul</option>
-      <option value="roxo" ${config.vip_cor_alerta==='roxo'||!config.vip_cor_alerta?'selected':''}>Roxo</option>
-      <option value="laranja" ${config.vip_cor_alerta==='laranja'?'selected':''}>Laranja</option>
-      <option value="rosa" ${config.vip_cor_alerta==='rosa'?'selected':''}>Rosa</option>
-      <option value="verde" ${config.vip_cor_alerta==='verde'?'selected':''}>Verde</option>
-      <option value="dourado" ${config.vip_cor_alerta==='dourado'?'selected':''}>Dourado</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Cor de fundo da disputa</label>
-    <input type="text" name="vip_cor_fundo" placeholder="#140B2B" value="${config.vip_cor_fundo||'#140B2B'}">
-  </div>
-  <div class="field">
-    <label>Cor de fundo da linha na lista</label>
-    <input type="text" name="vip_cor_linha" placeholder="#161B27" value="${config.vip_cor_linha != null ? config.vip_cor_linha : '#161B27'}">
-    <div class="hint" style="margin-top:3px">Deixe vazio para não pintar a linha.</div>
-  </div>
-</div>
-
-<div class="sec-title" style="font-size:12px;opacity:.85">&#128142; VIP Premium</div>
-<div class="bloco-fields">
-  <div class="field">
-    <label>Destravar skip perto da largada</label>
-    <select name="vip_premium_ativo">
-      <option value="1" ${config.vip_premium_ativo!=0?'selected':''}>Ativado</option>
-      <option value="0" ${config.vip_premium_ativo==0?'selected':''}>Desativado</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Minutos antes da largada</label>
-    <input type="number" name="vip_premium_min_antes" min="1" max="30" value="${config.vip_premium_min_antes!=null?config.vip_premium_min_antes:5}">
-  </div>
-  <div class="field">
-    <label>Alarme sonoro ao entrar em tela</label>
-    <select name="vip_premium_alarme">
-      <option value="1" ${config.vip_premium_alarme!=0?'selected':''}>Ativado</option>
-      <option value="0" ${config.vip_premium_alarme==0?'selected':''}>Desativado</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Som do alarme</label>
-    <select name="vip_premium_som">
-      <option value="sino" ${config.vip_premium_som==='sino'?'selected':''}>Sino</option>
-      <option value="beep" ${config.vip_premium_som==='beep'?'selected':''}>Beep</option>
-      <option value="alarme" ${config.vip_premium_som==='alarme'||!config.vip_premium_som?'selected':''}>Alarme</option>
-      <option value="suave" ${config.vip_premium_som==='suave'?'selected':''}>Suave</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Cor do selo que pisca</label>
-    <input type="text" name="vip_premium_cor_destaque" placeholder="#D4AF37" value="${config.vip_premium_cor_destaque||'#D4AF37'}">
-  </div>
-  <div class="field">
-    <label>Cor do alerta na lista</label>
-    <select name="vip_premium_cor_alerta">
-      <option value="azul" ${config.vip_premium_cor_alerta==='azul'?'selected':''}>Azul</option>
-      <option value="roxo" ${config.vip_premium_cor_alerta==='roxo'?'selected':''}>Roxo</option>
-      <option value="laranja" ${config.vip_premium_cor_alerta==='laranja'?'selected':''}>Laranja</option>
-      <option value="rosa" ${config.vip_premium_cor_alerta==='rosa'?'selected':''}>Rosa</option>
-      <option value="verde" ${config.vip_premium_cor_alerta==='verde'?'selected':''}>Verde</option>
-      <option value="dourado" ${config.vip_premium_cor_alerta==='dourado'||!config.vip_premium_cor_alerta?'selected':''}>Dourado</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>Cor de fundo da disputa</label>
-    <input type="text" name="vip_premium_cor_fundo" placeholder="#0A280E" value="${config.vip_premium_cor_fundo||'#0A280E'}">
-  </div>
-  <div class="field">
-    <label>Cor de fundo da linha na lista</label>
-    <input type="text" name="vip_premium_cor_linha" placeholder="#161B27" value="${config.vip_premium_cor_linha != null ? config.vip_premium_cor_linha : '#161B27'}">
-    <div class="hint" style="margin-top:3px">Deixe vazio para não pintar a linha.</div>
+    <label>Corte de CalTm (segundos)</label>
+    <input type="number" step="0.01" min="0" max="2" name="caltm_min_dif" value="${config.caltm_min_dif != null ? config.caltm_min_dif : 0.20}">
+    <div class="hint" style="margin-top:3px">Vantagem mínima de tempo, ajustada por categoria, para o eixo de CalTm passar. Maior = menos indicações e mais folga em cada uma.</div>
   </div>
 </div>
 
@@ -826,37 +728,8 @@ function limparFiltrosDash(){
   dashClassesSel=[]; dashClasseDirty=false; atualizaClasseBox();
   carregarDashboard();
 }
-// Aba de nivel do painel: '' (todas), 'plus' ou 'premium'.
-var dashVip='';
-function dashTrocaVip(v){ dashVip=v; carregarDashboard(); }
-
-// As abas so aparecem quando HA corrida marcada no periodo. A marca comecou a
-// ser gravada agora, entao periodo antigo nao tem nenhuma — e aba zerada passa
-// a impressao de que nao houve corrida VIP, quando na verdade nao havia
-// registro. Some tambem a de um nivel que ficou sem corrida no recorte.
-function dashRenderAbas(cont){
-  var box=document.getElementById('dash-abas');
-  if(!box){ box=document.createElement('div'); box.id='dash-abas'; box.style.cssText='display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap'; cont.parentNode.insertBefore(box, cont); }
-  var qtd=(dashUltimasOpcoes&&dashUltimasOpcoes.vip)||{plus:0,premium:0};
-  var abas=[['','Todas',null]];
-  if(qtd.plus||dashVip==='plus') abas.push(['plus','\u2B50 VIP Plus',qtd.plus]);
-  if(qtd.premium||dashVip==='premium') abas.push(['premium','\u{1F48E} VIP Premium',qtd.premium]);
-  if(abas.length===1){ box.innerHTML=''; return; }
-  box.innerHTML=abas.map(function(a){
-    var on=dashVip===a[0];
-    return '<button type="button" data-vip="'+a[0]+'" style="padding:7px 15px;border-radius:18px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;'
-      +(on?'background:rgba(34,197,94,.14);border:1px solid #22c55e;color:#22c55e':'background:#161B27;border:1px solid #333;color:#888')+'">'
-      +a[1]+(a[2]!=null?' <span style="opacity:.65">'+a[2]+'</span>':'')+'</button>';
-  }).join('');
-  box.querySelectorAll('button').forEach(function(b){
-    b.onclick=function(){ dashTrocaVip(b.getAttribute('data-vip')); };
-  });
-}
-// Guarda a ultima contagem por nivel. As abas leem daqui em vez de recontar:
-// dentro de uma aba, o proprio filtro reduz o conjunto, e recontar faria a aba
-// sumir debaixo do seu proprio pe.
-var dashUltimasOpcoes=null;
-
+// As abas de nivel (VIP Plus / VIP Premium) sairam junto com o VIP. O motor
+// virou unico, sem niveis, e o filtro por nivel nao separa mais nada.
 async function carregarDashboard(){
   var cont=document.getElementById('dash-content'); if(!cont) return;
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
@@ -874,17 +747,12 @@ async function carregarDashboard(){
   if(fClasse)qs.push('classe='+encodeURIComponent(fClasse));
   if(fQtdMin)qs.push('qtdMin='+encodeURIComponent(fQtdMin));
   if(fQtdMax)qs.push('qtdMax='+encodeURIComponent(fQtdMax));
-  if(dashVip)qs.push('vip='+dashVip);
   try{
     var r=await fetch('${BASE}/config/desempenho-data?'+qs.join('&'));
     if(!r.ok) throw new Error('HTTP '+r.status);
     var d=await r.json();
     if(d.error) throw new Error(d.error);
     dashNomes = d.nomes || {};
-    // So atualiza a contagem quando estamos vendo TODAS: dentro de uma aba o
-    // conjunto ja vem filtrado e a contagem do outro nivel viria zerada.
-    if(!dashVip) dashUltimasOpcoes = d.opcoes || null;
-    dashRenderAbas(cont);
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
     dashPistasDisponiveis = d.opcoes.pistas || [];
     dashClassesPorPista = d.classesPorPista || {};
@@ -1355,7 +1223,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_linha TEXT DEFAULT '#161B27'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=?,caltm_min_dif=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1397,6 +1265,9 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       // String vazia e' escolha valida (sem fundo), entao NAO cai no default.
       d.vip_cor_linha != null ? String(d.vip_cor_linha).trim() : '#161B27',
       d.vip_premium_cor_linha != null ? String(d.vip_premium_cor_linha).trim() : '#161B27',
+      // Os dois cortes do motor unico. O motor le direto da analysis_config.
+      d.sp_ratio_max != null && d.sp_ratio_max !== '' ? parseFloat(d.sp_ratio_max) : 1.15,
+      d.caltm_min_dif != null && d.caltm_min_dif !== '' ? parseFloat(d.caltm_min_dif) : 0.20,
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
@@ -1532,10 +1403,6 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       caes: String(req.query.caes || '').trim(),
       classe: String(req.query.classe || '').trim(),
       pares: String(req.query.pares || '').trim(),
-      // 'plus' | 'premium' | '' (todas). Marcas gravadas pelo motor antes da
-      // largada e congeladas nela.
-      vip: ['plus','premium'].indexOf(String(req.query.vip || '').trim()) >= 0
-        ? String(req.query.vip).trim() : '',
       qtdMin: String(req.query.qtdMin || '').trim(),
       qtdMax: String(req.query.qtdMax || '').trim()
     };
