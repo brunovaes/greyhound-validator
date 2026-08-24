@@ -250,14 +250,18 @@ function rankPodio(dogsByTrap, ctx, topN) {
 
 // Avalia TODOS os pares do betwinner de uma corrida e devolve os melhores (top N),
 // ja com pos. pares: [{aTrap,bTrap,oddV1,oddV2}]. dogsByTrap: { trap: dogObj }.
-function rankearAvbs(pares, dogsByTrap, ctx, topN) {
-  topN = topN || 3;
+// opts.soTop = MOTOR UNICO (Bruno ago/2026): so mantem os pares que passam no gate dos
+// 4 eixos (av.top). Filtra ANTES de cortar em topN, pra nao perder um top que ficou
+// atras de um nao-top na ordenacao por pct. Sem opts.soTop, comportamento antigo.
+function rankearAvbs(pares, dogsByTrap, ctx, topN, opts) {
+  topN = topN || 3; opts = opts || {};
   const out = [];
   for (const p of (pares || [])) {
     const d1 = dogsByTrap[p.aTrap], d2 = dogsByTrap[p.bTrap];
     if (!d1 || !d2) continue;
     const av = avaliarPar(d1, d2, ctx);
     if (av.descartar) continue;
+    if (opts.soTop && !av.top) continue;         // gate dos 4 eixos (a nata)
     out.push(Object.assign({}, av, { _par: p }));
   }
   out.sort((a, b) => b.avaliacao - a.avaliacao);

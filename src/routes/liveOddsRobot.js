@@ -409,7 +409,10 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
     // track = 1a palavra do corrida ("Newc A8" -> "Newc"); dist vem do casamento.
     const _trackHoje = (dados && dados.corrida) ? String(dados.corrida).split(' ')[0] : null;
     const ctx = { trapsVazias, dataCorrida: (dados && dados.dataCard) || null, trackCorrida: _trackHoje, distCorrida: (dados && dados.dist) || null, config: {} };
-    const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, _maxAvbs);
+    // MOTOR UNICO (Bruno ago/2026, opcao A): o BW so abre AvB — principal E secundarios —
+    // que passa no gate dos 4 eixos. Corrida sem nenhum par top -> avbs vazio -> nao mostra
+    // e nao grava fechamento (onClose pula quando avbs.length==0). Mesma nata da manha.
+    const ranked = reanalise.rankearAvbs(race.avbs, dogsByTrap, ctx, _maxAvbs, { soTop: true });
     avbs = ranked.map(a => {
       // casa com o par do betwinner p/ pegar odd + % mercado, orientados pro FAVORITO da reanalise
       const par = race.avbs.find(p =>
@@ -442,6 +445,8 @@ async function snapshotCorrida(gameId, dados, prevAvbs) {
         avaliacao: a.avaliacao, enginePct: a.avaliacao, // enginePct mantido p/ retrocompat
         reanalisePct: a.avaliacao,                      // motor 2 (reanalise par-a-par)
         motorOrigPct,                                   // motor 1 (analise global original)
+        top: a.top, eixos: a.eixos,                     // gate dos 4 eixos (aqui sempre true — filtrado)
+        caltm_dif: a.caltm_dif, cat_pick: a.cat_pick, cat_outro: a.cat_outro,
         oddAvenceB: odd, marketPct, edge, pos: a.pos,
         valor: (edge != null && edge >= _edgeMin),
         flags: a.flags, obs: a.obs
