@@ -1315,6 +1315,32 @@ applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
 // O que NAO saiu: as colunas races.vip_plus / races.vip_premium continuam no
 // banco como registro do periodo em que o VIP existiu.
 
+// CSS do card de historico de galgo (.sv-*), usado pelo painel "Analisar
+// disputa". Vive numa funcao porque a tela /sessao/:id o injeta no <style>.
+// O JS que monta o card esta em public/js/cardGalgo.js.
+//
+// Foi removido por engano junto com as telas VIP (ficava no meio daquele
+// bloco) e a /sessao passou a estourar 500: a funcao era chamada e nao
+// existia mais. Reconstruido a partir das classes que o cardGalgo.js usa.
+function cssCardGalgo() {
+  return `.sv-dog{width:100%}
+.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sv-name{font-size:14px;font-weight:700;color:#f0f0f0}
+.sv-perfil{font-size:11px;color:#60a5fa}
+.sv-sep{height:1px;background:#222;margin:14px 0}
+.sv-tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
+.sv-tbl th{padding:5px 4px;text-align:center;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}
+.sv-tbl td{padding:5px 4px;text-align:center;border-bottom:1px solid #1e2430;color:#ccc}
+.sv-tbl tr:last-child td{border-bottom:none}
+.sv-td-date{white-space:nowrap;color:#aaa}
+.sv-td-track{white-space:nowrap}
+.sv-td-muted{color:#777}
+.sv-td-rem{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8a94a6;text-align:left}
+.sv-bends{font-weight:700;letter-spacing:1px;color:#f0f0f0}
+.sv-grade{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid #444;color:#aaa}
+.sv-caltm{font-weight:700;color:#f0f0f0}`;
+}
+
 router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
