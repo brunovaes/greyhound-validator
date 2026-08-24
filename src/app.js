@@ -1205,13 +1205,28 @@ function _mmPintarNotas(r){
   };
   var out = [];
 
-  // Corrida parelha: os DOIS percentuais, rotulados "no confronto". Sozinho,
-  // "56%" seria lido como chance de vencer a prova de 6 galgos — e nao e' isso,
-  // pct_pick e pct_outro somam 100 entre os dois.
-  if (sl.parelho) {
-    out.push(nota('#f59e0b',
-      'corrida parelha: T' + sl.pick_trap + ' ' + sl.pct_pick + '% x T' + sl.outro_trap + ' ' + sl.pct_outro + '% no confronto',
-      'os dois percentuais somam 100: e a chance dentro do par, nao de vencer a corrida'));
+  // A nota de "corrida parelha" FOI REMOVIDA. O motor virou de 4 eixos: um par
+  // so vira pick quando o favorito ganha em categoria, CalTm, split e podio.
+  // Nao passou nos quatro, a corrida nao traz principal. Ou seja, parelho nao
+  // dispara mais — todo pick que chega aqui e' folgado por definicao.
+  //
+  // No lugar dela, mostramos POR QUE o par passou: os quatro eixos e a
+  // vantagem de CalTm. Sem isso o pick vira caixa-preta, e a nota antiga pelo
+  // menos dizia quando desconfiar.
+  if (sl.top && sl.eixos) {
+    var e = sl.eixos;
+    var quatro = (e.categoria && e.caltm && e.split && e.podio);
+    var dif = (sl.caltm_dif != null) ? ' &middot; +' + sl.caltm_dif + 's' : '';
+    if (quatro) {
+      out.push(nota('#22c55e', 'passou nos 4 eixos' + dif,
+        'categoria, CalTm, split e pódio: o favorito ganha nos quatro'));
+    } else {
+      // Nao deveria acontecer (top:true implica os quatro). Se acontecer, e'
+      // divergencia do payload, e a tela avisa em vez de afirmar "4 eixos".
+      var faltou = ['categoria','caltm','split','podio'].filter(function(k){ return !e[k]; });
+      out.push(nota('#f59e0b', 'pick sem os 4 eixos: falta ' + faltou.join(', '),
+        'o payload marcou top:true mas os eixos não fecham; confira antes de entrar'));
+    }
   }
 
   // Box vazio. O numero vem de *_vazia_traps (o BOX), nunca do trap do galgo.
