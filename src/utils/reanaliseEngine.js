@@ -10,9 +10,14 @@
 
 const DEFAULTS = {
   segPorNivelCat: 0.40,   // cada nivel de categoria vale ~0,40s (dobra p/ >1 nivel via a propria conta)
-  pesoUltima: 0.6,        // enfase 60% ultima corrida
-  pesoPenultima: 0.4,     // 40% penultima
+  pesoUltima: 0.5,        // media SIMPLES das 2 recentes (Bruno ago/2026: sem peso extra na ultima)
+  pesoPenultima: 0.5,
   nRecentes: 5,           // olhar ate 5 corridas p/ split/bends/podio
+  // ── GATE "nata das natas" (Bruno ago/2026): o favorito so vira pick TOP se ganhar
+  //    nos QUATRO eixos. Estes sao os cortes de cada eixo (o SP colado e' checado por
+  //    quem chama). ──
+  caltmMinDif: 0.20,      // pick precisa ser >= isto mais rapido (aj. categoria) p/ "ganhar" o CalTm
+  splitEps: 0.01,         // pick precisa arrancar melhor (split) por pelo menos isto
   escalaPct: 85,          // conversao vantagem-liquida(seg) -> % (0,10s ~ +8,5%)
   kSplit: 0.15,           // peso do split (arranque)
   kBends: 0.05,           // peso dos bends (como correu)
@@ -115,11 +120,17 @@ function resumoGalgo(hist, o) {
   const poss = rec.map(l => l.pos).filter(p => p > 0);
   const podioRate = poss.length ? poss.filter(p => p <= 3).length / poss.length : 0;
 
+  // CATEGORIA do galgo = nivel da corrida real (nao-trial) mais recente com classe valida.
+  // Usado como EIXO independente no gate da nata (pick tem que vir de categoria igual ou
+  // melhor que o rival). menor = mais forte (A1=1 ... A9=9; OR=1).
+  let catNivel = null;
+  for (const l of naoTrial) { const n = nivelCat(l.classe); if (n != null) { catNivel = n; break; } }
+
   // TRIAL "muito superior" numa corrida ANTERIOR a ultima -> promove.
   const mediaNT = naoTrial.length ? naoTrial.map(l => l.caltm).reduce((a, b) => a + b, 0) / naoTrial.length : null;
   const trialSuperior = val.slice(1).some(l => ehTrial(l) && l.caltm > 0 && mediaNT != null && (mediaNT - l.caltm) >= o.trialSuperiorSeg);
 
-  return { caltmEf, splitEf, bendEf, podioRate, ultimaTrial, trialSuperior };
+  return { caltmEf, splitEf, bendEf, podioRate, catNivel, ultimaTrial, trialSuperior };
 }
 
 function montarObs(A, B, R, Rb, vantTempoAbs, flags) {
@@ -183,13 +194,58 @@ function avaliarPar(d1, d2, ctx) {
   let A = d1, B = d2, pct = pct1, R = r1, Rb = r2;
   if (pct1 < 50) { A = d2; B = d1; pct = 100 - pct1; R = r2; Rb = r1; }
 
+  // ── GATE "nata das natas" (Bruno ago/2026) ─────────────────────────────────
+  // So e' pick TOP quando o FAVORITO (A) ganha nos QUATRO eixos, cada um por si:
+  //   categoria: A vem de categoria igual ou MELHOR (nunca mais fraca) que B
+  //   caltm:     A mais rapido por >= caltmMinDif (segundos aj. categoria)
+  //   split:     A arranca melhor (splitEf menor por >= splitEps)
+  //   podio:     A com melhor podio recente (podioRate estritamente maior)
+  // O SP colado NAO entra aqui — quem chama (motorManha/BW) so manda par de odd colada.
+  // 'top' e 'eixos' sao ADITIVOS: consumidores antigos que ignoram esses campos seguem
+  // funcionando igual (o pct/obs/flags nao mudaram de forma).
+  const vantTempoA = (A === d1) ? vantTempo : -vantTempo;   // seg aj. categoria, a favor do pick A
+  const eixoCategoria = (R.catNivel != null && Rb.catNivel != null) ? (R.catNivel <= Rb.catNivel) : false;
+  const eixoCaltm     = vantTempoA >= o.caltmMinDif;
+  const eixoSplit     = (R.splitEf != null && Rb.splitEf != null) ? (R.splitEf < Rb.splitEf - o.splitEps) : false;
+  const eixoPodio     = (R.podioRate > Rb.podioRate);
+  const eixos = { categoria: eixoCategoria, caltm: eixoCaltm, split: eixoSplit, podio: eixoPodio };
+  const top = eixoCategoria && eixoCaltm && eixoSplit && eixoPodio;
+
   return {
     descartar: false,
     aTrap: A.trap, aNome: A.nome, bTrap: B.trap, bNome: B.nome,
     avaliacao: pct, favoritoTrap: A.trap, flags,
+    top: top, eixos: eixos,                       // GATE nata: passou nos 4 eixos?
+    caltm_dif: +vantTempoA.toFixed(3),            // vantagem de tempo do pick (aj. categoria)
+    cat_pick: R.catNivel, cat_outro: Rb.catNivel, // niveis de categoria (menor = mais forte)
     obs: montarObs(A, B, R, Rb, Math.abs(vantTempo), flags),
     _debug: { vantTempo: +vantTempo.toFixed(3), vantSplit: +vantSplit.toFixed(3), vantBends: +vantBends.toFixed(3), vantPodio: +vantPodio.toFixed(3), net: +net.toFixed(3) }
   };
+}
+
+// PODIO pela MESMA lógica dos 4 eixos, mas SEM exigir SP colado (Bruno ago/2026):
+// ranqueia TODO o grid por um score que junta CalTm (aj. categoria, mais rapido melhor),
+// split, bends e podio recente — os mesmos pesos que decidem o AvB. Devolve os traps do
+// top N em ordem. Galgo sem tempo avaliavel (caltmEf null) fica fora do ranking.
+// dogsByTrap: { trap: {trap, historico:[...]} }. ctx: { trackCorrida, distCorrida, config }.
+function rankPodio(dogsByTrap, ctx, topN) {
+  const o = Object.assign({}, DEFAULTS, (ctx && ctx.config) || {});
+  const trk = (ctx && ctx.trackCorrida != null) ? ctx.trackCorrida : null;
+  const dst = (ctx && ctx.distCorrida != null) ? ctx.distCorrida : null;
+  const scored = [];
+  for (const k in dogsByTrap) {
+    const d = dogsByTrap[k]; if (!d || d.trap == null) continue;
+    const r = resumoGalgo(limparHistorico(d.historico, trk, dst, o.outlierSeg), o);
+    if (r.caltmEf == null) continue;                 // sem tempo -> nao ranqueia
+    // menor caltmEf = melhor; menor split = melhor; menor bend = melhor; maior podio = melhor.
+    const score = -r.caltmEf
+      + o.kSplit * -(r.splitEf != null ? r.splitEf : 0)
+      + o.kBends * -(r.bendEf != null ? r.bendEf : 0)
+      + o.kPodio * (r.podioRate || 0);
+    scored.push({ trap: Number(d.trap), score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topN || 3).map(x => x.trap);
 }
 
 // Avalia TODOS os pares do betwinner de uma corrida e devolve os melhores (top N),
@@ -208,4 +264,4 @@ function rankearAvbs(pares, dogsByTrap, ctx, topN) {
   return out.slice(0, topN).map((a, i) => Object.assign({}, a, { pos: i + 1 }));
 }
 
-module.exports = { avaliarPar, rankearAvbs, resumoGalgo, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };
+module.exports = { avaliarPar, rankearAvbs, rankPodio, resumoGalgo, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };

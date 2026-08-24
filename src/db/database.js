@@ -303,6 +303,11 @@ const migrations = [
   // ago/2026 — passa a aceitar corridas Open (OR). Adiciona OR,OR1,OR2,OR3 na lista
   // de classes aceitas do config EXISTENTE (idempotente: so mexe se ainda nao tem OR).
   "UPDATE analysis_config SET classes_aceitas = classes_aceitas || ',OR,OR1,OR2,OR3' WHERE classes_aceitas IS NOT NULL AND classes_aceitas NOT LIKE '%OR%'",
+  // ago/2026 — MOTOR UNICO ("a nata das natas"): so vira pick o par de SP colada cujo
+  // favorito ganha nos 4 eixos (categoria, CalTm, split, podio). Dois parametros na tela
+  // de Config: SP colado (razao maxima das odds) e corte de CalTm (aj. categoria, em s).
+  "ALTER TABLE analysis_config ADD COLUMN sp_ratio_max REAL DEFAULT 1.15",   // par so conta se razao das odds medias <= isto
+  "ALTER TABLE analysis_config ADD COLUMN caltm_min_dif REAL DEFAULT 0.20",  // pick precisa ser >= isto mais rapido p/ "ganhar" o CalTm
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

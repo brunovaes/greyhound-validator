@@ -59,7 +59,8 @@ function _nomeMascara(nomeCru, trap) {
 function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   opts = opts || {};
   const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX;
-  const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE;
+  // corte de CalTm do gate da nata (aj. categoria). Vem da config; senao o default do engine.
+  const caltmMinDif = opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif;
 
   const dogsByTrap = {};
   for (const g of (Array.isArray(histFull) ? histFull : [])) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g;
@@ -71,7 +72,7 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   const trapsVazias = Array.from(vaz);
   // QUAIS traps vazias estao ao lado (nao so "tem/nao tem") — pra a nota dizer o numero.
   const vaziasAoLado = t => [t - 1, t + 1].filter(x => x >= 1 && x <= 6 && vaz.has(x));
-  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: {} };
+  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: { caltmMinDif } };
 
   const oddMedia = _oddMediaPorTrap(histAll);
   // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card (galgo
@@ -96,6 +97,10 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
     if (slots.length >= N_SLOTS) break;
     const av = reanalise.avaliarPar(dogsByTrap[par.a], dogsByTrap[par.b], ctx);
     if (!av || av.descartar) continue;                    // sem histórico p/ avaliar → pula pro próximo par
+    // ── GATE "nata das natas": só entra o par onde o favorito GANHA NOS 4 EIXOS
+    //    (categoria, CalTm >= corte, split, pódio). Não passou → não é top, não aparece.
+    //    (SP colado já foi garantido no pareamento acima.) Sem meio-termo, sem parelho.
+    if (!av.top) continue;
     const pct = av.avaliacao;                             // % do favorito (av.aTrap) vencer
     slots.push({
       slot: rotulos[slots.length],
@@ -104,7 +109,10 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
       outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
       pct: pct,
       pct_pick: pct, pct_outro: 100 - pct,
-      parelho: pct <= parelhoAte,                         // <= 60% = nota "corrida parelha"
+      top: true,                                          // passou nos 4 eixos (a nata)
+      eixos: av.eixos,                                    // {categoria,caltm,split,podio} — todos true aqui
+      caltm_dif: av.caltm_dif,                            // vantagem de CalTm do pick (aj. categoria)
+      cat_pick: av.cat_pick, cat_outro: av.cat_outro,     // niveis de categoria (menor = mais forte)
       // ITEM 5 — nota de trap vazia ao lado, indicando QUAL trap (atualiza tardio: le o
       // card fresco a cada chamada). pick_vazia_traps = ex.: [3] (box 3 vazio ao lado do pick).
       pick_vazia_lado: vaziasAoLado(av.aTrap).length > 0,
@@ -118,26 +126,22 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   return slots;
 }
 
-// Pódio COERENTE (item 3+c): base = top3 do Motor 1 (ex.: "5-3-6"); se o AvB principal
-// (pick firme, não parelho) contradiz a ordem, inverte os dois no pódio (o 5-1-6 com
-// AvB 6v5 vira 6-1-5). Nunca sai pódio que briga com o AvB.
-// Coerência vale SEMPRE que há principal (inclusive parelho — o pick é o favorito,
-// por mais apertado que seja). Regra do Bruno: o pick tem que estar À FRENTE do outro
-// no pódio, OU o outro não aparecer. Três casos:
-//   A) os dois no pódio, outro na frente        -> troca os dois.
-//   B) outro no pódio e o pick FORA             -> insere o pick logo antes do outro (corta em 3).
-//   C) pick presente e outro fora / os dois fora -> sem contradição, não mexe.
-function _podioCoerente(top3Str, principal) {
-  let podio = String(top3Str || '').split('-').map(n => parseInt(n)).filter(n => n > 0);
+// Pódio pela MESMA lógica dos 4 eixos, SEM SP (Bruno ago/2026): ranqueia o grid inteiro
+// pelo reanalise.rankPodio (CalTm aj. categoria + split + bends + pódio recente). Como o
+// pick (favorito que ganhou os 4 eixos) tem score melhor que o outro por construção, ele
+// sai naturalmente à frente — mas mantenho uma passada de coerência de segurança: se por
+// algum motivo o outro vier na frente, troca os dois. Devolve {podio, ajustado}.
+function _podioQuatroEixos(histFull, ctxBase, opts, principal) {
+  const dogsByTrap = {};
+  for (const g of (Array.isArray(histFull) ? histFull : [])) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g;
+  const caltmMinDif = opts && opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif;
+  const ctx = { trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: { caltmMinDif } };
+  let podio = reanalise.rankPodio(dogsByTrap, ctx, 3);
   let ajustado = false;
   if (principal && principal.pick_trap && principal.outro_trap) {
-    const pick = principal.pick_trap, outro = principal.outro_trap;
-    const ip = podio.indexOf(pick), io = podio.indexOf(outro);
-    if (io >= 0 && ip >= 0 && io < ip) {                 // A) troca
-      podio[ip] = outro; podio[io] = pick; ajustado = true;
-    } else if (io >= 0 && ip < 0) {                       // B) pick fora, entra antes do outro
-      podio.splice(io, 0, pick); podio = podio.slice(0, 3); ajustado = true;
-    }
+    const ip = podio.indexOf(principal.pick_trap), io = podio.indexOf(principal.outro_trap);
+    if (io >= 0 && ip >= 0 && io < ip) { podio[ip] = principal.outro_trap; podio[io] = principal.pick_trap; ajustado = true; }
+    else if (io >= 0 && ip < 0) { podio.splice(io, 0, principal.pick_trap); podio = podio.slice(0, 3); ajustado = true; }
   }
   return { podio, ajustado };
 }
@@ -149,11 +153,17 @@ function _podioOk(podio, principal) {
   return ip >= 0 && ip < io;                              // pick presente e à frente
 }
 
-// corte de parelho: ?opts vence; senao a config do Painel (avb_parelho_pct); senao 60.
-function _aplicaParelhoConfig(db, opts) {
-  if (!(opts.parelhoAte > 0)) {
-    try { const c = db.prepare("SELECT avb_parelho_pct FROM analysis_config WHERE user_id=1").get(); if (c && c.avb_parelho_pct > 0) opts = Object.assign({}, opts, { parelhoAte: c.avb_parelho_pct }); } catch (e) {}
-  }
+// Config do motor único (Bruno ago/2026): SP colado e corte de CalTm vêm de analysis_config
+// (a tela de Config, do UI). ?opts sempre vence. Defensivo: se as colunas ainda não existem,
+// cai nos defaults (SP_RATIO_MAX 1.15 / engine caltmMinDif 0.20).
+function _aplicaConfigMotor(db, opts) {
+  try {
+    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif FROM analysis_config WHERE user_id=1").get();
+    if (c) {
+      if (!(opts.spRatioMax > 0) && c.sp_ratio_max > 0) opts = Object.assign({}, opts, { spRatioMax: c.sp_ratio_max });
+      if (!(opts.caltmMinDif > 0) && c.caltm_min_dif > 0) opts = Object.assign({}, opts, { caltmMinDif: c.caltm_min_dif });
+    }
+  } catch (e) {}
   return opts;
 }
 
@@ -167,7 +177,7 @@ function _corridaDeRow(row, date, opts) {
   if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) return null;
   const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
   const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
-  const pod = _podioCoerente(row.top3, slots[0] || null);
+  const pod = _podioQuatroEixos(histFull, ctxBase, opts, slots[0] || null);
   // galgos que a reanálise CONSIDEROU (pra ninguém sumir do pódio na revisão do skip)
   const considerados = Array.from(new Set(slots.flatMap(s => [s.pick_trap, s.outro_trap]))).sort((a, b) => a - b);
   return {
@@ -175,7 +185,7 @@ function _corridaDeRow(row, date, opts) {
     principal: slots[0] || null,
     secundarios: slots.slice(1),
     slots,
-    podio: pod.podio, podio_base_top3: row.top3 || null, podio_ajustado_pelo_avb: pod.ajustado,
+    podio: pod.podio, podio_fonte: '4-eixos', podio_base_top3: row.top3 || null, podio_ajustado_pelo_avb: pod.ajustado,
     podio_ok: _podioOk(pod.podio, slots[0] || null),   // invariante: pódio não contradiz o AvB
     galgos_considerados: considerados
   };
@@ -187,7 +197,7 @@ const _SELECT_CORRIDA = "r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.r
 function listar(db, opts) {
   opts = opts || {};
   const date = opts.date;
-  opts = _aplicaParelhoConfig(db, opts);
+  opts = _aplicaConfigMotor(db, opts);
   const rows = db.prepare(
     "SELECT " + _SELECT_CORRIDA + " " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
@@ -202,12 +212,17 @@ function listar(db, opts) {
 
   return {
     date, total_corridas: corridas.length,
-    parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, parelho_ate_pct: opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE, n_slots: N_SLOTS },
+    parametros: {
+      sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX,
+      caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif,
+      n_slots: N_SLOTS
+    },
     corridas,
-    legenda: 'Motor da manhã = regras da reanálise sobre as SPs do PDF. 3 pares de SP mais colada por corrida '
-      + '(principal + 2 secundários). pct = % do pick (favorito) vencer o outro. parelho=true quando pct <= '
-      + PARELHO_ATE + '% (mostrar nota com os dois %). pct_pick/pct_outro = os dois percentuais. '
-      + 'Perto da largada a reanálise atualiza isto com o card fresco (trap vazia, retirada).'
+    legenda: 'MOTOR ÚNICO (a nata das natas): só entra como pick o par de SP colada (razão <= sp_ratio_max) '
+      + 'cujo favorito GANHA NOS 4 EIXOS — categoria (igual ou melhor), CalTm (>= caltm_min_dif, aj. categoria), '
+      + 'split (arranca melhor) e pódio (melhor pódio recente). top=true e eixos={categoria,caltm,split,podio}. '
+      + 'Não passou nos 4 → não aparece (sem meio-termo, sem parelho). O pódio é ranqueado pela MESMA lógica dos '
+      + '4 eixos, mas SEM exigir SP (podio_fonte:"4-eixos"). Perto da largada atualiza com o card fresco (trap vazia, retirada).'
   };
 }
 
@@ -250,7 +265,7 @@ function umaCorrida(db, opts) {
   const date = opts.date;
   const hora = String(opts.hora || '').trim();
   const corrida = String(opts.corrida || '').trim();
-  opts = _aplicaParelhoConfig(db, opts);
+  opts = _aplicaConfigMotor(db, opts);
   if (!hora || !corrida) {
     return { date, hora, corrida, encontrada: false, match: null, corrida_casada: null, erro: 'hora e corrida são obrigatórios', corrida_obj: null };
   }
@@ -281,7 +296,7 @@ function umaCorrida(db, opts) {
     date, hora, corrida, encontrada: !!c, match: c ? match : null,
     corrida_casada: row.corrida,   // o r.corrida que bateu (código cru do banco)
     corrida_obj: c,                // null quando a corrida existe mas não tem histórico avaliável
-    parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, parelho_ate_pct: opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE, n_slots: N_SLOTS }
+    parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif, n_slots: N_SLOTS }
   };
 }
 
@@ -292,9 +307,7 @@ function umaCorrida(db, opts) {
 function paraPersistir(db, opts) {
   opts = opts || {};
   const date = opts.date;
-  if (!(opts.parelhoAte > 0)) {
-    try { const c = db.prepare("SELECT avb_parelho_pct FROM analysis_config WHERE user_id=1").get(); if (c && c.avb_parelho_pct > 0) opts = Object.assign({}, opts, { parelhoAte: c.avb_parelho_pct }); } catch (e) {}
-  }
+  opts = _aplicaConfigMotor(db, opts);
   const rows = db.prepare(
     "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.top3, r.final_check_at, r.finishing_order_json " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
@@ -312,7 +325,7 @@ function paraPersistir(db, opts) {
     const slots = slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts);
     const principal = slots[0] || null;
     if (!principal) continue;                                  // só corrida COM principal (decisão do Bruno)
-    const pod = _podioCoerente(row.top3, principal);
+    const pod = _podioQuatroEixos(histFull, ctxBase, opts, principal);
     const histByTrap = {}; for (const g of histAll) if (g && g.trap != null) histByTrap[Number(g.trap)] = g;
     const gP = histByTrap[principal.pick_trap], gO = histByTrap[principal.outro_trap];
     out.push({
