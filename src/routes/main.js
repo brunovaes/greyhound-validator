@@ -705,6 +705,38 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   .val-dog{overflow-x:visible!important}
   .val-tbl{table-layout:auto!important;width:auto!important;min-width:560px!important}
 }
+
+/* ── A tela inteira cabe na altura da janela, em qualquer notebook ─────────
+   O .main usava min-height:calc(100vh - 175px), e esse 175 era um chute fixo
+   pro hero + menu. So que o hero e' uma imagem de largura 100%: a altura dele
+   MUDA com a largura da janela. Notebook mais largo -> banner mais alto -> os
+   175 ficam curtos, sobra conteudo e aparece o scroll. Era por isso que o zoom
+   precisava de ajuste de maquina pra maquina.
+
+   Agora a pagina e' uma coluna flex de 100vh: hero e menu ocupam o que
+   precisam, e o .main fica com EXATAMENTE o que sobrar, seja qual for a altura
+   do banner. Nada e' calculado a mao.
+
+   min-height:0 nas colunas e' obrigatorio: sem isso, item de flex nao encolhe
+   abaixo do proprio conteudo e o overflow-y:auto delas nunca entra em acao —
+   o scroll voltaria pra pagina inteira. */
+html,body{height:100%}
+body{display:flex;flex-direction:column;overflow:hidden;background:#000}
+.hero{flex:0 0 auto}
+/* Teto tambem em vh: em tela baixa o banner deixa de comer a area util. */
+.hero img{max-height:min(160px,15vh)}
+nav{flex:0 0 auto}
+.main{flex:1 1 auto;min-height:0}
+.sidebar,.race-list-col,.focus-col,.content{min-height:0}
+
+@media(max-width:900px){
+  /* No estreito a tela EMPILHA, e ai ela precisa rolar mesmo. Manter o
+     overflow:hidden aqui deixaria conteudo inalcancavel. */
+  html,body{height:auto;overflow:visible}
+  body{display:block}
+  .main{min-height:0}
+  .hero img{max-height:130px}
+}
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
 ${navBar(user, 'analisar')}
