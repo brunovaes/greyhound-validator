@@ -2484,16 +2484,48 @@ function openValModal(key){
 function openAllDogsModal(key){
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[ALLDOGS] nao achou:',key);return;}
-  var all=r.histAll&&r.histAll.length?r.histAll:null;
-  document.getElementById('val-title').textContent='Corrida completa — '+corridaDisplay(r);
+  var all=r.histAll&&r.histAll.length?r.histAll:[];
+
+  // Descartados vao junto, no FIM. Eles correm a prova do mesmo jeito: o motor
+  // os tirou do CALCULO, nao da pista. Sem eles, a "corrida completa" mostrava
+  // meia corrida — e na hora de olhar o grid faltava justamente quem pode
+  // atrapalhar o pick.
+  //
+  // O trap e' a chave: um galgo eliminado pode ate constar no histAll (o motor
+  // pontuou e so depois descartou), e ai ele nao pode aparecer duas vezes.
+  var elim = (r.eliminados||[]).filter(function(e){ return e && e.trap; });
+  var noCalculo = all.map(function(g){ return Number(g.trap); });
+  var fora = elim.filter(function(e){ return noCalculo.indexOf(Number(e.trap)) < 0; });
+
+  document.getElementById('val-title').textContent = 'Corrida completa — ' + corridaDisplay(r)
+    + (fora.length ? '  \u00b7  ' + all.length + ' no cálculo + ' + fora.length + ' descartado' + (fora.length>1?'s':'') : '');
   document.getElementById('val-body').classList.add('val-compact');
-  if(!all){
+
+  if(!all.length && !fora.length){
     document.getElementById('val-body').innerHTML='<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Histórico completo não disponível para esta corrida (sessão salva antes deste recurso).</div>';
   } else {
-    document.getElementById('val-body').innerHTML=all.map(function(g,i){
-      var card=buildDogCard(g.trap,g.nome,'',g.historico,true);
-      return card+(i<all.length-1?'<div class="val-sep"></div>':'');
+    var html = all.map(function(g,i){
+      return buildDogCard(g.trap,g.nome,'',g.historico,true)
+        + ((i<all.length-1 || fora.length) ? '<div class="val-sep"></div>' : '');
     }).join('');
+
+    if (fora.length) {
+      // Faixa separando. Sem ela o descartado pareceria mais um do grid, e o
+      // motivo de estar fora se perderia.
+      html += '<div style="margin:4px 0 10px;padding:6px 10px;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;border-radius:4px;'
+        + 'font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.3px">DESCARTADOS DO CÁLCULO'
+        + '<span style="font-weight:400;color:#c88;margin-left:6px">correm a prova do mesmo jeito</span></div>';
+      html += fora.map(function(e,i){
+        // O historico do descartado pode nao ter sido carregado. O buildDogCard
+        // ja trata lista vazia com "Sem histórico", entao o card sai igual aos
+        // outros, so sem as linhas.
+        var g = all.filter(function(x){ return Number(x.trap)===Number(e.trap); })[0];
+        var card = buildDogCard(e.trap, e.nome || (g&&g.nome) || '', '', (g&&g.historico)||[], true);
+        var motivo = '<div style="font-size:11px;color:#fca5a5;padding:2px 0 6px 2px">motivo: ' + (e.motivo||'não informado') + '</div>';
+        return card + motivo + (i<fora.length-1?'<div class="val-sep"></div>':'');
+      }).join('');
+    }
+    document.getElementById('val-body').innerHTML = html;
   }
   document.getElementById('val-modal').classList.add('open');
 }
