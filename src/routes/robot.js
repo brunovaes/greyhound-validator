@@ -2930,6 +2930,26 @@ router.get('/diag/lista-dia', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// BACKFILL do flag BW/bw_pares (admin): marca a NATA de um dia INTEIRO, inclusive as
+// corridas que JA largaram (o ciclo normal congela na largada, entao corridas que correram
+// antes do deploy do flag ficaram sem marca). bw e' so um rotulo derivado da analise, entao
+// remarcar depois da largada e' seguro. ?date=YYYY-MM-DD (default hoje). Precisa de hist_full
+// no dia (dias recentes tem). Roda quando voce chamar — util pra popular o Historico.
+router.get('/diag/backfill-bw', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const recs = mm.paraPersistir(db, { date });   // todas as corridas COM principal (nata), incl. largadas
+    // zera o dia inteiro (rotulo), depois marca a nata — sem respeitar freeze (e' so label)
+    db.prepare("UPDATE races SET bw=0, bw_pares=NULL WHERE id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date);
+    const upd = db.prepare('UPDATE races SET bw=1, bw_pares=? WHERE id=?');
+    let n = 0;
+    for (const r of recs) { upd.run(r.bw_pares || null, r.id); n++; }
+    res.json({ date, marcadas_nata: n, legenda: 'Marcou bw=1 e bw_pares nas corridas da nata do dia (inclusive as que ja largaram). As demais ficaram bw=0.' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // (VIP removido ago/2026 — /diag/limpar-fechamento-vip saiu junto. O avb_fechamento
 // é sempre a reanálise, então não há mais fechamento de origem VIP pra limpar.)
 
