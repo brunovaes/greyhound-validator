@@ -314,6 +314,9 @@ const migrations = [
   // FLAG BW: corrida aprovada pelo motor unico (a nata) = candidata a entrar na BW. O
   // _persistirManha marca 1 nas tops e 0 nas demais. Pro filtro "BW" da tela Analisar.
   "ALTER TABLE races ADD COLUMN bw INTEGER DEFAULT 0",
+  // Pares aprovados da nata (principal 1o, depois secundarios): "4x2,1x5". Pro Historico
+  // cruzar com avb_escolhido e medir "troquei de par dentro da nata, melhorou ou piorou?".
+  "ALTER TABLE races ADD COLUMN bw_pares TEXT",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

@@ -337,6 +337,9 @@ function paraPersistir(db, opts) {
       id: row.id, hora: row.hora, corrida: row.corrida,
       largou: !!(row.final_check_at || row.finishing_order_json),
       principal,
+      // TODOS os pares aprovados (nata), principal 1o, depois secundarios — ex.: "4x2,1x5".
+      // Pro Historico cruzar com avb_escolhido e saber se o Bruno ficou na nata e em qual slot.
+      bw_pares: slots.map(s => s.pick_trap + 'x' + s.outro_trap).join(','),
       podio_str: pod.podio.join('-'),
       hist_fav: gP ? (gP.historico || null) : null,
       hist_und: gO ? (gO.historico || null) : null,

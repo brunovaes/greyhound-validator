@@ -2833,11 +2833,11 @@ function _persistirManha(date, aplicar){
     // Antes de remarcar, zera o bw das corridas de hoje que ainda NAO largaram (as que sairam
     // da nata perdem a marca); as ja largadas ficam congeladas. Logo abaixo, as tops voltam a 1.
     if(aplicar){
-      try { db.prepare("UPDATE races SET bw=0 WHERE final_check_at IS NULL AND finishing_order_json IS NULL AND id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date); } catch(e){}
+      try { db.prepare("UPDATE races SET bw=0, bw_pares=NULL WHERE final_check_at IS NULL AND finishing_order_json IS NULL AND id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date); } catch(e){}
     }
     const upd = aplicar ? db.prepare(
       'UPDATE races SET trap_fav=?, name_fav=?, trap_und=?, name_und=?, perfil_fav=?, perfil_und=?, '
-      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=?, bw=1 WHERE id=?') : null;
+      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=?, bw=1, bw_pares=? WHERE id=?') : null;
     let n=0, cong=0; const preview=[];
     for(const r of recs){
       if(r.largou){ cong++; continue; }                      // FREEZE na largada
@@ -2852,7 +2852,7 @@ function _persistirManha(date, aplicar){
           p.pick_trap, p.pick_nome, p.outro_trap, p.outro_nome,
           r.perfil_fav||'', r.perfil_und||'',
           r.hist_fav?JSON.stringify(r.hist_fav):null, r.hist_und?JSON.stringify(r.hist_und):null,
-          p.pct, p.obs||null, r.podio_str||null, registro, r.id
+          p.pct, p.obs||null, r.podio_str||null, registro, r.bw_pares||null, r.id
         );
       } else if(preview.length < 20){
         preview.push({ hora:r.hora, corrida:r.corrida, trap_fav:p.pick_trap, name_fav:p.pick_nome, trap_und:p.outro_trap, name_und:p.outro_nome, pct:p.pct, parelho:p.parelho, top3:r.podio_str, perfil_fav:r.perfil_fav, perfil_und:r.perfil_und });
