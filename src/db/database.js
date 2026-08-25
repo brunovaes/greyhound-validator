@@ -311,6 +311,9 @@ const migrations = [
   // "NAO-SEGURA" (fumador): pick que lidera na ultima curva e desaba na reta e' reprovado.
   "ALTER TABLE analysis_config ADD COLUMN desaba_queda INTEGER DEFAULT 2",   // posicoes perdidas (ultima curva -> FIN) p/ contar desabamento
   "ALTER TABLE analysis_config ADD COLUMN desaba_min INTEGER DEFAULT 2",     // quantas das ultimas 5 com desabamento p/ reprovar o pick
+  // FLAG BW: corrida aprovada pelo motor unico (a nata) = candidata a entrar na BW. O
+  // _persistirManha marca 1 nas tops e 0 nas demais. Pro filtro "BW" da tela Analisar.
+  "ALTER TABLE races ADD COLUMN bw INTEGER DEFAULT 0",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

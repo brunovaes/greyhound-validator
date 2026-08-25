@@ -2829,9 +2829,15 @@ function _persistirManha(date, aplicar){
     date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
     const mm = require('../utils/motorManha');
     const recs = mm.paraPersistir(db, { date });
+    // FLAG BW: marca as corridas aprovadas pelo motor unico (a nata) pro filtro "BW" da tela.
+    // Antes de remarcar, zera o bw das corridas de hoje que ainda NAO largaram (as que sairam
+    // da nata perdem a marca); as ja largadas ficam congeladas. Logo abaixo, as tops voltam a 1.
+    if(aplicar){
+      try { db.prepare("UPDATE races SET bw=0 WHERE final_check_at IS NULL AND finishing_order_json IS NULL AND id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date); } catch(e){}
+    }
     const upd = aplicar ? db.prepare(
       'UPDATE races SET trap_fav=?, name_fav=?, trap_und=?, name_und=?, perfil_fav=?, perfil_und=?, '
-      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=? WHERE id=?') : null;
+      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=?, bw=1 WHERE id=?') : null;
     let n=0, cong=0; const preview=[];
     for(const r of recs){
       if(r.largou){ cong++; continue; }                      // FREEZE na largada
