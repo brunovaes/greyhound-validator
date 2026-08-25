@@ -1519,27 +1519,27 @@ function _celulaAvb(r){
 // vip_premium guarda a NOTA ('A+', 'A'), nao 1/0 — por isso ela aparece junto.
 // Premium tem prioridade: e' o subconjunto mais exigente, e mostrar "Plus"
 // numa corrida que tambem era Premium seria informacao a menos.
-// QUAL MOTOR analisou esta corrida. Nao confundir com a coluna AvB, que diz
-// qual PAR valeu e se foi voce que apontou.
+// A corrida foi aprovada pelo motor unico (a NATA) ou nao.
 //
-//   'bw'       voce entrou num par que a camada BW trouxe (ou inverteu sobre ele)
-//   'analise'  vale o par da analise, com ou sem escolha sua por cima
+// Le races.bw, o flag que o motor grava a cada ciclo: 1 = passou nos 4 eixos e
+// nao e' nao-segura. E' da CORRIDA, nao do par.
 //
-// O avb_escolhido e' quem decide aqui: o fechamento sozinho nao troca o AvB da
-// corrida. A camada BW continua existindo (a coluna de alternativas da tela
-// Analisar le as odds ao vivo), mesmo com o VIP fora.
+// Antes esta coluna dizia de onde vinha o par ("BW" quando ele entrava numa
+// alternativa). Foi trocada porque "BW" significava uma coisa aqui e outra no
+// filtro da lista, e ninguem merece decorar isso. A informacao antiga nao se
+// perdeu: a coluna AvB ja marca "sua escolha" nas linhas em que ele apontou o
+// par.
 function _motorDoAvb(r){
-  var esc = _jsonOuNull(r.avb_escolhido);
-  if (esc && String(esc.origem || '') === 'bw') return 'bw';
-  if (esc || (r.trap_fav && r.trap_und)) return 'analise';
+  if (r.bw === 1 || r.bw === true || r.bw === '1') return 'nata';
+  if (_jsonOuNull(r.avb_escolhido) || (r.trap_fav && r.trap_und)) return 'analise';
   return '';
 }
 
 function _celulaMotor(r){
   var m = _motorDoAvb(r);
   var mapa = {
-    bw:      ['#D4AF37', 'BW',       'você entrou num par que a camada orientada pela BW trouxe'],
-    analise: ['#8a94a6', 'Análise',  'vale o par do motor de análise']
+    nata:    ['#D4AF37', 'NATA',     'o motor aprovou esta corrida: passou nos 4 eixos e o pick não é não-segura'],
+    analise: ['#8a94a6', 'Análise',  'a corrida não passou no corte do motor: vale o AvB da análise']
   };
   var v = mapa[m];
   if (!v) return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
@@ -1880,7 +1880,7 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:88px">Motor<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="analise">Análise</option><option value="bw">BW</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:88px">Motor<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="nata">NATA</option><option value="analise">Análise</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:110px">Resultado</th><th style="width:50px">🚩</th><th style="width:360px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
