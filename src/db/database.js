@@ -193,6 +193,32 @@ db.exec(`
     bytes INTEGER DEFAULT 0,
     reqs INTEGER DEFAULT 0
   );
+
+  -- ago/2026 — TABELA OCULTA de pre-calculo (ideia do Bruno). De manha o motor pre-analisa
+  -- TODOS os confrontos possiveis de cada corrida e guarda aqui. So e' atualizada quando o
+  -- card muda (saida de galgo / mudanca de ultima hora) — detectado pela `assinatura` (traps
+  -- presentes). Na hora da BW, cruza-se avb_abertos com esta tabela e a analise ja esta pronta,
+  -- sem recalcular nada. A indicacao da manha = o melhor par que passa na regua de qualidade E
+  -- e' bw_provavel (ambos no topo do mercado). E' temporaria: reconstruida a cada ciclo do dia.
+  CREATE TABLE IF NOT EXISTS avb_precalc (
+    race_id INTEGER NOT NULL,
+    pick_trap INTEGER NOT NULL,
+    outro_trap INTEGER NOT NULL,
+    data TEXT, corrida TEXT, hora TEXT,
+    pct INTEGER,
+    tier TEXT,                 -- TOP | REGULAR | NULL(fora) — QUALIDADE (SP nao entra)
+    bw_provavel INTEGER DEFAULT 0,   -- 1 = ambos os caes no topo do mercado (abre na BW ~94%)
+    indicado INTEGER DEFAULT 0,      -- 1 = e' o par escolhido como indicacao (principal/secundario)
+    rank_pick INTEGER, rank_outro INTEGER,
+    sp_ratio REAL,
+    caltm_dif REAL, split_dif REAL, podio_dif REAL, desaba_count INTEGER,
+    eixos_json TEXT, obs TEXT,
+    assinatura TEXT,           -- traps presentes no card (ex.: "1,2,3,4,6") — muda = recalcula
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (race_id, pick_trap, outro_trap)
+  );
+  CREATE INDEX IF NOT EXISTS idx_precalc_data ON avb_precalc(data);
+  CREATE INDEX IF NOT EXISTS idx_precalc_race ON avb_precalc(race_id);
 `);
 
 // Migracoes seguras para banco existente

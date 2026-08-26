@@ -56,7 +56,7 @@ function _nomeMascara(nomeCru, trap) {
 // Monta os slots (principal + 2 secundários) de UMA corrida.
 // histFull: [{trap,nome,brtClasse,ssnDate,historico}]  histAll: [{trap,historico:[{sp,...}]}]
 // raceCard: [{trap,nome}] (p/ traps vazias)  ctxBase: {dataCorrida,trackCorrida,distCorrida}
-function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
+function _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   opts = opts || {};
   const D = reanalise.DEFAULTS;
   // DUAS REGUAS (Bruno ago/2026): o mesmo motor classifica cada par em TOP (nata) ou REGULAR.
@@ -95,24 +95,25 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card.
   const traps = Object.keys(dogsByTrap).map(Number).filter(t => oddMedia[t] > 0 && presentes.has(t));
 
-  // pareia pelo SP MAIS FROUXO (o da REGULAR), pra os DOIS tiers verem os candidatos.
-  const spPair = Math.max(reguaTop.sp_ratio_max, reguaReg.sp_ratio_max);
-  const pares = [];
-  for (let i = 0; i < traps.length; i++) for (let j = i + 1; j < traps.length; j++) {
-    const a = traps[i], b = traps[j];
-    const ratio = Math.max(oddMedia[a], oddMedia[b]) / Math.min(oddMedia[a], oddMedia[b]);
-    if (ratio > spPair) continue;
-    pares.push({ a, b, ratio });
-  }
-  pares.sort((x, y) => x.ratio - y.ratio);
+  // RANKING DE MERCADO por SP-media (1 = favorito). A engenharia reversa (ago/2026) mostrou
+  // que a BW abre os pares no TOPO do mercado — nao pelos mais "colados": ela abre ALGUM par
+  // entre os 3 favoritos em ~94% das corridas, e a razao de SP dos pares dela nem e' baixa
+  // (mediana ~1,39). Entao o que decide "abre na BW?" e' a POSICAO no ranking, nao a razao
+  // de SP. bwTopN = quantos caes do topo contam como "abrivel na BW" (default 3, configuravel).
+  const ordenados = traps.slice().sort((a, b) => oddMedia[a] - oddMedia[b]);
+  const rankDe = {}; ordenados.forEach((t, i) => { rankDe[t] = i + 1; });
+  const bwTopN = opts.bwTopN > 0 ? opts.bwTopN : 3;
+  const bwProvavel = (a, b) => !!(rankDe[a] && rankDe[b] && rankDe[a] <= bwTopN && rankDe[b] <= bwTopN);
 
   const nomeTrap = t => { const g = dogsByTrap[t]; return g ? _nomeMascara(g.nome, t) : ('b' + t + ' (sem nome)'); };
-  const montaSlot = (av, par, tier) => ({
-    ratio_sp: +par.ratio.toFixed(3),
+  const montaSlot = (av, ratio, tier) => ({
+    ratio_sp: +Number(ratio).toFixed(3),
     pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
     outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
     pct: av.avaliacao, pct_pick: av.avaliacao, pct_outro: 100 - av.avaliacao,
     tier: tier, top: tier === 'TOP',
+    rank_pick: rankDe[av.aTrap] || null, rank_outro: rankDe[av.bTrap] || null,
+    bw_provavel: bwProvavel(av.aTrap, av.bTrap),         // ambos no topo do mercado -> ~certo de abrir na BW
     eixos: av.eixos,                                    // {categoria,caltm,split,podio} contra a regua TOP
     caltm_dif: av.caltm_dif, split_dif: av.split_dif, podio_dif: av.podio_dif, desaba_count: av.desaba_count,
     cat_pick: av.cat_pick, cat_outro: av.cat_outro,
@@ -121,23 +122,40 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
     obs: av.obs || null, flags: av.flags || null
   });
 
-  const topSlots = [], regSlots = [];
-  for (const par of pares) {
-    if (topSlots.length >= N_SLOTS && regSlots.length >= N_SLOTS) break;
-    const av = reanalise.avaliarPar(dogsByTrap[par.a], dogsByTrap[par.b], ctx);
+  // TODOS os confrontos possiveis (a "tabela oculta" que o Bruno pediu). SEM gate de SP:
+  // avalia cada par, classifica a QUALIDADE (SP nao entra -> passaRegua com ratio=null) e
+  // marca bw_provavel (ambos no topo). Guarda tudo pra precalc; a indicacao sai daqui.
+  const todos = [];
+  for (let i = 0; i < traps.length; i++) for (let j = i + 1; j < traps.length; j++) {
+    const av = reanalise.avaliarPar(dogsByTrap[traps[i]], dogsByTrap[traps[j]], ctx);
     if (!av || av.descartar) continue;                    // sem histórico p/ avaliar
-    // classifica: passa a regua TOP -> TOP; senao a REGULAR -> REGULAR; senao fora.
-    if (reanalise.passaRegua(av.medidas, par.ratio, reguaTop)) {
-      if (topSlots.length < N_SLOTS) topSlots.push(montaSlot(av, par, 'TOP'));
-    } else if (reanalise.passaRegua(av.medidas, par.ratio, reguaReg)) {
-      if (regSlots.length < N_SLOTS) regSlots.push(montaSlot(av, par, 'REGULAR'));
-    }
+    const ratio = Math.max(oddMedia[traps[i]], oddMedia[traps[j]]) / Math.min(oddMedia[traps[i]], oddMedia[traps[j]]);
+    const tierQ = reanalise.passaRegua(av.medidas, null, reguaTop) ? 'TOP'
+      : reanalise.passaRegua(av.medidas, null, reguaReg) ? 'REGULAR' : null;
+    todos.push(montaSlot(av, ratio, tierQ));
   }
-  // a corrida e' TOP se tem QUALQUER pick TOP; senao REGULAR se tem regular; senao vazia.
-  // (nao mistura tiers numa corrida — os secundarios seguem o tier do principal.)
-  const escolhidos = topSlots.length ? topSlots : regSlots;
+
+  // INDICACAO (Bruno ago/2026): o melhor par que PASSA na regua de qualidade E e' bw_provavel
+  // (topo do mercado -> quase certo de abrir na BW). Ordena TOP antes de REGULAR e, dentro do
+  // tier, pelo maior pct (pick mais forte). Sem candidato bw_provavel aprovado -> corrida fora.
+  const candidatos = todos.filter(s => s.tier && s.bw_provavel)
+    .sort((x, y) => (x.top === y.top ? y.pct - x.pct : (x.top ? -1 : 1)));
   const rotulos = ['principal', 'secundario_1', 'secundario_2'];
-  return escolhidos.slice(0, N_SLOTS).map((s, i) => Object.assign({ slot: rotulos[i] }, s));
+  const slots = candidatos.slice(0, N_SLOTS).map((s, i) => Object.assign({ slot: rotulos[i] }, s));
+  return { slots, todos, rankDe, oddMedia };
+}
+
+// Devolve so os SLOTS (indicacao: principal + secundarios), como antes. Consumidores que
+// so precisam da indicacao seguem iguais.
+function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
+  return _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts).slots;
+}
+
+// TABELA COMPLETA de uma corrida (a "oculta"): TODOS os confrontos ja analisados, cada um
+// com tier de qualidade, rank de SP e bw_provavel. `slots` = a indicacao derivada. Serve pra
+// pre-calcular a manha inteira e cruzar com a BW na hora, sem recalcular nada.
+function precalcDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
+  return _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts);
 }
 
 // Pódio pela MESMA lógica dos 4 eixos, SEM SP (Bruno ago/2026): ranqueia o grid inteiro
@@ -443,4 +461,4 @@ function paraPersistir(db, opts) {
   return out;
 }
 
-module.exports = { listar, umaCorrida, slotsDaCorrida, paraPersistir, PARELHO_ATE, SP_RATIO_MAX };
+module.exports = { listar, umaCorrida, slotsDaCorrida, precalcDaCorrida, paraPersistir, _aplicaConfigMotor, PARELHO_ATE, SP_RATIO_MAX };

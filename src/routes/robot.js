@@ -2873,8 +2873,69 @@ function _persistirManha(date, aplicar){
         nFora = infoFora.changes || 0;
       } catch(e){}
     }
-    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_pick: n, top: nTop, regular: nReg, fora_limpas: nFora, congeladas_ja_largaram: cong, preview: aplicar?undefined:preview };
+    // TABELA OCULTA (ideia do Bruno): pre-analisa TODOS os confrontos do dia e guarda em
+    // avb_precalc. So recalcula as corridas cujo card mudou (assinatura). Nao-fatal.
+    let precalc = null;
+    if(aplicar){ try { precalc = _precalcManha(date, false); } catch(e){} }
+    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_pick: n, top: nTop, regular: nReg, fora_limpas: nFora, congeladas_ja_largaram: cong, precalc, preview: aplicar?undefined:preview };
   }catch(e){ return { erro: e.message }; }
+}
+
+// TABELA OCULTA de pre-calculo (avb_precalc). Pra cada corrida do dia, pre-analisa TODOS os
+// confrontos (mm.precalcDaCorrida) e guarda. So RECALCULA a corrida cujo card mudou — detecta
+// pela `assinatura` (traps presentes ordenados). Marca indicado=1 nos pares que viraram a
+// indicacao (principal/secundarios). force=true refaz tudo. So-escrita nesta tabela temporaria.
+function _precalcManha(date, force){
+  const { db } = require('../db/database');
+  const mm = require('../utils/motorManha');
+  date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
+  const rows = db.prepare(
+    "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.top3 "
+    + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
+    + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+  ).all(date);
+  const assinaturaAtual = db.prepare("SELECT assinatura FROM avb_precalc WHERE race_id=? LIMIT 1");
+  const del = db.prepare("DELETE FROM avb_precalc WHERE race_id=?");
+  const ins = db.prepare(
+    "INSERT OR REPLACE INTO avb_precalc (race_id,pick_trap,outro_trap,data,corrida,hora,pct,tier,bw_provavel,indicado,"
+    + "rank_pick,rank_outro,sp_ratio,caltm_dif,split_dif,podio_dif,desaba_count,eixos_json,obs,assinatura,updated_at) "
+    + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)"
+  );
+  // MESMA config (cortes do Config) que a indicacao usa — pra o tier da tabela nao divergir.
+  const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+  let corridas=0, recalc=0, pulou=0, pares=0, indic=0;
+  for(const row of rows){
+    let histFull=null, histAll=null, raceCard=null;
+    try { histFull = JSON.parse(row.hist_full); } catch(e){ continue; }
+    try { histAll = JSON.parse(row.hist_all); } catch(e){}
+    try { raceCard = JSON.parse(row.race_card); } catch(e){}
+    if(!Array.isArray(histFull) || histFull.length<2 || !Array.isArray(histAll)) continue;
+    corridas++;
+    // assinatura = traps presentes (do card; senao do hist_full), ordenados. Muda = recalcula.
+    const src = Array.isArray(raceCard) && raceCard.length ? raceCard : histFull;
+    const assin = Array.from(new Set(src.map(g => g && g.trap!=null ? Number(g.trap) : null).filter(x=>x!=null))).sort((a,b)=>a-b).join(',');
+    if(!force){
+      let ja=null; try { const a=assinaturaAtual.get(row.id); if(a) ja=a.assinatura; } catch(e){}
+      if(ja!=null && ja===assin){ pulou++; continue; }         // card igual — nao mexe
+    }
+    const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: (String(row.corrida||'').trim().split(/\s+/)[0]||'?'), distCorrida: row.dist || null };
+    let pc; try { pc = mm.precalcDaCorrida(histFull, histAll, raceCard, ctxBase, opts); } catch(e){ continue; }
+    const chaveInd = new Set((pc.slots||[]).map(s => s.pick_trap+'x'+s.outro_trap));
+    try {
+      del.run(row.id);
+      for(const s of (pc.todos||[])){
+        const indicado = chaveInd.has(s.pick_trap+'x'+s.outro_trap) ? 1 : 0;
+        ins.run(row.id, s.pick_trap, s.outro_trap, date, row.corrida, row.hora, s.pct,
+          s.tier||null, s.bw_provavel?1:0, indicado, s.rank_pick||null, s.rank_outro||null,
+          s.ratio_sp!=null?s.ratio_sp:null, s.caltm_dif!=null?s.caltm_dif:null, s.split_dif!=null?s.split_dif:null,
+          s.podio_dif!=null?s.podio_dif:null, s.desaba_count!=null?s.desaba_count:null,
+          s.eixos?JSON.stringify(s.eixos):null, s.obs||null, assin);
+        pares++; if(indicado) indic++;
+      }
+      recalc++;
+    } catch(e){}
+  }
+  return { corridas, recalculadas: recalc, puladas_card_igual: pulou, pares_gravados: pares, indicacoes: indic };
 }
 
 // DIAG (admin): MOTOR DA MANHA v2 — as regras da reanalise ja de manha, sobre as SPs.
@@ -2897,6 +2958,28 @@ router.get('/diag/persistir-manha', requireAdmin, (req, res) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
   const aplicar = req.query.aplicar === '1';
   res.json(_persistirManha(date, aplicar));
+});
+
+// DIAG (admin): a TABELA OCULTA de pre-calculo (avb_precalc). Reconstroi o dia (so recalcula
+// card que mudou; ?force=1 refaz tudo) e devolve um resumo. Com ?corrida=Kilky A6 (+ ?hora=)
+// dumpa a tabela completa daquela corrida: todos os confrontos, tier, rank de SP, bw_provavel,
+// e qual e' a indicacao. So-leitura fora da propria avb_precalc.
+router.get('/diag/precalc', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const resumo = _precalcManha(date, req.query.force === '1');
+    let corrida = null;
+    if (req.query.corrida) {
+      const cod = String(req.query.corrida).trim();
+      const sql = "SELECT pick_trap,outro_trap,pct,tier,bw_provavel,indicado,rank_pick,rank_outro,sp_ratio,caltm_dif,obs "
+        + "FROM avb_precalc WHERE data=? AND corrida LIKE ? " + (req.query.hora ? "AND hora=? " : "")
+        + "ORDER BY indicado DESC, bw_provavel DESC, tier IS NULL, pct DESC";
+      const args = req.query.hora ? [date, '%' + cod.split(/\s+/)[0] + '%', String(req.query.hora)] : [date, '%' + cod.split(/\s+/)[0] + '%'];
+      corrida = db.prepare(sql).all(...args);
+    }
+    res.json({ date, resumo, corrida, legenda: 'resumo = quantas corridas foram recalculadas/puladas e quantos confrontos gravados. corrida[] = a tabela oculta daquela pista: cada confronto com tier (qualidade), rank de SP (1=favorito), bw_provavel (1=abre na BW ~certo) e indicado (1=e a indicacao do motor).' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
 // LISTA DO DIA (admin): os AvBs do MOTOR UNICO (gate dos 4 eixos + nao-segura) de hoje,
