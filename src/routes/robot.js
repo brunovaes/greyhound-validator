@@ -3147,6 +3147,59 @@ router.get('/diag/sp-vs-bw', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// EXERCICIO COLADA x BW (Bruno ago/2026): pro dia, cruza os pares COLADOS do motor (razao <= teto
+// do Config, em QUALQUER lugar do grid) com os pares que a BW ABRIU, e conta quantos passam do
+// corte (60% por padrao). Responde exatamente: "quantos AvBs colados a BW abriu, e quantos a gente
+// aproveitaria acima de 60%". So-leitura. ?date= ?corte= (muda o 60).
+router.get('/diag/exercicio', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const corte = parseFloat(req.query.corte) || 60;
+    const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+    ).all(date);
+    const selBw = db.prepare("SELECT pares_json FROM avb_abertos WHERE data=? AND corrida=? AND hora=? LIMIT 1");
+    const mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2) || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
+    let colada = 0, coladaBw = 0, coladaBw60 = 0, racesBw = 0;
+    const detalhe = [];
+    for (const row of rows) {
+      let hf = null, ha = null, rc = null;
+      try { hf = JSON.parse(row.hist_full); } catch (e) { continue; }
+      try { ha = JSON.parse(row.hist_all); } catch (e) {}
+      try { rc = JSON.parse(row.race_card); } catch (e) {}
+      if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) continue;
+      const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: (String(row.corrida || '').trim().split(/\s+/)[0] || '?'), distCorrida: row.dist || null };
+      let pc; try { pc = mm.precalcDaCorrida(hf, ha, rc, ctxBase, opts); } catch (e) { continue; }
+      const coladas = (pc.todos || []).filter(s => s.bw_provavel);
+      let pares = null; try { const a = selBw.get(date, row.corrida, row.hora); if (a) pares = JSON.parse(a.pares_json); } catch (e) {}
+      const temBw = Array.isArray(pares) && pares.length; if (temBw) racesBw++;
+      const linhas = [];
+      for (const s of coladas) {
+        colada++;
+        const aberto = temBw && pares.some(p => mesmoPar(p, s.pick_trap, s.outro_trap));
+        const acima = s.pct > corte;
+        if (aberto) { coladaBw++; if (acima) coladaBw60++; linhas.push('T' + s.pick_trap + 'xT' + s.outro_trap + ' (pct ' + s.pct + (acima ? ' >60' : ' <=60') + ')'); }
+      }
+      if (linhas.length) detalhe.push({ hora: row.hora, corrida: row.corrida, intersecoes: linhas });
+    }
+    res.json({
+      date, corte,
+      resumo: {
+        pares_colados_pelo_motor: colada,
+        colados_que_a_BW_abriu: coladaBw,
+        destes_acima_de_60: coladaBw60,
+        corridas_com_bw_aberta: racesBw
+      },
+      detalhe,
+      legenda: 'pares_colados_pelo_motor = todos os pares com SP colada (razao <= teto do Config) que o motor achou, em qualquer lugar do grid. colados_que_a_BW_abriu = a INTERSECAO (colado E aberto pela BW). destes_acima_de_60 = os que a gente aproveitaria (pct > corte). ?corte= muda o 60; ?date= o dia.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // (VIP removido ago/2026 — /diag/limpar-fechamento-vip saiu junto. O avb_fechamento
 // é sempre a reanálise, então não há mais fechamento de origem VIP pra limpar.)
 

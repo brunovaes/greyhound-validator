@@ -40,6 +40,19 @@ function _oddMediaPorTrap(histAll) {
   return out;
 }
 
+// SP da ULTIMA corrida (mais recente) por trap — 1 linha, nao a media. Usado pra montar o POOL
+// (Bruno ago/2026: "pegar o SP mais igual dos galgos somente pela ultima corrida").
+function _lastSpPorTrap(histAll) {
+  const out = {};
+  for (const g of (Array.isArray(histAll) ? histAll : [])) {
+    if (!g || g.trap == null) continue;
+    const u = (g.historico || []).filter(l => l && !_isTrial(l.classe) && Number(l.caltm) > 0).slice(0, 1);
+    const od = u.length ? _oddDecimal(u[0].sp) : null;
+    if (od != null && od > 0) out[Number(g.trap)] = od;
+  }
+  return out;
+}
+
 function _distNum(d) { return parseInt(String(d || '').replace(/[^0-9]/g, '')) || 0; }
 function _pista(corrida) { return String(corrida || '').trim().split(/\s+/)[0] || '?'; }
 
@@ -91,29 +104,29 @@ function _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null,
     config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min } };
 
-  const oddMedia = _oddMediaPorTrap(histAll);
-  // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card.
-  const traps = Object.keys(dogsByTrap).map(Number).filter(t => oddMedia[t] > 0 && presentes.has(t));
+  const oddMedia = _oddMediaPorTrap(histAll);       // media das 2 ultimas — mantida so como referencia
+  const lastSp = _lastSpPorTrap(histAll);           // SO a ultima corrida (mais recente) — define a colagem
+  // ITEM 6 — retirada: so pareia trap que TEM galgo (SP na ultima corrida) E esta PRESENTE no card.
+  const traps = Object.keys(dogsByTrap).map(Number).filter(t => lastSp[t] > 0 && presentes.has(t));
 
-  // RANKING DE MERCADO por SP-media (1 = favorito). A engenharia reversa (ago/2026) mostrou
-  // que a BW abre os pares no TOPO do mercado — nao pelos mais "colados": ela abre ALGUM par
-  // entre os 3 favoritos em ~94% das corridas, e a razao de SP dos pares dela nem e' baixa
-  // (mediana ~1,39). Entao o que decide "abre na BW?" e' a POSICAO no ranking, nao a razao
-  // de SP. bwTopN = quantos caes do topo contam como "abrivel na BW" (default 3, configuravel).
-  const ordenados = traps.slice().sort((a, b) => oddMedia[a] - oddMedia[b]);
+  // COLAGEM (Bruno ago/2026): um AvB e' candidato quando os DOIS caes tem SP COLADA ENTRE SI
+  // (razao <= sp_ratio do Config), pela SP da ULTIMA corrida — NAO precisa ser o favorito nem o
+  // topo. Dois caes em ~8 de SP, colados, com um nitidamente melhor (tempo/categoria) valem AvB.
+  // rankDe = posicao por SP (so informativo). O teto de razao e' o filtro de "corrida que vale".
+  const ordenados = traps.slice().sort((a, b) => lastSp[a] - lastSp[b]);
   const rankDe = {}; ordenados.forEach((t, i) => { rankDe[t] = i + 1; });
-  const bwTopN = opts.bwTopN > 0 ? opts.bwTopN : 3;
-  const bwProvavel = (a, b) => !!(rankDe[a] && rankDe[b] && rankDe[a] <= bwTopN && rankDe[b] <= bwTopN);
+  const spColada = reguaTop.sp_ratio_max > 0 ? reguaTop.sp_ratio_max : SP_RATIO_MAX;
+  const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE;   // corte de chance (default 60)
 
   const nomeTrap = t => { const g = dogsByTrap[t]; return g ? _nomeMascara(g.nome, t) : ('b' + t + ' (sem nome)'); };
-  const montaSlot = (av, ratio, tier) => ({
+  const montaSlot = (av, ratio, tier, colada) => ({
     ratio_sp: +Number(ratio).toFixed(3),
     pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
     outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
     pct: av.avaliacao, pct_pick: av.avaliacao, pct_outro: 100 - av.avaliacao,
     tier: tier, top: tier === 'TOP',
     rank_pick: rankDe[av.aTrap] || null, rank_outro: rankDe[av.bTrap] || null,
-    bw_provavel: bwProvavel(av.aTrap, av.bTrap),         // ambos no topo do mercado -> ~certo de abrir na BW
+    bw_provavel: !!colada,                              // par de SP colada (razao <= teto) — em qualquer lugar
     eixos: av.eixos,                                    // {categoria,caltm,split,podio} contra a regua TOP
     caltm_dif: av.caltm_dif, split_dif: av.split_dif, podio_dif: av.podio_dif, desaba_count: av.desaba_count,
     cat_pick: av.cat_pick, cat_outro: av.cat_outro,
@@ -122,27 +135,30 @@ function _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
     obs: av.obs || null, flags: av.flags || null
   });
 
-  // TODOS os confrontos possiveis (a "tabela oculta" que o Bruno pediu). SEM gate de SP:
-  // avalia cada par, classifica a QUALIDADE (SP nao entra -> passaRegua com ratio=null) e
-  // marca bw_provavel (ambos no topo). Guarda tudo pra precalc; a indicacao sai daqui.
+  // TODOS os confrontos possiveis (a "tabela oculta"). O pct do avaliarPar ja embute
+  // categoria/tempo/split/podio pelos pesos do Config; tier aqui e' so informativo (nao decide).
+  // O fumador (nao-segura) NAO reprova mais (Bruno ago/2026: "pode tirar"). colada = SP dos dois
+  // caes dentro do teto de razao (o par que "vale" — em qualquer parte do grid, nao so no topo).
   const todos = [];
   for (let i = 0; i < traps.length; i++) for (let j = i + 1; j < traps.length; j++) {
     const av = reanalise.avaliarPar(dogsByTrap[traps[i]], dogsByTrap[traps[j]], ctx);
     if (!av || av.descartar) continue;                    // sem histórico p/ avaliar
-    const ratio = Math.max(oddMedia[traps[i]], oddMedia[traps[j]]) / Math.min(oddMedia[traps[i]], oddMedia[traps[j]]);
+    const ratio = Math.max(lastSp[traps[i]], lastSp[traps[j]]) / Math.min(lastSp[traps[i]], lastSp[traps[j]]);
+    const colada = ratio <= spColada;
     const tierQ = reanalise.passaRegua(av.medidas, null, reguaTop) ? 'TOP'
       : reanalise.passaRegua(av.medidas, null, reguaReg) ? 'REGULAR' : null;
-    todos.push(montaSlot(av, ratio, tierQ));
+    todos.push(montaSlot(av, ratio, tierQ, colada));
   }
 
-  // INDICACAO (Bruno ago/2026): o melhor par que PASSA na regua de qualidade E e' bw_provavel
-  // (topo do mercado -> quase certo de abrir na BW). Ordena TOP antes de REGULAR e, dentro do
-  // tier, pelo maior pct (pick mais forte). Sem candidato bw_provavel aprovado -> corrida fora.
-  const candidatos = todos.filter(s => s.tier && s.bw_provavel)
-    .sort((x, y) => (x.top === y.top ? y.pct - x.pct : (x.top ? -1 : 1)));
+  // INDICACAO (Bruno ago/2026): entre os AvBs COLADOS (razao <= teto, em qualquer lugar), os que
+  // passam de `parelhoAte` (60% por padrao) qualificam. O de MAIOR pct vira PRINCIPAL; os outros,
+  // SECUNDARIOS. Corrida so entra na lista se tiver >=1 candidato — e' o filtro de "corrida que
+  // vale" (avaliar a corrida como um todo). Sem fumador, sem gate extra. Principal = "VIP" no Historico.
+  const candidatos = todos.filter(s => s.bw_provavel && s.pct > parelhoAte)
+    .sort((x, y) => y.pct - x.pct);
   const rotulos = ['principal', 'secundario_1', 'secundario_2'];
-  const slots = candidatos.slice(0, N_SLOTS).map((s, i) => Object.assign({ slot: rotulos[i] }, s));
-  return { slots, todos, rankDe, oddMedia };
+  const slots = candidatos.slice(0, N_SLOTS).map((s, i) => Object.assign({}, s, { slot: rotulos[i], tier: i === 0 ? 'TOP' : 'REGULAR' }));
+  return { slots, todos, rankDe, oddMedia, lastSp };
 }
 
 // Devolve so os SLOTS (indicacao: principal + secundarios), como antes. Consumidores que
@@ -347,28 +363,29 @@ function _bwDaCorrida(db, row, corridaObj, opts, date) {
   let abriu = !!parP, oddP = null;
   if (parP) { const od = Number(Number(parP.aTrap) === principal.pick_trap ? parP.oddAvenceB : parP.oddBvenceA); oddP = (Number.isFinite(od) && od > 0) ? od : null; }
 
-  // 2) secundários (só se o principal NÃO abriu): pares prontos da BW que passam no tier. Até 2.
-  const secundarios = [];
-  if (!abriu) {
-    for (const p of paresAbertos) {
-      if (secundarios.length >= 2) break;
-      if (mesmoPar(p, principal.pick_trap, principal.outro_trap)) continue;
-      const dA = dogsByTrap[Number(p.aTrap)], dB = dogsByTrap[Number(p.bTrap)];
-      if (!dA || !dB) continue;
-      const av = reanalise.avaliarPar(dA, dB, ctx);
-      if (!av || av.descartar) continue;
-      if (!reanalise.passaRegua(av.medidas, null, reguaTier)) continue;   // SP null = não checa (BW já pronto)
-      const od = Number(Number(p.aTrap) === av.aTrap ? p.oddAvenceB : p.oddBvenceA);
-      secundarios.push({
-        pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
-        outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
-        pct: av.avaliacao,
-        tier: reanalise.passaRegua(av.medidas, null, reguaTop) ? 'TOP' : 'REGULAR',
-        odd: (Number.isFinite(od) && od > 0) ? od : null,
-        caltm_dif: av.caltm_dif, eixos: av.eixos, obs: av.obs || null
-      });
-    }
+  // 2) secundários (Bruno ago/2026): SEMPRE as 2 MELHORES que a BW ABRIU (mesmo se o principal
+  // abriu) — inclusive pares "sem relação com a OD do PDF", já que a análise já está pronta no
+  // banco. Exclui o par do principal. Corte: pct > parelhoAte (60%). Ordena por pct, pega os 2.
+  const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE;
+  const cand = [];
+  for (const p of paresAbertos) {
+    if (mesmoPar(p, principal.pick_trap, principal.outro_trap)) continue;
+    const dA = dogsByTrap[Number(p.aTrap)], dB = dogsByTrap[Number(p.bTrap)];
+    if (!dA || !dB) continue;
+    const av = reanalise.avaliarPar(dA, dB, ctx);
+    if (!av || av.descartar) continue;
+    if (av.avaliacao <= parelhoAte) continue;             // só AvB firme (>60%)
+    const od = Number(Number(p.aTrap) === av.aTrap ? p.oddAvenceB : p.oddBvenceA);
+    cand.push({
+      pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
+      outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
+      pct: av.avaliacao, tier: 'REGULAR',
+      odd: (Number.isFinite(od) && od > 0) ? od : null,
+      caltm_dif: av.caltm_dif, eixos: av.eixos, obs: av.obs || null
+    });
   }
+  cand.sort((a, b) => b.pct - a.pct);
+  const secundarios = cand.slice(0, 2);
   return { monitorada: true, abriu, odd: oddP, secundarios };
 }
 
