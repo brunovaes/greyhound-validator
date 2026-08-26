@@ -196,7 +196,7 @@ db.exec(`
 
   -- ago/2026 — TABELA OCULTA de pre-calculo (ideia do Bruno). De manha o motor pre-analisa
   -- TODOS os confrontos possiveis de cada corrida e guarda aqui. So e' atualizada quando o
-  -- card muda (saida de galgo / mudanca de ultima hora) — detectado pela `assinatura` (traps
+  -- card muda (saida de galgo / mudanca de ultima hora) — detectado pela assinatura (traps
   -- presentes). Na hora da BW, cruza-se avb_abertos com esta tabela e a analise ja esta pronta,
   -- sem recalcular nada. A indicacao da manha = o melhor par que passa na regua de qualidade E
   -- e' bw_provavel (ambos no topo do mercado). E' temporaria: reconstruida a cada ciclo do dia.
