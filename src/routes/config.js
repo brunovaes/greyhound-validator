@@ -116,11 +116,9 @@ ${navBar(user, 'config')}
 <div class="layout">
 
 <div class="tabnav">
-  <button type="button" class="tabbtn active" data-tab="t-pesos" onclick="showTab('t-pesos')">${icon('sliders',{size:14})} Pesos dos Critérios</button>
-  <button type="button" class="tabbtn" data-tab="t-categoria" onclick="showTab('t-categoria')">${icon('layers',{size:14})} Categoria</button>
+  <button type="button" class="tabbtn active" data-tab="t-motor-reguas" onclick="showTab('t-motor-reguas')">${icon('gear',{size:14})} Motor de Análise</button>
   <button type="button" class="tabbtn" data-tab="t-filtros" onclick="showTab('t-filtros')">${icon('filter',{size:14})} Filtros de Corrida</button>
-  <button type="button" class="tabbtn" data-tab="t-confianca" onclick="showTab('t-confianca')">${icon('shield',{size:14})} Thresholds de Confiança</button>
-  <button type="button" class="tabbtn" data-tab="t-motor" onclick="showTab('t-motor')">${icon('gear',{size:14})} Motor de Pontuação</button>
+  <button type="button" class="tabbtn" data-tab="t-regras" onclick="showTab('t-regras')">${icon('scroll',{size:14})} Documento de Regras</button>
   <button type="button" class="tabbtn" data-tab="t-automacao" onclick="showTab('t-automacao')">${icon('clock',{size:14})} Alarme</button>
   <button type="button" class="tabbtn" data-tab="t-dash" onclick="showTab('t-dash');carregarDashboard()">${icon('trophy',{size:14})} Desempenho (HR)</button>
   <button type="button" class="tabbtn" data-tab="t-graf" onclick="showTab('t-graf');carregarGraf()">${icon('layers',{size:14})} Dashboard</button>
@@ -128,79 +126,7 @@ ${navBar(user, 'config')}
 
 <div>
 
-<div class="tab-panel active" id="t-pesos">
-<div class="section">
-<div class="sec-title">Ajustes do modelo antigo (removidos da tela)</div>
-<p class="hint" style="margin-bottom:16px">Os pesos dos critérios, a tabela de categoria, os thresholds de confiança e o motor de pontuação saíram desta tela. Eles pertencem ao modelo antigo, que dava uma nota somando fatores. O motor atual não pontua: ele aprova ou reprova o par em quatro eixos, e os cortes ficam logo abaixo, em <strong>Motor de análise</strong>.<br><br>Os valores continuam gravados no banco e não foram apagados. Se algum dia voltarem a ser usados, é só devolver os controles à tela.</p>
-
-<div class="sec-title">Filtros de Corrida</div>
-${blocoToggle('bloco_filtros_ativo', 'Filtros de Corrida')}
-<div class="grid bloco-fields" id="bloco_filtros_ativo_fields" data-ativo="${config.bloco_filtros_ativo===0?'0':'1'}">
-<div class="field"><label>Distancia minima (m)</label><input type="number" name="dist_min" value="${config.dist_min}" min="200" max="600"><span class="hint">Corridas abaixo sao descartadas</span></div>
-<div class="field"><label>Distancia maxima (m)</label><input type="number" name="dist_max" value="${config.dist_max}" min="400" max="1000"><span class="hint">Corridas acima sao descartadas</span></div>
-<div class="field"><label>Mín. corridas na pista/distância exata</label><input type="number" name="min_corridas_uteis" value="${config.min_corridas_uteis}" min="1" max="10"><span class="hint">Quantas linhas do histórico precisam ser na MESMA pista e MESMA distância da corrida de hoje pra considerar o galgo elegível. Abaixo disso, ele é eliminado do AvB.</span></div>
-<div class="field"><label>Classes aceitas</label><input type="text" name="classes_aceitas" value="${config.classes_aceitas}"><span class="hint">Separadas por virgula</span></div>
-</div>
-</div>
-
-<div class="section">
-<div class="sec-title">Descarte por cio (fêmea)</div>
-<div class="info-box">
-  Fica <strong>fora</strong> do bloco acima de proposito: o cio obedece so ao proprio switch e continua valendo mesmo com "Filtros de Corrida" no padrao de fabrica. Quando dispara, o galgo sai do pool e o AvB re-elege favorito e underdog — o descarte aparece destacado em vermelho no Relatorio de Analise.
-</div>
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
-  <div class="field"><label>Descartar por cio recente</label>
-    <select name="cio_recente_ativo">
-      <option value="0" ${(config.cio_recente_ativo?1:0)===0?'selected':''}>Desativado</option>
-      <option value="1" ${(config.cio_recente_ativo?1:0)===1?'selected':''}>Ativado (padrão)</option>
-    </select>
-    <span class="hint">Fêmea com cio "(Ssn &lt;data&gt;)" recente na linha do card vira elegível a descarte. O "(SsnSupp)", que vem sem data, nunca dispara.</span>
-  </div>
-  <div class="field"><label>Janela do cio recente (dias)</label>
-    <input type="number" name="cio_recente_dias" value="${config.cio_recente_dias||90}" step="1" min="7" max="365">
-    <span class="hint">Cio até N dias antes da corrida conta como recente. Padrão 90 (cerca de 3 meses). Varra 30/45/60/90 no backtest pra achar o melhor.</span>
-  </div>
-</div>
-</div>
-</div>
-
-<div class="tab-panel" id="t-confianca">
-<div class="section">
-<div class="sec-title" style="display:flex;align-items:center;gap:8px">${icon('scroll',{size:14})} Documento de Regras</div>
-<details style="cursor:pointer">
-<summary style="font-size:12px;color:#22c55e;padding:4px 0">Ver como funciona o motor de pontuação (clique para expandir)</summary>
-<div style="margin-top:14px;font-size:12px;color:#aaa;line-height:1.8;background:#0D1117;padding:14px;border-radius:8px">
-<p style="color:#f0f0f0;font-weight:700;margin-bottom:8px">Como o motor calcula o resultado de cada corrida:</p>
-
-<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 1 — Extracao (Claude)</p>
-O Claude le o PDF e extrai os dados brutos de cada galgo: historico de corridas, tempos CalTm, remarks, bends, splits, BRT. Zero julgamento nesta fase.
-
-<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 2 — Filtro de linhas validas (codigo)</p>
-Para cada galgo, cada linha do historico e avaliada. E descartada se: distancia for diferente da corrida atual (&gt;10%), classe invalida (HP, Trial, OR, Solo), acidente gravissimo (Fall, Stmb, RnUp), ou sem CalTm. Se o galgo tiver menos de 3 linhas validas, ele e eliminado da corrida. Se sobrar menos de 4 galgos, a corrida vira Skip.
-
-<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 3 — Ajuste de CalTm (codigo)</p>
-Cada linha valida tem seu CalTm ajustado: desconto por acidente (Bmp=-${config.desconto_acidente_leve||0.10}s, Crd=-${config.desconto_acidente_medio||0.20}s) e ajuste por nivel de classe (+${config.ajuste_classe_segundos||0.20}s por nivel de diferenca). Os 3 ajustados mais recentes sao agregados com peso por recencia (3x, 2x, 1x) em ${Math.round((config.proporcao_media_caltm||0.60)*100)}% media + ${Math.round((1-(config.proporcao_media_caltm||0.60))*100)}% melhor.
-
-<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 4 — Score por critério (código)</p>
-Cada galgo recebe um score 0-100 em cada critério, multiplicado pelo seu peso:<br>
-&bull; <strong>CalTm</strong> (peso ${config.peso_caltm||4}): normalizado pela diferenca para o melhor da corrida (teto ${config.teto_diff_normalizacao||0.50}s)<br>
-&bull; <strong>Categoria</strong>: influencia via ajuste de CalTm (${config.ajuste_classe_segundos||0.20}s/nivel) + pool limitado a ${config.max_niveis_pool||2} nível(is) + CalTm pode superar ate ${config.max_cat_diff_caltm||1} nivel(is)<br>
-&bull; <strong>Bends/Perfil</strong> (peso ${config.peso_bends||3}): Recuperador=90pts, Frontrunner=80pts, Estavel=60pts, Fumador=20pts + bonus por split<br>
-&bull; <strong>Remarks</strong> (peso ${config.peso_remarks||3}): combos muito positivos +30pts, positivos +15pts, negativos -20pts<br>
-&bull; <strong>BRT</strong> (peso ${config.peso_brt||1}): comparativo entre galgos, penalizado se BRT em classe muito diferente ou galgo fora de forma<br>
-&bull; <strong>Post Pick</strong> (peso ${config.peso_post_pick||0}): 1a escolha=100pts, 2a=75pts, 3a=55pts, fora=30pts
-
-<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 5 — Ranking e decisao (codigo)</p>
-Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o menor score.<br>
-&bull; <strong>AvB</strong>: 1o vs ultimo. Se diferenca &lt; ${config.threshold_skip_avb||10}pts = Skip automatico (corrida parelha).<br>
-&bull; <strong>Back</strong>: So gerado se diferenca entre 1o e 2o &gt; ${config.threshold_back||25}pts (vantagem absurda).
-</div>
-</details>
-</div>
-</div>
-
-<div class="tab-panel" id="t-automacao">
-
+<div class="tab-panel active" id="t-motor-reguas">
 <div class="section">
 <div class="sec-title">Motor de análise — duas réguas</div>
 <p class="hint" style="margin-bottom:10px">Cada corrida é classificada em <strong>TOP</strong> (a régua exigente) ou <strong>REGULAR</strong> (a mais frouxa). O que não passa em nenhuma das duas fica de fora e não aparece nos filtros. Deixe um campo <strong>em branco</strong> para manter o valor atual sem alterá-lo.</p>
@@ -267,6 +193,80 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
 </div>
 
+</div>
+</div>
+
+<div class="tab-panel" id="t-filtros">
+<div class="section">
+<div class="sec-title">Filtros de Corrida</div>
+${blocoToggle('bloco_filtros_ativo', 'Filtros de Corrida')}
+<div class="grid bloco-fields" id="bloco_filtros_ativo_fields" data-ativo="${config.bloco_filtros_ativo===0?'0':'1'}">
+<div class="field"><label>Distancia minima (m)</label><input type="number" name="dist_min" value="${config.dist_min}" min="200" max="600"><span class="hint">Corridas abaixo sao descartadas</span></div>
+<div class="field"><label>Distancia maxima (m)</label><input type="number" name="dist_max" value="${config.dist_max}" min="400" max="1000"><span class="hint">Corridas acima sao descartadas</span></div>
+<div class="field"><label>Mín. corridas na pista/distância exata</label><input type="number" name="min_corridas_uteis" value="${config.min_corridas_uteis}" min="1" max="10"><span class="hint">Quantas linhas do histórico precisam ser na MESMA pista e MESMA distância da corrida de hoje pra considerar o galgo elegível. Abaixo disso, ele é eliminado do AvB.</span></div>
+<div class="field"><label>Classes aceitas</label><input type="text" name="classes_aceitas" value="${config.classes_aceitas}"><span class="hint">Separadas por virgula</span></div>
+</div>
+</div>
+
+<div class="section">
+<div class="sec-title">Descarte por cio (fêmea)</div>
+<div class="info-box">
+  Fica <strong>fora</strong> do bloco acima de proposito: o cio obedece so ao proprio switch e continua valendo mesmo com "Filtros de Corrida" no padrao de fabrica. Quando dispara, o galgo sai do pool e o AvB re-elege favorito e underdog — o descarte aparece destacado em vermelho no Relatorio de Analise.
+</div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field"><label>Descartar por cio recente</label>
+    <select name="cio_recente_ativo">
+      <option value="0" ${(config.cio_recente_ativo?1:0)===0?'selected':''}>Desativado</option>
+      <option value="1" ${(config.cio_recente_ativo?1:0)===1?'selected':''}>Ativado (padrão)</option>
+    </select>
+    <span class="hint">Fêmea com cio "(Ssn &lt;data&gt;)" recente na linha do card vira elegível a descarte. O "(SsnSupp)", que vem sem data, nunca dispara.</span>
+  </div>
+  <div class="field"><label>Janela do cio recente (dias)</label>
+    <input type="number" name="cio_recente_dias" value="${config.cio_recente_dias||90}" step="1" min="7" max="365">
+    <span class="hint">Cio até N dias antes da corrida conta como recente. Padrão 90 (cerca de 3 meses). Varra 30/45/60/90 no backtest pra achar o melhor.</span>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="tab-panel" id="t-regras">
+<div class="section">
+<div class="sec-title" style="display:flex;align-items:center;gap:8px">${icon('scroll',{size:14})} Documento de Regras</div>
+<details style="cursor:pointer">
+<summary style="font-size:12px;color:#22c55e;padding:4px 0">Ver como funciona o motor de pontuação (clique para expandir)</summary>
+<div style="margin-top:14px;font-size:12px;color:#aaa;line-height:1.8;background:#0D1117;padding:14px;border-radius:8px">
+<p style="color:#f0f0f0;font-weight:700;margin-bottom:8px">Como o motor calcula o resultado de cada corrida:</p>
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 1 — Extracao (Claude)</p>
+O Claude le o PDF e extrai os dados brutos de cada galgo: historico de corridas, tempos CalTm, remarks, bends, splits, BRT. Zero julgamento nesta fase.
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 2 — Filtro de linhas validas (codigo)</p>
+Para cada galgo, cada linha do historico e avaliada. E descartada se: distancia for diferente da corrida atual (&gt;10%), classe invalida (HP, Trial, OR, Solo), acidente gravissimo (Fall, Stmb, RnUp), ou sem CalTm. Se o galgo tiver menos de 3 linhas validas, ele e eliminado da corrida. Se sobrar menos de 4 galgos, a corrida vira Skip.
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 3 — Ajuste de CalTm (codigo)</p>
+Cada linha valida tem seu CalTm ajustado: desconto por acidente (Bmp=-${config.desconto_acidente_leve||0.10}s, Crd=-${config.desconto_acidente_medio||0.20}s) e ajuste por nivel de classe (+${config.ajuste_classe_segundos||0.20}s por nivel de diferenca). Os 3 ajustados mais recentes sao agregados com peso por recencia (3x, 2x, 1x) em ${Math.round((config.proporcao_media_caltm||0.60)*100)}% media + ${Math.round((1-(config.proporcao_media_caltm||0.60))*100)}% melhor.
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 4 — Score por critério (código)</p>
+Cada galgo recebe um score 0-100 em cada critério, multiplicado pelo seu peso:<br>
+&bull; <strong>CalTm</strong> (peso ${config.peso_caltm||4}): normalizado pela diferenca para o melhor da corrida (teto ${config.teto_diff_normalizacao||0.50}s)<br>
+&bull; <strong>Categoria</strong>: influencia via ajuste de CalTm (${config.ajuste_classe_segundos||0.20}s/nivel) + pool limitado a ${config.max_niveis_pool||2} nível(is) + CalTm pode superar ate ${config.max_cat_diff_caltm||1} nivel(is)<br>
+&bull; <strong>Bends/Perfil</strong> (peso ${config.peso_bends||3}): Recuperador=90pts, Frontrunner=80pts, Estavel=60pts, Fumador=20pts + bonus por split<br>
+&bull; <strong>Remarks</strong> (peso ${config.peso_remarks||3}): combos muito positivos +30pts, positivos +15pts, negativos -20pts<br>
+&bull; <strong>BRT</strong> (peso ${config.peso_brt||1}): comparativo entre galgos, penalizado se BRT em classe muito diferente ou galgo fora de forma<br>
+&bull; <strong>Post Pick</strong> (peso ${config.peso_post_pick||0}): 1a escolha=100pts, 2a=75pts, 3a=55pts, fora=30pts
+
+<p style="color:#22c55e;margin-top:12px;margin-bottom:4px">FASE 5 — Ranking e decisao (codigo)</p>
+Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o menor score.<br>
+&bull; <strong>AvB</strong>: 1o vs ultimo. Se diferenca &lt; ${config.threshold_skip_avb||10}pts = Skip automatico (corrida parelha).<br>
+&bull; <strong>Back</strong>: So gerado se diferenca entre 1o e 2o &gt; ${config.threshold_back||25}pts (vantagem absurda).
+</div>
+</details>
+</div>
+</div>
+
+<div class="tab-panel" id="t-automacao">
+
+<div class="section">
 <div class="sec-title">Alarme para filtro selecionado</div>
 <div class="bloco-toggle">
   <input type="hidden" name="alarme_filtro_ativo" value="0">

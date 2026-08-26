@@ -473,37 +473,28 @@ function isOldRaceCard(r) {
 // Filtro por regua: '' (todas) | 'top' | 'regular'.
 // Fonte: races.tier, do /api/session/:id/races. Corrida com tier null ficou
 // fora das duas reguas e nao aparece em nenhum dos filtros.
+// So DOIS tipos de corrida: TOP e REGULAR. Nao existe "todas" — corrida que
+// nao entra em nenhuma das duas nao e' corrida pra olhar, e por isso nao ha
+// estado que mostre as duas juntas nem as reprovadas.
 var FILTRO_TIER = (function(){
-  // Lembra a escolha: se voce opera so no TOP, nao faz sentido reativar o
-  // filtro toda vez que abre a tela.
   try {
-    var v = localStorage.getItem('gh_tier');
-    return (v === 'top' || v === 'regular') ? v : '';
-  } catch(e){ return ''; }
+    return localStorage.getItem('gh_tier') === 'regular' ? 'regular' : 'top';
+  } catch(e){ return 'top'; }   // abre em TOP
 })();
-// Cicla entre os tres estados no mesmo botao: todas -> TOP -> REGULAR -> todas.
-// Volta direto pra TODAS. O botao cicla, mas quando a lista esta vazia por
-// causa do filtro o que voce quer e' sair dele, nao avancar pro proximo.
-function verTodasAsCorridas(){
-  FILTRO_TIER = '';
-  try { localStorage.setItem('gh_tier', ''); } catch(e){}
-  _pintaBotaoTier();
-  refreshFocusMode();
-}
 
 function alternarTier(){
-  FILTRO_TIER = FILTRO_TIER === '' ? 'top' : (FILTRO_TIER === 'top' ? 'regular' : '');
+  FILTRO_TIER = FILTRO_TIER === 'top' ? 'regular' : 'top';
   try { localStorage.setItem('gh_tier', FILTRO_TIER); } catch(e){}
   _pintaBotaoTier();
   refreshFocusMode();
 }
+
 function _pintaBotaoTier(){
   var b = document.getElementById('btn-tier');
   if(!b) return;
   var m = {
-    '':        ['transparent',            'var(--bdr2)', 'var(--mut)', 'TODAS',   'mostrando todas as corridas; clique para ver só as TOP'],
-    'top':     ['rgba(212,175,55,.16)',   '#D4AF37',     '#D4AF37',    'TOP',     'mostrando só as TOP; clique para ver só as REGULAR'],
-    'regular': ['rgba(96,165,250,.16)',   '#60a5fa',     '#60a5fa',    'REGULAR', 'mostrando só as REGULAR; clique para voltar a todas']
+    'top':     ['rgba(212,175,55,.16)',   '#D4AF37',     '#D4AF37',    'TOP',     'mostrando as TOP; clique para ver as REGULAR'],
+    'regular': ['rgba(96,165,250,.16)',   '#60a5fa',     '#60a5fa',    'REGULAR', 'mostrando as REGULAR; clique para ver as TOP']
   }[FILTRO_TIER];
   b.style.background = m[0]; b.style.borderColor = m[1]; b.style.color = m[2];
   b.textContent = m[3]; b.title = m[4];
@@ -531,9 +522,7 @@ function _sessaoTemRegua(lista) {
 // INDICE do item, e ai a protecao dispararia sozinha na primeira posicao.
 function passaNoFiltroTier(r, sessaoClassificada) {
   if (sessaoClassificada === false) return true;   // sessao anterior ao motor
-  var t = _tierDe(r);
-  if (!FILTRO_TIER) return t !== null;
-  return t === FILTRO_TIER;
+  return _tierDe(r) === FILTRO_TIER;
 }
 
 // Normaliza o tier na ENTRADA. O motor escreve TOP/REGULAR, e o resto da tela
@@ -2312,12 +2301,9 @@ function renderRaceListPanel(avbs) {
   if (!avbs.length) {
     var av = document.createElement('div');
     av.style.cssText = 'padding:14px 12px;font-size:11px;color:var(--mut);line-height:1.6;text-align:center';
-    av.innerHTML = FILTRO_TIER
-      ? 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
-        + '<div style="margin-top:6px"><button type="button" onclick="verTodasAsCorridas()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver TOP e REGULAR</button></div>'
-      // Sem filtro e mesmo assim vazio: o motor ainda nao classificou nada
-      // hoje. Dizer isso e' melhor que uma lista muda, que pareceria falha.
-      : 'Nenhuma corrida classificada pelo motor até agora.';
+    var outro = FILTRO_TIER === 'top' ? 'REGULAR' : 'TOP';
+    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
+      + '<div style="margin-top:6px"><button type="button" onclick="alternarTier()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver as ' + outro + '</button></div>';
     col.appendChild(av);
   }
   if (!avbs.length) {
