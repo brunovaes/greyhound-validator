@@ -2966,6 +2966,104 @@ router.get('/diag/backfill-bw', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ENGENHARIA REVERSA SP × BW (Bruno ago/2026). So LEITURA — nao grava, nao muda indicacao.
+// Objetivo: descobrir o PADRAO com que a BW escolhe os pares que abre, cruzando, pro dia:
+//   (1) o ranking de SP de TODOS os traps (SP-media das 2 ultimas do PDF, = o que o motor usa),
+//   (2) os pares que a BW REALMENTE abriu (avb_abertos) com odds e a posicao de cada trap no ranking,
+//   (3) o par PRINCIPAL que o motor formou.
+// Com isso a gente ve se a BW sempre abre "favorito nº1 × nº2", ou razao de SP <= tal, etc.,
+// e calibra o motor pra a taxa de abertura na BW chegar perto de 100%.
+//   motor_bateu = o par do motor esta entre os que a BW abriu.
+router.get('/diag/sp-vs-bw', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const { probImplicita } = require('../utils/spEngine');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const _isTrial = c => { const s = String(c || '').trim().toUpperCase(); return s === 'T' || s === 'S' || s.startsWith('T ') || s.startsWith('S '); };
+    const _oddDec = sp => { if (!sp) return null; const p = probImplicita(String(sp).replace(/[A-Za-z]+$/, '')); return (p && p > 0) ? 1 / p : null; };
+    // SP-media (2 ultimas nao-trial) por trap, ordenado do favorito (menor odd) pro azarao.
+    const trapsSp = histAll => {
+      const out = [];
+      for (const g of (Array.isArray(histAll) ? histAll : [])) {
+        if (!g || g.trap == null) continue;
+        const u = (g.historico || []).filter(l => l && !_isTrial(l.classe) && Number(l.caltm) > 0).slice(0, 2);
+        const odds = u.map(l => _oddDec(l.sp)).filter(v => v != null);
+        if (odds.length) out.push({ trap: Number(g.trap), sp: +(odds.reduce((a, b) => a + b, 0) / odds.length).toFixed(2) });
+      }
+      out.sort((a, b) => a.sp - b.sp);
+      return out;
+    };
+    const mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2) || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
+
+    // par do motor por corrida|hora (so as que o motor deu pick)
+    const recs = mm.paraPersistir(db, { date });
+    const motorPorChave = {};
+    for (const r of recs) motorPorChave[r.corrida + '|' + r.hora] = r;
+
+    // TODAS as corridas do dia com histórico (inclusive as que o motor NAO deu pick — a BW pode
+    // abrir par nelas, e isso e' justamente o que interessa achar).
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.hist_all FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.hist_all IS NOT NULL ORDER BY r.hora"
+    ).all(date);
+    const selBw = db.prepare("SELECT pares_json FROM avb_abertos WHERE data=? AND corrida=? AND hora=? LIMIT 1");
+
+    const detalhe = [];
+    const histRank = {};              // "1x2","1x3",... -> quantas vezes a BW abriu esse combo de ranking
+    let racesBw = 0, paresBwTotal = 0, motorBateu = 0, motorComPickEbw = 0;
+    for (const row of rows) {
+      let histAll = null; try { histAll = JSON.parse(row.hist_all); } catch (e) {}
+      const tsp = trapsSp(histAll);
+      const rankDe = t => { const i = tsp.findIndex(x => x.trap === Number(t)); return i >= 0 ? i + 1 : null; };
+      const spDe = t => { const x = tsp.find(x => x.trap === Number(t)); return x ? x.sp : null; };
+      let pares = null; try { const a = selBw.get(date, row.corrida, row.hora); if (a) pares = JSON.parse(a.pares_json); } catch (e) {}
+      const motor = motorPorChave[row.corrida + '|' + row.hora] || null;
+      const motorPar = motor ? { pick: motor.principal.pick_trap, outro: motor.principal.outro_trap, ratio_sp: motor.principal.ratio_sp, tier: motor.tier } : null;
+
+      let bwPares = [];
+      if (Array.isArray(pares) && pares.length) {
+        racesBw++;
+        bwPares = pares.map(p => {
+          const ra = rankDe(p.aTrap), rb = rankDe(p.bTrap);
+          const sa = spDe(p.aTrap), sb = spDe(p.bTrap);
+          const ratio = (sa > 0 && sb > 0) ? +(Math.max(sa, sb) / Math.min(sa, sb)).toFixed(3) : null;
+          const combo = (ra && rb) ? [ra, rb].sort((x, y) => x - y).join('x') : '?';
+          histRank[combo] = (histRank[combo] || 0) + 1;
+          paresBwTotal++;
+          return { par: 'T' + p.aTrap + 'xT' + p.bTrap, rank: combo, sp_ratio: ratio, odd_ab: p.oddAvenceB, odd_ba: p.oddBvenceA };
+        });
+        if (motorPar) {
+          motorComPickEbw++;
+          if (pares.some(p => mesmoPar(p, motorPar.pick, motorPar.outro))) motorBateu++;
+        }
+      }
+      detalhe.push({
+        hora: row.hora, corrida: row.corrida, dist: row.dist,
+        traps_sp: tsp,                                  // ranking do mercado (PDF): 1=favorito
+        motor_par: motorPar,                            // null = motor nao deu pick nessa corrida
+        bw_pares: bwPares                               // [] = BW nao abriu (ainda)
+      });
+    }
+    res.json({
+      date,
+      resumo: {
+        corridas_dia: rows.length,
+        corridas_com_pick_motor: recs.length,
+        corridas_bw_abriu: racesBw,
+        pares_bw_total: paresBwTotal,
+        motor_bateu_bw: motorBateu + '/' + motorComPickEbw,
+        taxa_match: motorComPickEbw ? +(100 * motorBateu / motorComPickEbw).toFixed(1) : null,
+        // O ACHADO PRINCIPAL: como os pares da BW se distribuem no ranking de SP do PDF.
+        // Ex.: {"1x2": 30, "1x3": 5} => a BW quase sempre abre favorito nº1 × nº2.
+        distribuicao_rank_bw: histRank,
+        legenda: 'traps_sp = ranking por SP-media do PDF (1=favorito). bw_pares.rank = posicoes dos 2 traps do par no ranking. distribuicao_rank_bw = com que frequencia cada combo de ranking aparece nos pares que a BW abriu. taxa_match = % das corridas (com pick do motor E BW aberta) em que o par do motor coincidiu com um par da BW.'
+      },
+      detalhe
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // (VIP removido ago/2026 — /diag/limpar-fechamento-vip saiu junto. O avb_fechamento
 // é sempre a reanálise, então não há mais fechamento de origem VIP pra limpar.)
 
