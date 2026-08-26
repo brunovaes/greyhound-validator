@@ -367,6 +367,10 @@ function _bwDaCorrida(db, row, corridaObj, opts, date) {
   // abriu) — inclusive pares "sem relação com a OD do PDF", já que a análise já está pronta no
   // banco. Exclui o par do principal. Corte: pct > parelhoAte (60%). Ordena por pct, pega os 2.
   const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : PARELHO_ATE;
+  const alertaForteMin = opts.alertaForteMin > 0 ? opts.alertaForteMin : 75;   // corte do "grito" PC+mobile
+  // pares que a manha JA previu (principal + secundarios da lista) — pra saber o que e' NOVO.
+  const chavePar = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+  const previstos = new Set((corridaObj.slots || []).map(s => chavePar(s.pick_trap, s.outro_trap)));
   const cand = [];
   for (const p of paresAbertos) {
     if (mesmoPar(p, principal.pick_trap, principal.outro_trap)) continue;
@@ -376,17 +380,24 @@ function _bwDaCorrida(db, row, corridaObj, opts, date) {
     if (!av || av.descartar) continue;
     if (av.avaliacao <= parelhoAte) continue;             // só AvB firme (>60%)
     const od = Number(Number(p.aTrap) === av.aTrap ? p.oddAvenceB : p.oddBvenceA);
+    // NOVA = a BW abriu, passa dos 60%, mas NAO estava na lista da manha (surpresa/oportunidade).
+    // alerta_forte = surpresa com pct >= 75 (o "grito" diferenciado no PC e no mobile).
+    const nova = !previstos.has(chavePar(av.aTrap, av.bTrap));
     cand.push({
       pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
       outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
       pct: av.avaliacao, tier: 'REGULAR',
       odd: (Number.isFinite(od) && od > 0) ? od : null,
-      caltm_dif: av.caltm_dif, eixos: av.eixos, obs: av.obs || null
+      caltm_dif: av.caltm_dif, eixos: av.eixos, obs: av.obs || null,
+      nova: nova, alerta_forte: nova && av.avaliacao >= alertaForteMin
     });
   }
   cand.sort((a, b) => b.pct - a.pct);
   const secundarios = cand.slice(0, 2);
-  return { monitorada: true, abriu, odd: oddP, secundarios };
+  // SURPRESAS = todos os AvBs NOVOS que a BW abriu (nao so os 2 mostrados) — pra o aviso na tela.
+  // alerta_forte = existe surpresa >= 75% -> dispara o alerta diferenciado (PC + mobile).
+  const surpresas = cand.filter(s => s.nova);
+  return { monitorada: true, abriu, odd: oddP, secundarios, surpresas, tem_surpresa: surpresas.length > 0, alerta_forte: surpresas.some(s => s.alerta_forte) };
 }
 
 function umaCorrida(db, opts) {
