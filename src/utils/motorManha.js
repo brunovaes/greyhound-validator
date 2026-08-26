@@ -289,6 +289,71 @@ function _paraCodigoCorrida(corridaParam) {
 //   3) hora + corrida LIKE '%<código>%'      -> match:'aproximado'
 // Nada casou -> encontrada:false com erro explícito (grita, não vem vazio calado).
 // corrida_casada = o valor de r.corrida que de fato bateu (pra a tela conferir).
+// Réguas TOP/REGULAR a partir de opts (config) — usadas pela validação do BW.
+function _reguaTop(opts) {
+  const D = reanalise.DEFAULTS;
+  return { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : D.caltmMinDif, split_min: opts.splitMin != null ? opts.splitMin : D.splitMin, podio_min: opts.podioMin != null ? opts.podioMin : D.podioMin, desaba_min: opts.desabaMin > 0 ? opts.desabaMin : D.desabaMin };
+}
+function _reguaReg(opts) {
+  return { sp_ratio_max: opts.regSpRatioMax > 0 ? opts.regSpRatioMax : 1.20, caltm_min_dif: opts.regCaltmMinDif != null ? opts.regCaltmMinDif : 0.10, split_min: opts.regSplitMin != null ? opts.regSplitMin : 0, podio_min: opts.regPodioMin != null ? opts.regPodioMin : 0, desaba_min: opts.regDesabaMin > 0 ? opts.regDesabaMin : 3 };
+}
+
+// VALIDAÇÃO DO BW near-post (Bruno ago/2026): o principal (congelado da manhã) FICA sempre.
+// Aqui a gente só confere contra os pares que a BetWinner ABRIU (tabela avb_abertos):
+//   - o par do principal abriu? -> devolve a ODD dele (a tela atualiza o principal com a odd).
+//   - NÃO abriu? -> monta até 2 SECUNDÁRIOS entre os pares JÁ PRONTOS da BW que passam nas
+//     mesmas regras do tier (SP não entra — já vêm prontos), cada um com a sua odd.
+// Nunca troca o principal. monitorada=false quando a corrida ainda não foi vista na BW.
+function _bwDaCorrida(db, row, corridaObj, opts, date) {
+  const principal = corridaObj.principal;
+  const tier = corridaObj.tier || 'TOP';
+  const reguaTop = _reguaTop(opts), reguaReg = _reguaReg(opts);
+  const reguaTier = (tier === 'REGULAR') ? reguaReg : reguaTop;
+  const desabaQueda = opts.desabaQueda > 0 ? opts.desabaQueda : reanalise.DEFAULTS.desabaQueda;
+  let paresAbertos = null;
+  try {
+    const a = db.prepare("SELECT pares_json FROM avb_abertos WHERE data=? AND corrida=? AND hora=? LIMIT 1").get(date, row.corrida, row.hora);
+    if (a) { try { paresAbertos = JSON.parse(a.pares_json); } catch (e) {} }
+  } catch (e) {}
+  if (!Array.isArray(paresAbertos) || !paresAbertos.length) return { monitorada: false, abriu: null, odd: null, secundarios: [] };
+
+  const dogsByTrap = {};
+  try { const hf = JSON.parse(row.hist_full); if (Array.isArray(hf)) for (const g of hf) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g; } catch (e) {}
+  const nomeTrap = t => { const g = dogsByTrap[t]; return g ? _nomeMascara(g.nome, t) : ('b' + t + ' (sem nome)'); };
+  const ctx = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null,
+    config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min } };
+  const mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2) || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
+
+  // 1) o principal abriu? qual odd?
+  const parP = paresAbertos.find(p => mesmoPar(p, principal.pick_trap, principal.outro_trap));
+  let abriu = !!parP, oddP = null;
+  if (parP) { const od = Number(Number(parP.aTrap) === principal.pick_trap ? parP.oddAvenceB : parP.oddBvenceA); oddP = (Number.isFinite(od) && od > 0) ? od : null; }
+
+  // 2) secundários (só se o principal NÃO abriu): pares prontos da BW que passam no tier. Até 2.
+  const secundarios = [];
+  if (!abriu) {
+    for (const p of paresAbertos) {
+      if (secundarios.length >= 2) break;
+      if (mesmoPar(p, principal.pick_trap, principal.outro_trap)) continue;
+      const dA = dogsByTrap[Number(p.aTrap)], dB = dogsByTrap[Number(p.bTrap)];
+      if (!dA || !dB) continue;
+      const av = reanalise.avaliarPar(dA, dB, ctx);
+      if (!av || av.descartar) continue;
+      if (!reanalise.passaRegua(av.medidas, null, reguaTier)) continue;   // SP null = não checa (BW já pronto)
+      const od = Number(Number(p.aTrap) === av.aTrap ? p.oddAvenceB : p.oddBvenceA);
+      secundarios.push({
+        pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
+        outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
+        pct: av.avaliacao,
+        tier: reanalise.passaRegua(av.medidas, null, reguaTop) ? 'TOP' : 'REGULAR',
+        odd: (Number.isFinite(od) && od > 0) ? od : null,
+        caltm_dif: av.caltm_dif, eixos: av.eixos, obs: av.obs || null
+      });
+    }
+  }
+  return { monitorada: true, abriu, odd: oddP, secundarios };
+}
+
 function umaCorrida(db, opts) {
   opts = opts || {};
   const date = opts.date;
@@ -321,10 +386,13 @@ function umaCorrida(db, opts) {
     return { date, hora, corrida, encontrada: false, match: null, corrida_casada: null, erro: 'corrida não encontrada (hora+corrida não casou, nem por nome completo)', corrida_obj: null };
   }
   const c = _corridaDeRow(row, date, opts);
+  // validação do BW near-post: principal fica; só confere abertura/odd + secundários prontos da BW.
+  const bw = (c && c.principal) ? _bwDaCorrida(db, row, c, opts, date) : null;
   return {
     date, hora, corrida, encontrada: !!c, match: c ? match : null,
     corrida_casada: row.corrida,   // o r.corrida que bateu (código cru do banco)
     corrida_obj: c,                // null quando a corrida existe mas não tem histórico avaliável
+    bw,                            // { monitorada, abriu, odd, secundarios[] } — principal nunca troca
     parametros: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif, n_slots: N_SLOTS }
   };
 }
