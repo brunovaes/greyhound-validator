@@ -2862,7 +2862,18 @@ function _persistirManha(date, aplicar){
       if(ehTop) nTop++; else nReg++;
       n++;
     }
-    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_pick: n, top: nTop, regular: nReg, congeladas_ja_largaram: cong, preview: aplicar?undefined:preview };
+    // FORA do motor unico (Bruno ago/2026): so existem DOIS tipos — TOP e REGULAR. Toda corrida
+    // de hoje, nao largada, com historico, que NAO foi aprovada (tier NULL depois da classificacao)
+    // e' sobra do Motor 1 (a analise velha marca palpite em tudo). Limpa o AvB dela pra NAO aparecer
+    // como indicacao em lugar nenhum (Analisar/HR/Banca). As ja largadas ficam congeladas.
+    let nFora = 0;
+    if(aplicar){
+      try {
+        const infoFora = db.prepare("UPDATE races SET trap_fav=0, name_fav='', trap_und=0, name_und='', pct=0 WHERE final_check_at IS NULL AND finishing_order_json IS NULL AND hist_full IS NOT NULL AND tier IS NULL AND trap_fav>0 AND id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date);
+        nFora = infoFora.changes || 0;
+      } catch(e){}
+    }
+    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_pick: n, top: nTop, regular: nReg, fora_limpas: nFora, congeladas_ja_largaram: cong, preview: aplicar?undefined:preview };
   }catch(e){ return { erro: e.message }; }
 }
 
