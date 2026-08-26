@@ -95,7 +95,7 @@ async function runFinalCheckRobot(targetDate) {
 
   const dbRaces = db.prepare(
     "SELECT r.id, r.user_id, r.hora, r.hora_br, r.corrida, r.dist, r.trap_fav, r.name_fav, r.trap_und, r.name_und, " +
-    "r.race_card, r.track_full, r.pct, r.nivel " +
+    "r.race_card, r.track_full, r.pct, r.nivel, r.tier " +
     "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
     "WHERE date(s.created_at, '-3 hours')=? AND r.nivel != 'skip' AND r.final_check_status IS NULL"
   ).all(DATE);
@@ -259,20 +259,38 @@ async function runFinalCheckRobot(targetDate) {
           scores_json: novoResultado.scores ? JSON.stringify(novoResultado.scores) : null
         };
 
-        logChanges(dbRace.id, 'final_check_robot', oldRowForAudit, newValues, ['trap_fav', 'name_fav', 'trap_und', 'name_und', 'pct', 'nivel']);
-
-        db.prepare(
-          'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=?,eliminados=?,post_pick=?,scores_json=?,final_check_status=?,final_check_at=CURRENT_TIMESTAMP WHERE id=?'
-        ).run(
-          newValues.trap_fav, newValues.name_fav, newValues.trap_und, newValues.name_und, newValues.pct, newValues.nivel,
-          newValues.perfil_fav, newValues.perfil_und, newValues.obs, newValues.hist_fav, newValues.hist_und, newValues.hist_all,
-          newValues.race_card, newValues.top3, newValues.track_full, newValues.eliminados, newValues.post_pick, newValues.scores_json,
-          novoResultado.nivel === 'skip' ? 'refeita_skip' : 'refeita',
-          dbRace.id
-        );
-
-        status.refeitas++;
-        addLog('ok', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — REFEITA: novo AvB T' + newValues.trap_fav + ' ' + newValues.name_fav + ' vs T' + newValues.trap_und + ' ' + newValues.name_und + ' (' + newValues.pct + '% ' + newValues.nivel + ')');
+        // CONGELAMENTO (Bruno ago/2026): se a corrida e' do MOTOR UNICO (tier TOP/REGULAR),
+        // a checagem final NAO re-escolhe o pick — ela so ATUALIZA o card fresco (retiradas,
+        // trap vazia, scores) e congela (final_check_at). O pick da manha e' a autoridade e
+        // fica intocado (trap_fav/und, pct, obs, perfil, hist do pick, top3/podio). Isso mata o
+        // "a entrada mudou perto da corrida". Corrida sem tier (fora do motor unico) segue como
+        // antes — o Motor 1 refaz normal.
+        const doMotorUnico = (dbRace.tier === 'TOP' || dbRace.tier === 'REGULAR');
+        if (doMotorUnico) {
+          db.prepare(
+            'UPDATE races SET nivel=?,hist_all=?,race_card=?,track_full=?,eliminados=?,post_pick=?,scores_json=?,final_check_status=?,final_check_at=CURRENT_TIMESTAMP WHERE id=?'
+          ).run(
+            newValues.nivel, newValues.hist_all, newValues.race_card, newValues.track_full,
+            newValues.eliminados, newValues.post_pick, newValues.scores_json,
+            novoResultado.nivel === 'skip' ? 'refeita_skip' : 'ok_congelado',
+            dbRace.id
+          );
+          status.refeitas++;
+          addLog('ok', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — card atualizado, pick CONGELADO (tier ' + dbRace.tier + ': T' + dbRace.trap_fav + ' x T' + dbRace.trap_und + ')');
+        } else {
+          logChanges(dbRace.id, 'final_check_robot', oldRowForAudit, newValues, ['trap_fav', 'name_fav', 'trap_und', 'name_und', 'pct', 'nivel']);
+          db.prepare(
+            'UPDATE races SET trap_fav=?,name_fav=?,trap_und=?,name_und=?,pct=?,nivel=?,perfil_fav=?,perfil_und=?,obs=?,hist_fav=?,hist_und=?,hist_all=?,race_card=?,top3=?,track_full=?,eliminados=?,post_pick=?,scores_json=?,final_check_status=?,final_check_at=CURRENT_TIMESTAMP WHERE id=?'
+          ).run(
+            newValues.trap_fav, newValues.name_fav, newValues.trap_und, newValues.name_und, newValues.pct, newValues.nivel,
+            newValues.perfil_fav, newValues.perfil_und, newValues.obs, newValues.hist_fav, newValues.hist_und, newValues.hist_all,
+            newValues.race_card, newValues.top3, newValues.track_full, newValues.eliminados, newValues.post_pick, newValues.scores_json,
+            novoResultado.nivel === 'skip' ? 'refeita_skip' : 'refeita',
+            dbRace.id
+          );
+          status.refeitas++;
+          addLog('ok', '  ' + dbRace.corrida + ' ' + dbRace.hora + ' — REFEITA: novo AvB T' + newValues.trap_fav + ' ' + newValues.name_fav + ' vs T' + newValues.trap_und + ' ' + newValues.name_und + ' (' + newValues.pct + '% ' + newValues.nivel + ')');
+        }
 
       } catch (e) {
         addLog('err', 'Erro em ' + dbRace.corrida + ' ' + dbRace.hora + ': ' + e.message);
