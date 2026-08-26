@@ -1528,7 +1528,10 @@ function _celulaAvb(r){
 // comum", e' ter ficado fora do corte — e a coluna precisa dizer isso, senao
 // some a diferenca entre "o motor olhou e reprovou" e "o motor nem classificou".
 function _motorDoAvb(r){
-  var t = String(r.tier || '').toLowerCase();
+  // trim + toLowerCase: o motor escreve TOP/REGULAR em maiusculas. A tela
+  // Analisar normaliza igual — se as duas divergissem, a mesma corrida
+  // apareceria num filtro e nao no outro.
+  var t = String(r.tier || '').trim().toLowerCase();
   if (t === 'top') return 'top';
   if (t === 'regular') return 'regular';
   if (r.bw === 1 || r.bw === true || r.bw === '1') return 'top';

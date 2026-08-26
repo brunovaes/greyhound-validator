@@ -309,7 +309,7 @@ async function autoCheckAndAnalyze() {
                 // ter aberto.
                 // bw=1 continua sendo o atalho de TOP, pra linha antiga (antes
                 // do tier existir) nao virar "fora".
-                tier: r.tier || (r.bw ? 'top' : null),
+                tier: r.tier != null ? r.tier : (r.bw ? 'top' : null),
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
                 eliminados: r.eliminados?JSON.parse(r.eliminados):[],
                 postPick: r.post_pick||'',
@@ -517,7 +517,18 @@ function _pintaBotaoTier(){
 // mostrar a tela de encerrado — que nao tem o botao do filtro, entao nao dava
 // nem pra voltar. Filtro de exibicao nao pode opinar sobre o dia ter acabado.
 function passaNoFiltroTier(r) {
-  return !FILTRO_TIER || (r && r.tier === FILTRO_TIER);
+  return !FILTRO_TIER || _tierDe(r) === FILTRO_TIER;
+}
+
+// Normaliza o tier na ENTRADA. O motor escreve TOP/REGULAR, e o resto da tela
+// compara em minusculo — sem isto, 'TOP' nunca casava com 'top' e o filtro
+// vinha vazio nas duas reguas, sem erro nenhum aparecendo.
+// Tambem aceita o bw=1 como TOP, pra linha antiga (antes do tier existir).
+function _tierDe(r){
+  var t = String((r && r.tier) || '').trim().toLowerCase();
+  if (t === 'top' || t === 'regular') return t;
+  if (r && (r.bw === 1 || r.bw === true || r.bw === '1')) return 'top';
+  return null;
 }
 
 function shouldShowRace(r) {
@@ -608,7 +619,7 @@ async function syncFromServer() {
       cur.odd = r.odd; cur.valor = r.valor; cur.avbNaoAberto = !!r.avb_nao_aberto;
       // O tier muda a cada ciclo (corrida pode cair de TOP pra REGULAR, ou
       // sair das duas, antes de largar), entao o sync atualiza tambem.
-      cur.tier = r.tier || (r.bw ? 'top' : null);
+      cur.tier = r.tier != null ? r.tier : (r.bw ? 'top' : null);
       cur.top3 = r.top3;
       cur.histFav = r.hist_fav?JSON.parse(r.hist_fav):[];
       cur.histUnd = r.hist_und?JSON.parse(r.hist_und):[];
@@ -2206,7 +2217,9 @@ function renderRaceListPanel(avbs) {
   var col = document.getElementById('race-list-col');
   if (!col) return;
   col.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)">'
-    + '<span style="font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Próximas</span>'
+    // O rotulo "Próximas" saiu: a lista em sequencia ja diz o que e', e o
+    // espaco vale mais pro filtro.
+    + '<span></span>'
     + '<span style="display:flex;align-items:center;gap:8px">'
     // Botao "so BW": mostra apenas o que o motor unico aprovou. Fica ao lado do
     // Atualizar porque as duas acoes sao da lista, nao da corrida.
