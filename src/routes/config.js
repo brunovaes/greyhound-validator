@@ -130,93 +130,9 @@ ${navBar(user, 'config')}
 
 <div class="tab-panel active" id="t-pesos">
 <div class="section">
-<div class="sec-title">Pesos dos Critérios</div>
-${blocoToggle('bloco_pesos_ativo', 'Pesos')}
-<div class="info-box">Os pesos orientam o Claude sobre qual critério priorizar. Valores maiores = mais importante no raciocinio.</div>
-<div class="grid bloco-fields" id="bloco_pesos_ativo_fields" data-ativo="${config.bloco_pesos_ativo===0?'0':'1'}">
-${[['peso_caltm','Tempo Final CalTm','Media dos tempos calibrados',config.peso_caltm||5,1,10],
-   ['peso_categoria','Categoria','Diferenca de classe nas 3 linhas mais recentes',config.peso_categoria||4,1,10],
-   ['peso_bends','Bends / Perfil','Padrao de corrida (Avassalador/Turbo/Recuperador/Estavel/Fumador)',config.peso_bends||3,1,10],
-   ['peso_split','Split','Velocidade de saida ate a 1a curva, comparado ao melhor da corrida',config.peso_split||3,1,10],
-   ['peso_sp','SP (Starting Price)','Confianca do mercado nas ultimas corridas',config.peso_sp||3,1,10],
-   ['peso_remarks','Remarks','Merito + corrida escondida (HiddenRun)',config.peso_remarks||2,1,10],
-   ['peso_post_pick','Post Pick (Racing Post)','Indicacao dos 3 melhores no cabecalho do PDF',config.peso_post_pick||2,0,10],
-   ['peso_brt','Melhor Tempo BRT','Desempate final',config.peso_brt||1,1,10]].map(([n,l,h,v,mn,mx])=>
-`<div class="field"><label>${l}</label>
-<input type="range" name="${n}" min="${mn}" max="${mx}" value="${v}" oninput="upR(this)">
-<div style="display:flex;justify-content:space-between;align-items:center"><span class="hint">${h}</span><span class="rv" id="v_${n}">${v}</span></div>
-<div class="pbar"><div class="pfill" id="b_${n}" style="width:${v*10}%"></div></div>
-</div>`).join('')}
-</div>
-</div>
-</div>
+<div class="sec-title">Ajustes do modelo antigo (removidos da tela)</div>
+<p class="hint" style="margin-bottom:16px">Os pesos dos critérios, a tabela de categoria, os thresholds de confiança e o motor de pontuação saíram desta tela. Eles pertencem ao modelo antigo, que dava uma nota somando fatores. O motor atual não pontua: ele aprova ou reprova o par em quatro eixos, e os cortes ficam logo abaixo, em <strong>Motor de análise</strong>.<br><br>Os valores continuam gravados no banco e não foram apagados. Se algum dia voltarem a ser usados, é só devolver os controles à tela.</p>
 
-<div class="tab-panel" id="t-categoria">
-<div class="section">
-<div class="sec-title">Categoria</div>
-${blocoToggle('bloco_categoria_ativo', 'Categoria')}
-<div class="info-box">
-  Controla como a classe historica dos galgos influencia a análise.<br>
-  <strong>Diferenca que CalTm pode superar:</strong> quantos níveis de classe o tempo pode compensar entre dois galgos.<br>
-  <strong>Niveis no pool:</strong> quantos níveis de diferença em relação a classe do card sao aceitos no historico valido.
-</div>
-<div class="bloco-fields" id="bloco_categoria_ativo_fields" data-ativo="${config.bloco_categoria_ativo===0?'0':'1'}">
-<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
-<div class="field">
-  <label>Diferenca maxima de categoria que CalTm pode superar</label>
-  <select name="max_cat_diff_caltm">
-    <option value="0" ${(config.max_cat_diff_caltm||1)===0?'selected':''}>0 — Categoria sempre decide</option>
-    <option value="1" ${(config.max_cat_diff_caltm||1)===1?'selected':''}>1 nivel (ex: A5 vs A6)</option>
-    <option value="2" ${(config.max_cat_diff_caltm||1)===2?'selected':''}>2 níveis (ex: A5 vs A7)</option>
-    <option value="3" ${(config.max_cat_diff_caltm||1)===3?'selected':''}>3 níveis (ex: A5 vs A8)</option>
-  </select>
-  <span class="hint">Define quando o CalTm pode superar a diferenca de classe entre dois galgos comparados</span>
-</div>
-<div class="field">
-  <label>Niveis diferentes permitidos no pool</label>
-  <select name="max_niveis_pool">
-    <option value="1" ${(config.max_niveis_pool||2)===1?'selected':''}>1 nivel (apenas classe do card)</option>
-    <option value="2" ${(config.max_niveis_pool||2)===2?'selected':''}>2 níveis (ex: A7 aceita A8)</option>
-    <option value="3" ${(config.max_niveis_pool||2)===3?'selected':''}>3 níveis (ex: A7 aceita A8 e A9)</option>
-    <option value="4" ${(config.max_niveis_pool||2)===4?'selected':''}>4 níveis (histórico amplo)</option>
-  </select>
-  <span class="hint">Quantos níveis abaixo ou acima da classe do card sao aceitos nas linhas validas do galgo</span>
-</div>
-</div>
-<div style="margin-top:14px;padding-top:14px;border-top:1px solid #222">
-<div class="info-box" style="margin-bottom:12px">
-  <strong>Novo na categoria com gap:</strong> elimina galgo que tem <strong>${config.max_linhas_cat_inferior||3} corridas</strong> em categoria inferior antes da ultima, que nao foi vitorioso na ultima corrida ou ficou mais de <strong>${config.max_dias_gap_nova_cat||14} dias</strong> parado entre as duas ultimas corridas validas.
-</div>
-<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
-<div class="field">
-  <label>Max. corridas em cat. inferior antes da ultima</label>
-  <select name="max_linhas_cat_inferior">
-    <option value="2" ${(config.max_linhas_cat_inferior||3)===2?'selected':''}>2 corridas</option>
-    <option value="3" ${(config.max_linhas_cat_inferior||3)===3?'selected':''}>3 corridas (padrao)</option>
-    <option value="4" ${(config.max_linhas_cat_inferior||3)===4?'selected':''}>4 corridas</option>
-    <option value="5" ${(config.max_linhas_cat_inferior||3)===5?'selected':''}>5 corridas</option>
-    <option value="99" ${(config.max_linhas_cat_inferior||3)===99?'selected':''}>Desativado</option>
-  </select>
-  <span class="hint">Quantas linhas em categoria inferior (excluindo a ultima) sao toleradas antes de eliminar o galgo</span>
-</div>
-<div class="field">
-  <label>Gap máximo entre as duas últimas corridas (dias)</label>
-  <select name="max_dias_gap_nova_cat">
-    <option value="7"  ${(config.max_dias_gap_nova_cat||14)===7 ?'selected':''}>7 dias</option>
-    <option value="14" ${(config.max_dias_gap_nova_cat||14)===14?'selected':''}>14 dias (padrao)</option>
-    <option value="21" ${(config.max_dias_gap_nova_cat||14)===21?'selected':''}>21 dias</option>
-    <option value="28" ${(config.max_dias_gap_nova_cat||14)===28?'selected':''}>28 dias</option>
-  </select>
-  <span class="hint">Se o gap entre as duas ultimas corridas validas for maior que este valor, o galgo e eliminado</span>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-
-<div class="tab-panel" id="t-filtros">
-<div class="section">
 <div class="sec-title">Filtros de Corrida</div>
 ${blocoToggle('bloco_filtros_ativo', 'Filtros de Corrida')}
 <div class="grid bloco-fields" id="bloco_filtros_ativo_fields" data-ativo="${config.bloco_filtros_ativo===0?'0':'1'}">
@@ -249,44 +165,6 @@ ${blocoToggle('bloco_filtros_ativo', 'Filtros de Corrida')}
 </div>
 
 <div class="tab-panel" id="t-confianca">
-<div class="section">
-<div class="sec-title">Thresholds de Confiança</div>
-${blocoToggle('bloco_confianca_ativo', 'Thresholds de Confiança')}
-<div class="grid bloco-fields" id="bloco_confianca_ativo_fields" data-ativo="${config.bloco_confianca_ativo===0?'0':'1'}">
-<div class="field"><label>Alta confiança (%)</label>
-<input type="range" name="pct_alta" min="50" max="90" value="${config.pct_alta}" oninput="upR(this)">
-<div style="display:flex;justify-content:space-between"><span class="hint">Minimo para badge Alta</span><span class="rv" id="v_pct_alta">${config.pct_alta}%</span></div></div>
-<div class="field"><label>Média confiança (%)</label>
-<input type="range" name="pct_media" min="30" max="70" value="${config.pct_media}" oninput="upR(this)">
-<div style="display:flex;justify-content:space-between"><span class="hint">Minimo para badge Media</span><span class="rv" id="v_pct_media">${config.pct_media}%</span></div></div>
-</div>
-</div>
-</div>
-
-<div class="tab-panel" id="t-motor">
-<div class="section">
-<div class="sec-title">Motor de Pontuação</div>
-${blocoToggle('bloco_motor_ativo', 'Motor de Pontuação')}
-<div class="info-box">Estes parametros controlam o calculo deterministico de scores. O Claude agora so extrai dados brutos — toda a decisao de favorito/ranking/AvB/Back e feita por codigo com base nesses valores.</div>
-<div class="grid bloco-fields" id="bloco_motor_ativo_fields" data-ativo="${config.bloco_motor_ativo===0?'0':'1'}">
-<div class="field"><label>Ajuste por nivel de classe (s)</label><input type="number" name="ajuste_classe_segundos" value="${config.ajuste_classe_segundos||0.20}" step="0.05" min="0.05" max="0.50"><span class="hint">Ex: galgo em A5 correu em A3 = +0.20s no tempo (normaliza pra comparar)</span></div>
-<div class="field"><label>Desconto acidente leve (s)</label><input type="number" name="desconto_acidente_leve" value="${config.desconto_acidente_leve||0.10}" step="0.02" min="0" max="0.30"><span class="hint">Bmp, SAw, MsdBrk — tempo ajustado para baixo</span></div>
-<div class="field"><label>Desconto acidente medio (s)</label><input type="number" name="desconto_acidente_medio" value="${config.desconto_acidente_medio||0.20}" step="0.02" min="0" max="0.50"><span class="hint">Crd, FcdCk — desconto maior</span></div>
-<div class="field"><label>Teto normalizacao CalTm (s)</label><input type="number" name="teto_diff_normalizacao" value="${config.teto_diff_normalizacao||0.50}" step="0.05" min="0.20" max="1.00"><span class="hint">Diferenca maxima relevante entre galgos (acima disso = 0 pts)</span></div>
-<div class="field"><label>Proporcao media / melhor CalTm</label>
-  <select name="proporcao_media_caltm">
-    <option value="0.50" ${(config.proporcao_media_caltm||0.60)==0.50?'selected':''}>50% media + 50% melhor</option>
-    <option value="0.60" ${(config.proporcao_media_caltm||0.60)==0.60?'selected':''}>60% media + 40% melhor (padrao)</option>
-    <option value="0.70" ${(config.proporcao_media_caltm||0.60)==0.70?'selected':''}>70% media + 30% melhor</option>
-    <option value="0.80" ${(config.proporcao_media_caltm||0.60)==0.80?'selected':''}>80% media + 20% melhor</option>
-  </select>
-  <span class="hint">Consistencia vs potencial — maior proporcao de media = mais conservador</span>
-</div>
-<div class="field"><label>Score mínimo para gerar AvB (pts)</label><input type="number" name="threshold_skip_avb" value="${config.threshold_skip_avb||10}" step="1" min="1" max="30"><span class="hint">Abaixo disso = corrida parelha = skip automatico</span></div>
-<div class="field"><label>Score mínimo para gerar Back (pts)</label><input type="number" name="threshold_back" value="${config.threshold_back||25}" step="1" min="10" max="50"><span class="hint">Diferenca entre 1o e 2o colocado — barra alta para Back</span></div>
-</div>
-</div>
-
 <div class="section">
 <div class="sec-title" style="display:flex;align-items:center;gap:8px">${icon('scroll',{size:14})} Documento de Regras</div>
 <details style="cursor:pointer">
@@ -1217,7 +1095,20 @@ function _int(v){
 router.post('/save', requireAdmin, express.json(), (req, res) => {
   try {
     const user = req.user;
-    const d = req.body;
+
+    // O formulario envia SO os campos que estao na tela. O UPDATE, porem, grava
+    // dezenas de colunas — e cada uma tem um "|| valorPadrao" no argumento. Sem
+    // o merge abaixo, um campo ausente chegaria undefined, cairia no padrao e
+    // GRAVARIA POR CIMA do que esta no banco.
+    //
+    // Na pratica: ao tirar os pesos do modelo antigo da tela, salvar qualquer
+    // configuracao zeraria todos eles pros valores de fabrica, em silencio.
+    //
+    // Merge sobre a linha atual: o que veio do formulario manda, o que nao veio
+    // fica como esta. Assim, remover um controle da tela deixa de ter efeito
+    // colateral sobre o resto da configuracao.
+    const _atual = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(CONFIG_GLOBAL_ID) || {};
+    const d = Object.assign({}, _atual, req.body || {});
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN ajuste_classe_segundos REAL DEFAULT 0.20').run(); } catch(e) {}

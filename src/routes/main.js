@@ -1,2224 +1,3236 @@
-const express = require('express');
-const router = express.Router();
-const { db, getUserConfig } = require('../db/database');
-const path = require('path');
-const fs = require('fs');
-const { requireAdmin } = require('../middleware/auth');
-const { can } = require('../access/store');
-const { planLabel } = require('../utils/plans');
-const { designTokensCSS } = require('../utils/designTokens');
-const { nomeCorridaCompleto, nomePista, NOMES_PISTAS } = require('../utils/nomesPistas');
+var raceFiles=[],capFiles=[],results=[],capModalFilesList=[];
+var filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
+var SS_KEY='ghf_results_v1';
+function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})}));}catch(e){}}
+function clearSessionState(){try{sessionStorage.removeItem(SS_KEY);}catch(e){}}
+function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!raw)return false;var data=JSON.parse(raw);if(data&&Array.isArray(data.results)&&data.results.length){results=data.results;return true;}}catch(e){}return false;}
 
-const BASE = process.env.BASE_PATH || '/greyhound';
-const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
-const { exigirAcesso } = require('../middleware/acesso');
+function readB64(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result.split(',')[1]);};r.onerror=rej;r.readAsDataURL(file);});}
+function trapClass(n){return['','t1','t2','t3','t4','t5','t6'][n]||'t1';}
+function perfilBadge(p){if(!p)return'';var c=p==='Recuperador'?'p-rec':p==='Fumador'?'p-fum':p==='Frontrunner'?'p-fro':'p-est';var i=p==='Recuperador'?'&#128170;':p==='Fumador'?'&#128684;':p==='Frontrunner'?'&#9889;':'&#10145;';return'<span class="perfil-badge '+c+'">'+i+' '+p+'</span>';}
+function ukHoraParaOrdem(h){if(!h)return 9999;var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr*60+parseInt(p[1]||0);}
+function convertHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;else if(hr===10||hr===11||hr===12)hr=hr;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
+function setSt(m){document.getElementById('st').textContent=m;}
+function prog(p,t){document.getElementById('pw').style.display='block';document.getElementById('pf').style.width=p+'%';document.getElementById('pt').textContent=t;}
+function addFI(name,id){var list=document.getElementById('rlist');var d=document.createElement('div');d.className='fi';d.id='fi-'+id;var sn=name.length>22?name.slice(0,20)+'...':name;d.innerHTML='<span class="fi-name">'+sn+'</span><span class="fi-st fi-load" id="fis-'+id+'">...</span><button class="fi-rm" data-id="'+id+'">x</button>';list.appendChild(d);}
+function updFI(id,ok){var el=document.getElementById('fis-'+id);if(!el)return;el.className='fi-st '+(ok?'fi-ok':'fi-err');el.textContent=ok?'OK':'erro';}
+function updCards(){var avbs=results.filter(function(r){return r.nivel!=='skip';});var alta=results.filter(function(r){return r.nivel==='alta';}).length;document.getElementById('sp').textContent=raceFiles.length||'-';document.getElementById('sa').textContent=avbs.length||'-';document.getElementById('sal').textContent=alta||'-';}
 
-function getLogo() {
-  const logoPath = path.join(__dirname, '../../public/img/logo.png');
-  if (fs.existsSync(logoPath)) return 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
-  return '';
+/* filtros */
+function getPista(corrida){if(!corrida)return'';var p=corrida.trim().split(' ');if(p.length>1&&/^[A-Z]\d+$/i.test(p[p.length-1]))return p.slice(0,-1).join(' ');return corrida;}
+function horaToMin(h){if(!h)return null;var p=h.split(':');return parseInt(p[0]||0)*60+parseInt(p[1]||0);}
+function applyFiltersToAvbs(avbs){
+  return avbs.filter(function(r){
+    if(!filterState.mostrarSkip&&r.nivel==='skip')return false;
+    if(filterState.pista&&getPista(r.corrida||'')!==filterState.pista)return false;
+    if(filterState.confianca&&r.nivel!==filterState.confianca)return false;
+    if(filterState.horaMin||filterState.horaMax){
+      var hbr=convertHora(r.hora||'');var hMin=horaToMin(hbr);
+      if(hMin!==null){
+        if(filterState.horaMin&&hMin<horaToMin(filterState.horaMin))return false;
+        if(filterState.horaMax&&hMin>horaToMin(filterState.horaMax))return false;
+      }
+    }
+    return true;
+  });
 }
 
-function navBar(user, active) {
-  const isAdmin = user.role === 'admin';
-  return `<nav id="topnav" style="position:relative;background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
-    <button id="nav-burger" onclick="toggleNav()" aria-label="Menu" style="display:none;background:none;border:none;color:#e9edf2;font-size:22px;cursor:pointer;padding:10px 8px;line-height:1">&#9776;</button>
-    <div id="nav-links" style="display:flex">
-      ${can(user,'screen.analisar') ? `<a href="${BASE}" class="nl${active==='analisar'?' na':''}">Analisar</a>` : ''}
-      ${can(user,'screen.banca') ? `<a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Painel Admin</a>` : ''}
-      ${can(user,'screen.live') ? `<a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>` : ''}
-    </div>
-    <div style="display:flex;align-items:center;gap:14px">
-      <a href="${BASE}" id="race-alert-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.4);background:rgba(249,115,22,.1);border-radius:20px;padding:3px 10px;animation:blink 1.2s ease-in-out infinite">
-        <span style="display:inline-block;width:7px;height:7px;background:#f97316;border-radius:50%"></span>
-        <span id="race-alert-txt">Corrida em breve</span>
-      </a>
-      <a href="${BASE}/robot" id="results-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#a78bfa;text-decoration:none;border:1px solid rgba(167,139,250,.4);background:rgba(167,139,250,.1);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
-        <span style="display:inline-block;width:7px;height:7px;background:#a78bfa;border-radius:50%"></span>
-        <span>Robô Resultados rodando...</span>
-      </a>
-      <a href="${BASE}/robot" id="robot-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);background:rgba(96,165,250,.08);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
-        <span style="display:inline-block;width:7px;height:7px;background:#60a5fa;border-radius:50%"></span>
-        <span id="robot-badge-txt">Robô rodando...</span>
-      </a>
-      <span id="nav-userinfo" style="font-size:11px;color:#666">${user.name} · <span style="color:#${user.plan==='premium'?'a78bfa':user.plan==='pro'?'60a5fa':'888'}">${planLabel(user.plan)}</span> · ${user.analyses_used}/${user.analyses_limit===999999?'∞':user.analyses_limit} analises</span>
-      <a href="${BASE}/logout" style="font-size:11px;color:#666;text-decoration:none;border:1px solid #333;padding:4px 10px;border-radius:4px">Sair</a>
-    </div>
-  </nav>
-  <script src="${BASE}/static/js/alertaGlobal.js" defer></script>
-  <!-- Faixa de avisos dos robos. Nasce OCULTA de proposito: so a tela
-       Analisar a exibe (o CSS dela liga o display). Nas outras telas estes
-       avisos so ocupavam espaco — sao sobre o dia de corridas, e o Painel
-       Admin ou o Configuracoes nao tem o que fazer com eles. -->
-  <div id="gf-ticker"><div class="gf-tk-mov"></div></div>
-  <div id="gf-avisos" style="display:none">
-  <div id="res-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(249,115,22,.06);border-bottom:1px solid rgba(249,115,22,.15)">
-    <span class="gf-rotulo" style="color:#f97316">Robô de Resultados</span><span class="gf-txt gf-completo" style="font-size:12px;color:#f97316">🏁 <strong><span id="res-banner-cnt">0</span> resultados</strong> atualizados às <strong><span id="res-banner-time">--:--</span></strong></span>
-    <div style="display:flex;align-items:center;gap:10px">
-      <a href="${BASE}/historico" style="font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Histórico →</a>
-      <button onclick="dismissResBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
-    </div>
-  </div>
-  <div id="mon-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(96,165,250,.06);border-bottom:1px solid rgba(96,165,250,.15)">
-    <span class="gf-rotulo" style="color:#60a5fa">Robô de Monitoramento</span><span class="gf-txt gf-completo" style="font-size:12px;color:#60a5fa">🔎 <strong><span id="mon-banner-cnt">0</span> mudança(s) no card</strong> detectada(s) às <strong><span id="mon-banner-time">--:--</span></strong> — <span id="mon-banner-reanalyzed"></span></span>
-    <div style="display:flex;align-items:center;gap:10px">
-      <a href="${BASE}/robot" style="font-size:11px;color:#60a5fa;text-decoration:none;border:1px solid rgba(96,165,250,.3);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
-      <button onclick="dismissMonBanner()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;line-height:1">×</button>
-    </div>
-  </div>
-  <div id="suspicious-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.1);border-bottom:1px solid rgba(239,68,68,.3)">
-    <span class="gf-rotulo" style="color:#ef4444">Checagem Final</span><span class="gf-txt gf-completo" style="font-size:12px;color:#ef4444">⚠️ <strong>Rodada suspeita</strong> — <span id="suspicious-banner-msg"></span></span>
-    <div style="display:flex;align-items:center;gap:10px">
-      <a href="${BASE}/robot" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Robô →</a>
-      <button onclick="dismissSuspiciousBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece se continuar suspeito depois)">×</button>
-    </div>
-  </div>
-  <div id="stop-banner" style="display:none;align-items:center;justify-content:space-between;padding:8px 20px;background:rgba(239,68,68,.12);border-bottom:1px solid rgba(239,68,68,.35)">
-    <span class="gf-rotulo" style="color:#ef4444">Stop de Banca</span><span class="gf-txt gf-completo" style="font-size:12px;color:#ef4444">&#128721; <strong>Stop do dia atingido</strong> — <span id="stop-banner-msg"></span></span>
-    <div style="display:flex;align-items:center;gap:10px">
-      <a href="${BASE}/banca" style="font-size:11px;color:#ef4444;text-decoration:none;border:1px solid rgba(239,68,68,.4);padding:3px 10px;border-radius:4px;font-weight:600">Ver Banca →</a>
-      <button onclick="dismissStopBanner()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;opacity:.7" title="Fechar (reaparece amanha se acontecer de novo)">×</button>
-    </div>
-  </div>
-  </div>
-  <style>
-    .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
-    .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
-    @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
-    /* ===== Mobile: menu vira hamburguer e os avisos de robo somem ===== */
-    @media(max-width:768px){
-      #nav-burger{display:block!important}
-      #topnav{padding:0 10px}
-      #nav-links{display:none!important;position:absolute;top:100%;left:0;right:0;flex-direction:column;background:#111;border-bottom:1px solid #333;box-shadow:0 10px 26px rgba(0,0,0,.55);z-index:60}
-      #nav-links.open{display:flex!important}
-      #nav-links .nl{padding:13px 18px;border-bottom:1px solid #222!important;border-left:2px solid transparent}
-      #nav-links .nl.na{border-left-color:#22c55e!important}
-      #nav-userinfo{display:none!important}
-      #race-alert-badge,#results-badge,#robot-badge{display:none!important}
-      #res-banner,#mon-banner,#suspicious-banner,#stop-banner{display:none!important}
-    }
-  </style>
-  <script>
+/* estilos */
+function injectStyles(){
+  var css=[
+    'thead th{position:sticky!important;top:0!important;z-index:20!important;background:#0d1117!important;}',
+    '.ghf-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px);}',
+    '.ghf-modal-box{background:#161b27;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:32px 36px;width:440px;max-width:92vw;box-shadow:0 24px 64px rgba(0,0,0,.6);}',
+    '.ghf-modal-title{font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;}',
+    '.ghf-modal-sub{font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;}',
+    '.ghf-modal-inp{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:9px;color:#fff;padding:11px 15px;font-size:14px;outline:none;box-sizing:border-box;transition:border .2s;}',
+    '.ghf-modal-inp:focus{border-color:#00e676;}',
+    '.ghf-modal-inp::placeholder{color:rgba(255,255,255,.3);}',
+    '.ghf-modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;}',
+    '.ghf-btn-pri{background:linear-gradient(135deg,#00e676,#00c853);color:#000;border:none;padding:10px 26px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
+    '.ghf-btn-pri:hover{opacity:.88;}',
+    '.ghf-btn-sec{background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.15);padding:10px 22px;border-radius:9px;font-size:14px;cursor:pointer;}',
+    '.ghf-toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);padding:13px 18px 13px 28px;border-radius:11px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;display:flex;align-items:center;gap:14px;}',
+    '.ghf-toast.t-ok{background:linear-gradient(135deg,#00e676,#00c853);color:#000;}',
+    '.ghf-toast.t-err{background:#e53935;color:#fff;}',
+    '.ghf-toast.t-show{opacity:1;pointer-events:auto;}',
+    '.ghf-toast-x{background:rgba(0,0,0,.15);border:none;border-radius:6px;width:22px;height:22px;min-width:22px;color:inherit;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.7;transition:opacity .15s}',
+    '.ghf-toast-x:hover{opacity:1}',
+    '#filter-panel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);border-radius:8px;}',
+    '#filter-panel .fp-group{display:flex;align-items:center;gap:5px;}',
+    '#filter-panel .fp-label{font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}',
+    '#filter-panel select,#filter-panel input[type=time]{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:rgba(255,255,255,.8);font-size:11px;outline:none;cursor:pointer;padding:4px 6px;}',
+    '#filter-panel select{min-width:100px;}',
+    '#filter-panel input[type=time]{color-scheme:dark;width:78px;}',
+    '#filter-panel select:focus,#filter-panel input[type=time]:focus{border-color:rgba(0,230,118,.5);}',
+    '#filter-panel select option{background:#1a1f2e;font-size:12px;}',
+    '#filter-panel .fp-divider{width:1px;height:16px;background:rgba(255,255,255,.08);flex-shrink:0;margin:0 2px;}',
+    '#filter-panel .fp-hora-pair{display:flex;align-items:center;gap:4px;}',
+    '#filter-panel .fp-hora-sep{color:rgba(255,255,255,.2);font-size:10px;}',
+    '#fp-count{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto;white-space:nowrap;}',
+    '#btn-fp-clear{background:transparent;border:none;color:rgba(255,255,255,.2);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;transition:color .2s;flex-shrink:0;}',
+    '#btn-fp-clear:hover{color:#e53935;}',
+    /* popup pós-análise */
+    '.ps-ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9500;display:none;align-items:center;justify-content:center;}',
+    '.ps-ov.open{display:flex;}',
+    '.ps-box{background:#111;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:36px 40px;text-align:center;max-width:400px;width:90%;animation:psIn .25s ease;}',
+    '@keyframes psIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}',
+    '.ps-icon{font-size:52px;margin-bottom:16px;display:block;}',
+    '.ps-title{font-size:18px;font-weight:700;color:#fff;margin-bottom:8px;}',
+    '.ps-sub{font-size:13px;color:rgba(255,255,255,.5);margin-bottom:24px;line-height:1.6;}',
+    '.ps-inp{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:9px;color:#fff;padding:11px 15px;font-size:14px;outline:none;box-sizing:border-box;transition:border .2s;text-align:left;display:block;}',
+    '.ps-inp:focus{border-color:#22c55e;}',
+    '.ps-inp::placeholder{color:rgba(255,255,255,.3);}',
+    '.ps-btns{display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap;}',
+    '.ps-btn-pri{background:#22c55e;color:#000;border:none;padding:10px 24px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
+    '.ps-btn-pri:hover{opacity:.88;}',
+    '.ps-btn-sec{background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.15);padding:10px 20px;border-radius:9px;font-size:14px;cursor:pointer;}',
+    '.ps-btn-warn{background:#f97316;color:#000;border:none;padding:10px 20px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s;}',
+    '.ps-btn-warn:hover{opacity:.88;}',
+    '.rc-alert{animation:rcAlertBlink 1s ease-in-out infinite;}',
+    '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
+    '.rc-alert-custom{animation:rcAlertBlinkCustom 1s ease-in-out infinite;border-left:3px solid var(--alert-col,#3b82f6);}',
+    '@keyframes rcAlertBlinkCustom{0%,100%{background:transparent;}50%{background:var(--alert-col,#3b82f6);}}',
+    '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
+    '.rc-reanalise-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:8px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-bottom:3px}',
+    '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
+    '.rc-old{background:rgba(239,68,68,.12)!important;border-left:3px solid #ef4444;}',
+    '.rc-old-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
+    '.rc-suspect-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#000;background:#f59e0b;padding:1px 6px;border-radius:4px;margin-bottom:3px;}',
+    // O fundo da linha VIP NAO fica aqui: ele vem da configuracao de cada
+    // nivel e e' injetado por _cssVip(). Deixar fixo aqui vencia a
+    // configuracao, porque este CSS carrega depois.
+    '.fp-old-banner{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
+    '.fp-suspect-banner{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f59e0b;font-size:12px;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:10px;letter-spacing:.3px;}',
+    '.old-row{background:rgba(239,68,68,.08)!important;}',
+    '.old-row td{border-color:rgba(239,68,68,.15)!important;}'
+  ].join('');
+  var s=document.createElement('style');s.textContent=css;document.head.appendChild(s);
+}
 
-// ── Faixa de avisos: 1 ocupa tudo, 2 dividem ao meio, 3 dividem em tres ───
-// Os banners mudam de display por JS espalhado pelo arquivo (cada robo mexe no
-// seu). Em vez de caçar cada ponto, observamos a faixa e reagimos: sempre que
-// um aparece ou some, recalculamos as classes que o CSS usa pra dividir.
-(function(){
-  var faixa = document.getElementById('gf-avisos');
-  if(!faixa) return;
-  // So a tela Analisar tem a coluna de foco. Nas outras a faixa fica oculta,
-  // como nasceu — sao avisos sobre o dia de corridas, nao tem o que fazer no
-  // Painel Admin ou no Configuracoes.
-  var col = document.querySelector('.focus-col');
-  if(!col) return;
-  var ticker = document.getElementById('gf-ticker');
-  if(ticker) col.appendChild(ticker);
-  // Move a faixa pro fim da coluna de foco: assim ela fica colada no que vem
-  // antes (a barra de Odd) em qualquer zoom, em vez de ancorada na janela.
-  col.appendChild(faixa);
-
-  function visiveis(){
-    return Array.prototype.filter.call(faixa.children, function(d){
-      return d.style.display && d.style.display !== 'none';
-    });
-  }
-  function atualizar(){
-    var v = visiveis();
-    faixa.style.display = v.length ? 'flex' : 'none';
-    faixa.classList.toggle('solo',  v.length === 1);
-    faixa.classList.toggle('multi', v.length > 1);
-    // Banner na tela = ticker sai. Faixa livre = ticker volta, se houver aviso.
-    if (ticker) ticker.classList.toggle('on', v.length === 0 && _tkItens.length > 0);
-    // Um aviso que sumiu nao pode continuar "aberto" segurando a faixa.
-    if (faixa.classList.contains('expandido')) {
-      var ab = faixa.querySelector('.aberto');
-      if (!ab || ab.style.display === 'none') fechar();
-    }
-  }
-  function fechar(){
-    faixa.classList.remove('expandido');
-    var ab = faixa.querySelector('.aberto');
-    if (ab) ab.classList.remove('aberto');
-  }
-  // Clique no TEXTO expande. O botao de acao e o × continuam funcionando
-  // normalmente porque nao estao na area clicavel.
-  faixa.addEventListener('click', function(ev){
-    var txt = ev.target.closest && ev.target.closest('.gf-txt');
-    if(!txt) return;
-    var box = txt.closest('div[id$="-banner"]');
-    if(!box) return;
-    if (box.classList.contains('aberto')) { fechar(); return; }
-    fechar();
-    box.classList.add('aberto');
-    faixa.classList.add('expandido');
-  });
-
-  // ── Alimentacao do ticker ────────────────────────────────────────────────
-  // O app.js empurra os avisos do monitoramento aqui (reanalise, skip, cio).
-  // Antes eles viravam um toast que sumia em 2,6s — se voce estivesse olhando
-  // outra coisa, perdia. Agora ficam rolando ate o fim do dia.
-  var _tkItens = [];
-  var _TK_MAX = 30;   // teto: evita a faixa virar um log infinito
-  window.ghTicker = function(txt){
-    if(!txt) return;
-    var agora = new Date();
-    var hh = String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
-    _tkItens.unshift('<span class="gf-tk-item"><span class="gf-tk-hora">' + hh + '</span> ' + txt + '</span>');
-    if(_tkItens.length > _TK_MAX) _tkItens.length = _TK_MAX;
-    var mov = ticker && ticker.querySelector('.gf-tk-mov');
-    // Duplica a lista pra a volta do loop nao deixar um buraco na faixa.
-    if(mov) mov.innerHTML = _tkItens.join('') + _tkItens.join('');
-    atualizar();
-  };
-
-  // Observa mudancas de style nos 4 banners — e' assim que sabemos que um
-  // apareceu ou sumiu, sem precisar alterar o codigo de cada robo.
-  var obs = new MutationObserver(atualizar);
-  Array.prototype.forEach.call(faixa.children, function(d){
-    obs.observe(d, { attributes:true, attributeFilter:['style'] });
-  });
-  atualizar();
+// Modo simulado de AvBs (?simavb=1). Declarado no TOPO de proposito: o
+// shouldShowRace consulta esta flag e roda muito antes do bloco de AvBs.
+var _SIM_AVB = (function(){
+  try { return new URLSearchParams(location.search).get('simavb') === '1'; } catch(e){ return false; }
 })();
 
-  function toggleNav(){var m=document.getElementById('nav-links'); if(m) m.classList.toggle('open');}
-  (function() {
-    var BASE = '${BASE}';
-    var badge = document.getElementById('robot-badge');
-    var badgeTxt = document.getElementById('robot-badge-txt');
-    var pdfBanner = document.getElementById('pdf-banner');
-    function downloadAndAnalyze() {
-      var a = document.createElement('a');
-      a.href = BASE + '/api/pdfs/hoje/zip';
-      a.download = '';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function() { window.location.href = BASE; }, 1000);
+var RACAS_EM_TELA = 6;
+var STAKE_PADRAO = null;   // unidade padrao vinda da Banca (Configuracoes)
+var AUTO_REFRESH_MIN = 1;
+var ALERTA_MIN_ANTES = 3;
+var TELA_GRACE_MIN = 0;
+var SOM_ALERTA = 'sino';
+var ALARME_FILTRO = { ativo:0, turno:'', pistas:[], classes:[], regras:[], som:'beep', cor:'azul' };
+var CORES_ALARME = { azul:'#3b82f6', roxo:'#8b5cf6', laranja:'#f97316', rosa:'#ec4899', verde:'#22c55e', dourado:'#D4AF37' };
+var _sysCfgSig = ''; // assinatura da ultima config carregada (detecta mudanca p/ reaplicar o alarme)
+// Sinaliza que ESTA tela (analise) ja cuida do alarme — o alertaGlobal.js
+// (incluido em todas as paginas) fica passivo aqui pra nao duplicar aviso.
+window.__ghAlarmeApp = true;
+// Registra o aviso num store compartilhado (localStorage) pra que, ao navegar
+// pra outra tela, o alertaGlobal.js nao repita o mesmo aviso.
+function registrarAvisoGlobal(key){
+  try {
+    var now = Date.now(), TTL = 10*60*1000;
+    var raw = localStorage.getItem('ghAlerted'); var o = raw ? JSON.parse(raw) : {};
+    for (var k in o) { if (o[k] < now) delete o[k]; }
+    o[key] = now + TTL; localStorage.setItem('ghAlerted', JSON.stringify(o));
+  } catch(e){}
+}
+
+// Tres taxas sobre a MESMA chegada, todas via bateuPar no servidor:
+//   minha = os AvBs que voce escolheu   (numero grande, e' o que voce apostou)
+//   rean  = a principal da reanalise
+//   motor = o AvB da analise global original
+// Um numero so por card. Antes eram dois lado a lado (Motor e Reanalise), o
+// que so fazia sentido enquanto existiam dois AvBs guardados por corrida.
+// Agora ha um AvB por corrida — a sua escolha quando voce entrou, o do motor
+// quando nao entrou — entao comparar duas taxas nao quer dizer mais nada.
+//
+// Le 'geral' quando o servidor manda; enquanto o /api/acertos-resumo nao
+// devolver esse campo, cai no numero do topo (que hoje e' o do motor), pra o
+// card nunca ficar vazio.
+function _pintaAcertos(el, bloco){
+  if(!el || !bloco) return;
+  var t = bloco.tres;
+  var o = (t && t.geral) ? t.geral : bloco;
+  var pct = (o && o.pct != null) ? o.pct : null;
+
+  // Volta ao render simples: um numero ocupando o card.
+  el.style.display = '';
+  el.style.gap = '';
+  el.textContent = pct == null ? '-' : pct + '%';
+  el.style.color = pct == null ? '#666' : (pct >= 50 ? '#22c55e' : '#ef4444');
+  el.title = (o && o.tot) ? (o.ok + ' de ' + o.tot + ' corridas resolvidas') : '';
+
+  // Residuo do render antigo, quando havia uma linha de referencia embaixo.
+  var ref = document.getElementById(el.id + '-ref');
+  if(ref) ref.remove();
+}
+
+async function loadAcertosResumo() {
+  try {
+    var r = await fetch(BASE + '/api/acertos-resumo');
+    var d = await r.json();
+    _pintaAcertos(document.getElementById('acertos-dia'), d.dia);
+    _pintaAcertos(document.getElementById('acertos-mes'), d.mes);
+  } catch(e) {}
+}
+
+async function loadSystemConfig() {
+  try {
+    var r = await fetch(BASE+'/api/config');
+    var c = await r.json();
+    if (c.racas_em_tela) RACAS_EM_TELA = parseInt(c.racas_em_tela);
+    if (c.banca_unidade_padrao != null) STAKE_PADRAO = c.banca_unidade_padrao;
+    if (c.auto_refresh_min) AUTO_REFRESH_MIN = parseInt(c.auto_refresh_min);
+    if (c.alerta_min_antes != null) ALERTA_MIN_ANTES = parseInt(c.alerta_min_antes);
+    if (c.tela_grace_min != null) TELA_GRACE_MIN = parseInt(c.tela_grace_min);
+    if (c.som_alerta) SOM_ALERTA = c.som_alerta;
+    ALARME_FILTRO.ativo = c.alarme_filtro_ativo ? 1 : 0;
+    ALARME_FILTRO.turno = c.alarme_filtro_turno || '';
+    ALARME_FILTRO.pistas = (c.alarme_filtro_pistas||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    ALARME_FILTRO.classes = (c.alarme_filtro_classes||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    ALARME_FILTRO.som = c.alarme_filtro_som || 'beep';
+    ALARME_FILTRO.cor = c.alarme_filtro_cor || 'azul';
+    try { ALARME_FILTRO.regras = c.alarme_filtro_regras ? JSON.parse(c.alarme_filtro_regras) : []; } catch(e){ ALARME_FILTRO.regras = []; }
+    // Reaplica na hora quando a config muda (ex: salvou o "Alarme para filtro
+    // selecionado" em outra aba). Se o alarme/alerta mudou desde o ultimo load,
+    // descarta o estado de alerta atual (o aviso padrao e' descartado) e
+    // reavalia tudo com as novas regras, sem precisar recarregar a tela.
+    var _sig = JSON.stringify(ALARME_FILTRO) + '|' + SOM_ALERTA + '|' + ALERTA_MIN_ANTES;
+    if (_sysCfgSig !== '' && _sig !== _sysCfgSig) {
+      alertedRaces = {};
+      if (typeof checkRaceAlerts === 'function') checkRaceAlerts();
     }
-    function dismissPdfBanner() {
-      document.getElementById('pdf-banner').style.display = 'none';
-      var key = 'pdf_banner_dismissed_' + new Date().toISOString().slice(0,10);
-      try { localStorage.setItem(key, 'true'); } catch(e) {}
-    }
-    function dismissResBanner() {
-      var banner = document.getElementById('res-banner');
-      banner.style.display = 'none';
-      try { localStorage.setItem('res_banner_dismissed', banner.dataset.lastRun || ''); } catch(e) {}
-    }
-    function dismissMonBanner() {
-      var banner = document.getElementById('mon-banner');
-      banner.style.display = 'none';
-      try { localStorage.setItem('mon_banner_dismissed', banner.dataset.lastRun || ''); } catch(e) {}
-    }
-    function dismissSuspiciousBanner() {
-      var banner = document.getElementById('suspicious-banner');
-      var msg = document.getElementById('suspicious-banner-msg').textContent || '';
-      banner.style.display = 'none';
-      try { localStorage.setItem('suspicious_banner_dismissed', msg); } catch(e) {}
-    }
-    function dismissStopBanner() {
-      var banner = document.getElementById('stop-banner');
-      var today = new Date().toISOString().slice(0,10);
-      banner.style.display = 'none';
-      try { localStorage.setItem('stop_banner_dismissed', today); } catch(e) {}
-    }
-    function checkStopBanner() {
-      var today = new Date().toISOString().slice(0,10);
-      fetch(BASE + '/banca/data?view=day&date=' + today).then(function(r){return r.json();}).then(function(d){
-        var banner = document.getElementById('stop-banner');
-        if (!banner || !d.ok || !d.stopHit) { if(banner) banner.style.display='none'; return; }
-        var dismissed = false;
-        try { dismissed = localStorage.getItem('stop_banner_dismissed') === today; } catch(e) {}
-        if (dismissed) return;
-        document.getElementById('stop-banner-msg').textContent = d.avisoStop + ' (prejuízo hoje: ' + d.pctDia.toFixed(1) + '%, limite: ' + d.pctStop + '%)';
-        banner.style.display = 'flex';
-      }).catch(function(){});
-    }
-    function checkRobots() {
-      Promise.all([
-        fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
-        fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).catch(function(){return {};}),
-        fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).catch(function(){return {};})
-      ]).then(function(results) {
-        var pdf = results[0]; var res = results[1]; var mon = results[2];
-        var resultsBadge = document.getElementById('results-badge');
-        if (resultsBadge) resultsBadge.style.display = res.running ? 'flex' : 'none';
-        if (pdf.running) {
-          badge.style.display = 'flex';
-          badgeTxt.textContent = 'Robô PDF: ' + (pdf.progress||0) + '/' + (pdf.total||'?');
-        } else if (mon.running) {
-          badge.style.display = 'flex';
-          badgeTxt.textContent = 'Robô Monitoramento: ' + (mon.processed||0) + ' verificadas...';
-        } else {
-          badge.style.display = 'none';
+    _sysCfgSig = _sig;
+  } catch(e) {}
+}
+
+async function autoSaveSession(dateLabel) {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  if (!avbs.length) return;
+  // Reaplica dados preservados de uma sobrescrita (odd/valor/flag/resultados
+  // do robo que a sessao antiga ja tinha) — casando por hora+corrida.
+  if (preserveDataMap) {
+    avbs.forEach(function(r){
+      var prev = preserveDataMap[r.hora+'|'+r.corrida];
+      if (!prev) return;
+      if (prev.odd != null) r.odd = prev.odd;
+      if (prev.valor != null) r.valor = prev.valor;
+      if (prev.resultado_1 != null) r.r1 = prev.resultado_1;
+      if (prev.resultado_2 != null) r.r2 = prev.resultado_2;
+      if (prev.resultado_3 != null) r.r3 = prev.resultado_3;
+      if (prev.bateu != null) r.hit = prev.bateu;
+      if (prev.avb_nao_aberto != null) r.avbNaoAberto = !!prev.avb_nao_aberto;
+      if (prev.video_url != null) r.videoUrl = prev.video_url;
+    });
+    preserveDataMap = null;
+  }
+  // Fallback para data atual se dateLabel não foi definido
+  if (!dateLabel) {
+    var now = new Date();
+    dateLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+  }
+  var name = 'Races ' + dateLabel;
+  try {
+    // Remove sessão com mesmo nome se existir
+    var r = await fetch(BASE+'/api/sessions');
+    var sessions = await r.json();
+    var existing = sessions.find(function(s){return s.name===name;});
+    if (existing) await fetch(BASE+'/api/session/'+existing.id, {method:'DELETE'});
+    // Salva nova sessão
+    var saveResp = await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    var saveData = await saveResp.json().catch(function(){return null;});
+    // Busca de volta os IDs das corridas recem-criadas e vincula em `results` —
+    // sem isso, edições de Odd/Valor/AvB não aberto feitas depois nunca
+    // persistem no banco (saveRaceField exige um id pra saber onde dar o PUT).
+    if (saveData && saveData.sessionId) {
+      try {
+        var racesResp = await fetch(BASE+'/api/session/'+saveData.sessionId+'/races');
+        var racesData = await racesResp.json();
+        if (racesData && Array.isArray(racesData.races)) {
+          racesData.races.forEach(function(dbRace){
+            var match = avbs.find(function(x){ return x.hora===dbRace.hora && x.corrida===dbRace.corrida; });
+            if (match) match.id = dbRace.id;
+          });
         }
-        // Invariante de sanidade: rodada suspeita (taxa de falha alta) fica
-        // visivel aqui mesmo, sem precisar abrir a aba Robo
-        var susBanner = document.getElementById('suspicious-banner');
-        if (susBanner) {
-          var reasons = [];
-          if (res.suspicious) reasons.push('Resultados: ' + res.suspiciousReason);
-          if (mon.suspicious) reasons.push('Monitoramento: ' + mon.suspiciousReason);
-          if (reasons.length) {
-            var reasonsText = reasons.join(' | ');
-            document.getElementById('suspicious-banner-msg').textContent = reasonsText;
-            var dismissed = false;
-            try { dismissed = localStorage.getItem('suspicious_banner_dismissed') === reasonsText; } catch(e) {}
-            susBanner.style.display = dismissed ? 'none' : 'flex';
-          } else {
-            susBanner.style.display = 'none';
+      } catch(e) { console.error('[autoSaveSession] erro ao vincular IDs das corridas', e); }
+    }
+    showToast('\u2713 Sessão "'+name+'" salva no Histórico!', true);
+    // Auto-download ZIP na primeira análise do dia
+    var a = document.createElement('a');
+    a.href = BASE+'/api/pdfs/hoje/zip';
+    a.download = name.split('/').join('-')+'.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  } catch(e) { console.error('autoSave erro:', e); }
+}
+
+async function autoCheckAndAnalyze() {
+  if (raceFiles.length) return;
+  if (results.length) return;
+
+  function setFocusLoading(msg) {
+    var fc = document.getElementById('focus-col');
+    if (fc) fc.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center"><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div><div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div><div style="font-size:15px;font-weight:700;color:var(--mut2)">'+msg+'</div></div>';
+  }
+  function setFocusEmpty() {
+    var fc = document.getElementById('focus-col');
+    if (fc) fc.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center"><div style="font-size:48px">📭</div><div style="font-size:15px;font-weight:700;color:var(--mut2)">Nenhuma corrida disponível</div><div style="font-size:12px">O robô ainda não baixou os PDFs de hoje.<br>Verifique a aba Robô.</div></div>';
+    setSt('Ainda não existe corridas disponíveis para serem carregadas.');
+  }
+
+  // 1. Verifica sessão de hoje (erros não interrompem o fluxo)
+  try {
+    var now = new Date();
+    var todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    var sessionName = 'Races '+todayLabel;
+    var sr = await fetch(BASE+'/api/sessions');
+    if (sr.ok) {
+      var sessions = await sr.json();
+      if (Array.isArray(sessions)) {
+        var todaySession = sessions.find(function(s){ return s.name===sessionName; });
+        if (todaySession) {
+          setSt('Carregando sessão de hoje...');
+          var dr = await fetch(BASE+'/api/session/'+todaySession.id+'/races');
+          var dd = await dr.json();
+          if (dd.races && dd.races.length) {
+            dd.races.forEach(function(r) {
+              results.push({
+                tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
+                corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
+                nameFav:_limpaNome(r.name_fav)||'', trapUnd:r.trap_und||0, nameUnd:_limpaNome(r.name_und)||'',
+                pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
+                obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
+                avbNaoAberto: !!r.avb_nao_aberto,
+                // tier: 'top' | 'regular' | null. E' a regua em que a corrida
+                // passou. null = ficou fora das duas e nao aparece em filtro
+                // nenhum. NAO confundir com avbNaoAberto/abriu, que e' se o par
+                // ficou disponivel na casa: uma corrida pode ser TOP e nunca
+                // ter aberto.
+                // bw=1 continua sendo o atalho de TOP, pra linha antiga (antes
+                // do tier existir) nao virar "fora".
+                tier: r.tier != null ? r.tier : (r.bw ? 'top' : null),
+                histAll: r.hist_all?JSON.parse(r.hist_all):[],
+                eliminados: r.eliminados?JSON.parse(r.eliminados):[],
+                postPick: r.post_pick||'',
+                dataCard: r.data_card||null,
+                trackFull: r.track_full||null,
+                cardSuspect: !!r.card_suspect,
+                betEntrou: !!r.bet_entrou,
+                betUnidades: r.bet_unidades!=null?r.bet_unidades:(STAKE_PADRAO!=null?STAKE_PADRAO:2.5),
+                histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
+                flagAtrasada: !!r.flag_atrasada,
+                scores: r.scores || null,
+                id:r.id
+              });
+            });
+            updCards();
+            setSt(todayLabel+' - '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs carregados');
+            enterFocusMode();
+            return;
           }
         }
-      });
+      }
     }
-    function checkPdfBanner() {
-      fetch(BASE + '/api/pdfs/hoje').then(function(r){return r.json();}).then(function(d){
-        if (d.count > 0 && pdfBanner) {
-          var key = 'pdf_banner_dismissed_' + new Date().toISOString().slice(0,10);
-          var dismissed = false;
-          try { dismissed = localStorage.getItem(key) === 'true'; } catch(e) {}
-          if (dismissed) return;
-          document.getElementById('pdf-banner-cnt').textContent = d.count;
-          pdfBanner.style.display = 'flex';
-        }
-      }).catch(function(){});
-    }
-    function checkResultsBanner() {
-      fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).then(function(d){
-        if (!d.lastRun || !d.updated) return;
-        var resBanner = document.getElementById('res-banner');
-        if (!resBanner) return;
-        var dismissed = false;
-        try { dismissed = localStorage.getItem('res_banner_dismissed') === d.lastRun; } catch(e) {}
-        if (dismissed) return;
-        var lastRun = new Date(d.lastRun);
-        var diff = (Date.now() - lastRun) / 60000;
-        if (diff < 35) {
-          var h = String(lastRun.getHours()).padStart(2,'0');
-          var m = String(lastRun.getMinutes()).padStart(2,'0');
-          document.getElementById('res-banner-time').textContent = h + ':' + m;
-          document.getElementById('res-banner-cnt').textContent = d.updated;
-          resBanner.dataset.lastRun = d.lastRun;
-          resBanner.style.display = 'flex';
-        }
-      }).catch(function(){});
-    }
-    function checkMonitorBanner() {
-      fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).then(function(d){
-        if (!d.lastRun || !d.changed) return;
-        var monBanner = document.getElementById('mon-banner');
-        if (!monBanner) return;
-        var dismissed = false;
-        try { dismissed = localStorage.getItem('mon_banner_dismissed') === d.lastRun; } catch(e) {}
-        if (dismissed) return;
-        var lastRun = new Date(d.lastRun);
-        var diff = (Date.now() - lastRun) / 60000;
-        if (diff < 70) {
-          var h = String(lastRun.getHours()).padStart(2,'0');
-          var m = String(lastRun.getMinutes()).padStart(2,'0');
-          document.getElementById('mon-banner-time').textContent = h + ':' + m;
-          document.getElementById('mon-banner-cnt').textContent = d.changed;
-          document.getElementById('mon-banner-reanalyzed').textContent = d.reanalyzed ? (d.reanalyzed + ' reanalisada(s) automaticamente') : 'confira manualmente';
-          monBanner.dataset.lastRun = d.lastRun;
-          monBanner.style.display = 'flex';
-        }
-      }).catch(function(){});
-    }
-    checkRobots();
-    checkPdfBanner();
-    checkResultsBanner();
-    checkMonitorBanner();
-    checkStopBanner();
-    setInterval(function(){ checkRobots(); checkResultsBanner(); checkMonitorBanner(); checkStopBanner(); }, 60000);
-    setInterval(checkRobots, 4000);
+  } catch(e) { console.warn('sessao check erro:', e.message); }
 
-    // ── Alerta de corrida proxima, em QUALQUER pagina do site (nao so na
-    // Analisar) — pedido do Bruno em 14/07/2026. Usa sessionStorage pra nao
-    // repetir o som pra mesma corrida ao navegar entre paginas.
-    var alertedRacesGlobal = {};
-    try { var stored = sessionStorage.getItem('alertedRacesGlobal'); if (stored) alertedRacesGlobal = JSON.parse(stored); } catch(e) {}
-    function salvarAlertedRacesGlobal() { try { sessionStorage.setItem('alertedRacesGlobal', JSON.stringify(alertedRacesGlobal)); } catch(e) {} }
-
-    function tocarSino(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.3,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(1046.5,0,0.25);tone(1318.5,0.15,0.35);}
-    function tocarBeep(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='square';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.2,ctx.currentTime+start+0.01);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.03);}tone(1500,0,0.08);tone(1500,0.14,0.08);}
-    function tocarAlarme(ctx){function tone(freq,start,dur){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sawtooth';o.frequency.value=freq;g.gain.setValueAtTime(0.0001,ctx.currentTime+start);g.gain.exponentialRampToValueAtTime(0.22,ctx.currentTime+start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+start+dur);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);}tone(880,0,0.15);tone(660,0.15,0.15);tone(880,0.30,0.15);tone(660,0.45,0.15);}
-    function tocarSuave(ctx){var o=ctx.createOscillator();var g=ctx.createGain();o.type='sine';o.frequency.value=700;g.gain.setValueAtTime(0.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.6);o.connect(g);g.connect(ctx.destination);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.65);}
-    var SONS_GLOBAIS = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
-    function tocarSomAlertaGlobal(escolha) {
-      try { var ctx = new (window.AudioContext||window.webkitAudioContext)(); (SONS_GLOBAIS[escolha]||tocarSino)(ctx); } catch(e) {}
-    }
-
-    function minutosAteAgoraGlobal(horaBr) {
-      if (!horaBr) return null;
-      var now = new Date();
-      var nowMin = now.getHours()*60+now.getMinutes();
-      var p = horaBr.split(':');
-      var raceMin = parseInt(p[0]||0)*60+parseInt(p[1]||0);
-      return raceMin - nowMin;
-    }
-
-    function checkRaceProximity() {
-      fetch(BASE + '/api/proxima-corrida').then(function(r){return r.json();}).then(function(d){
-        var badge = document.getElementById('race-alert-badge');
-        if (!badge || !d.races || !d.races.length) { if(badge) badge.style.display='none'; return; }
-        var alertaMin = d.alerta_min_antes || 3;
-        var proxima = null, proximaMin = 999;
-        d.races.forEach(function(r) {
-          var mins = minutosAteAgoraGlobal(r.hora_br);
-          if (mins !== null && mins >= 0 && mins <= alertaMin && mins < proximaMin) { proxima = r; proximaMin = mins; }
-        });
-        if (!proxima) { badge.style.display = 'none'; return; }
-        document.getElementById('race-alert-txt').textContent = proxima.corrida + ' em ' + proximaMin + ' min';
-        badge.style.display = 'flex';
-        // O SOM saiu daqui de proposito. Este bloco cuida so do SELO no menu.
-        // Quem toca e' o app.js (tela Analisar) ou o alertaGlobal.js (demais
-        // telas) — os dois respeitam o "Alarme para filtro selecionado"
-        // (turno/pista/classe, som e cor), coisa que este trecho antigo nunca
-        // fez. Manter os dois tocando duplicava o aviso.
-      }).catch(function(){});
-    }
-    checkRaceProximity();
-    setInterval(checkRaceProximity, 15000);
-    // Expor funções de dismiss globalmente
-    window.dismissPdfBanner = dismissPdfBanner;
-    window.dismissResBanner = dismissResBanner;
-    window.dismissMonBanner = dismissMonBanner;
-    window.dismissSuspiciousBanner = dismissSuspiciousBanner;
-    window.dismissStopBanner = dismissStopBanner;
-    window.downloadAndAnalyze = downloadAndAnalyze;
-  })();
-  </script>`;
-}
-
-// Serve o JS do cliente como arquivo separado
-router.get('/app.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.sendFile(require('path').join(__dirname, '../../src/app.js'));
-});
-
-// ─── PWA / Web Push ────────────────────────────────────────────────────────
-// O service worker PRECISA ser servido daqui (BASE + '/sw.js') e nao de
-// /static/js/. Um service worker so controla paginas ABAIXO do caminho de onde
-// foi entregue: servido de /greyhound/static/js/, o escopo seria
-// /greyhound/static/ e ele nao controlaria tela nenhuma do sistema.
-router.get('/sw.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.setHeader('Service-Worker-Allowed', '/');
-  res.setHeader('Cache-Control', 'no-cache');   // SW velho em cache e' fonte classica de dor de cabeca
-  res.sendFile(require('path').join(__dirname, '../../public/sw.js'));
-});
-
-// Manifest do PWA. Gerado aqui em vez de arquivo estatico porque precisa do
-// BASE_PATH real nas URLs.
-router.get('/manifest.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/manifest+json');
-  res.json({
-    name: 'Greyhound Factory',
-    short_name: 'Greyhound Factory',   // o iOS anexa este nome a toda notificacao ("from ...")
-    description: 'Analise de corridas de galgos',
-    start_url: BASE + '/',
-    scope: BASE + '/',
-    display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#0D1117',
-    theme_color: '#0D1117',
-    icons: [
-      { src: BASE + '/static/img/icon-180.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
-      { src: BASE + '/static/img/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }
-    ]
-  });
-});
-
-router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
-  const user = req.user;
-  const config = getUserConfig(user.id);
-  // Sessoes e corridas sao do SISTEMA: le sempre o canonico, nao o login.
-  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7').all(CANONICO);
-  // new Date() roda no SERVIDOR (Railway = UTC), nao no relogio do Bruno.
-  // Sem o ajuste de -3h, depois das 21h BRT o servidor ja calcula a data de
-  // AMANHA (UTC ja virou o dia seguinte), fazendo o "Historico do dia" achar
-  // que nao existe sessao de hoje mesmo ela existindo.
-  const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
-  const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
-  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
-  const taxa = stats.t > 0 ? Math.round(stats.a/stats.t*100) : 0;
-  const logoB64 = getLogo();
-
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Greyhound Validator</title>
-<!-- PWA: esta e' a start_url do manifest, entao e' daqui que o "Adicionar a
-     Tela de Inicio" do Safari deve ser feito. No iOS o Web Push SO funciona a
-     partir do icone instalado, nunca da aba normal do navegador. -->
-<link rel="manifest" href="${BASE}/manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Greyhound Factory">
-<meta name="theme-color" content="#0D1117">
-<link rel="apple-touch-icon" sizes="180x180" href="${BASE}/static/img/icon-180.png">
-<link rel="stylesheet" href="${BASE}/static/css/shared.css">
-<style>
-
-/* ── Faixa de avisos, LADO A LADO, colada abaixo da barra de Odd ───────────
-   NAO usa position:fixed de proposito. Fixed ancora na JANELA, entao com zoom
-   o conteudo terminava mais acima e sobrava um vao entre a barra de Odd e a
-   faixa. Aqui ela entra no fluxo normal da coluna de foco: fica sempre colada
-   no que vem antes, em qualquer zoom, e ocupa a largura toda da area util.
-
-   1 aviso ocupa tudo; 2 dividem ao meio; 3 dividem em tres. Sem empilhamento,
-   nao ha o que se sobrepor (antes o "bottom" era chutado em multiplos de 38px
-   e um cobria o outro — chegou a cobrir a propria barra de Odd). */
-#gf-avisos{
-  display:none;gap:1px;background:rgba(255,255,255,.06);
-  border-top:1px solid rgba(255,255,255,.06);
-}
-#gf-avisos > div{
-  flex:1 1 0;min-width:0;                 /* min-width:0 permite truncar o texto */
-  align-items:center;justify-content:space-between;gap:8px;
-  padding:7px 12px;border:none!important;
-}
-/* Expandido: o clicado toma a faixa e os outros somem. */
-#gf-avisos.expandido > div{display:none!important}
-#gf-avisos.expandido > div.aberto{display:flex!important;flex:1 1 100%}
-/* Texto cortado quando divide a faixa, inteiro quando sozinho ou expandido. */
-#gf-avisos .gf-txt{
-  flex:1;min-width:0;cursor:pointer;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;
-}
-#gf-avisos.expandido .gf-txt,#gf-avisos.solo .gf-txt{white-space:normal;font-size:12px}
-/* Nome do robo: so aparece quando ha mais de um aviso dividindo a faixa. */
-#gf-avisos .gf-rotulo{display:none;font-weight:800;font-size:10px;letter-spacing:.3px;white-space:nowrap;cursor:pointer}
-#gf-avisos.multi .gf-rotulo{display:inline}
-#gf-avisos.multi:not(.expandido) .gf-completo{display:none}
-
-
-/* ── Ticker: avisos do monitoramento rolando na faixa ──────────────────────
-   So aparece quando a faixa esta LIVRE. Assim que qualquer banner surge, ele
-   sai de cena — banners tem prioridade porque exigem acao (tem botao) e ficam
-   ate voce fechar, enquanto texto em movimento e' dificil de ler sob pressao,
-   justo quando faltam minutos pra corrida. */
-#gf-ticker{
-  display:none;overflow:hidden;white-space:nowrap;
-  background:rgba(96,165,250,.05);border-top:1px solid rgba(96,165,250,.15);
-  padding:6px 0;font-size:11px;color:#9aa4b2;
-}
-#gf-ticker.on{display:block}
-#gf-ticker .gf-tk-mov{
-  display:inline-block;padding-left:100%;
-  animation:gfTicker 30s linear infinite;
-}
-/* Pausa no hover: da pra ler um aviso especifico sem esperar dar a volta. */
-#gf-ticker:hover .gf-tk-mov{animation-play-state:paused}
-#gf-ticker .gf-tk-item{margin-right:44px}
-#gf-ticker .gf-tk-hora{color:#60a5fa;font-weight:700}
-@keyframes gfTicker{
-  0%{transform:translateX(0)}
-  100%{transform:translateX(-100%)}
-}
-
-${designTokensCSS()}
-.main{display:grid;grid-template-columns:250px 1fr;min-height:calc(100vh - 175px)}
-.main.focus-mode{grid-template-columns:250px 170px 1fr}
-@media(max-width:768px){
-  .main,.main.focus-mode{grid-template-columns:1fr;min-height:0}
-  .sidebar{border-right:none;border-bottom:1px solid var(--bdr2)}
-  .main.focus-mode .race-list-col{border-right:none;border-bottom:1px solid var(--bdr2);max-height:340px}
-  .main.focus-mode .focus-col{min-width:0}
-  .content{padding:12px 10px}
-  .tw{max-width:100%}
-}
-.sidebar{background:var(--sur);border-right:1px solid var(--bdr2);padding:16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
-.sidebar h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut)}
-.tabnav{background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:2px}
-.tabbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s;text-decoration:none;box-sizing:border-box}
-.tabbtn:hover{background:rgba(34,197,94,.08);color:#ccc}
-.tabbtn.active{background:rgba(34,197,94,.12);color:#22c55e}
-.uz{border:2px dashed var(--bdr2);border-radius:8px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
-.uz:hover,.uz.drag{border-color:var(--grn);background:rgba(34,197,94,.08)}
-.uz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.uz strong{color:var(--grn);display:block;font-size:12px;margin-bottom:2px}.uz p{font-size:10px;color:var(--mut2);line-height:1.4}
-.flist{display:flex;flex-direction:column;gap:4px;max-height:90px;overflow-y:auto;margin-top:5px}
-.fi{display:flex;align-items:center;gap:5px;background:var(--sur2);border:1px solid var(--bdr);border-radius:5px;padding:4px 8px;font-size:10px}
-.fi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fi-st{font-size:9px;padding:1px 6px;border-radius:8px;flex-shrink:0}
-.fi-ok{background:rgba(34,197,94,.15);color:var(--grn)}.fi-load{background:rgba(249,115,22,.15);color:var(--org)}.fi-err{background:rgba(239,68,68,.12);color:var(--red)}
-.fi-rm{background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px;padding:0}.fi-rm:hover{color:var(--red)}
-.btn-go{width:100%;padding:11px;background:var(--grn);color:#000;font-weight:700;font-size:13px;border:none;border-radius:var(--rad);cursor:pointer}
-.btn-go:hover{background:var(--grn2)}.btn-go:disabled{opacity:.35;cursor:not-allowed}
-.btn-sm{width:100%;padding:6px;background:transparent;color:var(--grn);font-size:11px;border:1px solid rgba(34,197,94,.3);border-radius:var(--rad);cursor:pointer;font-weight:600;transition:all .2s;display:none}
-.dv{height:1px;background:var(--bdr2)}
-.sess-link{display:block;font-size:11px;color:var(--mut2);text-decoration:none;padding:3px 0;border-bottom:1px solid var(--bdr)}
-.sess-link:hover{color:var(--grn)}.sess-link span{float:right;color:var(--mut)}
-.content{padding:18px;overflow-y:auto}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
-.kpi{background:var(--sur);border:1px solid var(--bdr2);border-radius:8px;padding:10px 14px;position:relative;overflow:hidden}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.kpi.g::before{background:var(--grn)}.kpi.o::before{background:var(--org)}.kpi.b::before{background:#3b82f6}.kpi.p::before{background:#8b5cf6}
-.kpi-label{font-size:10px;color:var(--mut2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
-.kpi-val{font-size:22px;font-weight:700}.kpi.g .kpi-val{color:var(--grn)}.kpi.o .kpi-val{color:var(--org)}.kpi.b .kpi-val{color:#60a5fa}.kpi.p .kpi-val{color:#a78bfa}
-.pw{margin-bottom:10px;display:none}.pb{height:3px;background:var(--bdr2);border-radius:2px;overflow:hidden}
-.pf{height:100%;background:linear-gradient(90deg,var(--grn),var(--org));transition:width .4s}.pt{font-size:11px;color:var(--mut2);margin-top:3px}
-.st{font-size:12px;color:var(--mut2);margin-bottom:8px;min-height:16px}
-.tw{overflow-x:auto;border:1px solid var(--bdr2);border-radius:8px}
-table{width:100%;border-collapse:collapse;min-width:880px}thead{background:var(--sur2)}
-th{padding:9px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--bdr2);white-space:nowrap}
-td{padding:8px 10px;border-bottom:1px solid var(--bdr);vertical-align:middle}tr:last-child td{border-bottom:none}
-tr.row-avb td{background:rgba(34,197,94,.03)}tr.row-avb td:first-child{border-left:3px solid var(--grn)}tr.row-avb:hover td{background:rgba(34,197,94,.08)}
-tr.sk td{opacity:.35}tr.sk td:first-child{border-left:3px solid var(--bdr2)}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-.ba{background:rgba(34,197,94,.15);color:var(--grn);border:1px solid rgba(34,197,94,.3)}
-.bm{background:rgba(249,115,22,.12);color:var(--org);border:1px solid rgba(249,115,22,.25)}
-.bb{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)}
-.bs{background:rgba(100,100,100,.1);color:var(--mut2);border:1px solid var(--bdr2)}
-.cbar{width:48px;height:3px;background:var(--bdr2);border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:4px}
-.cfill{height:100%;border-radius:2px}.cfg{background:var(--grn)}.cfa{background:var(--org)}.cfr{background:var(--red)}
-.trap-row{display:flex;align-items:center;gap:6px}.trap-item{display:flex;flex-direction:column;align-items:center;gap:2px}
-.trap-name{font-size:9px;color:var(--mut);text-align:center;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.trap-vs{color:var(--mut);font-size:12px;font-weight:600}
-.obs-c{font-size:11px;color:var(--mut2);line-height:1.5}
-.obs-cap{font-size:11px;color:var(--org);line-height:1.5}
-td input[type=text]{width:50px;padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:11px}
-td input:focus{outline:none;border-color:var(--grn)}
-td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:11px;cursor:pointer}
-.cap-btn{font-size:10px;padding:3px 9px;border:1px solid var(--org);border-radius:4px;background:rgba(249,115,22,.08);color:var(--org);cursor:pointer;font-weight:600}
-.cap-ok{font-size:11px;color:var(--grn)}
-.empty{text-align:center;padding:50px 20px;color:var(--mut)}.empty h3{font-size:15px;color:var(--mut2);margin-bottom:6px}
-.empty p{font-size:12px;line-height:1.6;max-width:380px;margin:0 auto}
-.ab{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
-.bexp{padding:7px 14px;background:var(--sur2);border:1px solid var(--bdr2);color:var(--mut2);border-radius:var(--rad);cursor:pointer;font-size:12px}
-.bexp:hover{border-color:var(--grn);color:var(--grn)}
-.bsave{padding:7px 14px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--grn);border-radius:var(--rad);cursor:pointer;font-size:12px;font-weight:600}
-.bsave:hover{background:rgba(34,197,94,.2)}
-/* ── Race list column ── */
-.race-list-col{display:none;background:var(--sur);border-right:1px solid var(--bdr2);overflow-y:auto}
-.main.focus-mode .race-list-col{display:block}
-.main.focus-mode .content{display:none}
-.main.focus-mode .focus-col{display:flex}
-.focus-col{display:none;flex-direction:column;overflow-y:auto;background:var(--bg);flex:1}
-.rc{padding:7px 10px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
-.rc:hover{background:rgba(34,197,94,.05);border-left-color:rgba(34,197,94,.3)}
-.rc.rc-active{background:rgba(34,197,94,.09);border-left-color:var(--grn)}
-.rc-time{font-size:16px;font-weight:700;color:var(--grn);line-height:1.1}
-.rc-name{font-size:10px;color:rgba(255,255,255,.8);margin:3px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rc-next-badge{display:block;font-size:8px;background:var(--grn);color:#000;border-radius:3px;padding:1px 5px;font-weight:700;margin-bottom:4px;align-self:flex-start}
-.rc-traps{display:flex;align-items:center;gap:4px}
-/* ── Focus panel ── */
-.fp-hdr{padding:10px 18px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:52px;background:var(--sur)}
-.fp-race-title{font-size:14px;font-weight:700;color:#fff}
-.fp-race-meta{font-size:11px;color:var(--mut2);margin-top:1px}
-.fp-toggle-tbl{padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--bdr2);color:var(--mut2);border-radius:4px;cursor:pointer}
-.fp-toggle-tbl:hover{border-color:var(--grn);color:var(--grn)}
-.fp-arena{display:flex;align-items:flex-end;padding:12px 20px 0;gap:0;flex-shrink:0;background:radial-gradient(ellipse at center bottom,rgba(34,197,94,.04) 0%,transparent 70%)}
-.fp-dog-side{flex:1;display:flex;flex-direction:column;align-items:center;padding-bottom:8px}
-.fp-dog-img{height:190px;object-fit:contain;max-width:100%;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5));transition:all .3s}
-.fp-dog-und .fp-dog-img{transform:scaleX(-1)}
-.fp-dog-name{font-size:17px;font-weight:700;color:#fff;margin-top:6px;text-align:center}
-.fp-dog-perfil{font-size:11px;font-weight:600;margin-top:3px;text-align:center;letter-spacing:.3px;opacity:.85}
-.fp-dog-trap{margin-bottom:6px}
-.fp-center{width:80px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:28px;gap:2px}
-.fp-vence-lbl{font-size:8px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase}
-.fp-vence-arrow{font-size:26px;color:var(--grn);animation:pulse-arrow 1.5s ease-in-out infinite}
-@keyframes pulse-arrow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.9)}}
-.fp-gauges-row{display:flex;justify-content:space-around;padding:8px 16px 10px;flex-shrink:0;gap:4px}
-.fp-gauges-grp{display:flex;gap:8px;flex:1;justify-content:center}
-.fp-gauges-div{width:1px;background:var(--bdr2);margin:0 8px;align-self:stretch}
-.fp-gauge{display:flex;flex-direction:column;align-items:center;gap:2px}
-.fp-gauge-lbl{font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px;text-align:center}
-.fp-inputs-row{display:flex;gap:12px;padding:8px 18px;border-top:1px solid var(--bdr2);align-items:center;flex-wrap:wrap;flex-shrink:0;background:var(--sur)}
-.fp-inp-group{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut2)}
-.fp-inp-group input{width:64px;padding:4px 8px;background:var(--sur2);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt);font-size:12px;font-weight:600}
-.fp-inp-group input:focus{outline:none;border-color:var(--grn)}
-.fp-conf-badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700}
-.fp-obs{padding:8px 18px 12px;font-size:11px;color:var(--mut2);line-height:1.6;border-top:1px solid var(--bdr2);flex-shrink:0;overflow-y:auto;max-height:90px}
-.pdf-ready-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center}
-.pdf-ready-modal.open{display:flex}
-.pdf-ready-box{background:#111;border:1px solid #333;border-radius:12px;padding:28px 32px;text-align:center;max-width:420px;border-top:3px solid #22c55e}
-.pdf-ready-icon{font-size:48px;margin-bottom:12px}
-.pdf-ready-box h3{font-size:17px;font-weight:700;color:#f0f0f0;margin-bottom:8px}
-.pdf-ready-box p{font-size:13px;color:#888;margin-bottom:20px;line-height:1.6}
-.pdf-ready-ok{padding:10px 28px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:14px}
-.pdf-ready-ok:hover{background:#16a34a}
-@media print{
-  .hero,.sidebar,.kpis,.pw,.st,.ab,nav,.bexp,.bsave,#btn-print,.cap-btn,.fi-rm,
-  .col-sel-full,.col-perf,.col-res,.col-bat,.col-cap,.col-odd,
-  th.th-sel,th.th-perf,th.th-res,th.th-bat,th.th-cap,th.th-odd,
-  td.td-sel,td.td-perf,td.td-res,td.td-bat,td.td-cap,td.td-odd{display:none!important}
-  body{background:#fff!important;color:#000!important;font-size:10px!important}
-  .tw{border:none!important}
-  table{min-width:unset!important;width:100%!important;font-size:9px!important}
-  th{color:#333!important;background:#f0f0f0!important;padding:4px 6px!important;font-size:8px!important}
-  td{color:#000!important;border-color:#ddd!important;padding:4px 6px!important;font-size:9px!important}
-  .main{display:block!important}
-  .content{padding:4px!important}
-  .badge{border:1px solid #999!important;color:#000!important;background:#eee!important;font-size:8px!important}
-  .trap-badge{border:1px solid #999!important;color:#000!important;background:#eee!important;width:18px!important;height:18px!important;font-size:9px!important}
-  .trap-name{display:none!important}
-  tr.sk{display:none!important}
-  .obs-c,.obs-cap{max-width:none!important;font-size:9px!important;color:#000!important}
-  .perfil-badge{display:none!important}
-  .win-tag,.hora-br,.top3-tag{display:none!important}
-}
-
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto}
-.modal-bg.open{display:flex}.modal{background:var(--sur);border:1px solid var(--bdr2);border-radius:10px;padding:22px;width:500px;max-width:95vw;border-top:3px solid var(--org)}
-.modal h3{font-size:15px;font-weight:700;color:var(--org);margin-bottom:6px}.modal p{font-size:12px;color:var(--mut2);margin-bottom:14px;line-height:1.6}
-.modal-upload{border:2px dashed var(--bdr2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;position:relative;margin-bottom:10px;transition:all .2s}
-.modal-upload:hover{border-color:var(--org);background:rgba(249,115,22,.08)}
-.modal-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.modal-upload strong{color:var(--org);display:block;font-size:12px;margin-bottom:3px}
-.cap-st{font-size:12px;padding:6px 10px;border-radius:5px;margin-bottom:8px;display:none}
-.cap-st.ok{background:rgba(34,197,94,.1);color:var(--grn)}.cap-st.er{background:rgba(239,68,68,.1);color:var(--red)}
-.flist-modal{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:120px;overflow-y:auto}
-.modal-acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
-.bok{padding:9px 20px;background:var(--grn);color:#000;font-weight:700;border:none;border-radius:var(--rad);cursor:pointer}.bok:hover{background:var(--grn2)}
-.bca{padding:9px 14px;background:transparent;color:var(--mut2);border:1px solid var(--bdr2);border-radius:var(--rad);cursor:pointer}
-.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
-@keyframes spin{to{transform:rotate(360deg)}}
-/* ==== Ajustes mobile Analisar (itens 1-3) — no fim para vencer as regras base ==== */
-@media(max-width:768px){
-  .sidebar{border-right:none!important}
-  .sess-recentes-box{display:none!important}
-  .acertos-sidebar{display:none!important}
-  .acertos-mobile{display:flex!important}
-  .fp-gauges-row{display:none!important}
-  .fp-dog-name{font-size:13px!important}
-  .fp-dog-perfil{font-size:10px!important}
-  /* Esconde "Carregar PDFs" no mobile (o robo coleta os PDFs automaticamente) */
-  #rz{display:none!important}
-  /* Centraliza as mensagens do painel (ex: "Corridas encerradas"): no desktop
-     elas usam margin-left:-85px pra compensar a coluna Proximas; no mobile isso
-     jogava o texto pra esquerda. */
-  .focus-col > div{margin-left:0!important}
-  /* Modal de confronto/relatorio (injetado pelo app.js): em tela cheia no
-     mobile usando a altura real do aparelho, rolando ate o fim (corrige o
-     corte do iOS). !important pra vencer o estilo que o app.js injeta depois. */
-  #val-modal{align-items:stretch!important;padding:10px!important}
-  #val-box{width:100%!important;max-width:100%!important;height:100%!important;max-height:100%!important;overflow:hidden!important}
-  #val-hdr{flex-shrink:0!important}
-  #val-body{flex:1 1 auto!important;min-height:0!important;height:auto!important;overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
-  #val-body.val-compact{max-height:none!important}
-  /* Conteudo do relatorio/confronto: alinhado a esquerda e sem centralizar,
-     pra rolagem horizontal comecar mostrando o inicio (nome do galgo) */
-  #val-body > *{margin-left:0!important;margin-right:0!important}
-  .val-dog{overflow-x:visible!important}
-  .val-tbl{table-layout:auto!important;width:auto!important;min-width:560px!important}
-}
-
-/* ── A tela inteira cabe na altura da janela, em qualquer notebook ─────────
-   O .main usava min-height:calc(100vh - 175px), e esse 175 era um chute fixo
-   pro hero + menu. So que o hero e' uma imagem de largura 100%: a altura dele
-   MUDA com a largura da janela. Notebook mais largo -> banner mais alto -> os
-   175 ficam curtos, sobra conteudo e aparece o scroll. Era por isso que o zoom
-   precisava de ajuste de maquina pra maquina.
-
-   Agora a pagina e' uma coluna flex de 100vh: hero e menu ocupam o que
-   precisam, e o .main fica com EXATAMENTE o que sobrar, seja qual for a altura
-   do banner. Nada e' calculado a mao.
-
-   min-height:0 nas colunas e' obrigatorio: sem isso, item de flex nao encolhe
-   abaixo do proprio conteudo e o overflow-y:auto delas nunca entra em acao —
-   o scroll voltaria pra pagina inteira. */
-html,body{height:100%}
-body{display:flex;flex-direction:column;overflow:hidden;background:#000}
-.hero{flex:0 0 auto}
-/* Teto tambem em vh: em tela baixa o banner deixa de comer a area util. */
-.hero img{max-height:min(160px,15vh)}
-nav{flex:0 0 auto}
-.main{flex:1 1 auto;min-height:0}
-.sidebar,.race-list-col,.focus-col,.content{min-height:0}
-
-@media(max-width:900px){
-  /* No estreito a tela EMPILHA, e ai ela precisa rolar mesmo. Manter o
-     overflow:hidden aqui deixaria conteudo inalcancavel. */
-  html,body{height:auto;overflow:visible}
-  body{display:block}
-  .main{min-height:0}
-  .hero img{max-height:130px}
-}
-</style></head><body>
-<div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : '<div style="height:130px;background:#000;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#22c55e">GREYHOUND VALIDATOR</div>'}</div>
-${navBar(user, 'analisar')}
-<div class="main" id="main-layout">
-  <!-- Botao "Automaticamente" foi removido da UI, mas o app.js (servido de src/app.js)
-       ainda pode referenciar #btngo. Este elemento oculto evita erro de JS
-       (getElementById('btngo') nunca retorna null). -->
-  <button id="btngo" style="display:none" aria-hidden="true" tabindex="-1"></button>
-  <div class="sidebar">
-    <div style="margin-bottom:-3px">
-      <h2>Analisar corridas</h2>
-      <div class="tabnav">
-        <label class="tabbtn active" id="rz" for="race-input">
-          <input type="file" accept=".pdf" multiple id="race-input" style="display:none">
-          &#128193; Carregar PDF
-        </label>
-        <a href="${BASE}/historico" class="tabbtn">&#128220; Históricos</a>
-      </div>
-      <div class="flist" id="rlist"></div>
-    </div>
-    <div class="dv"></div>
-    ${sessaoHoje ? `<a href="${BASE}/sessao/${sessaoHoje.id}" class="st-link" title="Abrir a sessao de hoje" style="text-decoration:none;display:block">` : ''}<div class="st" id="st" style="font-size:11px;color:var(--mut2);text-align:center;margin:-4px 0 -2px;min-height:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>${sessaoHoje ? `</a>` : ''}
-    <button class="btn-sm" id="btn-clear" style="display:none">Limpar</button>
-    <div class="dv"></div>
-    <div class="sess-recentes-box">
-      <h2 style="margin-bottom:6px">Sessoes recentes</h2>
-      <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
-    </div>
-    <div class="acertos-box acertos-sidebar" style="display:flex;gap:8px;margin-top:8px">
-      <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-        <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
-        <div id="acertos-dia" class="acertos-dia-val" style="font-size:20px;font-weight:700;color:#666">-</div>
-      </div>
-      <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-        <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
-        <div id="acertos-mes" class="acertos-mes-val" style="font-size:20px;font-weight:700;color:#666">-</div>
-      </div>
-    </div>
-  </div>
-  <div class="race-list-col" id="race-list-col"></div>
-  <div class="focus-col" id="focus-col"></div>
-  <div class="content">
-    <div class="pw" id="pw"><div class="pb"><div class="pf" id="pf" style="width:0%"></div></div><div class="pt" id="pt"></div></div>
-    <div class="kpis">
-      <div class="kpi b"><div class="kpi-label">PDFs carregados</div><div class="kpi-val" id="sp">-</div></div>
-      <div class="kpi g"><div class="kpi-label">Corridas AvB</div><div class="kpi-val" id="sa">-</div></div>
-      <div class="kpi o"><div class="kpi-label">Alta confianca</div><div class="kpi-val" id="sal">-</div></div>
-      <div class="kpi p"><div class="kpi-label">Taxa acerto geral</div><div class="kpi-val">${taxa}%</div></div>
-    </div>
-    <div class="tw">
-      <table><thead><tr>
-        <th style="width:75px;text-align:center">Hora</th><th style="width:130px;text-align:center">Corrida</th><th style="width:170px;text-align:center">Selecao</th><th style="width:85px;text-align:center">Confianca</th><th style="text-align:left;padding-left:12px">Observacao</th><th style="width:105px;text-align:center">Odd / Valor</th><th style="width:105px;text-align:center">Resultado</th><th style="width:65px;text-align:center">Bateu</th><th style="width:50px;text-align:center">Cap</th>
-      </tr></thead>
-      <tbody id="tb"><tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida analisada</h3><p>Carregue PDFs e clique em Analisar.</p></div></td></tr></tbody></table>
-    </div>
-    <div class="ab" id="ab" style="display:none">
-      <button class="bexp" onclick="enterFocusMode()" style="border-color:rgba(34,197,94,.3);color:#22c55e">&#9654; Voltar ao Foco</button>
-      <button class="bexp" id="btn-exp">Exportar CSV</button>
-    </div>
-  </div>
-  <div class="acertos-box acertos-mobile" style="display:none;gap:8px;margin-top:4px;padding:0 10px 16px">
-    <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-      <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
-      <div id="acertos-dia-m" style="font-size:20px;font-weight:700;color:#666">-</div>
-    </div>
-    <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-      <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
-      <div id="acertos-mes-m" style="font-size:20px;font-weight:700;color:#666">-</div>
-    </div>
-  </div>
-</div>
-<script>
-/* Espelha os valores de Acertos (preenchidos pelo app.js na copia da sidebar)
-   para a copia do rodape usada no mobile — assim funciona independe da versao do app.js. */
-(function(){
-  function espelharAcertos(){
-    [['acertos-dia','acertos-dia-m'],['acertos-mes','acertos-mes-m']].forEach(function(p){
-      var src=document.getElementById(p[0]), dst=document.getElementById(p[1]);
-      if(src&&dst){ dst.textContent=src.textContent; dst.style.color=src.style.color; }
-    });
+  // 2. Sem sessão — busca PDFs
+  try {
+    var r = await fetch(BASE+'/api/pdfs/hoje');
+    var d = await r.json();
+    if (!d.count) { setFocusEmpty(); return; }
+    var parts = (d.date||'').split('-');
+    autoDateLabel = parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : d.date;
+    var mainEl = document.getElementById('main-layout');
+    if (mainEl) mainEl.classList.add('focus-mode');
+    setFocusLoading('Analisando '+d.count+' corridas de '+autoDateLabel+'...');
+    setSt('Analisando '+d.count+' corridas...');
+    await runAnalysis();
+  } catch(e) {
+    console.error('autoCheckAndAnalyze erro:', e);
+    setFocusEmpty();
   }
-  document.addEventListener('DOMContentLoaded', espelharAcertos);
-  setInterval(espelharAcertos, 1200);
+}
+
+/* ── PAINEL DE FOCO ─────────────────────────────────────────── */
+var focusRaceIdx = -1;
+
+function getDogImg(trap, corrida) {
+  var pelagens = ['branco', 'caramelo', 'preto', 'mesclado'];
+  var seed = 0;
+  for (var i = 0; i < (corrida||'').length; i++) seed += corrida.charCodeAt(i);
+  seed += (trap||1) * 13;
+  var p = pelagens[((seed % pelagens.length) + pelagens.length) % pelagens.length];
+  return BASE + '/static/img/dogs/Trap' + (trap||1) + '_' + p + '.png';
+}
+
+function getRaceClass(corrida){var m=(corrida||'').trim().match(/([A-Z]\d+)$/i);return m?m[1].toUpperCase():null;}
+// Nome de exibicao da corrida: usa o nome completo da pista (trackFull vindo do
+// servidor) + classe -> "Sunderland (A3)". Fallback pro codigo cru quando a
+// sessao e' antiga e nao tem trackFull salvo. So EXIBICAO — nunca mexe em
+// r.corrida (o motor/filtros continuam usando o codigo).
+function corridaDisplay(r){if(!r)return'-';var cls=getRaceClass(r.corrida||'');return r.trackFull?(r.trackFull+(cls?' ('+cls+')':'')):(r.corrida||'-');}
+function getHistByClass(hist,raceClass){if(!raceClass)return hist||[];return(hist||[]).filter(function(h){return(h.classe||'').toUpperCase()===raceClass.toUpperCase();});}
+function mediaTempoByClass(hist,raceClass){var f=getHistByClass(hist,raceClass).filter(function(h){return h.caltm&&parseFloat(h.caltm)>0;});if(!f.length)return null;return f.reduce(function(a,h){return a+parseFloat(h.caltm);},0)/f.length;}
+function podiosByClass(hist,raceClass){return getHistByClass(hist,raceClass).filter(function(h){return h.pos&&parseInt(h.pos)<=3;}).length;}
+function arranqueByClass(hist,raceClass){var f=getHistByClass(hist,raceClass).filter(function(h){return h.split&&parseFloat(h.split)>0;});if(!f.length)return null;return f.reduce(function(a,h){return a+parseFloat(h.split);},0)/f.length;}
+function melhorBRT(hist){var f=(hist||[]).filter(function(h){return h.caltm&&parseFloat(h.caltm)>0;});if(!f.length)return{val:null,classe:''};f.sort(function(a,b){return parseFloat(a.caltm)-parseFloat(b.caltm);});return{val:parseFloat(f[0].caltm).toFixed(2),classe:f[0].classe||''};}
+function categoriaInfo(hist,raceClass){var rc=(raceClass||'').toUpperCase();var rcNum=parseInt((rc.match(/\d+/)||['99'])[0]);if(!hist||!hist.length)return{label:rc||'N/A',ascending:false,fillPct:Math.max(0,(12-rcNum)/11)};var recent=hist[0].classe||rc;var recentNum=parseInt((recent.match(/\d+/)||['99'])[0]);var ascending=rcNum<recentNum;return{label:rc+(ascending?'↑':''),ascending:ascending,fillPct:Math.max(0,(12-rcNum)/11)};}
+function renderGauge(label,displayVal,subLabel,fillPct,color){var r=28,circ=2*Math.PI*r;var offset=circ*(1-Math.min(Math.max(fillPct||0,0),1));var dv=displayVal||'-';var fs=dv.length>5?'9':dv.length>3?'10':'12';return'<div class="fp-gauge">'+'<svg width="64" height="64" viewBox="0 0 72 72">'+'<circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5"/>'+'<circle cx="36" cy="36" r="28" fill="none" stroke="'+color+'" stroke-width="5" '+'stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" '+'stroke-linecap="round" transform="rotate(-90 36 36)"/>'+(subLabel?'<text x="36" y="33" text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700" font-family="sans-serif">'+dv+'</text>'+'<text x="36" y="47" text-anchor="middle" fill="rgba(255,255,255,.45)" font-size="9" font-family="sans-serif">'+subLabel+'</text>':'<text x="36" y="41" text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700" font-family="sans-serif">'+dv+'</text>')+'</svg>'+'<div class="fp-gauge-lbl">'+label+'</div>'+'</div>';}
+function categoriaCountByClassOrBetter(hist, raceClass) {
+  if (!raceClass) return (hist||[]).length;
+  var rcNum = parseInt((raceClass.match(/\d+/)||['99'])[0]);
+  return (hist||[]).filter(function(h) {
+    var hNum = parseInt(((h.classe||'').match(/\d+/)||['99'])[0]);
+    return hNum <= rcNum;
+  }).length;
+}
+
+function buildGauges(hist, raceClass, otherHist) {
+  var myMt  = mediaTempoByClass(hist, raceClass);
+  var otMt  = mediaTempoByClass(otherHist, raceClass);
+  var myCat = categoriaCountByClassOrBetter(hist, raceClass);
+  var otCat = categoriaCountByClassOrBetter(otherHist, raceClass);
+  var myPod = podiosByClass(hist, raceClass);
+  var otPod = podiosByClass(otherHist, raceClass);
+  var myArr = arranqueByClass(hist, raceClass);
+  var otArr = arranqueByClass(otherHist, raceClass);
+  var myBrt = melhorBRT(hist);
+  var otBrt = melhorBRT(otherHist);
+
+  // Cores comparativas: verde = melhor, vermelho = pior, azul = empate
+  function timeCol(my, other) { // menor = melhor
+    if (!my && !other) return '#555';
+    if (!my) return '#ef4444';   // sem dados = pior
+    if (!other) return '#22c55e'; // só eu tenho = melhor
+    if (Math.abs(my - other) < 0.01) return '#60a5fa'; // empate = azul
+    return my <= other ? '#22c55e' : '#ef4444';
+  }
+  function cntCol(my, other) { // maior = melhor
+    if (my === null || my === undefined) return '#555';
+    if (other === null || other === undefined) return '#22c55e';
+    if (my === other) return '#60a5fa'; // empate = azul
+    return my >= other ? '#22c55e' : '#ef4444';
+  }
+
+  var mtColor  = timeCol(myMt, otMt);
+  var catColor = cntCol(myCat, otCat);
+  var podColor = cntCol(myPod, otPod);
+  var arrColor = timeCol(myArr, otArr);
+  var brtColor = timeCol(myBrt.val ? parseFloat(myBrt.val) : null, otBrt.val ? parseFloat(otBrt.val) : null);
+
+  var mtFill   = myMt ? Math.max(0,Math.min(1,(35-myMt)/8)) : 0;
+  var mtStr    = myMt ? myMt.toFixed(2) : '-';
+  var cnt      = getHistByClass(hist, raceClass).length;
+  var catFill  = Math.min(myCat/20, 1); // 20 corridas = full
+  var podFill  = cnt > 0 ? (myPod > 0 ? Math.min(myPod/cnt, 1) : (otPod > 0 ? 0.08 : 0)) : 0;
+  var arrFill  = myArr ? Math.max(0,Math.min(1,(6.0-myArr)/3.5)) : 0; // range real 2.5-6.0s
+  var arrStr   = myArr ? myArr.toFixed(2) : '-';
+  var brtFill  = myBrt.val ? Math.max(0,Math.min(1,(35-parseFloat(myBrt.val))/8)) : 0;
+
+  return renderGauge('Média de Tempo', mtStr, cnt?'('+cnt+' corr.)':'', mtFill, mtColor)
+    + renderGauge('Categoria', String(myCat), raceClass||'', catFill, catColor)
+    + renderGauge('Pódios', String(myPod), cnt?'/'+cnt:'', podFill, podColor)
+    + renderGauge('Arranque', arrStr, '', arrFill, arrColor)
+    + renderGauge('Melhor BRT', myBrt.val||'-', myBrt.classe, brtFill, brtColor);
+}
+
+function isUpcoming(r) {
+  if (r.flagAtrasada) return true; // marcada como atrasada na mao — nunca some sozinha
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  if (!hbr) return true;
+  var now = new Date();
+  var nowMin = now.getHours()*60 + now.getMinutes();
+  var parts = hbr.split(':');
+  var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
+  return (raceMin + TELA_GRACE_MIN) >= nowMin;
+}
+
+function minutesToRace(r) {
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  if (!hbr) return null;
+  var now = new Date();
+  var nowMin = now.getHours()*60 + now.getMinutes();
+  var parts = hbr.split(':');
+  var raceMin = parseInt(parts[0]||0)*60 + parseInt(parts[1]||0);
+  return raceMin - nowMin;
+}
+
+// Corrida "antiga" = o PDF traz uma data explicita (dataCard, formato
+// YYYY-MM-DD) e ela e anterior a hoje. PDFs sem essa data (formato antigo,
+// sem o campo) nunca sao marcados como antigos — fica neutro.
+function isOldRaceCard(r) {
+  if (!r || !r.dataCard) return false;
+  var now = new Date();
+  var todayStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  return r.dataCard < todayStr;
+}
+
+// Corrida antiga (data anterior a hoje) SEMPRE deve continuar visivel,
+// independente do relogio bater ou nao com o horario dela no card — ela e
+// so pra consulta/estudo, nao participa da logica de "ja passou". Corridas
+// de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
+// Filtro por regua: '' (todas) | 'top' | 'regular'.
+// Fonte: races.tier, do /api/session/:id/races. Corrida com tier null ficou
+// fora das duas reguas e nao aparece em nenhum dos filtros.
+var FILTRO_TIER = (function(){
+  // Lembra a escolha: se voce opera so no TOP, nao faz sentido reativar o
+  // filtro toda vez que abre a tela.
+  try {
+    var v = localStorage.getItem('gh_tier');
+    return (v === 'top' || v === 'regular') ? v : '';
+  } catch(e){ return ''; }
 })();
-</script>
-
-<div class="pdf-ready-modal" id="pdf-ready-modal">
-  <div class="pdf-ready-box">
-    <div class="pdf-ready-icon">&#9989;</div>
-    <h3>PDFs prontos!</h3>
-    <p>Seus PDFs já estão disponíveis para realização das análises.</p>
-    <button class="pdf-ready-ok" id="btn-pdf-ready-ok">OK</button>
-  </div>
-</div>
-
-<div class="modal-bg" id="cap-modal">
-  <div class="modal">
-    <h3 id="cm-title">Capivara necessaria</h3>
-    <p id="cm-body">Carregue o print ou PDF.</p>
-    <div class="modal-upload"><input type="file" id="cap-modal-inp" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple><strong>Clique, arraste ou cole (Ctrl+V)</strong><p>JPG PNG PDF aceitos · Ctrl+V para colar print</p></div>
-    <div class="cap-st" id="cap-st"></div>
-    <div class="flist-modal" id="cap-modal-list"></div>
-    <div class="modal-acts"><button class="bca" id="btn-cap-cancel">Cancelar</button><button class="bok" id="btn-cap-ok" disabled>Validar e Reanalisar</button></div>
-  </div>
-</div>
-
-<script>var BASE='${BASE}';var SS_KEY='ghf_results_v1';</script>
-<script src="${BASE}/app.js"></script></body></html>`);
-});
-
-router.get('/live', exigirAcesso('screen.live'), (req, res) => {
-  const user = req.user;
-  const logoB64 = getLogo();
-  // URLs fixas das pistas (ajustar aqui quando precisar trocar)
-  const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
-  const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-  // Recorte de cada tela dentro do greyhoundbrasil (uma em cima da outra na pagina
-  // original). Valores calibrados manualmente via /live/calibrar em 06/07/2026.
-  const GHBR_1 = {
-    top: process.env.GHBR_TOP_1 || '-262',
-    left: process.env.GHBR_LEFT_1 || '-457',
-    width: process.env.GHBR_WIDTH_1 || '1920',
-    height: process.env.GHBR_HEIGHT_1 || '1954',
-    scale: process.env.GHBR_SCALE_1 || '48'
-  };
-  const GHBR_2 = {
-    top: process.env.GHBR_TOP_2 || '-571',
-    left: process.env.GHBR_LEFT_2 || '-3',
-    width: process.env.GHBR_WIDTH_2 || '1920',
-    height: process.env.GHBR_HEIGHT_2 || '3840',
-    scale: process.env.GHBR_SCALE_2 || '48'
-  };
-  const SIS_CROP = {
-    top: process.env.SIS_TOP || '-34',
-    left: process.env.SIS_LEFT || '-165',
-    width: process.env.SIS_WIDTH || '2029',
-    height: process.env.SIS_HEIGHT || '1078',
-    scale: process.env.SIS_SCALE || '38'
-  };
-  function ghbrFrameStyle(c) {
-    return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
-      + 'width:' + c.width + 'px;height:' + c.height + 'px;'
-      + 'transform:scale(' + (parseInt(c.scale, 10) / 100) + ');transform-origin:top left;border:none;';
-  }
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Live - Greyhound Validator</title>
-<style>
-${designTokensCSS()}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0D1117;color:#f0f0f0;font-size:14px}
-.hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
-.content{padding:16px 20px;max-width:1900px;margin:0 auto}
-h1{font-size:18px;font-weight:700;margin-bottom:12px}
-.live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-@media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:700px){.live-grid{grid-template-columns:1fr}}
-.live-panel{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
-.live-panel h3{font-size:11px;color:#666;padding:6px 10px;border-bottom:1px solid #222;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
-.live-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#555;font-size:12px;text-align:center;padding:20px;gap:10px}
-</style></head><body>
-<div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
-${navBar(user, 'live')}
-<div class="content">
-<h1>Live — Acompanhamento Simultaneo</h1>
-<div class="live-grid">
-  <div class="live-panel">
-    <h3>SIS Racing</h3>
-    <div class="live-crop">
-      ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(SIS_CROP)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
-    </div>
-  </div>
-  <div class="live-panel">
-    <h3>Greyhound Brasil — Tela 1</h3>
-    <div class="live-crop">
-      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_1)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
-    </div>
-  </div>
-  <div class="live-panel">
-    <h3>Greyhound Brasil — Tela 2</h3>
-    <div class="live-crop">
-      ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_2)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
-    </div>
-  </div>
-</div>
-</div>
-</body></html>`);
-});
-
-router.get('/live/popup', exigirAcesso('screen.live'), (req, res) => {
-  const SISRACING_URL = process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
-  const GHBR_URL = process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-  const GHBR_1 = {
-    top: process.env.GHBR_TOP_1 || '-262',
-    left: process.env.GHBR_LEFT_1 || '-457',
-    width: process.env.GHBR_WIDTH_1 || '1920',
-    height: process.env.GHBR_HEIGHT_1 || '1954',
-    scale: process.env.GHBR_SCALE_1 || '48'
-  };
-  const GHBR_2 = {
-    top: process.env.GHBR_TOP_2 || '-571',
-    left: process.env.GHBR_LEFT_2 || '-3',
-    width: process.env.GHBR_WIDTH_2 || '1920',
-    height: process.env.GHBR_HEIGHT_2 || '3840',
-    scale: process.env.GHBR_SCALE_2 || '48'
-  };
-  const SIS_CROP = {
-    top: process.env.SIS_TOP || '-34',
-    left: process.env.SIS_LEFT || '-165',
-    width: process.env.SIS_WIDTH || '2029',
-    height: process.env.SIS_HEIGHT || '1078',
-    scale: process.env.SIS_SCALE || '38'
-  };
-  function ghbrFrameStyle(c) {
-    return 'position:absolute;top:' + c.top + 'px;left:' + c.left + 'px;'
-      + 'width:' + c.width + 'px;height:' + c.height + 'px;'
-      + 'transform:scale(' + (parseInt(c.scale, 10) / 100) + ');transform-origin:top left;border:none;';
-  }
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Live - Greyhound Validator</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;height:100vh;overflow:hidden;display:flex;align-items:center}
-.live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;width:100%}
-@media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:700px){.live-grid{grid-template-columns:1fr}}
-.live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;top:-65px;left:0;width:100%;height:600px;border:none}
-.live-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:13px;text-align:center;padding:20px;font-family:sans-serif}
-</style></head><body>
-<div class="live-grid">
-  <div class="live-crop">
-    ${SISRACING_URL ? `<iframe src="${SISRACING_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(SIS_CROP)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
-  </div>
-  <div class="live-crop">
-    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_1)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
-  </div>
-  <div class="live-crop">
-    ${GHBR_URL ? `<iframe src="${GHBR_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen style="${ghbrFrameStyle(GHBR_2)}"></iframe>` : '<div class="live-empty">Nao configurado</div>'}
-  </div>
-</div>
-</body></html>`);
-});
-
-// ─── Calibrador manual de recorte de iframe (top/left/largura/altura/zoom) ───
-// Ferramenta so pra admin ajustar visualmente o crop de uma pagina de terceiros
-// dentro do painel, sem precisar ficar chutando valor e fazendo deploy.
-router.get('/live/calibrar', requireAdmin, (req, res) => {
-  const targetUrl = req.query.url || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-  // Largura real de um painel na producao (hoje com 3 colunas). Calculo:
-  // .content max-width 1900px, gap 14px entre as 3 colunas -> (1900 - 2*14) / 3 ≈ 624px.
-  // Se o layout de colunas mudar de novo, passe ?boxwidth=NNN pra recalibrar certo.
-  const BOX_WIDTH = parseInt(req.query.boxwidth, 10) || 624;
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Calibrador de Tela - Greyhound Validator</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
-.wrap{display:grid;grid-template-columns:340px 1fr;height:100vh}
-.panel{background:#111;border-right:1px solid #333;padding:16px;overflow-y:auto}
-.panel h2{font-size:14px;margin-bottom:14px;color:#22c55e}
-.panel .box-note{font-size:11px;color:#666;margin-bottom:14px;line-height:1.5;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:8px 10px}
-.panel .box-note b{color:#22c55e}
-.field{margin-bottom:14px}
-.field label{display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
-.field label span{color:#22c55e;font-weight:700;font-family:monospace}
-.field input[type=range]{width:100%}
-.field input[type=number]{width:80px;padding:4px 6px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:12px}
-.field-row{display:flex;gap:8px;align-items:center}
-.url-field{width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:12px;margin-bottom:14px}
-.btn{width:100%;padding:9px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-top:6px}
-.btn:hover{background:#16a34a}
-.btn-sec{background:transparent;border:1px solid #333;color:#888}
-.btn-sec:hover{border-color:#22c55e;color:#22c55e}
-pre{background:#000;border:1px solid #333;border-radius:6px;padding:10px;font-size:11px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;margin-top:10px}
-.stage{background:#000;display:flex;align-items:center;justify-content:center;padding:20px}
-.crop-box{position:relative;width:100%;max-width:${BOX_WIDTH}px;aspect-ratio:16/9;overflow:hidden;background:#000;border:1px solid #333;border-radius:8px}
-.crop-box iframe{position:absolute;border:none}
-</style></head><body>
-<div class="wrap">
-  <div class="panel">
-    <h2>&#127919; Calibrador de Recorte</h2>
-    <div class="box-note">Preview usando <b>${BOX_WIDTH}px</b> de largura — o tamanho real de 1 painel na tela Live hoje (layout de 3 colunas). Se o numero de paineis mudar, adicione <code>?boxwidth=NNN</code> na URL pra recalibrar certo.</div>
-    <label style="display:block;font-size:11px;color:#888;margin-bottom:5px;text-transform:uppercase">URL alvo</label>
-    <input type="text" class="url-field" id="c-url" value="${targetUrl}">
-    <button class="btn btn-sec" onclick="reloadFrame()">&#8635; Recarregar pagina</button>
-
-    <div class="field" style="margin-top:16px">
-      <label>Top (px) <span id="v-top">0</span></label>
-      <div class="field-row">
-        <input type="range" id="r-top" min="-3000" max="500" value="0" oninput="syncFromRange('top')">
-        <input type="number" id="n-top" value="0" onchange="syncFromNumber('top')">
-      </div>
-    </div>
-    <div class="field">
-      <label>Left (px) <span id="v-left">0</span></label>
-      <div class="field-row">
-        <input type="range" id="r-left" min="-2000" max="500" value="0" oninput="syncFromRange('left')">
-        <input type="number" id="n-left" value="0" onchange="syncFromNumber('left')">
-      </div>
-    </div>
-    <div class="field">
-      <label>Largura do iframe (px) <span id="v-width">1920</span></label>
-      <div class="field-row">
-        <input type="range" id="r-width" min="320" max="3840" value="1920" oninput="syncFromRange('width')">
-        <input type="number" id="n-width" value="1920" onchange="syncFromNumber('width')">
-      </div>
-    </div>
-    <div class="field">
-      <label>Altura do iframe (px) <span id="v-height">1080</span></label>
-      <div class="field-row">
-        <input type="range" id="r-height" min="320" max="3840" value="1080" oninput="syncFromRange('height')">
-        <input type="number" id="n-height" value="1080" onchange="syncFromNumber('height')">
-      </div>
-    </div>
-    <div class="field">
-      <label>Zoom / escala <span id="v-scale">100</span>%</label>
-      <div class="field-row">
-        <input type="range" id="r-scale" min="10" max="300" value="100" oninput="syncFromRange('scale')">
-        <input type="number" id="n-scale" value="100" onchange="syncFromNumber('scale')">
-      </div>
-    </div>
-
-    <button class="btn" onclick="copyValues()">&#128203; Copiar valores</button>
-    <pre id="out"></pre>
-  </div>
-  <div class="stage">
-    <div class="crop-box" id="box">
-      <iframe id="frame" src="${targetUrl}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe>
-    </div>
-  </div>
-</div>
-<script>
-var vals={top:0,left:0,width:1920,height:1080,scale:100};
-
-function applyStyle(){
-  var f=document.getElementById('frame');
-  f.style.top=vals.top+'px';
-  f.style.left=vals.left+'px';
-  f.style.width=vals.width+'px';
-  f.style.height=vals.height+'px';
-  f.style.transform='scale('+(vals.scale/100)+')';
-  f.style.transformOrigin='top left';
-  updateOutput();
+// Cicla entre os tres estados no mesmo botao: todas -> TOP -> REGULAR -> todas.
+// Volta direto pra TODAS. O botao cicla, mas quando a lista esta vazia por
+// causa do filtro o que voce quer e' sair dele, nao avancar pro proximo.
+function verTodasAsCorridas(){
+  FILTRO_TIER = '';
+  try { localStorage.setItem('gh_tier', ''); } catch(e){}
+  _pintaBotaoTier();
+  refreshFocusMode();
 }
 
-function syncFromRange(key){
-  var r=document.getElementById('r-'+key);
-  var n=document.getElementById('n-'+key);
-  var v=document.getElementById('v-'+key);
-  vals[key]=parseInt(r.value,10);
-  n.value=r.value;
-  v.textContent=r.value;
-  applyStyle();
+function alternarTier(){
+  FILTRO_TIER = FILTRO_TIER === '' ? 'top' : (FILTRO_TIER === 'top' ? 'regular' : '');
+  try { localStorage.setItem('gh_tier', FILTRO_TIER); } catch(e){}
+  _pintaBotaoTier();
+  refreshFocusMode();
+}
+function _pintaBotaoTier(){
+  var b = document.getElementById('btn-tier');
+  if(!b) return;
+  var m = {
+    '':        ['transparent',            'var(--bdr2)', 'var(--mut)', 'TODAS',   'mostrando todas as corridas; clique para ver só as TOP'],
+    'top':     ['rgba(212,175,55,.16)',   '#D4AF37',     '#D4AF37',    'TOP',     'mostrando só as TOP; clique para ver só as REGULAR'],
+    'regular': ['rgba(96,165,250,.16)',   '#60a5fa',     '#60a5fa',    'REGULAR', 'mostrando só as REGULAR; clique para voltar a todas']
+  }[FILTRO_TIER];
+  b.style.background = m[0]; b.style.borderColor = m[1]; b.style.color = m[2];
+  b.textContent = m[3]; b.title = m[4];
 }
 
-function syncFromNumber(key){
-  var r=document.getElementById('r-'+key);
-  var n=document.getElementById('n-'+key);
-  var v=document.getElementById('v-'+key);
-  vals[key]=parseInt(n.value,10)||0;
-  r.value=vals[key];
-  v.textContent=vals[key];
-  applyStyle();
-}
-
-function updateOutput(){
-  var css='position:absolute;top:'+vals.top+'px;left:'+vals.left+'px;'
-    +'width:'+vals.width+'px;height:'+vals.height+'px;'
-    +'transform:scale('+(vals.scale/100)+');transform-origin:top left;border:none;';
-  document.getElementById('out').textContent =
-    'CSS do iframe:\\n'+css+
-    '\\n\\nEnv vars (se for essa tela):\\nGHBR_TOP=' +vals.top+
-    '\\nGHBR_LEFT='+vals.left+
-    '\\nGHBR_IFRAME_WIDTH='+vals.width+
-    '\\nGHBR_IFRAME_HEIGHT='+vals.height+
-    '\\nGHBR_SCALE='+vals.scale;
-}
-
-function copyValues(){
-  var txt=document.getElementById('out').textContent;
-  navigator.clipboard.writeText(txt).then(function(){
-    alert('Copiado! Cola aqui no chat ou no Railway.');
-  }).catch(function(){
-    alert('Nao consegui copiar automaticamente — seleciona o texto manualmente.');
-  });
-}
-
-function reloadFrame(){
-  var url=document.getElementById('c-url').value;
-  document.getElementById('frame').src=url;
-}
-
-applyStyle();
-</script>
-</body></html>`);
-});
-
-// ─── Calibrador das 3 telas ao mesmo tempo, no MESMO layout exato da aba Live ───
-// Evita o problema de calibrar num mockup de tamanho diferente do real.
-router.get('/live/calibrar3', requireAdmin, (req, res) => {
-  const P1_URL = req.query.p1 || process.env.SISRACING_URL || 'https://www.sisracing.tv/?autoplay=1';
-  const P2_URL = req.query.p2 || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-  const P3_URL = req.query.p3 || process.env.GHBR_URL || 'https://tv.greyhoundbrasil.com/';
-
-  const P1_INIT = {
-    top: process.env.SIS_TOP || '-299', left: process.env.SIS_LEFT || '-458',
-    width: process.env.SIS_WIDTH || '1920', height: process.env.SIS_HEIGHT || '3840',
-    scale: process.env.SIS_SCALE || '48'
-  };
-  const P2_INIT = {
-    top: process.env.GHBR_TOP_1 || '-28', left: process.env.GHBR_LEFT_1 || '-131',
-    width: process.env.GHBR_WIDTH_1 || '1920', height: process.env.GHBR_HEIGHT_1 || '763',
-    scale: process.env.GHBR_SCALE_1 || '37'
-  };
-  const P3_INIT = {
-    top: process.env.GHBR_TOP_2 || '-571', left: process.env.GHBR_LEFT_2 || '-3',
-    width: process.env.GHBR_WIDTH_2 || '1920', height: process.env.GHBR_HEIGHT_2 || '3840',
-    scale: process.env.GHBR_SCALE_2 || '48'
-  };
-
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Calibrador 3 Telas - Greyhound Validator</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0D1117;color:#f0f0f0;font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
-.content{padding:16px 20px;max-width:1900px;margin:0 auto}
-h1{font-size:16px;font-weight:700;margin-bottom:4px}
-.sub{font-size:12px;color:#888;margin-bottom:14px}
-.live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-@media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:700px){.live-grid{grid-template-columns:1fr}}
-.live-panel{background:#161B27;border:1px solid #222;border-radius:10px;overflow:hidden}
-.live-panel h3{font-size:11px;color:#666;padding:6px 10px;border-bottom:1px solid #222;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.live-crop{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000}
-.live-crop iframe{position:absolute;border:none}
-.ctrl{padding:10px;background:#161B27;border-top:1px solid #222;display:flex;flex-direction:column;gap:6px}
-.ctrl-row{display:flex;align-items:center;gap:6px;font-size:10px}
-.ctrl-row label{width:34px;color:#888;text-transform:uppercase;flex-shrink:0}
-.ctrl-row input[type=range]{flex:1}
-.ctrl-row input[type=number]{width:62px;padding:3px 5px;background:#0D1117;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px}
-.ctrl-row span{width:36px;text-align:right;color:#22c55e;font-family:monospace;font-size:10px}
-.ctrl-url{width:100%;padding:5px 7px;background:#0D1117;border:1px solid #333;border-radius:4px;color:#f0f0f0;font-size:11px;margin-bottom:2px}
-.btn-copy{padding:6px;background:#22c55e;color:#000;font-weight:700;border:none;border-radius:5px;cursor:pointer;font-size:11px;margin-top:2px}
-.btn-copy:hover{background:#16a34a}
-pre{background:#000;border:1px solid #333;border-radius:5px;padding:6px 8px;font-size:9px;color:#60a5fa;white-space:pre-wrap;word-break:break-all;margin-top:4px;max-height:90px;overflow-y:auto}
-</style></head><body>
-<div class="content">
-<h1>&#127919; Calibrador — 3 Telas Simultaneas</h1>
-<div class="sub">Layout identico a aba Live real (mesma grade de 3 colunas) — o que voce ve aqui e o tamanho exato de producao. Ajusta cada painel e copia os valores.</div>
-<div class="live-grid">
-
-  <div class="live-panel">
-    <h3>SIS Racing</h3>
-    <div class="live-crop"><iframe id="f-p1" src="${P1_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
-    <div class="ctrl">
-      <input type="text" class="ctrl-url" id="url-p1" value="${P1_URL}" onchange="document.getElementById('f-p1').src=this.value">
-      <div class="ctrl-row"><label>Top</label><input type="range" id="r-p1-top" min="-3000" max="500" value="${P1_INIT.top}" oninput="sync('p1','top')"><input type="number" id="n-p1-top" value="${P1_INIT.top}" onchange="syncN('p1','top')"><span id="v-p1-top">${P1_INIT.top}</span></div>
-      <div class="ctrl-row"><label>Left</label><input type="range" id="r-p1-left" min="-2000" max="500" value="${P1_INIT.left}" oninput="sync('p1','left')"><input type="number" id="n-p1-left" value="${P1_INIT.left}" onchange="syncN('p1','left')"><span id="v-p1-left">${P1_INIT.left}</span></div>
-      <div class="ctrl-row"><label>Larg</label><input type="range" id="r-p1-width" min="320" max="3840" value="${P1_INIT.width}" oninput="sync('p1','width')"><input type="number" id="n-p1-width" value="${P1_INIT.width}" onchange="syncN('p1','width')"><span id="v-p1-width">${P1_INIT.width}</span></div>
-      <div class="ctrl-row"><label>Alt</label><input type="range" id="r-p1-height" min="320" max="3840" value="${P1_INIT.height}" oninput="sync('p1','height')"><input type="number" id="n-p1-height" value="${P1_INIT.height}" onchange="syncN('p1','height')"><span id="v-p1-height">${P1_INIT.height}</span></div>
-      <div class="ctrl-row"><label>Zoom</label><input type="range" id="r-p1-scale" min="10" max="300" value="${P1_INIT.scale}" oninput="sync('p1','scale')"><input type="number" id="n-p1-scale" value="${P1_INIT.scale}" onchange="syncN('p1','scale')"><span id="v-p1-scale">${P1_INIT.scale}</span></div>
-      <button class="btn-copy" onclick="copyVals('p1')">&#128203; Copiar SIS Racing</button>
-      <pre id="out-p1"></pre>
-    </div>
-  </div>
-
-  <div class="live-panel">
-    <h3>Greyhound Brasil — Tela 1</h3>
-    <div class="live-crop"><iframe id="f-p2" src="${P2_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
-    <div class="ctrl">
-      <input type="text" class="ctrl-url" id="url-p2" value="${P2_URL}" onchange="document.getElementById('f-p2').src=this.value">
-      <div class="ctrl-row"><label>Top</label><input type="range" id="r-p2-top" min="-3000" max="500" value="${P2_INIT.top}" oninput="sync('p2','top')"><input type="number" id="n-p2-top" value="${P2_INIT.top}" onchange="syncN('p2','top')"><span id="v-p2-top">${P2_INIT.top}</span></div>
-      <div class="ctrl-row"><label>Left</label><input type="range" id="r-p2-left" min="-2000" max="500" value="${P2_INIT.left}" oninput="sync('p2','left')"><input type="number" id="n-p2-left" value="${P2_INIT.left}" onchange="syncN('p2','left')"><span id="v-p2-left">${P2_INIT.left}</span></div>
-      <div class="ctrl-row"><label>Larg</label><input type="range" id="r-p2-width" min="320" max="3840" value="${P2_INIT.width}" oninput="sync('p2','width')"><input type="number" id="n-p2-width" value="${P2_INIT.width}" onchange="syncN('p2','width')"><span id="v-p2-width">${P2_INIT.width}</span></div>
-      <div class="ctrl-row"><label>Alt</label><input type="range" id="r-p2-height" min="320" max="3840" value="${P2_INIT.height}" oninput="sync('p2','height')"><input type="number" id="n-p2-height" value="${P2_INIT.height}" onchange="syncN('p2','height')"><span id="v-p2-height">${P2_INIT.height}</span></div>
-      <div class="ctrl-row"><label>Zoom</label><input type="range" id="r-p2-scale" min="10" max="300" value="${P2_INIT.scale}" oninput="sync('p2','scale')"><input type="number" id="n-p2-scale" value="${P2_INIT.scale}" onchange="syncN('p2','scale')"><span id="v-p2-scale">${P2_INIT.scale}</span></div>
-      <button class="btn-copy" onclick="copyVals('p2')">&#128203; Copiar Tela 1</button>
-      <pre id="out-p2"></pre>
-    </div>
-  </div>
-
-  <div class="live-panel">
-    <h3>Greyhound Brasil — Tela 2</h3>
-    <div class="live-crop"><iframe id="f-p3" src="${P3_URL}" scrolling="no" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
-    <div class="ctrl">
-      <input type="text" class="ctrl-url" id="url-p3" value="${P3_URL}" onchange="document.getElementById('f-p3').src=this.value">
-      <div class="ctrl-row"><label>Top</label><input type="range" id="r-p3-top" min="-3000" max="500" value="${P3_INIT.top}" oninput="sync('p3','top')"><input type="number" id="n-p3-top" value="${P3_INIT.top}" onchange="syncN('p3','top')"><span id="v-p3-top">${P3_INIT.top}</span></div>
-      <div class="ctrl-row"><label>Left</label><input type="range" id="r-p3-left" min="-2000" max="500" value="${P3_INIT.left}" oninput="sync('p3','left')"><input type="number" id="n-p3-left" value="${P3_INIT.left}" onchange="syncN('p3','left')"><span id="v-p3-left">${P3_INIT.left}</span></div>
-      <div class="ctrl-row"><label>Larg</label><input type="range" id="r-p3-width" min="320" max="3840" value="${P3_INIT.width}" oninput="sync('p3','width')"><input type="number" id="n-p3-width" value="${P3_INIT.width}" onchange="syncN('p3','width')"><span id="v-p3-width">${P3_INIT.width}</span></div>
-      <div class="ctrl-row"><label>Alt</label><input type="range" id="r-p3-height" min="320" max="3840" value="${P3_INIT.height}" oninput="sync('p3','height')"><input type="number" id="n-p3-height" value="${P3_INIT.height}" onchange="syncN('p3','height')"><span id="v-p3-height">${P3_INIT.height}</span></div>
-      <div class="ctrl-row"><label>Zoom</label><input type="range" id="r-p3-scale" min="10" max="300" value="${P3_INIT.scale}" oninput="sync('p3','scale')"><input type="number" id="n-p3-scale" value="${P3_INIT.scale}" onchange="syncN('p3','scale')"><span id="v-p3-scale">${P3_INIT.scale}</span></div>
-      <button class="btn-copy" onclick="copyVals('p3')">&#128203; Copiar Tela 2</button>
-      <pre id="out-p3"></pre>
-    </div>
-  </div>
-
-</div>
-</div>
-<script>
-var vals={
-  p1:{top:${P1_INIT.top},left:${P1_INIT.left},width:${P1_INIT.width},height:${P1_INIT.height},scale:${P1_INIT.scale}},
-  p2:{top:${P2_INIT.top},left:${P2_INIT.left},width:${P2_INIT.width},height:${P2_INIT.height},scale:${P2_INIT.scale}},
-  p3:{top:${P3_INIT.top},left:${P3_INIT.left},width:${P3_INIT.width},height:${P3_INIT.height},scale:${P3_INIT.scale}}
-};
-
-function applyStyle(p){
-  var f=document.getElementById('f-'+p);
-  var v=vals[p];
-  f.style.top=v.top+'px';
-  f.style.left=v.left+'px';
-  f.style.width=v.width+'px';
-  f.style.height=v.height+'px';
-  f.style.transform='scale('+(v.scale/100)+')';
-  f.style.transformOrigin='top left';
-  updateOutput(p);
-}
-
-function sync(p,key){
-  var r=document.getElementById('r-'+p+'-'+key);
-  var n=document.getElementById('n-'+p+'-'+key);
-  var s=document.getElementById('v-'+p+'-'+key);
-  vals[p][key]=parseInt(r.value,10);
-  n.value=r.value;
-  s.textContent=r.value;
-  applyStyle(p);
-}
-
-function syncN(p,key){
-  var r=document.getElementById('r-'+p+'-'+key);
-  var n=document.getElementById('n-'+p+'-'+key);
-  var s=document.getElementById('v-'+p+'-'+key);
-  vals[p][key]=parseInt(n.value,10)||0;
-  r.value=vals[p][key];
-  s.textContent=vals[p][key];
-  applyStyle(p);
-}
-
-function updateOutput(p){
-  var v=vals[p];
-  var css='position:absolute;top:'+v.top+'px;left:'+v.left+'px;'
-    +'width:'+v.width+'px;height:'+v.height+'px;'
-    +'transform:scale('+(v.scale/100)+');transform-origin:top left;border:none;';
-  document.getElementById('out-'+p).textContent = css;
-}
-
-function copyVals(p){
-  var v=vals[p];
-  var txt='CSS:\\n'+document.getElementById('out-'+p).textContent
-    +'\\n\\nValores:\\nTOP='+v.top+' LEFT='+v.left+' WIDTH='+v.width+' HEIGHT='+v.height+' SCALE='+v.scale;
-  navigator.clipboard.writeText(txt).then(function(){
-    alert('Copiado! Cola aqui no chat.');
-  }).catch(function(){
-    alert('Nao consegui copiar — seleciona manualmente no quadro preto.');
-  });
-}
-
-applyStyle('p1'); applyStyle('p2'); applyStyle('p3');
-</script>
-</body></html>`);
-});
-
-// As telas VIP (Plus e Premium) foram removidas junto com o backend: as rotas
-// /api/carga-vip e /api/vip-do-vip nao existem mais, e o motor virou unico (4
-// eixos, sem niveis). Sairam daqui:
-//   GET /carga-vip e GET /vip-do-vip (a fabrica paginaVip)
-//   POST /carga-vip/resultados e GET /carga-vip/disputa
-//   o catalogo das artes dos galgos, que so aquelas telas usavam
-// O public/js/telaCargaVip.js tambem pode ser apagado do repositorio.
+// O filtro de regua NAO entra no shouldShowRace, de proposito.
 //
-// O que NAO saiu: as colunas races.vip_plus / races.vip_premium continuam no
-// banco como registro do periodo em que o VIP existiu.
-
-// CSS do card de historico de galgo (.sv-*), usado pelo painel "Analisar
-// disputa". Vive numa funcao porque a tela /sessao/:id o injeta no <style>.
-// O JS que monta o card esta em public/js/cardGalgo.js.
-//
-// Foi removido por engano junto com as telas VIP (ficava no meio daquele
-// bloco) e a /sessao passou a estourar 500: a funcao era chamada e nao
-// existia mais. Reconstruido a partir das classes que o cardGalgo.js usa.
-function cssCardGalgo() {
-  return `.sv-dog{width:100%}
-.sv-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.sv-name{font-size:14px;font-weight:700;color:#f0f0f0}
-.sv-perfil{font-size:11px;color:#60a5fa}
-.sv-sep{height:1px;background:#222;margin:14px 0}
-.sv-tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
-.sv-tbl th{padding:5px 4px;text-align:center;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}
-.sv-tbl td{padding:5px 4px;text-align:center;border-bottom:1px solid #1e2430;color:#ccc}
-.sv-tbl tr:last-child td{border-bottom:none}
-.sv-td-date{white-space:nowrap;color:#aaa}
-.sv-td-track{white-space:nowrap}
-.sv-td-muted{color:#777}
-.sv-td-rem{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8a94a6;text-align:left}
-.sv-bends{font-weight:700;letter-spacing:1px;color:#f0f0f0}
-.sv-grade{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid #444;color:#aaa}
-.sv-caltm{font-weight:700;color:#f0f0f0}`;
+// Aquela funcao responde "esta corrida esta na janela de hoje?", e a MESMA
+// resposta alimenta o isDayClosed. Com o filtro dentro dela, ligar o filtro e
+// nao haver corrida daquela regua fazia o app concluir que o DIA ACABOU e
+// mostrar a tela de encerrado — que nao tem o botao do filtro, entao nao dava
+// nem pra voltar. Filtro de exibicao nao pode opinar sobre o dia ter acabado.
+function passaNoFiltroTier(r) {
+  return !FILTRO_TIER || _tierDe(r) === FILTRO_TIER;
 }
 
-router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
-  const user = req.user;
-  const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
-  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
-  const logoB64 = getLogo();
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Histórico - Greyhound Validator</title>
-<link rel="stylesheet" href="${BASE}/static/css/shared.css">
-<style>
-${designTokensCSS()}
-.content{padding:24px;max-width:900px;margin:0 auto}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
-h2{font-size:16px;font-weight:700;margin-bottom:12px}table{width:100%;border-collapse:collapse;background:#111;border:1px solid #333;border-radius:8px;overflow:hidden}th{padding:10px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#1a1a1a;border-bottom:1px solid #333}td{padding:10px 12px;border-bottom:1px solid #222;font-size:13px}tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
-.btn-del{background:none;border:none;cursor:pointer;color:#666;font-size:18px;padding:4px 6px;border-radius:6px;transition:all .2s;line-height:1}.btn-del:hover{color:#ef4444;background:rgba(239,68,68,.1)}
-.del-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;align-items:center;justify-content:center}
-.del-modal-bg.open{display:flex}
-.del-modal{background:#111;border:1px solid #333;border-radius:16px;padding:36px 40px;text-align:center;max-width:360px;width:90%;animation:popIn .25s ease}
-@keyframes popIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
-.del-icon{font-size:56px;margin-bottom:16px;display:block}
-.del-modal h3{font-size:18px;font-weight:700;margin-bottom:8px}
-.del-modal p{font-size:13px;color:#888;margin-bottom:24px;line-height:1.5}
-.del-btns{display:flex;gap:10px;justify-content:center}
-.del-btns button{padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;border:none}
-.btn-cancel{background:#222;color:#888;border:1px solid #333!important}
-.btn-cancel:hover{background:#2a2a2a}
-.btn-confirm-del{background:#ef4444;color:#fff}
-.btn-confirm-del:hover{background:#dc2626}
-</style></head><body>
-<div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
-${navBar(user, 'historico')}
-<div class="content">
-<div class="kpis">
-<div class="kpi g"><div class="kpi-label">Total sessoes</div><div class="kpi-val">${sessions.length}</div></div>
-<div class="kpi o"><div class="kpi-label">Total apostas</div><div class="kpi-val">${stats.t||0}</div></div>
-<div class="kpi b"><div class="kpi-label">Taxa de acerto</div><div class="kpi-val">${stats.t>0?Math.round(stats.a/stats.t*100):0}%</div></div>
-</div>
-<h2>Sessoes de analise</h2>
-<table><thead><tr><th>Data</th><th>Nome</th><th>AvBs</th><th>Acao</th></tr></thead><tbody>
-${sessions.map(s=>`<tr><td>${new Date(s.created_at).toLocaleDateString('pt-BR')}</td><td>${s.name||'Sem nome'}</td><td><span class="badge">${s.total_avbs||0}</span></td><td style="display:flex;gap:14px;align-items:center"><a href="${BASE}/sessao/${s.id}">Ver detalhes</a><button class="btn-del" title="Deletar sessao" onclick="abrirDel('${s.id}','${(s.name||'Sem nome').replace(/'/g,"\\'")}')">&#128465;</button></td></tr>`).join('')}
-${!sessions.length?'<tr><td colspan="4" style="text-align:center;color:#666;padding:30px">Nenhuma sessao salva</td></tr>':''}
-</tbody></table>
-</div>
-
-<div class="del-modal-bg" id="del-bg">
-  <div class="del-modal">
-    <span class="del-icon">&#128465;&#65039;</span>
-    <h3>Deletar sessao?</h3>
-    <p id="del-txt">Esta acao nao pode ser desfeita.</p>
-    <div class="del-btns">
-      <button class="btn-cancel" onclick="fecharDel()">Cancelar</button>
-      <button class="btn-confirm-del" onclick="confirmarDel()">Deletar</button>
-    </div>
-  </div>
-</div>
-<form id="del-form" method="POST" style="display:none"></form>
-
-<script>
-var BASE_H='${BASE}';
-var delId=null;
-function abrirDel(id,nome){delId=id;document.getElementById('del-txt').textContent='Voce esta deletando a sessao "'+nome+'". Esta acao nao pode ser desfeita.';document.getElementById('del-bg').classList.add('open');}
-function fecharDel(){document.getElementById('del-bg').classList.remove('open');delId=null;}
-function confirmarDel(){if(!delId)return;var f=document.getElementById('del-form');f.action=BASE_H+'/sessao/'+delId+'/deletar';f.submit();}
-document.getElementById('del-bg').addEventListener('click',function(e){if(e.target===this)fecharDel();});
-</script>
-</body></html>`);
-});
-
-router.post('/sessao/:id/deletar', (req, res) => {
-  const user = req.user;
-  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
-  if (sess) {
-    db.prepare('DELETE FROM races WHERE session_id=?').run(sess.id);
-    db.prepare('DELETE FROM race_sessions WHERE id=?').run(sess.id);
-  }
-  res.redirect(BASE + '/historico');
-});
-
-// ── AvB Motor x AvB BW ──────────────────────────────────────────────────────
-// AvB Motor : o par da analise global (trap_fav x trap_und). Sempre existe.
-// AvB BW    : o par que de fato valia na hora de apostar, com prioridade
-//             1) a SUA escolha (race_user_data.avb_escolhido)
-//             2) senao, a principal da reanalise (races.avb_fechamento)
-//             3) senao, vazio — a corrida nao abriu no ao vivo, ou nenhum AvB
-//                aberto tinha valor.
-//
-// O "bateu" e a "odd" seguem o BW quando ele existe; sem BW, seguem o Motor.
-// E' a regra que reflete a aposta que realmente valeu.
-// Observacoes: mostra os primeiros 150 caracteres e um "leia mais" que
-// expande a linha. Nada e' cortado no banco — o texto inteiro fica no HTML,
-// so escondido, entao o relatorio e o export continuam completos.
-// O corte respeita a palavra: cortar no meio de uma deixa a leitura estranha.
-function _celulaObs(r){
-  var txt = String(r.obs || '').trim();
-  if (!txt) return '<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">-</td>';
-  var LIM = 150;
-  if (txt.length <= LIM) {
-    return '<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">' + txt + '</td>';
-  }
-  var corte = txt.lastIndexOf(' ', LIM);
-  if (corte < LIM * 0.6) corte = LIM;      // palavra gigante: corta no limite mesmo
-  var ini = txt.slice(0, corte);
-  var resto = txt.slice(corte);
-  return '<td style="text-align:left;font-size:11px;color:#888;line-height:1.5">'
-    + '<span>' + ini + '</span>'
-    + '<span class="obs-resto" style="display:none">' + resto + '</span>'
-    + '<span class="obs-elip">…</span> '
-    + '<a class="obs-mais" style="color:#60a5fa;cursor:pointer;font-size:10px;white-space:nowrap">leia mais</a>'
-    + '</td>';
-}
-
-// O par que VALE na corrida.
-//
-// O avb_fechamento SAIU desta conta de proposito. Ele e' escrito pelo backend
-// perto da largada e estava sobrescrevendo, no Historico, o AvB que a tela
-// mostrou o dia inteiro: a Analisar exibia 3v4 e o Historico gravava 2v3, sem
-// o Bruno ter tocado em nada.
-//
-// A regra e' dele: o principal da analise permanece, e so muda quando ELE age
-// (inverte, escolhe um secundario ou entra num par da camada BW). Essa acao
-// grava avb_escolhido — que continua tendo prioridade aqui.
-//
-// O avb_fechamento nao some do banco: ele segue gravado e serve pra medicao
-// (junto com avb_inicial e avb_reanalise). So nao decide mais o que a tela
-// mostra nem o que a Banca conta.
-function _parBW(r){
-  var esc = _jsonOuNull(r.avb_escolhido);
-  if (esc) { esc._origem = 'sua escolha'; return esc; }
+// Normaliza o tier na ENTRADA. O motor escreve TOP/REGULAR, e o resto da tela
+// compara em minusculo — sem isto, 'TOP' nunca casava com 'top' e o filtro
+// vinha vazio nas duas reguas, sem erro nenhum aparecendo.
+// Tambem aceita o bw=1 como TOP, pra linha antiga (antes do tier existir).
+function _tierDe(r){
+  var t = String((r && r.tier) || '').trim().toLowerCase();
+  if (t === 'top' || t === 'regular') return t;
+  if (r && (r.bw === 1 || r.bw === true || r.bw === '1')) return 'top';
   return null;
 }
-// Celula do AvB BW, no MESMO formato visual da coluna do Motor: badge do trap,
-// nome embaixo, "vs" no meio. Se nao ha BW, celula vazia com um traco.
-// UMA celula de AvB por corrida. Resolve, nesta ordem:
-//   1) a sua escolha (race_user_data.avb_escolhido) — o par que voce apostou
-//   2) o fechamento do motor (races.avb_fechamento)
-//   3) o AvB da analise global (trap_fav x trap_und)
-// E' o MESMO par que manda no Bateu, na Odd e na Banca, entao a tela nao pode
-// mostrar outro: duas colunas obrigavam a decidir, a cada linha, qual ler.
-function _celulaAvb(r){
-  var lado = function(trap, nome, perfil){
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
-      + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
-      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
-      + (perfil ? '<div style="font-size:9px;color:#666;text-align:center">'+perfil+'</div>' : '')
-      + '</div>';
-  };
-  // Sem o fechamento: ou foi voce que apontou, ou vale o par da analise.
-  var esc = _jsonOuNull(r.avb_escolhido);
-  var a, b, pa = '', pb = '', origem;
-  if (esc) {
-    a = { trap: esc.aTrap, nome: esc.aNome }; b = { trap: esc.bTrap, nome: esc.bNome };
-    origem = 'sua escolha';
-  } else if (r.trap_fav && r.trap_und) {
-    a = { trap: r.trap_fav, nome: r.name_fav }; b = { trap: r.trap_und, nome: r.name_und };
-    pa = r.perfil_fav || ''; pb = r.perfil_und || '';
-    origem = 'motor';
-  } else {
-    return '<td style="text-align:center;vertical-align:middle;color:#444;font-size:11px">&mdash;</td>';
-  }
-  return '<td style="text-align:center;vertical-align:middle">'
-    + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
-    +   lado(a.trap, a.nome, pa)
-    +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
-    +   lado(b.trap, b.nome, pb)
-    + '</div>'
-    // Diz de onde veio o par, discreto: sem isso nao da pra saber se a linha
-    // reflete a sua entrada ou a decisao do motor.
-    + '<div style="font-size:8px;color:' + (esc ? '#60a5fa' : '#555') + ';margin-top:2px;text-transform:uppercase;letter-spacing:.4px">' + origem + '</div>'
-    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ')">&#128269; ver historico</a>'
-    + '</td>';
+
+function shouldShowRace(r) {
+  if (typeof _SIM_AVB !== 'undefined' && _SIM_AVB) return true;
+  // Skip que a lista VIP destravou entra em tela dentro da janela, mesmo
+  // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
+  // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
+  if (_vipSkipLiberado(r)) return true;
+  return isOldRaceCard(r) || isUpcoming(r);
 }
 
-// Selo do nivel VIP na linha do Historico.
-//
-// As marcas vem de races.vip_plus e races.vip_premium, gravadas pelo motor
-// ANTES da largada e congeladas nela. Ou seja: e' o que a lista dizia na hora
-// de decidir, nao a lista de hoje aplicada ao passado.
-//
-// vip_premium guarda a NOTA ('A+', 'A'), nao 1/0 — por isso ela aparece junto.
-// Premium tem prioridade: e' o subconjunto mais exigente, e mostrar "Plus"
-// numa corrida que tambem era Premium seria informacao a menos.
-// Em qual REGUA a corrida passou: TOP, REGULAR, ou nenhuma.
-//
-// Le races.tier. O bw=1 continua valendo como atalho de TOP, pra linha antiga
-// (gravada antes do tier existir) nao virar "fora" no historico.
-//
-// Corrida que nao passou em nenhuma das duas fica com traco: nao e' "analise
-// comum", e' ter ficado fora do corte — e a coluna precisa dizer isso, senao
-// some a diferenca entre "o motor olhou e reprovou" e "o motor nem classificou".
-function _motorDoAvb(r){
-  // trim + toLowerCase: o motor escreve TOP/REGULAR em maiusculas. A tela
-  // Analisar normaliza igual — se as duas divergissem, a mesma corrida
-  // apareceria num filtro e nao no outro.
-  var t = String(r.tier || '').trim().toLowerCase();
-  if (t === 'top') return 'top';
-  if (t === 'regular') return 'regular';
-  if (r.bw === 1 || r.bw === true || r.bw === '1') return 'top';
-  return '';
+function isDayClosed(avbs) {
+  // Encerrado quando nao sobra nenhuma corrida futura na sessao carregada
+  // (dinamico — nao depende de um horario fixo de corte).
+  return !avbs.some(shouldShowRace);
 }
 
-function _celulaMotor(r){
-  var m = _motorDoAvb(r);
-  var mapa = {
-    top:     ['#D4AF37', 'TOP',      'passou na régua exigente do motor'],
-    regular: ['#60a5fa', 'REGULAR',  'passou na régua regular, não na TOP']
-  };
-  var v = mapa[m];
-  if (!v) return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
-  return '<td style="text-align:center;vertical-align:middle" title="' + v[2] + '">'
-    + '<span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 7px;'
-    + 'border-radius:10px;border:1px solid ' + v[0] + '55;color:' + v[0] + ';white-space:nowrap">' + v[1] + '</span></td>';
+var focusRefreshInterval = null;
+var alertCheckInterval = null;
+var syncFromServerInterval = null;
+var serverSyncInterval = null;
+
+// Busca do banco os dados atualizados da sessao de hoje (o que os robos de
+// resultado/monitoramento ja tiverem gravado) e atualiza `results` em
+// memoria — sem isso, mudancas feitas pelos robos so apareciam depois de
+// um F5 manual na pagina.
+// Atualiza "Historico do dia" e "Sessoes recentes" no sidebar sem precisar de
+// F5 — esses dois so eram montados no carregamento inicial da pagina, entao
+// se a aba ficar aberta e o robo salvar a sessao de hoje depois, ficavam
+// "congelados" mostrando informacao velha ate a pessoa atualizar manualmente.
+async function refreshSidebarSessions() {
+  try {
+    var r = await fetch(BASE + '/api/sidebar-sessions');
+    var d = await r.json();
+    var histSlot = document.getElementById('hist-do-dia-slot');
+    if (histSlot) {
+      histSlot.innerHTML = d.sessaoHojeId
+        ? '<a href="'+BASE+'/sessao/'+d.sessaoHojeId+'" class="tabbtn">&#128220; Histórico do dia</a>'
+        : '<span class="tabbtn" style="opacity:.4;cursor:not-allowed" title="Ainda nao ha sessao analisada hoje">&#128220; Histórico do dia</span>';
+    }
+    var sessSlot = document.getElementById('sessoes-recentes-slot');
+    if (sessSlot && d.sessions) {
+      // slice(0,7): o servidor renderiza 7 na carga inicial, mas o endpoint do
+      // refresh devolve mais — a lista crescia sozinha depois do 1o ciclo.
+      sessSlot.innerHTML = d.sessions.length
+        ? d.sessions.slice(0,7).map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
+        : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>';
+    }
+  } catch(e) { /* falha silenciosa - nao atrapalha o resto da tela */ }
 }
 
-// Coluna Resultado: a chegada COMPLETA, uma bolinha por posicao.
-//
-// Antes mostrava so resultado_1/2/3, que e' o podio. A chegada inteira ja
-// estava no banco (finishing_order_json, 1o ao 6o) e nao aparecia em lugar
-// nenhum da tela — voce via quem subiu no podio, mas nao onde os outros dois
-// do seu par terminaram, que e' justamente o que decide o AvB.
-//
-// A posicao autoritativa e' o campo pos, NAO a ordem do array. Fallback pro
-// podio quando a chegada completa nao existir (corrida antiga, ou o robo nao
-// conseguiu extrair).
-function _celulaResultado(r){
-  var tc = ['','t1','t2','t3','t4','t5','t6'];
-  var badge = function(n){
-    return '<span class="trap-badge ' + tc[n] + '" style="width:19px;height:19px;font-size:10px;margin:0 1px">' + n + '</span>';
-  };
-  var html = '', ordem = null;
-  try { ordem = typeof r.finishing_order_json === 'string' ? JSON.parse(r.finishing_order_json) : r.finishing_order_json; }
-  catch(e) { ordem = null; }
+async function syncFromServer() {
+  try {
+    var now = new Date();
+    var todayLabel = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    var sessionName = 'Races '+todayLabel;
+    var sr = await fetch(BASE+'/api/sessions');
+    if (!sr.ok) return;
+    var sessions = await sr.json();
+    var todaySession = Array.isArray(sessions) ? sessions.find(function(s){return s.name===sessionName;}) : null;
+    if (!todaySession) return;
+    var dr = await fetch(BASE+'/api/session/'+todaySession.id+'/races');
+    if (!dr.ok) return;
+    var dd = await dr.json();
+    if (!dd.races || !Array.isArray(dd.races)) return;
 
-  if (Array.isArray(ordem) && ordem.length) {
-    ordem.slice().sort(function(a,b){ return Number(a.pos) - Number(b.pos); }).forEach(function(f){
-      var n = Number(f.trap);
-      if (n >= 1 && n <= 6) html += badge(n);
-    });
-  } else {
-    // Sem chegada completa: cai no podio, como era antes.
-    [r.resultado_1, r.resultado_2, r.resultado_3].forEach(function(v){
-      if (!v) return;
-      var n = parseInt(v);
-      if (n >= 1 && n <= 6) html += badge(n);
-      else {
-        var nome = String(v).split(' ')[0].slice(0,10);
-        html += '<span style="font-size:9px;color:#888;display:block;text-align:center;line-height:1.3">' + nome + '</span>';
+    var focusedKey = (focusRaceIdx>=0 && results[focusRaceIdx]) ? (results[focusRaceIdx].hora+'|'+results[focusRaceIdx].corrida) : null;
+    var changedAny = false;
+    var changes = [];
+
+    dd.races.forEach(function(r){
+      var idx = results.findIndex(function(x){ return x.hora===r.hora && x.corrida===r.corrida; });
+      if (idx === -1) return;
+      var cur = results[idx];
+      var oldNivel = cur.nivel, oldFav = cur.trapFav, oldUnd = cur.trapUnd;
+      var oldCioTraps = (cur.eliminados||[]).filter(function(e){return /Cio recente/i.test(e.motivo||'');}).map(function(e){return e.trap;});
+      if (cur.trapFav!==r.trap_fav || cur.trapUnd!==r.trap_und || cur.nameFav!==r.name_fav || cur.nameUnd!==r.name_und || cur.pct!==r.pct || cur.nivel!==r.nivel || cur.flagAtrasada!==!!r.flag_atrasada) {
+        changedAny = true;
+      }
+      // _limpaNome aqui, na ENTRADA: o nome vindo do servidor as vezes traz a
+      // linha de pedigree inteira ("Nome (M) ltf b Pai-Mae Oct24"). Limpar num
+      // ponto so vale mais que caçar as ~10 telas que exibem o nome — bastava
+      // esquecer uma pra o problema voltar, e foi o que aconteceu quando
+      // tratei so o caminho do aHist.
+      cur.nivel = r.nivel; cur.trapFav = r.trap_fav; cur.nameFav = _limpaNome(r.name_fav);
+      cur.trapUnd = r.trap_und; cur.nameUnd = _limpaNome(r.name_und); cur.pct = r.pct;
+      cur.perfilFav = r.perfil_fav; cur.perfilUnd = r.perfil_und; cur.obs = r.obs;
+      cur.odd = r.odd; cur.valor = r.valor; cur.avbNaoAberto = !!r.avb_nao_aberto;
+      // O tier muda a cada ciclo (corrida pode cair de TOP pra REGULAR, ou
+      // sair das duas, antes de largar), entao o sync atualiza tambem.
+      cur.tier = r.tier != null ? r.tier : (r.bw ? 'top' : null);
+      cur.top3 = r.top3;
+      cur.histFav = r.hist_fav?JSON.parse(r.hist_fav):[];
+      cur.histUnd = r.hist_und?JSON.parse(r.hist_und):[];
+      cur.histAll = r.hist_all?JSON.parse(r.hist_all):[];
+      cur.dataCard = r.data_card||null;
+      cur.trackFull = r.track_full||cur.trackFull;
+      cur.cardSuspect = !!r.card_suspect;
+      cur.betEntrou = !!r.bet_entrou;
+      cur.betUnidades = r.bet_unidades!=null?r.bet_unidades:(STAKE_PADRAO!=null?STAKE_PADRAO:2.5);
+      cur.scores = r.scores || cur.scores;
+      // Escolha vinda do banco (campo pessoal). So adota se o cliente ainda
+      // nao tem uma: o que esta na tela e' mais recente que o que veio.
+      if (!cur.avbEscolhido && r.avb_escolhido) {
+        try { var _e = JSON.parse(r.avb_escolhido); if(_e && _e.aTrap!=null) cur.avbEscolhido = { a:_e.aTrap, b:_e.bTrap, odd:_e.odd||null, em:(_e.ts||0)*1000 }; } catch(e){}
+      } // achado 14/07/2026 — faltava, relatorio nunca via score atualizado
+      try { cur.eliminados = r.eliminados?JSON.parse(r.eliminados):[]; } catch(e){ cur.eliminados = cur.eliminados||[]; }
+      cur.flagAtrasada = !!r.flag_atrasada;
+      cur.id = r.id;
+      cur.finalCheckStatus = r.final_check_status || null;
+      cur.finalCheckAt = r.final_check_at || null;
+      // Sinaliza reanalise/skip vindos do robo (ex.: checagem final antes da
+      // largada) — selo na lista + toast + som, pra nunca apostar no palpite
+      // velho. Detecta pela transicao real dos campos (independe do texto que
+      // o robo grava em final_check_status).
+      var _pista = getPista(cur.corrida) || cur.corrida || '';
+      var _hbr = cur.hora_br || convertHora(cur.hora||'') || cur.hora || '';
+      if (oldNivel !== 'skip' && cur.nivel === 'skip') {
+        cur._reanaliseFlag = { type:'skip', at: Date.now() };
+        changes.push({ tipo:'skip', txt: _hbr+' '+_pista+' virou SKIP (card mudou)' });
+      } else if (oldNivel !== 'skip' && cur.nivel !== 'skip' && (oldFav !== cur.trapFav || oldUnd !== cur.trapUnd)) {
+        cur._reanaliseFlag = { type:'reanalise', at: Date.now() };
+        changes.push({ tipo:'reanalise', txt: _hbr+' '+_pista+' reanalisada (fav agora T'+cur.trapFav+')' });
+      }
+      // Cio recente (item 3): avisa quando a regra passou a descartar um galgo
+      // que antes nao estava descartado (ex.: substituto em cio pego pelo robo).
+      var _newCio = (cur.eliminados||[]).filter(function(e){return /Cio recente/i.test(e.motivo||'');});
+      var _freshCio = _newCio.filter(function(e){ return oldCioTraps.indexOf(e.trap)===-1; });
+      if (_freshCio.length) {
+        cur._reanaliseFlag = { type:'reanalise', at: Date.now() };
+        changes.push({ tipo:'cio', txt: '🩸 '+_hbr+' '+_pista+' — cio recente: '+_freshCio.map(function(e){return 'T'+e.trap;}).join(', ')+' descartada' });
       }
     });
-  }
 
-  if (r.video_url) {
-    html += '<div style="margin-top:5px"><button onclick="openReplay(' + r.id + ')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px">&#9654; Replay</button></div>';
-  }
-  return '<td style="text-align:center">' + html + '</td>';
+    if (changedAny) {
+      refreshFocusMode();
+      // So re-mostra a corrida que estava em foco se ela AINDA e valida pra
+      // exibir agora (nao passou do horario nesse meio-tempo) — senao, deixa
+      // o refreshFocusMode() ja ter avancado sozinho pra proxima, sem forcar
+      // de volta uma corrida velha que ja devia ter saido da tela.
+      if (focusedKey) {
+        var stillIdx = results.findIndex(function(x){ return (x.hora+'|'+x.corrida)===focusedKey; });
+        if (stillIdx>=0 && shouldShowRace(results[stillIdx])) {
+          renderFocusPanel(results[stillIdx], stillIdx);
+        }
+      }
+      if (changes.length) {
+        var _hasSkip = changes.some(function(c){ return c.tipo==='skip'; });
+        // Alem do toast (que some em 2,6s), manda cada aviso pro ticker da
+        // faixa de baixo. O toast serve pra chamar atencao na hora; o ticker
+        // guarda o historico do dia, pra quem estava olhando outra coisa nao
+        // perder o que mudou.
+        // Os avisos de mudanca vao SO pro ticker da faixa de baixo. O toast
+        // flutuante foi removido daqui: ele cobria os gauges da arena e, agora
+        // que o ticker guarda o historico do dia, era informacao duplicada.
+        // O showToast segue existindo pra confirmacoes de acao (salvar etc).
+        if (typeof window.ghTicker === 'function') {
+          changes.forEach(function(c){ try { window.ghTicker(c.txt); } catch(e){} });
+        } else {
+          var _hasSkip2 = changes.some(function(c){ return c.tipo==='skip'; });
+          showToast((_hasSkip2?'\u26A0\uFE0F ':'\uD83D\uDD04 ') + changes.map(function(c){ return c.txt; }).join(' \u00B7 '), !_hasSkip2);
+        }
+      } else {
+        showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
+      }
+    }
+  } catch(e) { console.error('[syncFromServer] erro', e); }
 }
 
-function _celulaAberto(r){
-  var par = r.abriu_par ? ' (' + String(r.abriu_par) + ')' : '';
-  var base;
-  if (r.abriu === 1 || r.abriu === '1') {
-    base = '<div title="o AvB' + par + ' abriu na BW' + (r.odd_abertura != null ? '; odd real de abertura' : '') + '">'
-      + '<span style="font-size:13px;font-weight:800;color:#22c55e">&#10003;</span>'
-      + (r.odd_abertura != null ? '<div style="font-size:10px;color:#60a5fa;font-weight:700;margin-top:1px">' + r.odd_abertura + '</div>' : '')
-      + '</div>';
-  } else if (r.abriu === 0 || r.abriu === '0') {
-    base = '<div style="font-size:10px;color:#555" title="a corrida foi monitorada e o AvB' + par + ' não abriu na BW">&mdash;</div>';
-  } else {
-    base = '<div style="font-size:10px;color:#333" title="corrida não monitorada: não dá pra saber se o AvB abriu">&mdash;</div>';
-  }
-  var manual = r.avb_nao_aberto
-    ? '<div style="font-size:9px;color:#f97316;margin-top:2px" title="você marcou esta corrida como não aberta">marquei</div>'
-    : '';
-  return '<td style="text-align:center">' + base + manual + '</td>';
+// Checagem RAPIDA (a cada 15s) e independente do refresh geral da lista —
+// so atualiza a classe de piscar + dispara o som, sem precisar esperar o
+// intervalo configurado em Automacao (que pode ser grande demais e "pular"
+// a janela de 3 minutos sem nunca cair exatamente nela).
+function checkRaceAlerts() {
+  document.querySelectorAll('.rc').forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-idx'), 10);
+    if (isNaN(idx) || !results[idx]) return;
+    var r = results[idx];
+    el.classList.toggle('rc-old', isOldRaceCard(r));
+    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom'); return; } // corrida antiga nunca pisca/soa
+    var mins = minutesToRace(r);
+    var shouldAlert = mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
+    if (shouldAlert) {
+      var custom = matchAlarmeFiltro(r);
+      if (custom) {
+        el.classList.remove('rc-alert'); el.classList.add('rc-alert-custom');
+        el.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6');
+      } else {
+        el.classList.remove('rc-alert-custom'); el.classList.add('rc-alert');
+      }
+      var key = raceAlertKey(r);
+      if (!alertedRaces[key]) {
+        alertedRaces[key] = true;
+        avisarCorrida(r, custom);
+      }
+    } else {
+      el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom');
+    }
+  });
 }
 
-function _celulaBW(r){
-  var av = _parBW(r);
-  if(!av){
-    return '<td style="text-align:center;vertical-align:middle;color:#444;font-size:11px">—</td>';
-  }
-  // Mesmo tratamento visual da coluna AvB Motor: badge + primeiro nome apenas.
-  // Os numeros (rean/mkt/odd/edge) ficam de fora de proposito — a coluna e' de
-  // identificacao do par, e a odd ja tem coluna propria.
-  var lado = function(trap, nome){
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
-      + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
-      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
-      + '</div>';
-  };
-  return '<td style="text-align:center;vertical-align:middle">'
-    + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
-    +   lado(av.aTrap, av.aNome)
-    +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
-    +   lado(av.bTrap, av.bNome)
-    + '</div>'
-    // So os dois numeros que dizem se valeu a pena: a avaliacao da reanalise e
-    // o que o mercado achava. Odd e edge ficam de fora — a odd ja tem coluna
-    // propria e o edge e' a diferenca entre estes dois, da pra ler de olho.
-    + (function(){
-        var n = [];
-        if (av.reanalisePct != null) n.push('rean ' + av.reanalisePct + '%');
-        if (av.marketPct != null) n.push('mkt ' + av.marketPct + '%');
-        return n.length ? '<div style="font-size:8.5px;color:#777;margin-top:3px">' + n.join(' &middot; ') + '</div>' : '';
-      })()
-    + '</td>';
+function showDayEndMsg() {
+  var focusCol = document.getElementById('focus-col');
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px;margin-left:-85px"><div style="font-size:64px">&#127937;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Ciclo do dia encerrado</div><div style="font-size:13px">As corridas de hoje se encerraram e voltaremos amanhã</div></div>';
+  var col = document.getElementById('race-list-col');
+  if (col) { col.innerHTML = ''; col.style.background = '#0D1117'; col.style.borderRight = 'none'; }
+  if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
+  if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
+  if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
 }
 
-// ── AvB do Historico: fechamento (objetivo) x escolha (pessoal) ─────────────
-// races.avb_fechamento  -> foto da principal da reanalise no instante da
-//                          largada. Escrita SO pelo robo, igual pra todos.
-// race_user_data.avb_escolhido -> o par em que ESTE usuario entrou.
+// Mensagem especifica pra quando o lote CARREGADO (avulso ou nao) e' inteiro
+// composto por corridas de hoje que ja aconteceram (nao antigas — antigas
+// tem mensagem/tratamento proprio — so ja passaram do horario hoje mesmo)
+function showAllExpiredMsg() {
+  var focusCol = document.getElementById('focus-col');
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px;margin-left:-85px"><div style="font-size:64px">&#9200;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Corridas encerradas</div><div style="font-size:13px">Favor aguardar o próximo turno.</div></div>';
+  var col = document.getElementById('race-list-col');
+  if (col) { col.innerHTML = ''; col.style.background = '#0D1117'; col.style.borderRight = 'none'; }
+  if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
+  if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
+  if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
+}
+
+function refreshFocusMode() {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
+
+  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
+  // Se sobrou alguma corrida no lote mas nenhuma e antiga nem futura, e
+  // porque sao corridas de hoje que ja aconteceram — mensagem diferente.
+  // No simulado, segue em frente mesmo com o dia encerrado — senao nao ha
+  // corrida em foco e nao ha o que simular.
+  if (!(typeof _SIM_AVB !== 'undefined' && _SIM_AVB) && isDayClosed(avbs)) { avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg(); return; }
+
+  // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja
+  // passadas — exceto corridas antigas (data anterior a hoje), que ficam
+  // sempre visiveis independente do horario.
+  // A janela primeiro, o filtro de regua depois: o corte por RACAS_EM_TELA vale
+  // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
+  var toShow = avbs.filter(shouldShowRace).filter(passaNoFiltroTier).slice(0, RACAS_EM_TELA);
+
+  renderRaceListPanel(toShow);
+
+  // Simulado: se nada esta em foco (dia encerrado, por exemplo), foca a
+  // primeira corrida pra haver painel onde desenhar os AvBs de teste.
+  if ((typeof _SIM_AVB !== 'undefined' && _SIM_AVB) && focusRaceIdx < 0 && toShow.length) {
+    renderFocusPanel(toShow[0], results.indexOf(toShow[0]));
+  }
+
+  // Se a corrida em foco já passou, avança para a próxima automaticamente
+  // (corridas antigas nunca "avançam" sozinhas — ficam fixas pra consulta)
+  if (focusRaceIdx >= 0 && results[focusRaceIdx] && !shouldShowRace(results[focusRaceIdx])) {
+    var next = toShow[0];
+    if (next) {
+      renderFocusPanel(next, results.indexOf(next));
+      document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
+      var firstCard = document.querySelector('.rc');
+      if (firstCard) firstCard.classList.add('rc-active');
+    } else {
+      avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg();
+    }
+  }
+}
+
+// Botao "Atualizar" ao lado de PROXIMAS. Se a tela esta mostrando corridas
+// ANTIGAS (PDFs de data anterior, carregados so pra estudo), o Atualizar
+// descarta elas e recarrega as corridas de HOJE — e o autoCheckAndAnalyze
+// mostra as de hoje OU a mensagem de "encerrado / sem corridas" se o dia
+// ja acabou. Se ja esta mostrando as de hoje, so faz o refresh normal.
+function atualizarProximas() {
+  var avbs = results.filter(function(r){ return r.nivel !== 'skip' && r.trapFav > 0; });
+  var soAntigas = avbs.length > 0 && avbs.every(isOldRaceCard);
+
+  if (soAntigas) {
+    // Descarta as corridas antigas e volta pro fluxo automatico do dia.
+    results = [];
+    raceFiles = [];
+    capFiles = [];
+    focusRaceIdx = -1;
+    clearSessionState();
+    autoCheckAndAnalyze();   // carrega as de hoje, ou avisa que nao ha corridas
+    return;
+  }
+
+  // Corridas de hoje (ou nada carregado) -> refresh normal da lista.
+  refreshFocusMode();
+}
+
+function enterFocusMode() {
+  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
+  if (!avbs.length) return;
+
+  // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
+  // Se sobrou corrida no lote mas nenhuma e antiga nem futura, sao corridas
+  // de hoje que ja aconteceram — mensagem diferente da generica.
+  if (isDayClosed(avbs)) {
+    document.getElementById('main-layout').classList.add('focus-mode');
+    avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg();
+    return;
+  }
+
+  // A janela primeiro, o filtro de regua depois: o corte por RACAS_EM_TELA vale
+  // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
+  var toShow = avbs.filter(shouldShowRace).filter(passaNoFiltroTier).slice(0, RACAS_EM_TELA);
+  document.getElementById('main-layout').classList.add('focus-mode');
+  renderRaceListPanel(toShow);
+  var next = toShow[0];
+  if (next) renderFocusPanel(next, results.indexOf(next));
+
+  // Auto-refresh a cada minuto
+  if (focusRefreshInterval) clearInterval(focusRefreshInterval);
+  focusRefreshInterval = setInterval(refreshFocusMode, AUTO_REFRESH_MIN * 60000);
+
+  // Sincroniza com o servidor no mesmo ritmo — pega mudanças feitas pelos
+  // robôs em background (Monitoramento, Checagem Final) sem precisar
+  // recarregar a página na mão. syncFromServer() já existia pronta, só
+  // faltava ser chamada de algum lugar.
+  if (syncFromServerInterval) clearInterval(syncFromServerInterval);
+  // Roda AGORA e a cada refresh. So dentro do setInterval, a lista VIP so
+  // chegava no 1o ciclo automatico e quem clicava logo nao via nada.
+  carregarVipSet();
+  syncFromServerInterval = setInterval(function(){ syncFromServer(); loadAcertosResumo(); carregarVipSet(); }, AUTO_REFRESH_MIN * 60000);
+
+  // Checagem de alerta de proximidade (independente, mais frequente)
+  if (alertCheckInterval) clearInterval(alertCheckInterval);
+  alertCheckInterval = setInterval(checkRaceAlerts, 15000);
+  checkRaceAlerts(); // roda uma vez na hora
+
+  // Sincroniza com o banco a cada 2 min (pega mudancas feitas pelos robos)
+  if (serverSyncInterval) clearInterval(serverSyncInterval);
+  serverSyncInterval = setInterval(syncFromServer, 120000);
+}
+
+// ── AvBs ao vivo: helpers de par ─────────────────────────────────────────────
+// O robo de reanalise pode trocar QUAL par aparece na arena grande (a pos 1 do
+// ranking muda entre ciclos de 5s). Estes helpers acham nome/perfil/historico
+// de um trap qualquer dentro do que o motor ja mandou em r.histAll / r.scores,
+// pra arena conseguir se redesenhar pra qualquer dupla.
+
+// Par escolhido pelo usuario (fica) > principal do motor unico.
 //
-// Regra de exibicao: sem escolha, mostra so o fechamento; escolha igual ao
-// fechamento, mostra um so (nao duplica); divergiram, mostra os DOIS lado a
-// lado — e' o que permite comparar, ao longo do tempo, se escolher na mao
-// esta ajudando ou atrapalhando.
-function _jsonOuNull(txt){
-  if(!txt) return null;
-  try { var o = typeof txt === 'string' ? JSON.parse(txt) : txt; return (o && o.aTrap != null) ? o : null; }
-  catch(e){ return null; }
+// O "par ao vivo" SAIU desta conta. Ele vinha do pos-1 da lista de odds e
+// trocava a arena a cada 5 segundos; agora o principal e' do motor unico e
+// nunca muda pela lista ao vivo. So a retirada, no ciclo de 4 min do motor,
+// pode ajustar o pick — e ai o proprio trap_fav muda na origem.
+//
+// Uma vez que o usuario ESCOLHE, aquele par manda e nao muda mais sozinho:
+// e' ele que vai pro historico e pra banca.
+function _parEmFoco(r){
+  if (r && r.avbEscolhido && r.avbEscolhido.a) return { a:r.avbEscolhido.a, b:r.avbEscolhido.b, escolhido:true };
+  return { a: r && r.trapFav || 1, b: r && r.trapUnd || 2 };
 }
-function _mesmoPar(x, y){
-  return x && y && String(x.aTrap)===String(y.aTrap) && String(x.bTrap)===String(y.bTrap);
+// ── Fonte do historico: aHist/bHist do robo, com fallback pro histAll ───────
+// O robo passou a mandar, em cada avb, o historico completo dos dois galgos do
+// par (aHist/bHist). E' a fonte CERTA por dois motivos:
+//   1) a reanalise pareia sobre histFull (todos os galgos) e o histAll so tem
+//      os que receberam score no motor 1 — um galgo pode existir num e nao no
+//      outro, e ai a arena nao conseguia desenhar o par sugerido;
+//   2) mesmo pros galgos presentes nos dois, o histAll traz linhasValidas e a
+//      reanalise usa o historico completo. A tela mostrava um conjunto de
+//      linhas diferente do que gerou a recomendacao — divergencia silenciosa,
+//      pior que o painel vazio, porque ninguem percebe.
+// O fallback pro histAll fica pras analises antigas e pra janela entre deploys.
+// Convencao do robo: A e' sempre o favorito da reanalise.
+// O nome que vem no aHist/bHist as vezes traz a linha de pedigree inteira do
+// card ("Airfield Thunder (M) bebdw b Out Of Range ASB-Airfield Biddy Jul21").
+// Cortamos no marcador de sexo, que fecha o nome. Sem isso o nome estoura a
+// largura e empurra o layout da arena.
+// Isto e' defesa na tela: o certo e' o motor mandar o nome ja limpo.
+// Extrai o NOME do galgo de uma linha que pode vir com o pedigree inteiro do
+// card: "Droopys Kendall bkwtkd b Serene Ace-Droopys Berry Apr23 (Ssn 04Apr26)".
+//
+// A primeira versao cortava so no "(M)"/"(W)" e falhava justamente nos nomes
+// que nao trazem o marcador de sexo. Agora usamos varios sinais de onde o
+// pedigree COMECA, e paramos no primeiro que aparecer:
+//   1) marcador de sexo entre parenteses — "(M)" / "(W)"
+//   2) codigo de cor/pelagem do Racing Post: bk, bd, be, f, wbd, bkw, bebdw,
+//      bkwtkd etc — tokens curtos so de letras dessas, que nunca sao nome
+//   3) "Mes+Ano" da data de nascimento — "Apr23", "Jul21"
+//   4) "(Ssn ...)" do cio
+//
+// Se nada casar, devolve o texto como veio: melhor um nome longo do que um
+// nome cortado no lugar errado.
+// ── CARGA VIP ─────────────────────────────────────────────────────────────
+// Lista as corridas que passaram no filtro de VALOR do motor. E' filtro de
+// valor, NAO previsao: as taxas (62%/69%) sao o historico do filtro, nao a
+// chance daquela corrida especifica. A tela diz isso de forma explicita —
+// numero especifico ("69%") passa sensacao de certeza justamente por ser
+// especifico, e aqui o custo de confundir os dois e' dinheiro.
+// Conjunto "hora|corrida" das corridas que passaram no filtro VIP. Carregado
+// no boot pra a arena poder se destacar mesmo quando voce chega na corrida
+// navegando normal, sem ter aberto a lista.
+// ── VIP desligado ─────────────────────────────────────────────────────────
+// O VIP (Plus e Premium) saiu do backend: as rotas /api/carga-vip e
+// /api/vip-do-vip nao existem mais, e o marcador parou de gravar. Todo o bloco
+// que consultava essas rotas foi removido — ele daria 404 a cada ciclo de
+// refresh, de graca.
+//
+// As tres funcoes abaixo viram no-op em vez de sumir: elas sao chamadas em
+// varios pontos do render, e caçar cada chamada num arquivo deste tamanho e'
+// mais arriscado que deixa-las devolvendo "nao e VIP". O motor unico de 4
+// eixos nao tem niveis.
+//
+// As colunas vip_plus/vip_premium continuam no banco como registro do periodo
+// em que o VIP existiu; so nao recebem dado novo.
+function _vipTipo(r){ return null; }
+function _ehVip(r){ return false; }
+function _vipCorFundo(tipo){ return ''; }
+function _vipSkipLiberado(r){ return false; }
+function _avisarVipSkip(r){}
+function _cssVip(){}
+function carregarVipSet(){}
+
+// Foco por URL: ?vip=hora|corrida. As telas VIP sairam, mas o parametro segue
+// util — qualquer link que aponte pra uma corrida especifica cai aqui.
+function _focoVipDaUrl(){
+  var alvo = null;
+  try { alvo = new URLSearchParams(location.search).get('vip'); } catch(e){}
+  if(!alvo) return;
+  // Limpa o parametro da URL na hora: sem isso, um F5 daqui a pouco jogaria
+  // voce de volta numa corrida que ja largou.
+  try { history.replaceState(null, '', location.pathname); } catch(e){}
+  var p = alvo.split('|');
+  var hora = p[0], corrida = p.slice(1).join('|');
+  // As corridas do dia podem ainda estar carregando quando a pagina abre,
+  // entao insiste por alguns segundos antes de desistir.
+  var tent = 0;
+  var t = setInterval(function(){
+    tent++;
+    var idx = results.findIndex(function(r){ return r.tipo==='avb' && r.hora===hora && r.corrida===corrida; });
+    if(idx >= 0){ clearInterval(t); renderFocusPanel(results[idx], idx); return; }
+    if(tent >= 30){ clearInterval(t); showToast('Essa corrida não está carregada na tela.', false); }
+  }, 400);
 }
-// Bloco compacto de um par, pro Histórico. rotulo identifica a origem.
-function _blocoAvb(av, rotulo, cor){
-  if(!av) return '';
-  var nums = [];
-  if(av.reanalisePct != null) nums.push('rean ' + av.reanalisePct + '%');
-  if(av.motorOrigPct != null) nums.push('motor ' + av.motorOrigPct + '%');
-  if(av.marketPct != null) nums.push('mkt ' + av.marketPct + '%');
-  if(av.odd != null) nums.push('odd ' + av.odd);
-  var e = av.edge;
-  var edgeStr = (e == null) ? '' : ' <span style="color:' + (e > 0 ? '#22c55e' : (e < 0 ? '#ef4444' : '#666')) + ';font-weight:700">' + (e > 0 ? '+' : '') + e + '</span>';
-  var semRean = (av.origem === 'fallback' || av.reanalisePct == null)
-    ? '<span title="a reanalise nao rodou nesta corrida" style="font-size:8px;color:#eab308;margin-left:4px">sem reanálise</span>' : '';
-  return '<div style="border-left:2px solid ' + cor + ';padding-left:6px;margin-top:4px;text-align:left">'
-    + '<div style="font-size:8px;color:' + cor + ';font-weight:800;text-transform:uppercase;letter-spacing:.4px">' + rotulo + semRean + '</div>'
-    + '<div style="font-size:10px;color:#cbd5e1;font-weight:700">T' + av.aTrap + ' &times; T' + av.bTrap + '</div>'
-    + '<div style="font-size:8.5px;color:#777">' + nums.join(' &middot; ') + edgeStr + '</div>'
+
+function _limpaNome(n){
+  if(!n) return '';
+  var txt = String(n).trim();
+
+  // 1) sexo entre parenteses fecha o nome
+  var mSexo = txt.match(/^(.*?\((?:M|W)\))/);
+  if (mSexo) return mSexo[1].trim();
+
+  var toks = txt.split(/\s+/);
+  var CORES = /^(?:bk|bd|be|f|w|bkw|wbk|bdw|wbd|bew|wbe|bebdw|bkwtkd|bkbd|bebd|dkbd|lgbd|bkwbd)$/i;
+  var MESANO = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2}$/i;
+
+  for (var k = 1; k < toks.length; k++) {      // k=1: o 1o token e' sempre parte do nome
+    var t = toks[k];
+    if (CORES.test(t) || MESANO.test(t) || /^\(Ssn/i.test(t)) {
+      return toks.slice(0, k).join(' ').trim();
+    }
+  }
+  return txt;
+}
+
+function _avbDoPar(r, ta, tb){
+  var l = (r && r._avbsAoVivo) || [];
+  return l.find(function(x){ return String(x.aTrap)===String(ta) && String(x.bTrap)===String(tb); })
+      || l.find(function(x){ return String(x.aTrap)===String(tb) && String(x.bTrap)===String(ta); })
+      || null;
+}
+// Devolve {nome, perfil, historico} do trap, preferindo o que veio no avb.
+function _dadosDoTrap(r, trap, parA, parB){
+  var avb = (parA != null) ? _avbDoPar(r, parA, parB) : null;
+  if (avb) {
+    if (avb.aHist && String(avb.aHist.trap)===String(trap)) return avb.aHist;
+    if (avb.bHist && String(avb.bHist.trap)===String(trap)) return avb.bHist;
+    // sem aHist/bHist (robo antigo): usa ao menos nome e perfil do avb
+    if (String(avb.aTrap)===String(trap)) return { trap:trap, nome:avb.aNome, perfil:avb.aPerfil, historico:null };
+    if (String(avb.bTrap)===String(trap)) return { trap:trap, nome:avb.bNome, perfil:avb.bPerfil, historico:null };
+  }
+  return null;
+}
+
+function _nomeDoTrap(r, trap, parA, parB){
+  if(!r || trap==null) return '';
+  var _d = _dadosDoTrap(r, trap, parA, parB);
+  if (_d && _d.nome != null && _d.nome !== '') return _limpaNome(_d.nome);
+  if(String(trap)===String(r.trapFav)) return _limpaNome(r.nameFav)||'';
+  if(String(trap)===String(r.trapUnd)) return _limpaNome(r.nameUnd)||'';
+  var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
+  if(g && g.nome) return g.nome;
+  var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
+  return (sc && sc.nome) || '';
+}
+function _histDoTrap(r, trap, parA, parB){
+  if(!r || trap==null) return null;
+  var _d = _dadosDoTrap(r, trap, parA, parB);
+  if (_d && _d.historico && _d.historico.length) return _d.historico;
+  if(String(trap)===String(r.trapFav) && r.histFav) return r.histFav;
+  if(String(trap)===String(r.trapUnd) && r.histUnd) return r.histUnd;
+  var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
+  return g ? (g.historico||[]) : null;
+}
+function _perfilDoTrap(r, trap, parA, parB){
+  if(!r || trap==null) return '';
+  var _d = _dadosDoTrap(r, trap, parA, parB);
+  if (_d && _d.perfil != null && _d.perfil !== '') return _d.perfil;
+  if(String(trap)===String(r.trapFav)) return r.perfilFav||'';
+  if(String(trap)===String(r.trapUnd)) return r.perfilUnd||'';
+  var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
+  return (sc && sc.perfil) || '';
+}
+// O motor entrega odd/avaliacao com nomes diferentes conforme a versao
+// (oddAvenceB/enginePct no robo atual, odd/avaliacao no contrato do handoff).
+// Lemos os dois pra tela nao quebrar quando o motor migrar.
+// Odd do par que esta na arena, guardada pelo ultimo ciclo do poller.
+function _parOddAtual(r, ta, tb){
+  // 1) odd do ultimo ciclo do robo pra ESTE par
+  var l=(r&&r._avbsAoVivo)||[];
+  var achado=l.find(function(x){return String(x.aTrap)===String(ta)&&String(x.bTrap)===String(tb);});
+  if(achado) return _avbOdd(achado);
+  // 2) se o par pedido e' justamente o escolhido, usa a odd guardada na escolha
+  if(r&&r.avbEscolhido&&String(r.avbEscolhido.a)===String(ta)&&String(r.avbEscolhido.b)===String(tb)) return r.avbEscolhido.odd||null;
+  // 3) nao ha odd conhecida — devolve null pra o campo ficar vazio em vez de
+  //    manter um valor de outro par (dado errado passa despercebido)
+  return null;
+}
+function _avbOdd(a){ return a && (a.oddAvenceB != null ? a.oddAvenceB : a.odd); }
+// Dois percentuais distintos, entregues pelo robo:
+//   reanalisePct  = motor 2, reanalise par-a-par (pode vir null em analise antiga)
+//   motorOrigPct  = motor 1, analise global original, ja orientada pro favorito do par
+// Mantemos enginePct/avaliacao como fallback pra nao quebrar com dado antigo.
+function _avbRean(a){ return a && a.reanalisePct != null ? a.reanalisePct : null; }
+function _avbMotorOrig(a){
+  if(!a) return null;
+  if(a.motorOrigPct != null) return a.motorOrigPct;
+  return a.enginePct != null ? a.enginePct : (a.avaliacao != null ? a.avaliacao : null);
+}
+function _avbMotor(a){ return _avbRean(a) != null ? _avbRean(a) : _avbMotorOrig(a); }
+
+// ── Motor da Manha: notas de corrida parelha e de box vazio ───────────────
+//
+// Consulta UMA corrida (a que esta em foco), nao o dia inteiro: as notas sao
+// do painel de disputa, que mostra uma corrida por vez, e a de box vazio so
+// muda nos minutos finais DAQUELA corrida.
+//
+// A chave e' hora+corrida, a mesma da Carga VIP e do VIP do VIP. Passamos
+// r.corrida CRU (o codigo curto, "Kinsly A6"), nunca o nome bonito da tela:
+// o banco guarda o codigo, e o nome completo e' aplicado so na exibicao.
+var MM_CACHE = {};        // chave -> { dados, em }
+var MM_PULSO = null;      // timer da corrida em foco
+
+function _mmChave(r){ return (r.hora||'') + '|' + (r.corrida||''); }
+
+function _mmBuscar(r, aoTerminar){
+  var chave = _mmChave(r);
+  var url = BASE + '/api/avbs-manha?hora=' + encodeURIComponent(r.hora||'')
+          + '&corrida=' + encodeURIComponent(r.corrida||'');
+  fetch(url, { credentials:'same-origin' })
+    .then(function(res){ return res.ok ? res.json() : null; })
+    .then(function(d){
+      // encontrada:false vem com erro explicito. Guardamos assim mesmo, pra
+      // a tela poder DIZER que nao achou em vez de ficar muda.
+      MM_CACHE[chave] = { dados: d || null, em: Date.now() };
+      if (aoTerminar) aoTerminar();
+    })
+    .catch(function(){ /* sem notas: a tela segue sem elas */ });
+}
+
+// Pulso so perto da largada: e' quando retirada de ultima hora abre um box novo
+// e a nota muda. Fora dessa janela a nota nao muda, entao repetir e' gasto a toa.
+function _mmAgendarPulso(r){
+  if (MM_PULSO) { clearInterval(MM_PULSO); MM_PULSO = null; }
+  var chave = _mmChave(r);
+  MM_PULSO = setInterval(function(){
+    var atual = results[focusRaceIdx];
+    // Trocou de corrida: o pulso morre com ela.
+    if (!atual || _mmChave(atual) !== chave) { clearInterval(MM_PULSO); MM_PULSO = null; return; }
+    var min = minutesToRace(atual);
+    if (min === null || min > 12 || min < -2) return;   // fora da janela
+    _mmBuscar(atual, function(){ _mmPintarNotas(atual); _mmPintarBw(atual); });
+  }, 75000);
+}
+
+// 'exato' e 'traduzido' sao casamento seguro. 'aproximado' e' LIKE no codigo:
+// pode ter casado com outra corrida, e uma nota de box vazio errada e' pior que
+// nota nenhuma — entao avisa em vez de fingir certeza.
+function _mmSlotPrincipal(r){
+  var c = MM_CACHE[_mmChave(r)];
+  if (!c || !c.dados || !c.dados.encontrada) return null;
+  return { slot: c.dados.corrida_obj && c.dados.corrida_obj.principal, match: c.dados.match };
+}
+
+// ── Bloco bw: o que a BetWinner ja abriu pra esta corrida ────────────────
+// Vem no mesmo payload da corrida (corrida_obj + bw), no pulso perto da
+// largada. Tres estados, e cada um pede uma tela diferente:
+//   nao monitorada -> a BW ainda nem olhou; so o principal, sem odd
+//   abriu          -> a odd do principal existe e vale
+//   nao abriu      -> mostra os secundarios que ABRIRAM, sem trocar o principal
+//
+// O principal NUNCA e' trocado por nada disso. Ele e' do motor unico, congelado
+// desde a analise da manha.
+function _mmBw(r){
+  var c = MM_CACHE[_mmChave(r)];
+  return (c && c.dados && c.dados.encontrada && c.dados.bw) ? c.dados.bw : null;
+}
+
+function _mmPintarBw(r){
+  var box = document.getElementById('fp-alts');
+  var bw = _mmBw(r);
+  if (!box) return;
+
+  // Sem dado, ou o par principal ja abriu: nao ha alternativa a oferecer.
+  if (!bw || bw.abriu || !bw.secundarios || !bw.secundarios.length) {
+    box.innerHTML = ''; box.style.display = 'none';
+    return;
+  }
+
+  // O principal nao abriu, mas estes pares abriram e passam nas mesmas regras.
+  // Sao oferta, nao substituicao: entrar neles e' escolha sua, pelo botao.
+  box.innerHTML =
+    '<div style="font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--mut);text-transform:uppercase;text-align:center;margin-bottom:2px">'
+    + 'o par principal não abriu</div>'
+    + bw.secundarios.slice(0,2).map(function(a){
+        return _cardAlternativa(r, {
+          aTrap:a.pick_trap, bTrap:a.outro_trap,
+          aNome:a.pick_nome, bNome:a.outro_nome,
+          odd:a.odd, pct:a.pct, tier:a.tier, obs:a.obs
+        }, r.avbEscolhido);
+      }).join('');
+  box.style.display = 'flex';
+}
+
+function _mmPintarNotas(r){
+  var box = document.getElementById('fp-notas');
+  if (!box) return;
+  var info = _mmSlotPrincipal(r);
+  var sl = info && info.slot;
+  if (!sl) { box.innerHTML = ''; return; }
+
+  var nota = function(cor, txt, dica){
+    return '<div title="' + (dica||'') + '" style="display:inline-flex;align-items:center;gap:6px;'
+      + 'font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px;'
+      + 'background:' + cor + '22;border:1px solid ' + cor + '66;color:' + cor + '">' + txt + '</div>';
+  };
+  var out = [];
+
+  // A nota de "corrida parelha" FOI REMOVIDA. O motor virou de 4 eixos: um par
+  // so vira pick quando o favorito ganha em categoria, CalTm, split e podio.
+  // Nao passou nos quatro, a corrida nao traz principal. Ou seja, parelho nao
+  // dispara mais — todo pick que chega aqui e' folgado por definicao.
+  //
+  // No lugar dela, mostramos POR QUE o par passou: os quatro eixos e a
+  // vantagem de CalTm. Sem isso o pick vira caixa-preta, e a nota antiga pelo
+  // menos dizia quando desconfiar.
+  // nao_segura: galgo que lidera e desaba na reta. Pick reprovado por isso nao
+  // chega na tela — o gate ja filtrou. Se chegar, e' divergencia do payload, e
+  // e' o tipo de coisa que voce quer ver ANTES de entrar, nao depois.
+  if (sl.nao_segura) {
+    out.push(nota('#ef4444', '&#9888; pick marcado como não-segura',
+      'o payload trouxe um pick reprovado por desabamento; confira antes de entrar'));
+  }
+
+  if (sl.top && sl.eixos) {
+    var e = sl.eixos;
+    var quatro = (e.categoria && e.caltm && e.split && e.podio);
+    var dif = (sl.caltm_dif != null) ? ' &middot; +' + sl.caltm_dif + 's' : '';
+    if (quatro) {
+      out.push(nota('#22c55e', 'passou nos 4 eixos' + dif,
+        'categoria, CalTm, split e pódio: o favorito ganha nos quatro'));
+    } else {
+      // Nao deveria acontecer (top:true implica os quatro). Se acontecer, e'
+      // divergencia do payload, e a tela avisa em vez de afirmar "4 eixos".
+      var faltou = ['categoria','caltm','split','podio'].filter(function(k){ return !e[k]; });
+      out.push(nota('#f59e0b', 'pick sem os 4 eixos: falta ' + faltou.join(', '),
+        'o payload marcou top:true mas os eixos não fecham; confira antes de entrar'));
+    }
+  }
+
+  // Box vazio. O numero vem de *_vazia_traps (o BOX), nunca do trap do galgo.
+  //
+  // Os dois lados sao mostrados, e com SIGNIFICADOS OPOSTOS — foi o que o
+  // motor esclareceu e o que a versao anterior desta tela errava, pintando os
+  // dois de roxo como se fossem a mesma coisa:
+  //   ao lado do FAVORITO -> vantagem: ele tem espaco livre pra abrir
+  //   ao lado do RIVAL    -> risco: o rival pode furar pelo buraco
+  // Cores diferentes de proposito. Ler "box vazio" sem saber de que lado nao
+  // ajuda a decidir nada.
+  //
+  // O mesmo box pode estar ENTRE os dois: ai ele e' as duas coisas ao mesmo
+  // tempo, e vira uma nota so, neutra. Duas notas fariam voce ler como se
+  // houvesse dois vazios.
+  var bp = (sl.pick_vazia_lado && sl.pick_vazia_traps) ? sl.pick_vazia_traps : [];
+  var bo = (sl.outro_vazia_lado && sl.outro_vazia_traps) ? sl.outro_vazia_traps : [];
+  var compartilhado = bp.filter(function(b){ return bo.indexOf(b) >= 0; });
+  if (compartilhado.length) {
+    out.push(nota('#c084fc', 'box ' + compartilhado.join(', ') + ' livre entre T' + sl.pick_trap + ' e T' + sl.outro_trap,
+      'o mesmo box vazio está entre os dois: serve aos dois lados'));
+  }
+  var soPick = bp.filter(function(b){ return bo.indexOf(b) < 0; });
+  var soOutro = bo.filter(function(b){ return bp.indexOf(b) < 0; });
+  if (soPick.length) {
+    out.push(nota('#22c55e', 'box ' + soPick.join(', ') + ' livre ao lado do favorito T' + sl.pick_trap,
+      'espaço livre ao lado do pick: vantagem na largada'));
+  }
+  if (soOutro.length) {
+    out.push(nota('#f97316', '&#9888; box ' + soOutro.join(', ') + ' livre ao lado do rival T' + sl.outro_trap,
+      'o rival tem espaço livre e pode furar pelo buraco: atenção'));
+  }
+
+  // Estado da BW. "nao monitorada" e "nao abriu" sao coisas diferentes: a
+  // primeira e' a casa nem ter olhado ainda, a segunda e' ter olhado e o par
+  // nao estar la. Juntar as duas esconderia buraco de cobertura.
+  var bw = _mmBw(r);
+  if (bw) {
+    if (!bw.monitorada) {
+      out.push(nota('#8a94a6', 'BW ainda não monitorou esta corrida', 'a casa ainda não abriu o mercado; a odd aparece quando abrir'));
+    } else if (bw.abriu) {
+      out.push(nota('#60a5fa', 'o par abriu na BW' + (bw.odd != null ? ': ' + bw.odd : ''), 'o par principal está disponível na casa'));
+    } else {
+      out.push(nota('#f97316', '&#9888; o par principal não abriu na BW', 'a corrida foi monitorada e o par do motor não está disponível'));
+    }
+  }
+
+  if (out.length && info.match === 'aproximado') {
+    out.push(nota('#8a94a6', 'casamento aproximado',
+      'a corrida foi encontrada por semelhanca de nome, nao exatamente: confira antes de confiar nestes avisos'));
+  }
+  box.innerHTML = out.join('');
+}
+
+function renderFocusPanel(r, idx) {
+  var focusCol = document.getElementById('focus-col');
+  if (!focusCol) return;
+  focusRaceIdx = idx;
+
+  var tf = r.trapFav || 1, tu = r.trapUnd || 2;
+  // Passa pelo _limpaNome tambem aqui: ate agora so o caminho do aHist era
+  // limpo, e o nome que vem direto do r.nameFav/nameUnd chegava cru quando o
+  // motor gravou a linha de pedigree inteira. O sintoma e' o nome ocupando
+  // tres linhas e empurrando o layout da arena.
+  var nf = _limpaNome(r.nameFav) || 'Favorito', nu = _limpaNome(r.nameUnd) || 'Underdog';
+  var tc = ['','t1','t2','t3','t4','t5','t6'];
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  var conf = r.pct || 0;
+  var nivel = r.nivel || '';
+  var confClass = nivel==='alta'?'ba':nivel==='media'?'bm':'bb';
+
+  var histF = r.histFav || [];
+  var histU = r.histUnd || [];
+  var raceClass = getRaceClass(r.corrida||'');
+  var perfF = r.perfilFav || '';
+  var perfU = r.perfilUnd || '';
+  var perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
+  var perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
+
+  var imgF = getDogImg(tf, r.corrida||'');
+  var imgU = getDogImg(tu, r.corrida||'x');
+
+  // Sem uso no painel desde que a linha de analise saiu do rodape. Mantida
+  // porque r.obs continua alimentando a tabela e o Historico — e' so esta
+  // variavel local que ficou ociosa.
+  var obs = (r.obs||'').replace(/CalTm/gi,'Tempo');   // eslint-disable-line no-unused-vars
+  var oldBanner = isOldRaceCard(r) ? '<div class="fp-old-banner">&#9888; Esta corrida é de uma data anterior a hoje ('+r.dataCard.split('-').reverse().join('/')+'), apenas para consulta e estudo, não é uma corrida ao vivo.</div>' : '';
+  var suspectBanner = r.cardSuspect ? '<div class="fp-suspect-banner">&#9888; Essa corrida sumiu da lista ao vivo antes do horário — a pista pode ter sido cancelada hoje. Confira manualmente antes de confiar nesse AvB.</div>' : '';
+
+  // Titulo: "3:44 - Newcastle (A3) - 480m" (hora UK, nome completo da pista,
+  // classe, distancia). Se a sessao for antiga e nao tiver trackFull salvo
+  // (campo novo), cai pro formato curto de antes.
+  var tituloCorrida = r.trackFull
+    ? (r.hora||'') + ' - ' + r.trackFull + (raceClass ? ' ('+raceClass+')' : '') + ' - ' + (r.dist||'') + 'm'
+    : (r.corrida||'-');
+
+  // Par mostrado na arena grande. Comeca no fav x und do motor e pode ser
+  // trocado ao vivo pelo robo de reanalise (a pos 1 do ranking muda entre
+  // ciclos) ou pela escolha do usuario. So a ARENA muda — podio, gauges de
+  // contexto e o resto do painel continuam do original.
+  var _par = _parEmFoco(r);
+  // ATENCAO ao fallback: antes era "_nomeDoTrap(r,tf) || nf", e quando o trap
+  // novo NAO era encontrado o || caia no nome do galgo ORIGINAL — resultado:
+  // os dois lados da arena mostravam o mesmo galgo, sem nenhum erro visivel.
+  // Agora so troca o par se os DOIS lados forem encontrados de verdade.
+  var _achouA = _nomeDoTrap(r, _par.a, _par.a, _par.b) !== '' || _histDoTrap(r, _par.a, _par.a, _par.b) !== null;
+  var _achouB = _nomeDoTrap(r, _par.b, _par.a, _par.b) !== '' || _histDoTrap(r, _par.b, _par.a, _par.b) !== null;
+  if (_achouA && _achouB) {
+    tf = _par.a; tu = _par.b;
+    nf = _nomeDoTrap(r, tf, tf, tu);
+    nu = _nomeDoTrap(r, tu, tf, tu);
+    histF = _histDoTrap(r, tf, tf, tu) || [];
+    histU = _histDoTrap(r, tu, tf, tu) || [];
+    perfF = _perfilDoTrap(r, tf, tf, tu) || '';
+    perfU = _perfilDoTrap(r, tu, tf, tu) || '';
+    perfColorF = perfF==='Frontrunner'?'#f97316':perfF==='Recuperador'?'#22c55e':perfF==='Fumador'?'#ef4444':'#60a5fa';
+    perfColorU = perfU==='Frontrunner'?'#f97316':perfU==='Recuperador'?'#22c55e':perfU==='Fumador'?'#ef4444':'#60a5fa';
+    imgF = getDogImg(tf, r.corrida||'');
+    imgU = getDogImg(tu, r.corrida||'x');
+  } else if (_par.escolhido || _par.aoVivo) {
+    // Par novo veio do robo mas os galgos nao estao no histAll/scores desta
+    // corrida (analise antiga, card trocado). Mantem o par original e avisa no
+    // console em vez de desenhar dois galgos iguais em silencio.
+    console.warn('[arena] par ' + _par.a + 'x' + _par.b + ' sem dados nesta corrida; mantendo ' + tf + 'x' + tu);
+  }
+  // Guarda o par que a arena DE FATO desenhou. O chip do topo e o botao
+  // "Analisar disputa" leem daqui, e nao do _parEmFoco: quando os galgos do
+  // par sugerido nao existem na analise, a arena mantem o original — sem este
+  // registro o chip anunciava T1xT2 enquanto a arena mostrava T3xT5.
+  r._parNaTela = { a: tf, b: tu };
+
+  focusCol.innerHTML =
+    // Os banners (corrida antiga / card suspeito) foram pro RODAPE. Eles sao
+    // persistentes — ficam ate voce trocar de corrida — e no topo empurravam
+    // a arena pra baixo o tempo todo. La embaixo ocupam o espaco que sobrou
+    // da linha de analise e da faixa do ao vivo, que sairam.
+    '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
+    + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
+    + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
+    + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
+    + '</div>'
+    // Notas do Motor da Manha (parelha / box vazio). Ficam ACIMA da arena, que
+    // e' onde voce olha antes de decidir; no rodape chegariam tarde.
+    + '<div id="fp-notas" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 8px"></div>'
+    + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:flex-start">'
+    + '<div class="fp-arena-col" style="flex:1 1 auto;min-width:0">'
+    + '<div class="fp-arena" style="flex:1 1 70%">'
+    // Dog fav (esquerda, corre para direita)
+    + '<div class="fp-dog-side">'
+    + '<img class="fp-dog-img" src="'+imgF+'" alt="'+nf+'" onerror="this.style.opacity=\'.2\'">'
+    + '<div class="fp-dog-name">'+nf+'</div>'
+    + (perfF?'<div class="fp-dog-perfil" style="color:'+perfColorF+'">'+perfF+'</div>':'')
+    + '</div>'
+    // Centro
+    + '<div class="fp-center">'
+    + '<div class="fp-vence-lbl">VENCE</div>'
+    + '<div class="fp-vence-arrow">&#9658;</div>'
+    + '<button type="button" class="alt-analisar" data-a="'+tf+'" data-b="'+tu+'" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
+    // Inverter o sentido do par. Fica junto do "vence" porque e' exatamente o
+    // que ele muda: quem vence quem.
+    + '<button type="button" id="btn-inverter" onclick="inverterAvb()" title="trocar o sentido: T'+tu+' vence T'+tf+'" style="margin-top:6px;font-size:10px;font-weight:600;color:#8a94a6;background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 10px;cursor:pointer;white-space:nowrap;display:block;margin-left:auto;margin-right:auto">&#8646; inverter</button>'
+    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
+    + '</div>'
+    // Dog und (direita, espelhado — corre para esquerda)
+    + '<div class="fp-dog-side fp-dog-und">'
+    + '<img class="fp-dog-img" src="'+imgU+'" alt="'+nu+'" onerror="this.style.opacity=\'.2\'">'
+    + '<div class="fp-dog-name">'+nu+'</div>'
+    + (perfU?'<div class="fp-dog-perfil" style="color:'+perfColorU+'">'+perfU+'</div>':'')
+    + '</div>'
+    + '</div>'
+    + '<div class="fp-gauges-row">'
+    + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass, histU) + '</div>'
+    + '<div class="fp-gauges-div"></div>'
+    + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
+    + '</div>'
+    + '</div>'
+    + '<div id="fp-alts" style="display:none;flex:0 0 33%;min-width:260px;flex-direction:column;gap:10px;align-self:center"></div>'
+    + '</div>'
+    // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
+    // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
+    + '<div class="fp-inputs-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    // Odd e Stake NAO salvam mais a cada tecla. Antes o "oninput" gravava
+    // direto no banco, entao um numero digitado pela metade ja virava aposta
+    // registrada. Agora ficam locais ate voce apertar "Entrei!", que e' o
+    // unico momento em que a entrada vai pro Historico e pra Banca.
+    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Odd <input type="text" id="fp-odd" placeholder="-" value="'+(r.odd||'')+'" oninput="marcaEntradaSuja()" style="width:52px;text-align:center"></span>'
+    // Stake ja vem com a unidade padrao configurada na Banca; da pra mudar na
+    // hora sem alterar o padrao.
+    + '<span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Stake <input type="text" id="fp-stake" placeholder="-" value="'+(r.betUnidades!=null&&r.betUnidades!==''?r.betUnidades:(STAKE_PADRAO!=null?STAKE_PADRAO:''))+'" oninput="marcaEntradaSuja()" style="width:52px;text-align:center"></span>'
+    + '<button type="button" id="fp-entrei" onclick="confirmarEntrada()" style="font-size:11px;font-weight:700;padding:4px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;'
+    +   (r.betEntrou ? 'background:#22c55e;border:1px solid #22c55e;color:#000' : 'background:transparent;border:1px solid #22c55e;color:#22c55e')
+    +   '">'+(r.betEntrou ? '✓ Entrei' : 'Entrei !')+'</button>'
+    // "AvB não aberto" oculto por enquanto (pedido do Bruno). O input continua
+    // no DOM pra nao quebrar quem le o valor; so nao aparece.
+    + '<label style="display:none"><input type="checkbox" id="fp-avb-nao-aberto" '+(r.avbNaoAberto?'checked':'')+'></label>'
+    + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> 🚩 Atrasada</label>'
+    + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
+    + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
+    + '</div>'
+    // RODAPE do painel. Substitui a linha de analise (obs) e a faixa "AvBs ao
+    // vivo — betwinner", que saíram: a arena e os cards de alternativa ja
+    // mostram par, odd, mercado e edge, entao as duas so repetiam informacao.
+    // No lugar entram os banners persistentes (corrida antiga / card suspeito),
+    // que antes ficavam no topo empurrando a arena pra baixo.
+    + ((oldBanner || suspectBanner)
+        ? '<div style="margin-top:8px">' + oldBanner + suspectBanner + '</div>'
+        : '')
+    + '<div id="fp-odds-live" style="display:none"></div>';
+
+  // Fundo por nivel: roxo no VIP Plus, verde escuro no VIP Premium. Vai por
+  // style inline de proposito: a cor vem de var(--bg) no CSS da tela, e
+  // sobrescrever aqui evita depender de qual regra vence. Sempre reseta quando
+  // nao e' VIP, senao a corrida seguinte herdaria a cor da anterior.
+  focusCol.style.background = _ehVip(r) ? _vipCorFundo(_vipTipo(r)) : '';
+  if (_vipSkipLiberado(r)) _avisarVipSkip(r);
+
+  // Notas do Motor da Manha. Pinta na hora com o que ja estiver em cache (pra
+  // nao piscar ao voltar numa corrida) e busca uma vez; o pulso so entra perto
+  // da largada, que e' quando a nota de box vazio pode mudar.
+  _mmPintarNotas(r); _mmPintarBw(r);
+  if (!MM_CACHE[_mmChave(r)]) _mmBuscar(r, function(){ _mmPintarNotas(r); _mmPintarBw(r); });
+  _mmAgendarPulso(r);
+
+  startOddsLive(r);
+}
+
+// ── AvBs ao vivo do betwinner no painel de foco ──────────────────────────────
+// Puxa /robot/odds/live de 5 em 5s e mostra os AvBs da corrida em foco: ao vivo
+// (odd + % mercado + % motor + edge + tendencia) ou, antes de abrir, os sugeridos.
+var _oddsLiveTimer = null;
+function startOddsLive(r){
+  if (_oddsLiveTimer) { clearInterval(_oddsLiveTimer); _oddsLiveTimer = null; }
+  renderOddsLive(r);
+  _oddsLiveTimer = setInterval(function(){ renderOddsLive(r); }, 5000);
+}
+// NAO ESTA MAIS EM USO: as linhas de AvB do rodape sairam quando a arena e os
+// cards de alternativa passaram a mostrar a mesma informacao. Mantido de
+// proposito — e' codigo do chat do motor, e apagar funcao alheia ja gerou
+// estrago aqui antes. Se o motor confirmar que nao precisa, pode sair.
+function _avbRow(par, odd, mercado, motor, edge, trend){
+  var seta = trend==='subiu'?'<span style="color:#ef4444">&#9650;</span>':trend==='desceu'?'<span style="color:#22c55e">&#9660;</span>':'';
+  var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'</span>';
+  var parts = [];
+  if(odd!=null) parts.push('odd '+odd);
+  if(mercado!=null) parts.push('mkt '+mercado+'%');
+  if(motor!=null) parts.push('motor '+motor+'%');
+  return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0;gap:10px;border-bottom:1px solid rgba(255,255,255,.04)">'
+    + '<span style="color:#cbd5e1;font-weight:600">'+par+'</span>'
+    + '<span style="color:var(--mut);display:flex;gap:7px;align-items:center;white-space:nowrap">'+parts.join(' &middot; ')+' '+edgeStr+' '+seta+'</span>'
     + '</div>';
 }
-// UMA coluna, UM AvB. Resolve para a sua escolha quando voce entrou na mao;
-// sem escolha, para o AvB do motor no fechamento.
-//
-// Antes esta funcao mostrava os DOIS quando divergiam, pra dar pra comparar.
-// A comparacao continua existindo, mas saiu da tela: ela agora vive so no
-// calculo das taxas, e a tela mostra apenas o par que valeu. Duas visoes lado
-// a lado obrigavam a decidir, a cada linha, qual delas ler.
-function _avbDoHistorico(r){
-  var esc  = _jsonOuNull(r.avb_escolhido);
-  if(esc) return _blocoAvb(esc, 'sua escolha', '#1d4ed8');
-  var fech = _jsonOuNull(r.avb_fechamento);
-  if(fech) return _blocoAvb(fech, 'motor', '#22c55e');
-  return '';
+// Card compacto de uma alternativa (pos 2 e 3): os 2 galgos, a seta VENCE, os
+// numeros do mercado e os dois botoes. Sem onclick inline com aspas — os dados
+// vao em data-* e um listener unico trata o clique (aspas escapadas dentro de
+// template literal ja derrubaram tela neste projeto).
+// Botao "Apostar" que leva pra corrida na casa. Quando o robo passar a
+// entregar URL por AvB (hoje e' por corrida), basta o _linkBetwinner mudar.
+function _botaoApostar(r){
+  var snap = r && r._snapAoVivo;
+  var link = _linkBetwinner(snap);
+  if(!link) return '';
+  // O _linkBetwinner agora sempre devolve algo: com bwUrl abre a CORRIDA, sem
+  // ele cai na secao ao vivo de galgo. Sao coisas diferentes e o rotulo diz
+  // qual e' — clicar esperando a corrida e cair numa lista, sem aviso, e' o
+  // tipo de surpresa ruim numa acao que envolve dinheiro.
+  var direto = !!(snap && (snap.bwUrl || snap.urlBetwinner));
+  return '<a href="'+link+'" target="_blank" rel="noopener"'
+    + ' title="'+(direto ? 'Abre esta corrida na BetWinner' : 'Abre a seção ao vivo de galgos (a corrida exata não foi mapeada)')+'"'
+    + ' style="display:block;margin-top:5px;text-align:center;font-size:10px;font-weight:700;padding:4px;border-radius:4px;'
+    + 'background:'+(direto ? '#22c55e' : 'transparent')+';color:'+(direto ? '#000' : '#22c55e')+';'
+    + (direto ? '' : 'border:1px solid rgba(34,197,94,.45);')
+    + 'text-decoration:none">'+(direto ? 'Entre na BW' : 'Ao vivo na BW')+'</a>';
 }
 
-router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
-  const user = req.user;
-  const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
-  if (!sess) return res.redirect(BASE + '/historico');
-  const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(sess.id);
-  // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
-  aplicarPessoais(db, races, user.id);
+function _cardAlternativa(r, a, escolhidoAtual){
+  var ta=a.aTrap, tb=a.bTrap;
+  var odd=_avbOdd(a), motor=_avbMotor(a);
+  var ehEscolhido = escolhidoAtual && String(escolhidoAtual.a)===String(ta) && String(escolhidoAtual.b)===String(tb);
+  var opaco = (escolhidoAtual && !ehEscolhido) ? 'opacity:.35;' : '';
+  var borda = ehEscolhido ? '#1d4ed8' : 'var(--bdr2)';
+  var seta = a.trend==='subiu'?'<span style="color:#ef4444">&#9650;</span>':a.trend==='desceu'?'<span style="color:#22c55e">&#9660;</span>':'';
+  var edge = a.edge;
+  var edgeStr = (edge==null)?'':'<span style="color:'+(edge>0?'#22c55e':(edge<0?'#ef4444':'var(--mut)'))+';font-weight:700">'+(edge>0?'+':'')+edge+'%</span>';
+  var selo = a.valor ? '<span style="font-size:9px;color:#eab308;font-weight:800">&#9733; valor</span>' : '';
+  // Ordem: reanalise, motor original, mercado, odd, edge. Quando nao ha
+  // reanalise (analise antiga), some a "rean" e fica so o motor original.
+  var rean=_avbRean(a), motorOrig=_avbMotorOrig(a);
+  var nums=[];
+  if(rean!=null) nums.push('rean <strong style="color:#22c55e">'+rean+'%</strong>');
+  if(motorOrig!=null) nums.push('motor '+motorOrig+'%');
+  if(a.marketPct!=null) nums.push('mkt '+a.marketPct+'%');
+  if(odd!=null) nums.push('odd <strong style="color:#cbd5e1">'+odd+'</strong>');
 
-  // "Bateu" passa a refletir o AvB que REALMENTE valia: o BW quando existe
-  // (sua escolha, senao a principal da reanalise), e o do Motor quando nao
-  // existe. Sem isto a tela mostraria o acerto de uma disputa e o par de
-  // outra — a reanalise troca o par com frequencia.
-  // A ODD nao entra nessa regra: ela e' registro de APOSTA, e so existe
-  // depois do "Entrei!". Ver a nota mais abaixo.
-  // O bateu e' DERIVADO da chegada (finishing_order_json) com bateuPar, a
-  // mesma funcao usada nos KPIs, pra os dois numeros nunca discordarem.
-  // null (trap fora da chegada) fica como "-", nem acerto nem erro.
-  {
-    const { bateuPar } = require('../utils/avbResultado');
-    for (const r of races) {
-      // O par que VALEU, com a mesma queda da coluna AvB e da taxa: escolha,
-      // senao fechamento, senao a analise inicial.
-      //
-      // O "senao a analise inicial" estava faltando. Corrida sem escolha e sem
-      // fechamento pulava o recalculo e exibia o bateu CRU do banco, enquanto a
-      // taxa de acerto (que ja caia no par da analise) calculava por outro
-      // caminho. Resultado: a coluna dizia uma coisa e o KPI outra, na mesma
-      // linha, e ninguem via porque nada estourava.
-      const bw = _parBW(r) || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null);
-      if (!bw) continue;
-      const b = bateuPar(r.finishing_order_json, bw.aTrap, bw.bTrap);
-      r.bateu = (b === null) ? '' : (b ? 'sim' : 'nao');
-      // Guarda a CONTA, nao so o veredito: sem isso, discordancia entre o
-      // bateu e a coluna Resultado vira caca ao tesouro. Vai pro title da
-      // celula, entao da pra auditar passando o mouse.
-      r._bateuConta = (function(){
-        var ordem = null;
-        try { ordem = typeof r.finishing_order_json === 'string' ? JSON.parse(r.finishing_order_json) : r.finishing_order_json; }
-        catch(e) { ordem = null; }
-        var pos = function(t){
-          if (!Array.isArray(ordem)) return null;
-          for (const f of ordem) if (f && f.pos != null && Number(f.trap) === Number(t)) return Number(f.pos);
-          return null;
-        };
-        var pa = pos(bw.aTrap), pb = pos(bw.bTrap);
-        var lugar = function(t, p){ return 'T' + t + ': ' + (p == null ? 'fora da chegada' : p + 'o'); };
-        var top3 = [r.resultado_1, r.resultado_2, r.resultado_3].filter(Boolean).join('-');
-        return 'par ' + bw.aTrap + ' x ' + bw.bTrap
-          + '  |  ' + lugar(bw.aTrap, pa) + '  |  ' + lugar(bw.bTrap, pb)
-          + '  |  veredito: ' + (b === null ? 'indefinido' : (b ? 'bateu' : 'não bateu'))
-          + (top3 ? '  |  coluna Resultado: ' + top3 : '')
-          + (Array.isArray(ordem) ? '  |  chegada gravada: ' + ordem.slice().sort(function(x,y){return x.pos-y.pos;}).map(function(f){return f.trap;}).join('-') : '  |  sem chegada gravada');
-      })();
-      // A Odd NAO e' mais sobrescrita pela do fechamento. Antes esta linha
-      // fazia "r.odd = bw.odd" quando a odd pessoal estava vazia, o que
-      // quebrava a regra de que Odd so existe depois do "Entrei!" — e, pior,
-      // inflava Entradas/Green/%Green, que filtram justamente por r.odd:
-      // corrida nunca apostada passava a contar como aposta.
-      // A odd do fechamento continua visivel na coluna AvB BW, que e' o lugar
-      // dela: referencia do mercado, nao registro de aposta.
-    }
+  return '<div class="fp-alt-card" style="'+opaco+'background:var(--sur2);border:1px solid '+borda+';border-radius:8px;padding:7px 8px">'
+    + '<div style="display:flex;align-items:center;justify-content:center;gap:4px">'
+    +   '<img src="'+getDogImg(ta, r.corrida||'')+'" style="height:78px;object-fit:contain" alt="T'+ta+'">'
+    +   '<div style="text-align:center;line-height:1"><div style="font-size:9px;color:var(--mut2);font-weight:700;letter-spacing:.5px">VENCE</div>'
+    +   '<div style="font-size:11px;color:#22c55e">&#9658;</div></div>'
+    +   '<img src="'+getDogImg(tb, r.corrida||'x')+'" style="height:78px;object-fit:contain;transform:scaleX(-1)" alt="T'+tb+'">'
+    + '</div>'
+    + '<div style="font-size:10px;color:#cbd5e1;text-align:center;font-weight:600;margin-top:3px">T'+ta+' '+(a.aNome||'')+' &times; T'+tb+' '+(a.bNome||'')+'</div>'
+    + '<div style="font-size:9px;color:var(--mut);text-align:center;display:flex;gap:5px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:2px">'
+    +   nums.join(' &middot; ') + ' ' + edgeStr + ' ' + seta + ' ' + selo + '</div>'
+    + '<div style="display:flex;gap:4px;margin-top:5px">'
+    +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'" style="flex:1;font-size:9px;padding:3px;background:#161b27;border:1px solid var(--bdr2);color:#cbd5e1;border-radius:4px;cursor:pointer">Analisar</button>'
+    +   '<button type="button" class="alt-entrar" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(odd!=null?odd:'')+'" style="flex:1;font-size:9px;padding:3px;background:'+(ehEscolhido?'#1d4ed8':'transparent')+';border:1px solid '+(ehEscolhido?'#1d4ed8':'#22c55e')+';color:'+(ehEscolhido?'#fff':'#22c55e')+';border-radius:4px;cursor:pointer;font-weight:700">'+(ehEscolhido?'ESCOLHIDO':'Entrar')+'</button>'
+    + '</div>'
+    // O link da casa so aparece no AvB ESCOLHIDO. Hoje ele e' por CORRIDA (o
+    // robo monta pelo gameId), entao repeti-lo nos tres cards apontaria tres
+    // vezes pro mesmo lugar. Mostrando so no escolhido, ele aparece justo
+    // quando serve: na hora de ir apostar.
+    + (ehEscolhido ? _botaoApostar(r) : '')
+    + '</div>';
+}
+
+// "Analisar disputa" de QUALQUER par, nao so o fav x und. Mesma tabela, par
+// parametrizavel — o buildDogCard ja aceita qualquer galgo.
+function openValModalPar(key, trapA, trapB){
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[VAL-PAR] nao achou:',key);return;}
+  var nA=_nomeDoTrap(r,trapA,trapA,trapB), nB=_nomeDoTrap(r,trapB,trapA,trapB);
+  var hA=_histDoTrap(r,trapA,trapA,trapB), hB=_histDoTrap(r,trapB,trapA,trapB);
+  document.getElementById('val-title').textContent='T'+trapA+' '+(nA||'?')+' vs T'+trapB+' '+(nB||'?');
+  var body=document.getElementById('val-body');
+  body.classList.remove('val-compact');
+  // Quando um dos galgos nao tem historico nesta corrida, mostra um aviso no
+  // lugar da tabela vazia. Antes o lado simplesmente vinha em branco, e nao
+  // dava pra saber se o galgo era ruim ou se o dado nao existia.
+  var cardOuAviso = function(trap, nome, hist){
+    if (hist && hist.length) return buildDogCard(trap, nome, _perfilDoTrap(r,trap,trapA,trapB), hist);
+    return '<div style="padding:18px;text-align:center;color:rgba(255,255,255,.45);font-size:12px">'
+      + '<strong style="color:#eab308">T'+trap+(nome?' '+nome:'')+'</strong><br>'
+      + 'sem histórico disponível nesta corrida.<br>'
+      + '<span style="font-size:11px;color:rgba(255,255,255,.3)">O robô sugeriu este galgo, mas ele não está na análise carregada '
+      + '(card trocado ou análise anterior à reanálise).</span></div>';
+  };
+  body.innerHTML = cardOuAviso(trapA,nA,hA) + '<div class="val-sep"></div>' + cardOuAviso(trapB,nB,hB);
+  document.getElementById('val-modal').classList.add('open');
+}
+
+// Listener unico pros botoes das alternativas e da arena.
+document.addEventListener('click', function(ev){
+  var t=ev.target; if(!t||!t.classList) return;
+  var r=results[focusRaceIdx]; if(!r) return;
+  var key=r.hora+'|'+r.corrida;
+  if(t.classList.contains('alt-analisar')){
+    openValModalPar(key, parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10));
+  } else if(t.classList.contains('alt-entrar')){
+    // Veio da coluna de alternativas: sao os pares que a camada BW trouxe.
+    escolherAvb(parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10), t.getAttribute('data-odd'), 'bw');
   }
-  const racesValidas = races.filter(r=>r.nivel!=='skip');
-  const skipCount = races.length - racesValidas.length;
-  const resolvidas = racesValidas.filter(r=>r.bateu).length;
-  const ac = racesValidas.filter(r=>r.bateu==='sim').length;
-  const taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
-  const apostadas = racesValidas.filter(r=>r.odd);
-  const ap = apostadas.length;
-  const green = apostadas.filter(r=>r.bateu==='sim').length;
-  const pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
-  // ── Tres taxas sobre a MESMA chegada ─────────────────────────────────────
-  // Geral      = o AvB que REALMENTE valia: BW quando existe (sua escolha ou a
-  //              principal da reanalise), motor quando nao existe. E' a mesma
-  //              regra da coluna "Bateu", entao este numero e a tabela sempre
-  //              concordam.
-  // Pre-Analise= so o AvB do motor (analise global), pra medir o motor sozinho.
-  // Analise BW = so o AvB do fechamento da reanalise.
-  // Todas usam bateuPar sobre finishing_order_json: mesma funcao, mesmo
-  // criterio. Resultado indefinido (trap fora da chegada) fica FORA do
-  // denominador de cada uma — nao conta como acerto nem como erro.
-  const _tx = (function(){
-    const { bateuPar } = require('../utils/avbResultado');
-    const z = () => ({ ok:0, tot:0, pct:null });
-    const o = { geral:z() };
-    for (const r of racesValidas) {
-      const ordem = r.finishing_order_json;
-      const bw = _parBW(r);
-      // Um AvB so: o que valeu. Sua escolha quando existe, senao o do motor.
-      const par = {
-        geral: bw || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null)
-      };
-      for (const k of ['geral']) {
-        if (!par[k]) continue;
-        const v = bateuPar(ordem, par[k].aTrap, par[k].bTrap);
-        if (v === null) continue;
-        o[k].tot++; if (v) o[k].ok++;
+});
+
+// ESCOLHER um AvB. Regra: UM por corrida — escolher outro substitui.
+// O que muda: o par registrado (fav/und) e a odd. O PODIO e o resto da analise
+// ficam como o motor calculou. Uma vez escolhido, a arena para de trocar
+// sozinha: aquele par e' o que vai pro Historico e pra Banca.
+// Caixa de confirmacao propria, no visual do app. O confirm() do navegador
+// aparece colado na barra de endereco, com fonte do sistema, e destoa da tela
+// inteira — num fluxo de 5 minutos antes da largada isso atrapalha mais do
+// que ajuda.
+function _confirmarNaTela(titulo, texto, rotuloOk, aoConfirmar){
+  var velho = document.getElementById('gf-confirm'); if(velho) velho.remove();
+  var bg = document.createElement('div');
+  bg.id = 'gf-confirm';
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px';
+  bg.innerHTML =
+    '<div style="background:#161B27;border:1px solid #2a3140;border-radius:12px;padding:22px 24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+    + '<div style="font-size:15px;font-weight:700;color:#f0f0f0;margin-bottom:8px">'+titulo+'</div>'
+    + '<div style="font-size:12.5px;color:#9aa4b2;line-height:1.6;margin-bottom:18px">'+texto+'</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +   '<button type="button" id="gf-confirm-nao" style="padding:8px 16px;background:transparent;border:1px solid #2a3140;color:#9aa4b2;border-radius:6px;font-size:12px;cursor:pointer">Cancelar</button>'
+    +   '<button type="button" id="gf-confirm-sim" style="padding:8px 18px;background:#22c55e;border:none;color:#000;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">'+rotuloOk+'</button>'
+    + '</div></div>';
+  document.body.appendChild(bg);
+  var fechar = function(){ bg.remove(); };
+  bg.querySelector('#gf-confirm-nao').addEventListener('click', fechar);
+  bg.querySelector('#gf-confirm-sim').addEventListener('click', function(){ fechar(); aoConfirmar(); });
+  bg.addEventListener('click', function(e){ if(e.target===bg) fechar(); });   // clique fora fecha
+}
+
+// Aplica a odd no campo e persiste. Valor vazio limpa o campo — e' o que deve
+// acontecer quando nao ha odd conhecida pro par que ficou na arena.
+function _aplicarOdd(valor){
+  var el=document.getElementById('fp-odd');
+  var v = (valor==null || valor==='') ? '' : String(valor);
+  if(el) el.value = v;
+  updateFocusField('odd', v);
+}
+
+// Persiste o AvB escolhido no banco, como campo PESSOAL. Ate agora ele vivia
+// so em memoria/sessionStorage: recarregar a pagina perdia a escolha e o
+// Historico nao tinha o que ler.
+// Guarda o snapshot inteiro (par + odd + percentuais) porque a odd e os % do
+// momento da escolha sao o que importa depois — daqui a uma hora o mercado ja
+// mudou e nao da mais pra reconstruir.
+function _persistirEscolha(r, escolha){
+  if(!r || !r.id) return;                       // corrida ainda nao salva
+  var txt = escolha ? JSON.stringify(escolha) : '';
+  fetch(BASE+'/api/race/'+r.id, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ avb_escolhido: txt })
+  }).catch(function(e){ console.error('[avb] falhou ao salvar a escolha', e); });
+}
+
+// Monta o snapshot a partir do AvB ao vivo daquele par, pra guardar os
+// numeros do momento junto com a escolha.
+function _snapshotDoPar(r, ta, tb, odd){
+  var l=(r&&r._avbsAoVivo)||[];
+  var a=l.find(function(x){ return String(x.aTrap)===String(ta) && String(x.bTrap)===String(tb); }) || {};
+  return {
+    aTrap: ta, aNome: _nomeDoTrap(r, ta, ta, tb),
+    bTrap: tb, bNome: _nomeDoTrap(r, tb, ta, tb),
+    odd: (odd!=null && odd!=='') ? parseFloat(odd) : (_avbOdd(a)||null),
+    marketPct: a.marketPct!=null ? a.marketPct : null,
+    reanalisePct: _avbRean(a),
+    motorOrigPct: _avbMotorOrig(a),
+    edge: a.edge!=null ? a.edge : null,
+    ts: Math.round(Date.now()/1000)
+  };
+}
+
+// origem: 'bw' quando veio da coluna de alternativas (a camada que le a BW),
+// 'inversao' quando voce inverteu o sentido, e 'principal' quando e' o par que
+// a analise ja tinha posto na arena. Fica gravado no snapshot pra a coluna
+// Motor do Historico poder dizer qual motor valeu naquela linha.
+function escolherAvb(trapA, trapB, odd, origem){
+  var idx=focusRaceIdx, r=results[idx];
+  if(!r) return;
+  var jaEra = r.avbEscolhido && String(r.avbEscolhido.a)===String(trapA) && String(r.avbEscolhido.b)===String(trapB);
+
+  if(jaEra){
+    _confirmarNaTela(
+      'Desfazer a escolha?',
+      'A corrida volta a seguir o AvB mais bem avaliado no momento pela reanalise, e a odd acompanha esse par.',
+      'Desfazer',
+      function(){
+        r.avbEscolhido = null;
+        _persistirEscolha(r, null);
+        // A odd tem que acompanhar o par que fica na arena. Sem isto o campo
+        // guardava a odd do AvB desfeito — dado errado, e silencioso.
+        var p = _parEmFoco(r);
+        _aplicarOdd(_parOddAtual(r, p.a, p.b));
+        saveSessionState();
+        renderFocusPanel(r, idx);
+      }
+    );
+    return;
+  }
+
+  r.avbEscolhido={ a:trapA, b:trapB, odd:(odd||null), em:Date.now() };
+  // NAO grava aqui. Escolher um secundario ou inverter muda so a tela; quem
+  // grava e' o botao "Entrei !". Mesma logica da odd e da stake, que ja ficam
+  // locais ate a confirmacao: enquanto voce nao entrou, nao ha aposta, e o
+  // Historico deve continuar mostrando o principal da analise.
+  r._avbOrigem = origem || 'principal';
+  _aplicarOdd(odd);
+  saveSessionState();
+  renderFocusPanel(r, idx);   // redesenha arena + alternativas com o novo estado
+}
+
+// Inverte o par em foco: 1v2 vira 2v1. Nao e' cosmetico — e' outra aposta.
+// O bateuPar devolve o oposto, e o Historico e a Banca passam a contar pelo
+// par invertido. Por isso grava como escolha pessoal (o mesmo caminho do
+// botao Entrar) e a coluna AvB do Historico marca "sua escolha" na linha.
+function inverterAvb(){
+  var idx=focusRaceIdx, r=results[idx];
+  if(!r) return;
+  var p=_parEmFoco(r);
+  if(!p || !p.a || !p.b) return;
+  _confirmarNaTela(
+    'Inverter o AvB?',
+    'O par passa a ser T' + p.b + ' vence T' + p.a + '. Isso muda a aposta: o resultado, o Histórico e a Banca passam a contar por esse sentido.',
+    'Inverter',
+    function(){
+      // A odd do par invertido e' outra: a do sentido A vence B nao serve.
+      // Se nao houver odd pro sentido novo, limpa em vez de manter a antiga.
+      var novaOdd=_parOddAtual(r, p.b, p.a);
+      escolherAvb(p.b, p.a, novaOdd, 'inversao');
+    }
+  );
+}
+
+// Link pra corrida no betwinner. O robo ainda nao entrega a URL real — quando
+// entregar (ex.: snap.urlBetwinner ou montada pelo gameId), troca so aqui.
+function _linkBetwinner(snap){
+  if(!snap) return null;
+  if(snap.bwUrl) return snap.bwUrl;            // deep-link real do robo (/br/live/...-slug/...-slug) — abre a corrida
+  if(snap.urlBetwinner) return snap.urlBetwinner;
+  // Fallback: sem deep-link, abre a SECAO ao vivo de galgo (o gameId sozinho nao
+  // monta URL valida — precisa do segmento da liga). Bruno clica na corrida ativa.
+  return 'https://betwinner1.com/br/live/greyhound-racing/';
+}
+
+// ── SIMULADOR (so pra testar a tela sem depender do robo) ───────────────────
+// Liga com ?simavb=1 na URL, ou chamando simAvb() no console. Desliga com
+// ?simavb=0 ou simAvb(false). Monta 3 AvBs falsos com os traps reais da
+// corrida em foco, pra dar pra ver arena + 2 alternativas + odds + escolha
+// sem precisar mexer no relogio nem esperar o mercado abrir.
+
+function simAvb(liga){
+  _SIM_AVB = (liga !== false);
+  console.log('[sim] AvBs simulados', _SIM_AVB ? 'LIGADOS' : 'desligados');
+  var r = results[focusRaceIdx];
+  if (r) renderFocusPanel(r, focusRaceIdx);
+  return _SIM_AVB;
+}
+function _snapSimulado(r){
+  // Usa os traps que existem de verdade na corrida, pra imagem e historico
+  // baterem. Se a corrida tiver poucos galgos, repete o que houver.
+  var traps = (r.histAll||[]).map(function(g){ return g.trap; }).filter(function(t){ return t!=null; });
+  if (traps.length < 4) traps = [r.trapFav||1, r.trapUnd||2, 3, 4, 5, 6];
+  var nome = function(t){ return _nomeDoTrap(r, t) || ('Galgo T'+t); };
+  var mk = function(pos, ta, tb, motor, odd, mercado, trend, valor){
+    return { pos:pos, aTrap:ta, aNome:nome(ta), bTrap:tb, bNome:nome(tb),
+             enginePct:motor, avaliacao:motor, oddAvenceB:odd, odd:odd,
+             marketPct:mercado, edge:Math.round((motor-mercado)*10)/10,
+             trend:trend, valor:valor,
+             flags:{ trapVazia:[], cioRecente:null, obs:'' } };
+  };
+  return {
+    gameId: 999999, pista: getPista(r.corrida||''), analiseCorrida: r.corrida,
+    raceNum:'Race SIM', estado:'ao_vivo',
+    statusLine:'SIMULADO — inicia dentro de 3 minutos',
+    avbs: [
+      mk(1, traps[0], traps[1], 68, 1.55, 61.2, 'desceu', true),
+      mk(2, traps[2] || traps[0], traps[3] || traps[1], 59, 1.90, 55.4, 'subiu', false),
+      mk(3, traps[1], traps[4] || traps[2] || traps[0], 54, 2.10, 52.1, 'igual', false)
+    ],
+    sugeridos: []
+  };
+}
+
+function renderOddsLive(r){
+  // Modo simulado: nao chama o robo, monta o snapshot na hora.
+  if (_SIM_AVB) { _pintaOddsLive(r, { corridas:[ _snapSimulado(r) ] }); return; }
+
+  var box = document.getElementById('fp-odds-live');
+  if(!box || !r) return;
+  fetch(BASE+'/robot/odds/live', { credentials:'same-origin' })
+    .then(function(res){ return res.ok ? res.json() : null; })
+    .then(function(d){ _pintaOddsLive(r, d); })
+    .catch(function(){});
+}
+
+// Desenha o bloco ao vivo a partir de um snapshot — venha ele do robo ou do
+// simulador. Mantido separado justamente pra os dois caminhos produzirem
+// EXATAMENTE a mesma tela (se divergissem, o teste deixaria de valer).
+function _pintaOddsLive(r, d){
+  (function(){
+      var box2 = document.getElementById('fp-odds-live'); if(!box2) return;
+      if(!d){ box2.innerHTML=''; return; }
+      var lista = d.corridas||[];
+      var pista = getPista(r.corrida||'');
+      var snap = lista.find(function(c){ return c.analiseCorrida===r.corrida; })
+             || lista.find(function(c){ return c.pista===pista; });
+      if(!snap){
+        box2.innerHTML = '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:8px;font-size:10px;color:var(--mut);display:flex;justify-content:space-between;gap:8px">'
+          + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner</span>'
+          + '<span>aguardando esta corrida abrir (ou pista ainda não mapeada)</span></div>';
+        var hb0 = document.getElementById('fp-odds-hdr'); if(hb0) hb0.innerHTML='';
+        var ba0 = document.getElementById('fp-alts'); if(ba0){ ba0.innerHTML=''; ba0.style.display='none'; }
+        return;
+      }
+      var avbs = snap.avbs||[], sug = snap.sugeridos||[];
+      var hb = document.getElementById('fp-odds-hdr');
+      if(hb){
+        if(avbs.length){
+          // O chip segue o AvB ESCOLHIDO. Sem isto ele mostrava sempre o
+          // avbs[0] do robo, entao escolher uma alternativa deixava o topo da
+          // tela exibindo par e odd de OUTRA disputa — dado errado no lugar
+          // mais visivel.
+          // A principal e' a de pos===1 (o robo ja rankeia). Cai no primeiro da
+          // lista se o campo pos ainda nao vier.
+          var top = avbs.find(function(x){ return x.pos === 1; }) || avbs[0];
+          // O chip tem que refletir o par QUE ESTA NA ARENA. Se a arena nao
+          // conseguiu trocar (galgo fora do histAll), procura o avb daquele
+          // par; nao achando, o chip nao mostra par nenhum em vez de anunciar
+          // uma disputa que a tela nao esta exibindo.
+          if (r._parNaTela) {
+            var _naTela = avbs.find(function(x){
+              return String(x.aTrap)===String(r._parNaTela.a) && String(x.bTrap)===String(r._parNaTela.b);
+            });
+            if (_naTela) top = _naTela;
+            else if (top && (String(top.aTrap)!==String(r._parNaTela.a) || String(top.bTrap)!==String(r._parNaTela.b))) {
+              top = null;   // divergiu e nao ha avb do par exibido
+            }
+          }
+          if (top && r.avbEscolhido) {
+            var _ach = avbs.find(function(x){
+              return String(x.aTrap)===String(r.avbEscolhido.a) && String(x.bTrap)===String(r.avbEscolhido.b);
+            });
+            if (_ach) top = _ach;
+          }
+          // top pode ser null quando a arena nao conseguiu trocar o par: nesse
+          // caso o chip mostra so "AO VIVO", sem numeros, em vez de anunciar
+          // uma disputa diferente da que esta na tela.
+          if (!top) {
+            // Chip sem numeros: a arena nao conseguiu trocar o par, e anunciar
+            // uma disputa diferente da que esta na tela seria pior que nao
+            // anunciar nada. Sem "return" aqui de proposito — o resto do
+            // poller (alternativas, rodape) tem que continuar rodando.
+            hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>';
+          } else {
+          var e = top.edge;
+          var edgeH = (e==null)?'':' &middot; <span style="color:'+(e>0?'#22c55e':(e<0?'#ef4444':'var(--mut)'))+';font-weight:700">edge '+(e>0?'+':'')+e+'</span>';
+          hb.innerHTML = '<div style="font-size:9px;color:#22c55e;font-weight:800;letter-spacing:.5px">&#9889; AO VIVO</div>'
+            + '<div style="font-size:12px;color:#cbd5e1;font-weight:700;white-space:nowrap">T'+top.aTrap+'&times;T'+top.bTrap+' &middot; '+top.oddAvenceB+'</div>'
+            + '<div style="font-size:9px;color:var(--mut);white-space:nowrap">'
+            +   (_avbRean(top)!=null ? 'rean <span style="color:#22c55e;font-weight:700">'+_avbRean(top)+'%</span> &middot; ' : '')
+            +   (_avbMotorOrig(top)!=null ? 'motor '+_avbMotorOrig(top)+'% &middot; ' : '')
+            +   'mkt '+top.marketPct+'%'+edgeH+'</div>';
+                  }
+        } else if(sug.length){
+          var s0 = sug[0];
+          hb.innerHTML = '<div style="font-size:9px;color:#f59e0b;font-weight:800;letter-spacing:.5px">&#9889; SUGERIDO</div>'
+            + '<div style="font-size:12px;color:#cbd5e1;font-weight:700;white-space:nowrap">T'+s0.aTrap+'&times;T'+s0.bTrap+'</div>'
+            + '<div style="font-size:9px;color:var(--mut)">motor '+s0.enginePct+'%</div>';
+        } else { hb.innerHTML=''; }
+      }
+      // ── O que este ciclo de 5s NAO faz mais ──────────────────────────────
+      // Duas coisas foram aposentadas aqui, a pedido do motor:
+      //
+      // 1) TROCAR O PRINCIPAL. Antes, quando o pos-1 da lista ao vivo mudava e
+      //    o usuario ainda nao tinha escolhido, a arena se redesenhava com o
+      //    novo par. Agora o principal e' do motor unico e nunca troca pela
+      //    lista ao vivo: o par que aparece de manha e' o que fica (so a
+      //    retirada, no ciclo de 4 min do motor, pode ajustar).
+      //
+      // 2) PREENCHER a coluna da direita. O fp-alts agora vem de bw.secundarios
+      //    (pulso de 60-90s). Se os dois escrevessem ali, o de 5s sobrescrevia
+      //    o de 75s e os cards do motor apareciam e sumiam sozinhos.
+      //
+      // O que sobrou pra ele: as odds e o mercado ao vivo, que e' onde os 5s
+      // fazem diferenca de verdade.
+      r._avbsAoVivo = avbs.length ? avbs : sug;
+      r._snapAoVivo = snap;   // guarda o snapshot pro link da casa
+      // O bloco de baixo virou so uma FAIXA DE STATUS. As linhas de AvB que
+      // ficavam aqui foram removidas de proposito: depois que a arena e os
+      // cards de alternativa passaram a mostrar par, odd, mercado, motor e
+      // edge, este bloco so repetia a mesma informacao ocupando tela.
+      // Fica o que nao existe em outro lugar: o link pra casa e o status
+      // ("inicia dentro de X minutos").
+      var link = _linkBetwinner(snap);
+      var temAvb = (avbs.length || sug.length);
+      box2.innerHTML =
+        '<div style="border-top:1px solid var(--bdr2);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:10px">'
+        + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner'
+        +   (link ? ' <a href="'+link+'" target="_blank" rel="noopener" style="color:#60a5fa;font-weight:700;text-transform:none;letter-spacing:0">abrir na casa &#8599;</a>' : '')
+        + '</span>'
+        + '<span style="color:var(--mut)">' + (snap.statusLine || (temAvb ? '' : 'sem AvB aberto ainda')) + '</span>'
+        + '</div>';
+  })();
+}
+
+// Nomes de campo usados no front (results[i]) as vezes diferem da coluna no
+// banco (ex: r1/r2/r3/hit -> resultado_1/resultado_2/resultado_3/bateu).
+var FIELD_DB_MAP = { r1:'resultado_1', r2:'resultado_2', r3:'resultado_3', hit:'bateu' };
+// Mapeia campo em snake_case (nome no banco/data-f) pro nome camelCase usado
+// no objeto `results` em memoria
+var LOCAL_FIELD_MAP = { avb_nao_aberto: 'avbNaoAberto', bet_entrou: 'betEntrou', bet_unidades: 'betUnidades', flag_atrasada: 'flagAtrasada' };
+
+// Atualiza um campo da corrida em memoria (sessionStorage) e, se a corrida ja
+// existe no banco (tem id — ou seja, a sessao ja foi salva no Historico),
+// persiste na hora via PUT /api/race/:id. Assim Odd, aposta e a flag "AvB nao
+// aberto" ficam sempre sincronizados com o Historico, sem precisar reanalisar.
+function saveRaceField(idx, field, value) {
+  if (idx < 0 || !results[idx]) return;
+  var localField = LOCAL_FIELD_MAP[field] || field;
+  results[idx][localField] = value;
+  saveSessionState();
+  var id = results[idx].id;
+  if (!id) return; // ainda nao foi salva no Historico — vai junto no proximo save
+  var dbField = FIELD_DB_MAP[field] || field;
+  var body = {};
+  body[dbField] = value;
+  fetch(BASE+'/api/race/'+id, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).catch(function(e){ console.error('[saveRaceField] erro ao persistir', field, e); });
+}
+
+// ── Entrada na aposta: so grava quando voce confirma ──────────────────────
+// Antes a Odd salvava a cada tecla (oninput -> banco). Um numero digitado pela
+// metade ja virava aposta registrada no Historico e na Banca, e apagar depois
+// nao desfazia direito. Agora Odd e Stake ficam locais ate o "Entrei !".
+function marcaEntradaSuja(){
+  var b = document.getElementById('fp-entrei');
+  if(!b) return;
+  b.style.background = 'transparent';
+  b.style.borderColor = '#eab308';
+  b.style.color = '#eab308';
+  b.textContent = 'Entrei !';
+  b.title = 'Há alteração não confirmada — clique para salvar';
+}
+
+function confirmarEntrada(){
+  var r = results[focusRaceIdx];
+  if(!r) return;
+  var elOdd = document.getElementById('fp-odd');
+  var elStk = document.getElementById('fp-stake');
+  var odd = elOdd ? String(elOdd.value||'').trim().replace(',','.') : '';
+  var stk = elStk ? String(elStk.value||'').trim().replace(',','.') : '';
+
+  if(!odd){
+    // Sem odd nao ha entrada. Avisar e' melhor que gravar uma aposta sem preco.
+    if(elOdd){ elOdd.style.borderColor = '#ef4444'; setTimeout(function(){ elOdd.style.borderColor=''; }, 1500); }
+    showToast('Preencha a Odd antes de confirmar a entrada.', false);
+    return;
+  }
+  if(isNaN(parseFloat(odd))){ showToast('Odd inválida.', false); return; }
+  if(stk && isNaN(parseFloat(stk))){ showToast('Stake inválida.', false); return; }
+
+  // O PAR e' gravado aqui, junto com a entrada. Ate este clique, inverter ou
+  // escolher um secundario mudava so a tela — e' o "Entrei !" que transforma
+  // aquilo em registro. Sem ele, o Historico segue mostrando o principal da
+  // analise, que e' a regra do Bruno.
+  var pe = _parEmFoco(r);
+  if (pe && pe.a && pe.b) {
+    var snap = _snapshotDoPar(r, pe.a, pe.b, odd);
+    snap.origem = r._avbOrigem || 'principal';
+    _persistirEscolha(r, snap);
+  }
+
+  // Grava os tres juntos: odd, stake e a marca de que houve entrada. E' o
+  // bet_entrou que faz a corrida contar como aposta no Historico e na Banca.
+  updateFocusField('odd', odd);
+  if(stk) updateFocusField('bet_unidades', stk);
+  updateFocusField('bet_entrou', 1);
+  r.odd = odd; if(stk) r.betUnidades = stk; r.betEntrou = 1;
+
+  var b = document.getElementById('fp-entrei');
+  if(b){
+    b.style.background = '#22c55e'; b.style.borderColor = '#22c55e'; b.style.color = '#000';
+    b.textContent = '✓ Entrei'; b.title = 'Entrada confirmada';
+  }
+  showToast('Entrada confirmada: odd ' + odd + (stk ? ' · stake ' + stk : ''), true);
+  saveSessionState();
+}
+
+function updateFocusField(field, value) {
+  saveRaceField(focusRaceIdx, field, value);
+  // Desmarcar "atrasada" pode fazer a corrida sumir da lista na hora (se ja
+  // passou do horario) — sem isso, ela ficava presa em tela ate o proximo
+  // ciclo automatico. Achado 14/07/2026, pedido do Bruno.
+  if (field === 'flag_atrasada' && !value) {
+    refreshFocusMode();
+  }
+}
+
+// Alerta de proximidade da corrida (3 min antes): som de sino + piscar o card.
+// Sino gerado via Web Audio API (sem precisar de arquivo de audio externo).
+var alertedRaces = {};
+
+// 4 sons prontos, escolhidos via SOM_ALERTA (configuravel em Configuracoes)
+function tocarSino(ctx) {
+  function tone(freq, start, dur) {
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime+start+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(ctx.currentTime+start);
+    o.stop(ctx.currentTime+start+dur+0.05);
+  }
+  tone(1046.5, 0, 0.25);    // C6
+  tone(1318.5, 0.15, 0.35); // E6
+}
+function tocarBeep(ctx) {
+  function tone(freq, start, dur) {
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+start+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(ctx.currentTime+start);
+    o.stop(ctx.currentTime+start+dur+0.03);
+  }
+  tone(1500, 0, 0.08);
+  tone(1500, 0.14, 0.08);
+}
+function tocarAlarme(ctx) {
+  function tone(freq, start, dur) {
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime+start);
+    g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime+start+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+start+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(ctx.currentTime+start);
+    o.stop(ctx.currentTime+start+dur+0.05);
+  }
+  tone(880, 0, 0.15); tone(660, 0.15, 0.15);
+  tone(880, 0.30, 0.15); tone(660, 0.45, 0.15);
+}
+function tocarSuave(ctx) {
+  var o = ctx.createOscillator();
+  var g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.value = 700;
+  g.gain.setValueAtTime(0.0001, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime+0.05);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.6);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(ctx.currentTime);
+  o.stop(ctx.currentTime+0.65);
+}
+var SONS_DISPONIVEIS = { sino: tocarSino, beep: tocarBeep, alarme: tocarAlarme, suave: tocarSuave };
+
+// AudioContext unico e reaproveitado. Criado/retomado num gesto do usuario, o
+// som continua tocando mesmo com a aba em segundo plano — um AudioContext novo
+// criado com a aba escondida nasce suspenso e nao toca.
+var _audioCtx = null;
+function getAudioCtx(){
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+  } catch(e) { return null; }
+}
+// Retoma o audio e pede permissao de notificacao no primeiro gesto do usuario
+// (navegadores exigem gesto). Roda uma vez.
+var _alertInit = false;
+function initAlertaUserGesto(){
+  if (_alertInit) return; _alertInit = true;
+  getAudioCtx();
+  prepararSonsAudio(); // gera os sons como <audio> (tocam em background) e destrava no gesto
+  try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch(e){}
+}
+// Notificacao de desktop — aparece mesmo com a aba minimizada / voce em outra
+// tela. So dispara quando a aba NAO esta visivel, pra nao duplicar aviso quando
+// voce ja esta olhando o sistema.
+function notificarCorrida(r, custom){
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!document.hidden) return;
+    var hbr = r.hora_br || convertHora(r.hora||'');
+    var titulo = custom ? 'Alarme — corrida chegando' : 'Corrida chegando';
+    var corpo = (r.corrida||'') + (hbr ? (' · ' + hbr) : '');
+    // silent:true tira o "ding" padrao do Windows — quem toca e' o SOM ESCOLHIDO
+    // (via <audio>), pra voce ouvir o som configurado e nao o do sistema.
+    var n = new Notification(titulo, { body: corpo, tag: raceAlertKey(r), silent: true });
+    n.onclick = function(){ try { window.focus(); n.close(); } catch(e){} };
+    setTimeout(function(){ try { n.close(); } catch(e){} }, 20000);
+  } catch(e){}
+}
+// Fallback universal (mesmo sem permissao de notificacao): pisca o titulo da
+// aba enquanto a aba esta em segundo plano, pra chamar atencao na barra.
+var _tituloOrig = null, _tituloFlashTimer = null;
+function flashTituloAlerta(){
+  try {
+    if (!document.hidden || _tituloFlashTimer) return;
+    if (_tituloOrig === null) _tituloOrig = document.title;
+    var on = true;
+    _tituloFlashTimer = setInterval(function(){
+      document.title = on ? '🔔 Corrida chegando!' : (_tituloOrig || 'Greyhound Factory');
+      on = !on;
+    }, 1000);
+  } catch(e){}
+}
+function pararFlashTitulo(){
+  if (_tituloFlashTimer){ clearInterval(_tituloFlashTimer); _tituloFlashTimer = null; }
+  if (_tituloOrig !== null){ document.title = _tituloOrig; _tituloOrig = null; }
+}
+// ==== Sons como <audio> (data URI WAV) ====================================
+// Web Audio puro pode ser estrangulado/suspenso com a aba em segundo plano, e
+// aí o unico som que sobra é o "ding" do sistema. Renderizamos os 4 sons uma
+// vez (com os MESMOS timbres do Web Audio) para WAV e tocamos via <audio>, que
+// roda de forma confiavel em background — assim voce ouve o SOM ESCOLHIDO.
+var SOM_AUDIO = {}, _somAudioProntos = false;
+function _bufToWavDataURI(buffer){
+  var ch = buffer.getChannelData(0), sr = buffer.sampleRate, len = ch.length;
+  var ab = new ArrayBuffer(44 + len*2), view = new DataView(ab);
+  function ws(o,s){ for (var i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); }
+  ws(0,'RIFF'); view.setUint32(4, 36+len*2, true); ws(8,'WAVE'); ws(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+  view.setUint32(24,sr,true); view.setUint32(28,sr*2,true); view.setUint16(32,2,true);
+  view.setUint16(34,16,true); ws(36,'data'); view.setUint32(40,len*2,true);
+  var off = 44;
+  for (var i=0;i<len;i++,off+=2){ var s=Math.max(-1,Math.min(1,ch[i])); view.setInt16(off, s<0?s*0x8000:s*0x7FFF, true); }
+  var bytes = new Uint8Array(ab), bin=''; for (var j=0;j<bytes.length;j++) bin += String.fromCharCode(bytes[j]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+function _renderSom(fn, dur){
+  return new Promise(function(resolve, reject){
+    try {
+      var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OAC) return reject('no-oac');
+      var sr = 44100, oac = new OAC(1, Math.ceil(sr*dur), sr);
+      fn(oac);
+      oac.startRendering().then(function(buf){ resolve(_bufToWavDataURI(buf)); }).catch(reject);
+    } catch(e){ reject(e); }
+  });
+}
+// WAV de 10ms em silencio. Serve so pra dar um play() SINCRONO dentro do
+// gesto do usuario: no iOS (Safari e tambem o Chrome, que usa WebKit por
+// baixo) um <audio> so fica destravado se o play() acontecer no MESMO tick
+// do toque. Depois de destravado, trocar o .src mantem a liberacao.
+var _SILENCIO_WAV = 'data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+function prepararSonsAudio(){
+  if (_somAudioProntos) return; _somAudioProntos = true;
+  var specs = [['sino',tocarSino,0.7],['beep',tocarBeep,0.35],['alarme',tocarAlarme,0.75],['suave',tocarSuave,0.75]];
+
+  // PASSO 1 (sincrono, dentro do gesto): cria os <audio> ja com o silencio e
+  // toca. E' isto que destrava o autoplay no iOS. Antes, o new Audio()/play()
+  // acontecia no .then() do render — assincrono, fora do gesto — e por isso o
+  // alarme ficava mudo no celular sem dar erro nenhum. O botao "Testar" do
+  // Configuracoes funcionava porque ali o play() e' sincrono no clique.
+  specs.forEach(function(s){
+    try {
+      var a = new Audio(_SILENCIO_WAV);
+      a.preload = 'auto';
+      SOM_AUDIO[s[0]] = a;
+      var p = a.play();
+      if (p && p.then) p.then(function(){ try { a.pause(); a.currentTime = 0; } catch(e){} }).catch(function(){});
+    } catch(e){}
+  });
+
+  // PASSO 2 (assincrono): quando o timbre real terminar de ser renderizado,
+  // so troca o .src do elemento que JA esta destravado. Nunca criar um Audio
+  // novo aqui, senao o destravamento se perde.
+  specs.forEach(function(s){
+    _renderSom(s[1], s[2]).then(function(uri){
+      var a = SOM_AUDIO[s[0]];
+      if (a) { try { a.src = uri; a.load(); } catch(e){} }
+      else { try { var b = new Audio(uri); b.preload = 'auto'; SOM_AUDIO[s[0]] = b; } catch(e){} }
+    }).catch(function(){});
+  });
+}
+// Dispara todos os avisos de uma corrida que entrou na janela de alerta.
+function avisarCorrida(r, custom){
+  playSom(custom ? ALARME_FILTRO.som : SOM_ALERTA);
+  notificarCorrida(r, custom);
+  flashTituloAlerta();
+  registrarAvisoGlobal(raceAlertKey(r));
+}
+
+function playBellSound() {
+  try {
+    var ctx = getAudioCtx(); if (!ctx) return;
+    var fn = SONS_DISPONIVEIS[SOM_ALERTA] || tocarSino;
+    fn(ctx);
+  } catch(e) { console.error('[playBellSound] erro', e); }
+}
+
+function raceAlertKey(r) {
+  return (r.hora||'') + '|' + (r.corrida||'');
+}
+// Alarme para filtro selecionado (Configuracoes > Automacao): cor + som proprios
+function alarmeTurnoDaCorrida(r){
+  var hbr = r.hora_br || convertHora(r.hora||'');
+  var h = parseInt((hbr||'').split(':')[0], 10);
+  if (isNaN(h)) return '';
+  return h < 13 ? 'manha' : 'tarde';
+}
+
+// Casa a corrida contra a LISTA de regras. Cada regra e' uma combinacao
+// fechada (turno + pista + classes), entao "Youghal A5,A6" nao dispara em
+// outra pista nem em outra classe — que era o problema do filtro unico, que
+// cruzava tudo com tudo. Basta UMA regra casar.
+// Campo vazio dentro da regra = "qualquer". Lista vazia = cai no filtro
+// antigo (compatibilidade com quem ja tinha configurado).
+function ALARME_CASA_REGRAS(regras, turnoCorrida, pista, classe){
+  if (!regras || !regras.length) return null;   // null = "use o filtro antigo"
+  for (var i=0;i<regras.length;i++){
+    var g=regras[i]||{};
+    if (g.turno && g.turno !== turnoCorrida) continue;
+    if (g.pista && g.pista !== pista) continue;
+    var cs=(g.classes||[]).map(function(c){return String(c).toUpperCase();});
+    if (cs.length && cs.indexOf(classe) < 0) continue;
+    return true;
+  }
+  return false;
+}
+function matchAlarmeFiltro(r){
+  if (!ALARME_FILTRO.ativo) return false;
+  var _pista = (r.corrida||'').trim().split(' ')[0];
+  var _classe = (getRaceClass(r.corrida||'') || '').toUpperCase();
+  var _porRegra = ALARME_CASA_REGRAS(ALARME_FILTRO.regras, alarmeTurnoDaCorrida(r), _pista, _classe);
+  if (_porRegra !== null) return _porRegra;
+  if (ALARME_FILTRO.turno && alarmeTurnoDaCorrida(r) !== ALARME_FILTRO.turno) return false;
+  // pista = codigo do Racing Post = 1a palavra de corrida (mesma convencao do motor/HR)
+  var pista = (r.corrida||'').trim().split(' ')[0];
+  var classe = (getRaceClass(r.corrida||'') || '').toUpperCase();
+  if (ALARME_FILTRO.pistas.length && ALARME_FILTRO.pistas.indexOf(pista) < 0) return false;
+  if (ALARME_FILTRO.classes.length && ALARME_FILTRO.classes.map(function(c){return c.toUpperCase();}).indexOf(classe) < 0) return false;
+  return true;
+}
+function playSom(nome){
+  try {
+    // Preferimos o <audio> (toca em background); Web Audio e' o fallback.
+    var a = SOM_AUDIO[nome];
+    if (a) {
+      try { a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function(){ _playSomWebAudio(nome); }); return; } catch(e){}
+    }
+    _playSomWebAudio(nome);
+  } catch(e) { console.error('[playSom] erro', e); }
+}
+function _playSomWebAudio(nome){
+  try { var ctx = getAudioCtx(); if (!ctx) return; (SONS_DISPONIVEIS[nome] || tocarSino)(ctx); } catch(e){}
+}
+
+function renderRaceListPanel(avbs) {
+  var col = document.getElementById('race-list-col');
+  if (!col) return;
+  col.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)">'
+    // O rotulo "Próximas" saiu: a lista em sequencia ja diz o que e', e o
+    // espaco vale mais pro filtro.
+    + '<span></span>'
+    + '<span style="display:flex;align-items:center;gap:8px">'
+    // Botao "so BW": mostra apenas o que o motor unico aprovou. Fica ao lado do
+    // Atualizar porque as duas acoes sao da lista, nao da corrida.
+    + '<button type="button" id="btn-tier" onclick="alternarTier()" style="font-size:9px;font-weight:800;letter-spacing:.4px;background:transparent;border:1px solid var(--bdr2);color:var(--mut);border-radius:10px;padding:2px 8px;cursor:pointer;min-width:56px">TODAS</button>'
+    + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
+    + '</span>'
+    + '</div>';
+  _pintaBotaoTier();
+  var first = true;
+  var tc = ['','t1','t2','t3','t4','t5','t6'];
+  avbs.forEach(function(r, i) {
+    var hbr = r.hora_br || convertHora(r.hora||'');
+    var rIdx = results.indexOf(r);
+    var div = document.createElement('div');
+    var isOld = isOldRaceCard(r);
+    var mins = minutesToRace(r);
+    var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
+    var alertCustom = isAlerting && matchAlarmeFiltro(r);
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
+    if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
+    if (isAlerting) {
+      var key = raceAlertKey(r);
+      if (!alertedRaces[key]) {
+        alertedRaces[key] = true;
+        avisarCorrida(r, alertCustom);
       }
     }
-    for (const k of ['geral']) o[k].pct = o[k].tot ? Math.round(o[k].ok/o[k].tot*100) : null;
-    return o;
-  })();
-
-  // ── Grafico por turno: acerto x erro do AvB que valeu ────────────────────
-  // Uma barra por turno, nao duas: com um AvB por corrida nao ha mais o que
-  // comparar entre motor e reanalise dentro do turno.
-  // Mesmo corte de turno do dashboard de HR (6h e 13h BR) de proposito: se as
-  // duas telas usassem cortes diferentes, os numeros discordariam sem motivo
-  // aparente. Conta TODAS as corridas analisadas, nao so as apostadas.
-  const _turnos = (function(){
-    const { bateuPar } = require('../utils/avbResultado');
-    const g = { 'Manhã':{ok:0,err:0}, 'Tarde':{ok:0,err:0} };
-    for (const r of racesValidas) {
-      const h = parseInt(String(r.hora_br||'').split(':')[0], 10);
-      if (isNaN(h)) continue;
-      const t = h < 13 ? 'Manhã' : 'Tarde';
-      const par = _parBW(r) || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null);
-      if (!par) continue;
-      const v = bateuPar(r.finishing_order_json, par.aTrap, par.bTrap);
-      if (v === null) continue;      // indefinido fica fora
-      if (v) g[t].ok++; else g[t].err++;
-    }
-    return g;
-  })();
-
-  const logoB64 = getLogo();
-  const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
-  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
-<link rel="stylesheet" href="${BASE}/static/css/shared.css">
-<style>
-
-/* As tres taxas LADO A LADO, cada uma como uma mini-coluna: rotulo em cima,
-   percentual no meio, contagem embaixo. Usa !important porque o container dos
-   KPIs tem regras proprias pros filhos do card. */
-.tx3{display:flex!important;gap:14px;justify-content:space-between;margin-top:4px}
-.tx3 .tx3-l{display:flex!important;flex-direction:column;align-items:center;gap:1px;flex:1}
-.tx3 .tx3-rot{font-size:10px;color:#888;white-space:nowrap}
-.tx3 .tx3-num{font-size:19px;font-weight:800;line-height:1.1;white-space:nowrap}
-.tx3 .tx3-cnt{font-size:9px;color:#555;white-space:nowrap}
-
-/* Grafico por turno: manha e tarde LADO A LADO dentro do mesmo card, cada
-   turno com duas barras (motor e reanalise). Empilhar os turnos jogava o card
-   pra linha de baixo e deixava a faixa dos KPIs pela metade.
-   Sem biblioteca de grafico: sao divs com largura percentual — pra 4 barras,
-   trazer dependencia nova nao se justifica. */
-.gtn{min-width:0}   /* a largura vem do grid do .kpis */
-.gtn-cols{display:flex;gap:12px;margin-top:2px}
-.gtn-col{flex:1;min-width:0}
-.gtn-lin{display:flex;align-items:center;gap:6px;margin-top:4px}
-.gtn-rot{font-size:9px;color:#888;width:52px;flex-shrink:0;text-align:right;white-space:nowrap}
-.gtn-bar{flex:1;height:12px;border-radius:3px;overflow:hidden;display:flex;background:rgba(255,255,255,.04);min-width:50px}
-.gtn-ok{background:#22C65E}
-.gtn-err{background:#ef4444}
-.gtn-pct{font-size:10px;font-weight:700;width:32px;flex-shrink:0;white-space:nowrap}
-.gtn-turno{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
-
-${designTokensCSS()}
-.content{padding:16px 20px;max-width:1600px;margin:0 auto}
-/* 7 cartoes numa linha so. Os cinco simples (Corridas, Acertos, Entradas,
-   Green, % de Green) tem um numero curto e nao precisam de 1fr cada — com
-   colunas iguais o setimo card (o grafico) nao cabia e caia pra linha de
-   baixo, deixando a faixa pela metade.
-   Aqui os simples ficam estreitos, a Taxa (3 valores) um pouco maior, e o
-   grafico leva todo o resto. */
-.kpis{
-  display:grid;
-  grid-template-columns:0.62fr 0.62fr 1.15fr 0.62fr 0.62fr 0.62fr 1.75fr;
-  gap:8px;margin-bottom:16px;
-}
-/* Sem ponto de quebra por largura: um valor chutado (1400px) jogava tudo em
-   3 colunas em monitor comum. Se ficar apertado, o proprio grid encolhe as
-   colunas — os numeros sao curtos e aguentam. */
-/* Cabecalho fixo: o container ganha altura maxima e rolagem propria, e o
-   thead cola no topo dele. Sem o max-height quem rola e' a PAGINA inteira,
-   e ai o sticky nao tem em relacao a que grudar. */
-.tw{overflow:auto;max-height:calc(100vh - 260px);border:1px solid var(--bdr);border-radius:8px}
-.tw thead th{position:sticky;top:0;z-index:5}
-/* O sticky nao herda o fundo da linha: sem cor solida no th, o conteudo
-   rolando aparece POR TRAS do cabecalho. */
-.tw thead th{background:#1a1a1a}
-/* A borda de baixo some no sticky (a borda rola junto), entao usamos
-   box-shadow, que fica pintada na posicao fixa. */
-.tw thead th{box-shadow:inset 0 -1px 0 #333}
-table{width:100%;border-collapse:collapse;background:#111;min-width:900px}
-@media(max-width:768px){
-  .content{padding:12px 10px}
-  .kpis{grid-template-columns:repeat(3,1fr)}
-  table{min-width:660px}
-  .tw table th:nth-child(7), .tw table td:nth-child(7){display:none} /* Observacoes some no mobile */
-}
-th{padding:10px 8px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#888;background:#1a1a1a;border-bottom:1px solid #333;vertical-align:top}
-td{padding:10px 8px;border-bottom:1px solid var(--sur2);font-size:12px;vertical-align:middle;text-align:center}
-tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
-</style></head><body>
-<div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
-${navBar(user, 'historico')}
-<div class="content">
-<div class="kpis">
-<div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
-<div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
-<div class="kpi" title="o AvB que valeu em cada corrida: a sua escolha quando você entrou, o do motor quando não entrou">
-  <div class="kpi-label">Taxa de acerto</div>
-  <div class="kpi-val" id="kpi-taxa" style="color:${_tx.geral.pct==null?'#666':(_tx.geral.pct>=50?'#22C65E':'#ef4444')}">${_tx.geral.pct==null?'—':_tx.geral.pct+'%'}</div>
-  <div id="kpi-taxa-cnt" style="font-size:9px;color:#666;margin-top:2px">${_tx.geral.tot?`${_tx.geral.ok}/${_tx.geral.tot}`:''}</div>
-</div>
-<div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
-<div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
-<div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
-
-<div class="kpi gtn">
-  <div class="kpi-label">Acerto por turno</div>
-  <div class="gtn-cols" id="kpi-turnos">
-  ${['Manhã','Tarde'].map(function(t){
-    var d=_turnos[t];
-    var linha=function(rot,o){
-      var tot=o.ok+o.err;
-      if(!tot) return '<div class="gtn-lin"><span class="gtn-rot">'+rot+'</span>'
-        + '<span class="gtn-bar"></span><span class="gtn-pct" style="color:#555">—</span></div>';
-      var pct=Math.round(o.ok/tot*100);
-      return '<div class="gtn-lin" title="'+rot+' '+t+': '+o.ok+' acerto(s), '+o.err+' erro(s)">'
-        + '<span class="gtn-rot">'+rot+'</span>'
-        + '<span class="gtn-bar"><span class="gtn-ok" style="width:'+pct+'%"></span>'
-        +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
-        + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
-    };
-    return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'
-      + linha('AvB',d) + '</div>';
-  }).join('')}
-  </div>
-</div>
-</div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:88px">Motor<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="top">TOP</option><option value="regular">REGULAR</option><option value="fora">Fora das réguas</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:328px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
-${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
-  var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
-  var horaBr=r.hora_br||r.hora||'-';
-  var horaUk=r.hora||'';
-  var _brh=(function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
-  var turnoBR=_brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}" data-motor="${_motorDoAvb(r)}">
-<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
-<td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
-${_celulaAvb(r)}${_celulaMotor(r)}
-<td style="text-align:center" title="${(r._bateuConta||'').replace(/"/g,'&quot;')}"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
-<option value="" ${!r.bateu?'selected':''}>-</option>
-<option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
-<option value="nao" style="color:#ef4444" ${r.bateu==='nao'?'selected':''}>✗ Não</option>
-</select></td>
-${_celulaResultado(r)}
-<td style="text-align:center">${!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':'')}</td>
-${_celulaObs(r)}
-<td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
-${_celulaAberto(r)}
-<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
-</tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
-</tbody></table></div>
-
-<style>
-.row-atrasada{animation:rowAtrasadaBlink 1.2s ease-in-out infinite}
-@keyframes rowAtrasadaBlink{0%,100%{background:transparent}50%{background:rgba(234,179,8,.18)}}
-.hist-inp{background:transparent;border:1px solid transparent;color:#ccc}
-.hist-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff;cursor:pointer}
-.hist-inp[type=checkbox]{cursor:default}
-.hist-inp[type=checkbox]:not([disabled]){cursor:pointer}
-.edit-pencil{cursor:pointer;font-size:13px;opacity:.55;transition:opacity .15s}
-.edit-pencil:hover{opacity:1}
-.edit-pencil.editing{opacity:1;color:#22c55e}
-#sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}#sv-modal.open{display:flex}
-#sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
-#sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
-#sv-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
-#sv-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
-#sv-xbtn:hover{color:#fff}
-#sv-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
-${cssCardGalgo()}
-/* Mobile: modal ocupa quase a tela toda e a tabela rola na horizontal
-   (colunas legiveis, arrasta pro lado pra ver Bends/Fin/Remarks/Grade/CalTm). */
-@media(max-width:768px){
-  #sv-modal{align-items:stretch;padding:10px}
-  #sv-box{width:100%;max-width:100%;height:100%;max-height:100%;overflow:hidden}
-  #sv-hdr{flex-shrink:0}
-  #sv-body{flex:1 1 auto;min-height:0;height:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
-  .sv-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .sv-tbl{table-layout:auto;width:auto;min-width:640px}
-}
-</style>
-<style>
-#rv-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:9100;padding:20px}
-#rv-modal.open{display:flex}
-#rv-box{background:#0d0d0d;border:1px solid rgba(96,165,250,.25);border-radius:14px;width:988px;max-width:100%;height:824px;max-height:95vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 80px rgba(96,165,250,.08)}
-#rv-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#111;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
-#rv-dot{width:8px;height:8px;border-radius:50%;background:#60a5fa;flex-shrink:0}
-#rv-title{font-size:13px;font-weight:700;color:#60a5fa;flex:1;margin:0}
-#rv-newtab{font-size:11px;color:#555;text-decoration:none;padding:4px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap}
-#rv-newtab:hover{color:#aaa;border-color:#555}
-#rv-xbtn{background:transparent;border:none;color:#555;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0}
-#rv-xbtn:hover{color:#f0f0f0}
-#rv-crop{flex:1;overflow:hidden;position:relative}
-#rv-frame{position:absolute;top:-51px;left:0;width:100%;height:calc(100% + 51px);border:none;background:#000}
-</style>
-<div id="rv-modal">
-  <div id="rv-box">
-    <div id="rv-hdr">
-      <div id="rv-dot"></div>
-      <h3 id="rv-title">Replay</h3>
-      <a id="rv-newtab" href="#" target="_blank">&#8599; Nova aba</a>
-      <button id="rv-xbtn" onclick="closeReplayModal()">&#x2715;</button>
-    </div>
-    <div id="rv-crop">
-      <iframe id="rv-frame" src="about:blank" allowfullscreen allow="autoplay; fullscreen"></iframe>
-    </div>
-  </div>
-</div>
-<div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
-<script src="${BASE}/static/js/cardGalgo.js"></script>
-<script>
-
-// "leia mais" das Observacoes: um listener so pra tabela inteira, em vez de
-// onclick por linha (aspas dentro de onclick em template literal ja quebraram
-// tela neste projeto).
-document.addEventListener('click', function(ev){
-  var a = ev.target;
-  if(!a || !a.classList || !a.classList.contains('obs-mais')) return;
-  var td = a.closest('td'); if(!td) return;
-  var resto = td.querySelector('.obs-resto'), elip = td.querySelector('.obs-elip');
-  var aberto = resto && resto.style.display !== 'none';
-  if(resto) resto.style.display = aberto ? 'none' : 'inline';
-  if(elip)  elip.style.display  = aberto ? 'inline' : 'none';
-  a.textContent = aberto ? 'leia mais' : 'leia menos';
-});
-
-var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida)}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
-var BASE='${BASE}';
-// Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
-// pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
-function saveHistField(id, field, value){
-  var body={};
-  body[field]=value;
-  fetch(BASE+'/api/race/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-    .catch(function(e){console.error('[historico] erro ao salvar',field,e);});
-  var race = ALL_RACES.find(function(r){ return String(r.id)===String(id); });
-  if (race) { race[field] = value; recomputeKPIs(); }
-}
-function recomputeKPIs(){
-  var resolvidas = ALL_RACES.filter(function(r){ return r.bateu; }).length;
-  var ac = ALL_RACES.filter(function(r){ return r.bateu==='sim'; }).length;
-  var taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
-  var acEl = document.getElementById('kpi-acertos');
-  if (acEl) acEl.textContent = ac;
-  var taxaEl = document.getElementById('kpi-taxa');
-  if (taxaEl) { taxaEl.textContent = taxa + '%'; taxaEl.style.color = (resolvidas>0 && ac/resolvidas>=.5) ? '#22C65E' : '#ef4444'; }
-  var apostadas = ALL_RACES.filter(function(r){ return r.odd; });
-  var ap = apostadas.length;
-  var green = apostadas.filter(function(r){ return r.bateu==='sim'; }).length;
-  var pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
-  document.getElementById('kpi-apostas').textContent = ap;
-  document.getElementById('kpi-green').textContent = green;
-  var pgEl = document.getElementById('kpi-pctgreen');
-  pgEl.textContent = pctGreen + '%';
-  pgEl.style.color = (ap>0 && green/ap>=.5) ? '#22C65E' : '#ef4444';
-}
-// Lapis: liga/desliga o modo de edicao so daquela linha (Odd/Aberto ficam
-// desabilitados por padrao, pra nao editar sem querer)
-function setRowEdit(id, editing){
-  var pencilEl = document.querySelector('.edit-pencil[data-row="'+id+'"]');
-  if (pencilEl) {
-    pencilEl.classList.toggle('editing', editing);
-    pencilEl.innerHTML = editing ? '&#10003;' : '&#9998;';
-  }
-  document.querySelectorAll('.hist-inp[data-id="'+id+'"]').forEach(function(el){
-    el.disabled = !editing;
-  });
-}
-function toggleRowEdit(pencilEl){
-  var id = pencilEl.getAttribute('data-row');
-  var editing = !pencilEl.classList.contains('editing');
-  setRowEdit(id, editing);
-}
-document.querySelectorAll('table [data-f]').forEach(function(el){
-  var evt = el.type==='checkbox' ? 'change' : (el.type==='number'||el.type==='text' ? 'input' : 'change');
-  el.addEventListener(evt, function(){
-    var id=this.getAttribute('data-id'), f=this.getAttribute('data-f');
-    var val = this.type==='checkbox' ? (this.checked?1:0) : this.value;
-    saveHistField(id, f, val);
-    if (f === 'flag_atrasada') {
-      var tr = this.closest('tr');
-      if (tr) tr.classList.toggle('row-atrasada', !!val);
-    }
-    if (f === 'bateu') {
-      this.style.color = val==='sim' ? '#22c55e' : val==='nao' ? '#ef4444' : '#888';
-    }
-  });
-  // Odd: perder o foco (clicar fora) tambem fecha a edicao, alem do Enter
-  // (que ja da blur() via onkeydown inline no input)
-  if (el.getAttribute('data-f')==='odd') {
-    el.addEventListener('blur', function(){
-      setRowEdit(this.getAttribute('data-id'), false);
+    div.setAttribute('data-idx', rIdx);
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.justifyContent = 'space-between';
+    var top3Val = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(function(x){return x>0;}).join('-') : r.top3) : '';
+    var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2A4 4 0 0 1 17 9"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2A4 4 0 0 0 7 9"/></svg> '+top3Val+'</span></div>' : '';
+    div.innerHTML += '<div style="flex:1;min-width:0">'
+      + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
+      + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
+      + (r.cardSuspect ? '<div class="rc-suspect-badge">⚠ PISTA PODE TER CANCELADO</div>' : '')
+      + (r._reanaliseFlag && r._reanaliseFlag.type==='reanalise' && (Date.now()-r._reanaliseFlag.at)<300000 ? '<div class="rc-reanalise-badge">REANALISADA</div>' : '')
+      + '<div class="rc-time">'+hbr+'</div>'
+      + '<div class="rc-name">'+corridaDisplay(r)+'</div>'
+      + '<div class="rc-meta">'+(r.dist||'')+'m</div>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;padding-left:6px">'
+      + '<div style="display:flex;align-items:center;gap:3px">'
+      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapFav||'?')+'</span>'
+      + '<span style="font-size:9px;color:var(--mut)">vs</span>'
+      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
+      + '</div>'
+      + top3Html
+      // Selo do nivel embaixo do top3, na coluna da direita: a corrida ja se
+      // identifica pelo horario e pelo nome, e o selo e' o que faz voce parar
+      // nela ao correr o olho pela lista.
+      + '</div>';
+    div.addEventListener('click', function() {
+      document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
+      div.classList.add('rc-active');
+      renderFocusPanel(r, rIdx);
     });
+    col.appendChild(div);
+    first = false;
+  });
+
+  // Filtro ligado e nada na tela: avisa em vez de deixar a lista muda. Isso
+  // acontece de manha, antes do primeiro ciclo de 4 min gravar o bw — nesse
+  // intervalo TODAS as corridas vem com bw:0, e a lista vazia pareceria falta
+  // de corrida em vez de filtro.
+  // avbs aqui JA vem filtrado (e o toShow). Vazio + filtro ligado = o filtro
+  // escondeu tudo. O cabecalho com o botao ja foi desenhado acima, entao daqui
+  // da' pra voltar — foi isso que faltou na primeira versao.
+  if (FILTRO_TIER && !avbs.length) {
+    var av = document.createElement('div');
+    av.style.cssText = 'padding:14px 12px;font-size:11px;color:var(--mut);line-height:1.6;text-align:center';
+    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
+      + '<div style="margin-top:6px"><button type="button" onclick="verTodasAsCorridas()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver todas</button></div>';
+    col.appendChild(av);
   }
-});
-function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
-document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});
-function openSessValModal(id){
-  var r=ALL_RACES.find(function(x){return x.id==id;});
-  if(!r)return;
-  var hf=null,hu=null;
-  try{if(r.hist_fav)hf=JSON.parse(r.hist_fav);}catch(e){}
-  try{if(r.hist_und)hu=JSON.parse(r.hist_und);}catch(e){}
-  if(!hf&&!hu){document.getElementById('sv-title').textContent='Historico indisponivel';document.getElementById('sv-body').innerHTML='<p style="color:#888;font-size:12px;padding:20px;text-align:center">Sessao salva antes do recurso ser ativado.</p>';document.getElementById('sv-modal').classList.add('open');return;}
-  document.getElementById('sv-title').textContent='T'+r.trap_fav+' '+(r.name_fav||'')+' vs T'+r.trap_und+' '+(r.name_und||'');
-  document.getElementById('sv-body').innerHTML=svCard(r.trap_fav,r.name_fav,r.perfil_fav,hf)+'<div class="sv-sep"></div>'+svCard(r.trap_und,r.name_und,r.perfil_und,hu);
-  document.getElementById('sv-modal').classList.add('open');
+  if (!avbs.length) {
+    col.innerHTML += '<div style="padding:20px;text-align:center;color:var(--mut);font-size:12px">Nenhuma corrida futura</div>';
+  }
 }
-function closeReplayModal(){
-  document.getElementById('rv-modal').classList.remove('open');
-  document.getElementById('rv-frame').src='about:blank';
+
+function toggleTableView() {
+  var main = document.getElementById('main-layout');
+  if (main.classList.contains('focus-mode')) {
+    main.classList.remove('focus-mode');
+  } else {
+    enterFocusMode();
+  }
 }
-function openReplay(id){
-  var r=ALL_RACES.find(function(x){return x.id==id;});
-  if(!r||!r.video_url)return;
-  document.getElementById('rv-title').textContent='\u25B6 '+(r.corridaNome||r.corrida||'Replay');
-  document.getElementById('rv-newtab').href=r.video_url;
-  document.getElementById('rv-frame').src=r.video_url;
-  document.getElementById('rv-modal').classList.add('open');
+
+/* ── FIM PAINEL DE FOCO ─────────────────────────────────────── */
+
+/* ── Popup pós-análise (3 etapas) ───────────────────────────────────── */
+function injectPostSaveModal(){
+  var d=document.createElement('div');
+  d.innerHTML='<div id="ps-modal" class="ps-ov">'
+    +'<div class="ps-box" id="ps-box">'
+    +'<span class="ps-icon" id="ps-icon">&#128190;</span>'
+    +'<div class="ps-title" id="ps-title">Sessão analisada!</div>'
+    +'<div class="ps-sub" id="ps-sub"></div>'
+    +'<input class="ps-inp" id="ps-inp" type="text" maxlength="80" style="display:none" placeholder="Ex.: Races 03/07/2026">'
+    +'<div class="ps-btns" id="ps-btns"></div>'
+    +'</div></div>';
+  document.body.appendChild(d);
+  document.getElementById('ps-modal').addEventListener('click',function(e){if(e.target===this)closePsModal();});
 }
-// ===== Filtros do cabecalho do historico (Hora BR / Corrida / Bateu) =====
-function _histSet(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-// Refaz o "Acerto por turno" com as linhas que estao na tela. O grafico nascia
-// do servidor sobre TODAS as corridas, entao filtrar por pista ou por VIP
-// mudava a tabela inteira e deixava o grafico contando o que nao estava mais
-// visivel — dois numeros discordando na mesma tela.
-//
-// O turno vem do data-turno, o mesmo atributo que o filtro de turno usa, e o
-// resultado do data-bateu, que o servidor ja derivou com bateuPar sobre o AvB
-// que valeu. Nada e' recalculado aqui: so recontado.
-function redesenhaTurnos(vis){
-  var box=document.getElementById('kpi-turnos');
-  if(!box) return;
-  var g={'Manhã':{ok:0,err:0},'Tarde':{ok:0,err:0}};
-  vis.forEach(function(tr){
-    var t=tr.getAttribute('data-turno')||'';
-    if(!g[t]) return;
-    var b=tr.getAttribute('data-bateu')||'';
-    if(b==='sim') g[t].ok++; else if(b==='nao') g[t].err++;
-  });
-  box.innerHTML=['Manhã','Tarde'].map(function(t){
-    var o=g[t], tot=o.ok+o.err, lin;
-    if(!tot){
-      lin='<div class="gtn-lin"><span class="gtn-rot">AvB</span>'
-        + '<span class="gtn-bar"></span><span class="gtn-pct" style="color:#555">—</span></div>';
-    } else {
-      var pct=Math.round(o.ok/tot*100);
-      lin='<div class="gtn-lin" title="AvB '+t+': '+o.ok+' acerto(s), '+o.err+' erro(s)">'
-        + '<span class="gtn-rot">AvB</span>'
-        + '<span class="gtn-bar"><span class="gtn-ok" style="width:'+pct+'%"></span>'
-        +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
-        + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
+function closePsModal(){var m=document.getElementById('ps-modal');if(m)m.classList.remove('open');}
+function openPsModal(){
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  var alta=results.filter(function(r){return r.nivel==='alta';}).length;
+  showPsStep1(avbs.length,alta);
+  document.getElementById('ps-modal').classList.add('open');
+}
+function showPsStep1(avbs,alta){
+  document.getElementById('ps-icon').textContent='\uD83D\uDCBE';
+  document.getElementById('ps-title').textContent='Sessão analisada!';
+  document.getElementById('ps-sub').innerHTML='<strong style="color:#22c55e">'+avbs+'</strong> AvBs encontrados, <strong style="color:#f97316">'+alta+'</strong> de alta confiança.<br>Deseja salvar esta sessão no Histórico?';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var no=document.createElement('button');no.className='ps-btn-sec';no.textContent='Não, obrigado';no.onclick=showPsDeclineMsg;btns.appendChild(no);
+  var yes=document.createElement('button');yes.className='ps-btn-pri';yes.textContent='Sim, salvar ✓';yes.onclick=showPsStep2;btns.appendChild(yes);
+}
+function showPsDeclineMsg(){
+  document.getElementById('ps-icon').textContent='\u2705';
+  document.getElementById('ps-title').textContent='Ok';
+  document.getElementById('ps-sub').textContent='Suas corridas só ficarão disponíveis na aba Analisar.';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='OK';ok.onclick=finishDeclineSave;btns.appendChild(ok);
+}
+function clearUploadedPdfList(){
+  raceFiles=[];
+  var list=document.getElementById('rlist');
+  if(list) list.innerHTML='';
+}
+function finishDeclineSave(){
+  closePsModal();
+  // Lista ja foi limpa logo apos a analise terminar (clearUploadedPdfList),
+  // mas chama de novo aqui por segurança caso algo tenha sido re-adicionado.
+  clearUploadedPdfList();
+}
+function showPsStep2(){
+  document.getElementById('ps-icon').textContent='\u270F\uFE0F';
+  document.getElementById('ps-title').textContent='Nome da sessão';
+  document.getElementById('ps-sub').innerHTML='Escolha um nome para identificar esta análise no Histórico.<br><small style="color:#f97316">O padrão "Races DD/MM/AAAA" é reservado para as sessões automáticas do robô — não pode ser usado aqui.</small>';
+  var inp=document.getElementById('ps-inp');
+  inp.style.display='block';
+  var now=new Date();
+  var dd=String(now.getDate()).padStart(2,'0'), mm=String(now.getMonth()+1).padStart(2,'0'), yyyy=now.getFullYear();
+  var hh=String(now.getHours()).padStart(2,'0'), mi=String(now.getMinutes()).padStart(2,'0');
+  // Sugestao de nome DIFERENTE do padrao "Races DD/MM/AAAA" usado pelas sessoes
+  // automaticas do robo, pra nao colidir/sobrescrever sem querer.
+  inp.value='Avulsa '+dd+'/'+mm+'/'+yyyy+' '+hh+'h'+mi;
+  setTimeout(function(){inp.focus();inp.select();},80);
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var back=document.createElement('button');back.className='ps-btn-sec';back.textContent='← Voltar';back.onclick=function(){var avbs=results.filter(function(r){return r.tipo==='avb';});var alta=results.filter(function(r){return r.nivel==='alta';}).length;showPsStep1(avbs.length,alta);};btns.appendChild(back);
+  var ok=document.createElement('button');ok.className='ps-btn-pri';ok.textContent='Salvar';ok.onclick=psSaveCheck;btns.appendChild(ok);
+  inp.onkeydown=function(e){if(e.key==='Enter')psSaveCheck();if(e.key==='Escape')closePsModal();};
+}
+var RESERVED_SESSION_NAME_RE = /^races\s+\d{1,2}\/\d{1,2}\/\d{4}$/i;
+async function psSaveCheck(){
+  var name=document.getElementById('ps-inp').value.trim();
+  if(!name){document.getElementById('ps-inp').focus();return;}
+  // Bloqueia o padrao reservado das sessoes automaticas do robo — corridas
+  // avulsas (upload manual) nunca podem usar esse nome, pra nao arriscar
+  // sobrescrever a sessao automatica do dia sem querer.
+  if(RESERVED_SESSION_NAME_RE.test(name)){
+    showToast('Esse nome é reservado para as sessões automáticas do robô. Escolha outro nome pra corridas avulsas.', false);
+    document.getElementById('ps-inp').focus();
+    document.getElementById('ps-inp').select();
+    return;
+  }
+  try{
+    var r=await fetch(BASE+'/api/sessions');
+    var sessions=await r.json();
+    var existing=sessions.find(function(s){return s.name.trim().toLowerCase()===name.toLowerCase();});
+    if(existing){showPsStep3(name,existing.id);}
+    else{await psSaveNew(name);}
+  }catch(e){await psSaveNew(name);}
+}
+function showPsStep3(name,existingId){
+  document.getElementById('ps-icon').textContent='\u26A0\uFE0F';
+  document.getElementById('ps-title').textContent='Nome já existe';
+  document.getElementById('ps-sub').innerHTML='Já existe uma sessão chamada <strong style="color:#fff">"'+name+'"</strong>.<br>O que deseja fazer?';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var cancel=document.createElement('button');cancel.className='ps-btn-sec';cancel.textContent='Cancelar';cancel.onclick=closePsModal;btns.appendChild(cancel);
+  var update=document.createElement('button');update.className='ps-btn-warn';update.textContent='Atualizar';update.title='Mantém o nome e substitui os dados';update.onclick=async function(){await psReplace(name,existingId);};btns.appendChild(update);
+  var replace=document.createElement('button');replace.className='ps-btn-pri';replace.textContent='Substituir';replace.title='Remove a sessão antiga e cria uma nova';replace.onclick=async function(){await psReplace(name,existingId);};btns.appendChild(replace);
+}
+async function psSaveNew(name){
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  try{
+    var r=await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    if(r.ok){closePsModal();showToast('\u2713 Sessão "'+name+'" salva!',true);setTimeout(function(){location.reload();},1600);}
+    else showToast('Erro ao salvar sessão.',false);
+  }catch(e){showToast('Erro ao salvar sessão.',false);}
+}
+async function psReplace(name,oldId){
+  try{await fetch(BASE+'/api/session/'+oldId,{method:'DELETE'});}catch(e){}
+  await psSaveNew(name);
+}
+
+/* modal salvar */
+function injectSaveModal(){
+  var d=document.createElement('div');
+  d.innerHTML='<div id="save-modal" class="ghf-modal-ov" style="display:none">'
+    +'<div class="ghf-modal-box">'
+    +'<div class="ghf-modal-title">&#128190; Salvar sessão</div>'
+    +'<div class="ghf-modal-sub">Dê um nome para identificar esta análise no Histórico</div>'
+    +'<input id="save-inp" class="ghf-modal-inp" type="text" placeholder="Ex.: Races 28/06/2026" maxlength="80">'
+    +'<div class="ghf-modal-foot">'
+    +'<button id="save-cancel" class="ghf-btn-sec">Cancelar</button>'
+    +'<button id="save-ok" class="ghf-btn-pri">Salvar</button>'
+    +'</div></div></div>'
+    +'<div id="ghf-toast" class="ghf-toast"></div>';
+  document.body.appendChild(d);
+  document.getElementById('save-cancel').addEventListener('click',closeSaveModal);
+  document.getElementById('save-ok').addEventListener('click',doSaveSession);
+  document.getElementById('save-inp').addEventListener('keydown',function(e){if(e.key==='Enter')doSaveSession();if(e.key==='Escape')closeSaveModal();});
+  document.getElementById('save-modal').addEventListener('click',function(e){if(e.target===this)closeSaveModal();});
+}
+function openSaveModal(){
+  var now=new Date();
+  var dd=String(now.getDate()).padStart(2,'0');
+  var mm=String(now.getMonth()+1).padStart(2,'0');
+  var yyyy=now.getFullYear();
+  document.getElementById('save-inp').value='Races '+dd+'/'+mm+'/'+yyyy;
+  document.getElementById('save-modal').style.display='flex';
+  setTimeout(function(){var inp=document.getElementById('save-inp');inp.focus();inp.select();},80);
+}
+function closeSaveModal(){document.getElementById('save-modal').style.display='none';}
+var toastHideTimer = null;
+function hideToast(){
+  var t=document.getElementById('ghf-toast');
+  t.classList.remove('t-show');
+  if(toastHideTimer){clearTimeout(toastHideTimer);toastHideTimer=null;}
+}
+function showToast(msg,ok){
+  var t=document.getElementById('ghf-toast');
+  if(!t) return;
+  t.innerHTML='<span>'+msg+'</span><button class="ghf-toast-x" onclick="hideToast()" aria-label="Fechar">&#x2715;</button>';
+  t.className='ghf-toast '+(ok?'t-ok':'t-err');
+
+  // Encaixa o toast na FAIXA DE AVISOS, abaixo da barra de Odd, em vez de
+  // flutuar sobre a tela. Flutuando ele cobria justamente a barra de Odd e
+  // Stake — o lugar onde voce precisa clicar depois de ler o aviso.
+  // O posicionamento vai por style inline de proposito: o CSS do .ghf-toast
+  // vive em outro arquivo e usa position:fixed; sobrescrever aqui garante o
+  // encaixe sem depender de qual regra vence.
+  var col = document.querySelector('.focus-col');
+  if (col) {
+    if (t.parentNode !== col) col.appendChild(t);
+    t.style.cssText = 'position:static;display:flex;align-items:center;justify-content:space-between;'
+      + 'gap:10px;width:100%;margin:0;padding:7px 12px;border-radius:0;font-size:11px;'
+      + 'box-shadow:none;transform:none;left:auto;right:auto;bottom:auto;top:auto;z-index:auto;'
+      + 'border-top:1px solid rgba(255,255,255,.08);'
+      + (ok ? 'background:rgba(34,197,94,.12);color:#22c55e' : 'background:rgba(239,68,68,.12);color:#ef4444');
+  }
+
+  if(toastHideTimer){clearTimeout(toastHideTimer);}
+  requestAnimationFrame(function(){t.classList.add('t-show');});
+  toastHideTimer=setTimeout(function(){
+    t.classList.remove('t-show');
+    if(col && t.parentNode===col) t.style.display='none';   // libera o espaco
+    toastHideTimer=null;
+  },2600);
+}
+async function doSaveSession(){
+  var name=document.getElementById('save-inp').value.trim();
+  if(!name){document.getElementById('save-inp').focus();return;}
+  closeSaveModal();
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  try{
+    var resp=await fetch(BASE+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,races:avbs})});
+    if(resp.ok){showToast('\u2713 Sessão "'+name+'" salva!',true);setTimeout(function(){location.reload();},1600);}
+    else showToast('Erro ao salvar sessão.',false);
+  }catch(e){showToast('Erro ao salvar sessão.',false);}
+}
+
+/* modal validar dados no pdf */
+function injectValModal(){
+  var m=document.createElement('div');m.id='val-modal';
+  m.innerHTML='<div id="val-box"><div id="val-hdr"><h3 id="val-title">Histórico</h3><button id="val-xbtn" onclick="closeValModal()">&#x2715;</button></div><div id="val-body"></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click',function(e){if(e.target===this)closeValModal();});
+  var vs=document.createElement('style');
+  vs.textContent=`
+#val-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}
+#val-modal.open{display:flex}
+#val-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
+#val-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}
+#val-hdr h3{font-size:12px;font-weight:600;color:rgba(255,255,255,.85);margin:0;flex:1;text-align:center;letter-spacing:.2px}
+#val-xbtn{background:transparent;border:none;color:rgba(255,255,255,.3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;transition:color .15s}
+#val-xbtn:hover{color:#fff}
+#val-body{padding:12px 16px;display:flex;flex-direction:column;gap:0;background:#12172a}
+#val-body.val-compact .val-dog{width:100%}
+#val-body.val-compact .val-dog-hdr{margin-bottom:1px;gap:5px}
+#val-body.val-compact .val-dog-hdr .trap-badge{width:18px;height:18px;font-size:9px}
+#val-body.val-compact .val-name{font-size:11px}
+#val-body.val-compact .val-tbl th{padding:1px 3px;font-size:9px;line-height:1.1}
+#val-body.val-compact .val-tbl td{padding:0px 3px;font-size:9px;line-height:1.05}
+#val-body.val-compact .val-td-rem{font-size:8px;max-width:90px}
+#val-body.val-compact .val-sep{margin:2px 0}
+#val-body.val-compact{max-height:85vh;overflow-y:auto;gap:0}
+.val-dog{width:100%}
+.val-dog-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:0}
+.val-dog-hdr .trap-badge{width:26px;height:26px;font-size:12px;font-weight:700;flex-shrink:0}
+.val-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.1px}
+.val-perfil{font-size:10px;color:rgba(255,255,255,.35);margin-left:6px;font-weight:400}
+.val-sep{height:1px;background:rgba(255,255,255,.06);margin:10px 0}
+.val-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;font-family:var(--font-body)}
+.val-tbl thead tr{border-bottom:1px solid rgba(255,255,255,.08)}
+.val-tbl th{font-size:12px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.4px;padding:5px 4px;text-align:center;white-space:nowrap;font-family:var(--font-body)}
+.val-tbl td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.78);vertical-align:middle;text-align:center;font-family:var(--font-body);font-size:12px}
+.val-tbl tr:last-child td{border-bottom:none}
+.val-tbl tr:hover td{background:rgba(255,255,255,.025)}
+.val-td-date{color:rgba(255,255,255,.6);font-size:12px;text-align:left;font-family:var(--font-body)}
+.val-td-track{color:rgba(255,255,255,.7);font-size:12px;text-align:center;font-family:var(--font-body)}
+.val-td-muted{color:rgba(255,255,255,.4);font-size:12px;text-align:center;font-family:var(--font-body)}
+.val-td-bends{font-family:var(--font-body);font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-align:center}
+.val-td-rem{color:rgba(255,255,255,.45);font-size:11px;text-align:left;font-family:var(--font-body);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.val-badge-grade{display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px;font-size:12px;color:rgba(255,255,255,.55);font-family:var(--font-body)}
+.val-td-caltm{color:#60a5fa;font-weight:700;font-size:12px;text-align:center;font-family:var(--font-body)}
+@media(max-width:768px){
+  #val-box{width:96vw;max-width:96vw;max-height:90vh;overflow:hidden}
+  #val-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
+  .val-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .val-tbl{table-layout:auto;width:auto;min-width:640px}
+  #val-body.val-compact{max-height:90vh}
+  #val-body.val-compact .val-tbl{min-width:640px}
+  #val-body.val-compact .val-tbl th{font-size:11px;padding:3px 4px;line-height:1.2}
+  #val-body.val-compact .val-tbl td{font-size:11px;padding:3px 4px;line-height:1.2}
+  #val-body.val-compact .val-td-rem{font-size:10px;max-width:140px}
+  #val-body.val-compact .val-dog-hdr .trap-badge{width:22px;height:22px;font-size:11px}
+  #val-body.val-compact .val-name{font-size:12px}
+}
+.val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
+.val-link:hover{color:#60a5fa}.t1{background:radial-gradient(circle at 35% 35%,#ff4444,#c00 60%,#8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4)}.t2{background:radial-gradient(circle at 35% 35%,#4488ff,#1a3db5 60%,#0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3)}.t3{background:radial-gradient(circle at 35% 35%,#fff,#d0d0d0 60%,#a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8)}.t4{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a 60%,#000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15)}.t5{background:radial-gradient(circle at 35% 35%,#ffaa00,#e07000 60%,#a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4)}.t6{background:radial-gradient(circle at 50% 50%,#cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2)}
+`;
+  document.head.appendChild(vs);
+}
+function closeValModal(){var m=document.getElementById('val-modal');if(m)m.classList.remove('open');}
+function openValModal(key){
+  var r=results.find(function(x){return x.tipo==='avb'&&x.histFav&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[VAL] nao achou:',key);return;}
+  document.getElementById('val-title').textContent='T'+r.trapFav+' '+r.nameFav+' vs T'+r.trapUnd+' '+r.nameUnd;
+  document.getElementById('val-body').classList.remove('val-compact');
+  document.getElementById('val-body').innerHTML=buildDogCard(r.trapFav,r.nameFav,r.perfilFav,r.histFav)+'<div class="val-sep"></div>'+buildDogCard(r.trapUnd,r.nameUnd,r.perfilUnd,r.histUnd);
+  document.getElementById('val-modal').classList.add('open');
+}
+function openAllDogsModal(key){
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[ALLDOGS] nao achou:',key);return;}
+  var all=r.histAll&&r.histAll.length?r.histAll:[];
+
+  // Descartados vao junto, no FIM. Eles correm a prova do mesmo jeito: o motor
+  // os tirou do CALCULO, nao da pista. Sem eles, a "corrida completa" mostrava
+  // meia corrida — e na hora de olhar o grid faltava justamente quem pode
+  // atrapalhar o pick.
+  //
+  // O trap e' a chave: um galgo eliminado pode ate constar no histAll (o motor
+  // pontuou e so depois descartou), e ai ele nao pode aparecer duas vezes.
+  var elim = (r.eliminados||[]).filter(function(e){ return e && e.trap; });
+  var noCalculo = all.map(function(g){ return Number(g.trap); });
+  var fora = elim.filter(function(e){ return noCalculo.indexOf(Number(e.trap)) < 0; });
+
+  document.getElementById('val-title').textContent = 'Corrida completa — ' + corridaDisplay(r)
+    + (fora.length ? '  \u00b7  ' + all.length + ' no cálculo + ' + fora.length + ' descartado' + (fora.length>1?'s':'') : '');
+  document.getElementById('val-body').classList.add('val-compact');
+
+  if(!all.length && !fora.length){
+    document.getElementById('val-body').innerHTML='<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Histórico completo não disponível para esta corrida (sessão salva antes deste recurso).</div>';
+  } else {
+    var html = all.map(function(g,i){
+      return buildDogCard(g.trap,g.nome,'',g.historico,true)
+        + ((i<all.length-1 || fora.length) ? '<div class="val-sep"></div>' : '');
+    }).join('');
+
+    if (fora.length) {
+      // Faixa separando. Sem ela o descartado pareceria mais um do grid, e o
+      // motivo de estar fora se perderia.
+      html += '<div style="margin:4px 0 10px;padding:6px 10px;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;border-radius:4px;'
+        + 'font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.3px">DESCARTADOS DO CÁLCULO'
+        + '<span style="font-weight:400;color:#c88;margin-left:6px">correm a prova do mesmo jeito</span></div>';
+      html += fora.map(function(e,i){
+        // O historico do descartado pode nao ter sido carregado. O buildDogCard
+        // ja trata lista vazia com "Sem histórico", entao o card sai igual aos
+        // outros, so sem as linhas.
+        var g = all.filter(function(x){ return Number(x.trap)===Number(e.trap); })[0];
+        var card = buildDogCard(e.trap, e.nome || (g&&g.nome) || '', '', (g&&g.historico)||[], true);
+        var motivo = '<div style="font-size:11px;color:#fca5a5;padding:2px 0 6px 2px">motivo: ' + (e.motivo||'não informado') + '</div>';
+        return card + motivo + (i<fora.length-1?'<div class="val-sep"></div>':'');
+      }).join('');
     }
-    return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'+lin+'</div>';
+    document.getElementById('val-body').innerHTML = html;
+  }
+  document.getElementById('val-modal').classList.add('open');
+}
+// Relatorio tecnico da analise — 100% gerado por parametro (le os dados ja
+// calculados pelo motor: scores, eliminados, histAll), sem chamar IA nenhuma.
+// Mesma logica que eu (Claude) apliquei manualmente ao ler um PDF, so que
+// aqui e' o proprio motor que ja calculou tudo — o relatorio so organiza.
+async function openRelatorioModal(key){
+  // Sempre sincroniza com o servidor ANTES de montar o relatorio — a copia
+  // local (results) pode estar desatualizada (carregada antes de algum
+  // conserto/reprocessamento no backend), e o relatorio processado errado
+  // nunca teria como saber disso sem buscar de novo. Achado 14/07/2026.
+  document.getElementById('val-title').textContent = 'Relatório de Análise';
+  document.getElementById('val-body').classList.remove('val-compact');
+  document.getElementById('val-body').innerHTML = '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Carregando…</div>';
+  document.getElementById('val-modal').classList.add('open');
+  try { await syncFromServer(); } catch(e) {}
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){
+    document.getElementById('val-body').innerHTML = '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Não encontrei essa corrida depois de sincronizar (pode ter saído da lista de hoje). Tenta fechar e abrir de novo.</div>';
+    return;
+  }
+  document.getElementById('val-title').textContent='Relatório de Análise — '+corridaDisplay(r)+' '+(r.hora||'');
+  // Nunca deixa a tela travada em "Carregando" se algo quebrar aqui dentro —
+  // mostra o erro de verdade, pra dar pra investigar (achado 14/07/2026,
+  // depois de um caso que travava sem nenhuma pista do que aconteceu).
+  try {
+    document.getElementById('val-body').innerHTML=buildRelatorioHtml(r);
+  } catch(e) {
+    console.error('[RELATORIO] erro ao montar', e);
+    document.getElementById('val-body').innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444;font-size:12px">Erro ao montar o relatório: '+(e.message||e)+'<br><br><span style="color:rgba(255,255,255,.4);font-size:11px">Manda esse texto pro Claude — isso ajuda a achar a causa.</span></div>';
+  }
+}
+// Resumo humanizado — mesma logica do relatorio tecnico, so que organizada
+// como texto corrido (paragrafo), tipo um comentario de analista. 100% por
+// template/condicional, sem chamar IA nenhuma.
+function buildResumoHumanizado(r){
+  if (!r.scores || !r.scores.length || r.nivel==='skip') return '';
+  var fav = r.scores.find(function(g){return g.trap===r.trapFav;});
+  var und = r.scores.find(function(g){return g.trap===r.trapUnd;});
+  if (!fav || !und) return '';
+
+  var partes = [];
+  partes.push('AvB: T'+r.trapFav+' '+(r.nameFav||'')+' (Favorito) vs T'+r.trapUnd+' '+(r.nameUnd||'')+' (Underdog) — '+r.pct+'% ('+(r.nivel==='alta'?'Alta':'Média')+' confiança).');
+
+  // 2o colocado do ranking (pra comentario de Back)
+  var segundo = (r.scores[0] && r.scores[0].trap===r.trapFav) ? r.scores[1] : r.scores[0];
+  if (r.vencedor) {
+    partes.push('Recomendação de Back também — a vantagem de '+(r.nameFav||'')+' se estende até o 2º colocado, não só sobre o Underdog.');
+  } else if (segundo) {
+    if (segundo.score > fav.score) {
+      partes.push('Sem recomendação de Back (T'+segundo.trap+' '+(segundo.nome||'')+', o 2º colocado, na verdade tem score bruto maior que o Favorito — a diferença virou negativa, provavelmente por causa do desempate).');
+    } else {
+      partes.push('Sem recomendação de Back — a vantagem sobre o 2º colocado (T'+segundo.trap+' '+(segundo.nome||'')+') não foi grande o suficiente.');
+    }
+  }
+
+  // Curiosidade do Post Pick — top3 pode chegar como array (analise ao vivo,
+  // recem-calculada) OU como string "3-1-6-4-5" (lida do banco, formato de
+  // armazenamento) — normaliza pra array sempre, antes de usar .slice/.join.
+  // Achado 14/07/2026: quebrava toda vez que vinha do banco (string).
+  var top3Arr = Array.isArray(r.top3) ? r.top3 : (typeof r.top3 === 'string' && r.top3 ? r.top3.split('-').map(Number).filter(function(n){return n>0;}) : []);
+  if (r.postPick && top3Arr.length>=3) {
+    var picks = r.postPick.split('-').map(Number).filter(function(n){return n>0;});
+    var top3Str = top3Arr.slice(0,3).join('-');
+    var bateuExato = picks.length>=3 && picks[0]===top3Arr[0] && picks[1]===top3Arr[1] && picks[2]===top3Arr[2];
+    var mesmosTres = picks.length>=3 && picks.slice(0,3).sort().join(',')===top3Arr.slice(0,3).sort().join(',');
+    if (bateuExato) {
+      partes.push('Curiosamente, o top 3 bateu exatamente com o Post Pick do Racing Post ('+r.postPick+').');
+    } else if (mesmosTres) {
+      partes.push('Os mesmos 3 galgos do Post Pick do Racing Post ('+r.postPick+') aparecem no top 3 do motor, só em ordem diferente ('+top3Str+').');
+    }
+  }
+
+  // Eliminados relevantes
+  if (r.eliminados && r.eliminados.length) {
+    partes.push((r.eliminados.length===1?'Vale notar que 1 galgo foi eliminado':'Vale notar que '+r.eliminados.length+' galgos foram eliminados')+' antes do cálculo (detalhes abaixo).');
+  }
+
+  return partes.join(' ');
+}
+// Odd media do galgo (2 ultimas SPs na pista/dist), vinda do motor. Pode ser
+// null quando o galgo nao tem SP registrado — nesse caso mostra travessao em
+// vez de zero, que seria lido como "odd 0" e nao como "sem dado".
+function _fmtOdd(v){
+  return (v == null || v === '') ? '—' : Number(v).toFixed(2);
+}
+
+function buildRelatorioHtml(r){
+  var sec = 'padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)';
+  var title = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#22c55e;margin-bottom:10px';
+  var html = '';
+
+  if (!r.scores || !r.scores.length) {
+    return '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Relatório detalhado não disponível para esta corrida (sessão salva antes deste recurso, ou corrida descartada antes do cálculo de scores).</div>';
+  }
+
+  // Resumo humanizado (paragrafo de abertura)
+  var resumo = buildResumoHumanizado(r);
+  if (resumo) {
+    html += '<div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(34,197,94,.04)"><div style="font-size:13px;color:#eee;line-height:1.6">'+resumo+'</div></div>';
+  }
+
+  // Eliminados
+  if (r.eliminados && r.eliminados.length) {
+    html += '<div style="'+sec+'"><div style="'+title+'">Galgos eliminados antes do cálculo</div>';
+    html += r.eliminados.map(function(e){
+      var _cio = /Cio recente/i.test(e.motivo||'');
+      if (_cio) {
+        return '<div style="font-size:12px;color:#fca5a5;padding:4px 0;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;padding-left:6px;border-radius:3px;margin:2px 0"><span style="margin-right:4px">🩸</span><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
+      }
+      return '<div style="font-size:12px;color:#ccc;padding:4px 0"><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
+    }).join('');
+    html += '</div>';
+  }
+
+  // Tabela de scores
+  html += '<div style="'+sec+'"><div style="'+title+'">Scores calculados (motor fixo/configurado)</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#888;text-align:left">'
+    + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Categoria</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Split</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center" title="Odd decimal média das 2 últimas SPs na pista/distância">Odd méd</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
+  html += r.scores.map(function(g){
+    var s = g.scores||{};
+    var isFav = g.trap===r.trapFav, isUnd = g.trap===r.trapUnd;
+    var rowStyle = 'border-top:1px solid rgba(255,255,255,.06)' + (isFav?';background:rgba(34,197,94,.08)':(isUnd?';background:rgba(239,68,68,.08)':''));
+    var tag = isFav?' <span style="color:#22c55e;font-size:9px">FAV</span>':(isUnd?' <span style="color:#ef4444;font-size:9px">UND</span>':'');
+    return '<tr style="'+rowStyle+'"><td style="padding:5px 6px">T'+g.trap+'</td><td style="padding:5px 6px">'+(g.nome||'')+tag+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.caltm!=null?s.caltm:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.categoria!=null?s.categoria:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.bends!=null?s.bends:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.split!=null?s.split:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.remarks!=null?s.remarks:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.sp!=null?s.sp:'-')+'</td>'
+      // Odd media vem no galgo (g.oddMedia), nao no bloco de scores: e' dado de
+      // mercado, nao criterio de pontuacao. Null vira travessao — mostrar 0
+      // seria lido como "odd zero" em vez de "sem dado".
+      +'<td style="padding:5px 6px;text-align:center;color:#cbd5e1">'+_fmtOdd(g.oddMedia)+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.brt!=null?s.brt:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center">'+(s.postPick!=null?s.postPick:'-')+'</td>'
+      +'<td style="padding:5px 6px;text-align:center;font-weight:700">'+g.score+'</td></tr>';
   }).join('');
+  html += '</tbody></table></div>';
+
+  // Desempates (quando a diferenca entre colocados adjacentes e <= 5 pts)
+  var tbNotes = [];
+  for (var i=1;i<r.scores.length;i++) {
+    var diff = r.scores[i-1].score - r.scores[i].score;
+    if (diff <= 5) {
+      tbNotes.push('T'+r.scores[i-1].trap+' ('+r.scores[i-1].nome+') vs T'+r.scores[i].trap+' ('+r.scores[i].nome+'): diferença de apenas '+diff.toFixed(1)+' pts no score bruto — desempate aplicado (ordem: nota de CalTm → nota de Categoria).');
+    }
+  }
+  if (tbNotes.length) {
+    html += '<div style="'+sec+'"><div style="'+title+'">Desempates aplicados (score final ≤ 5 pts de diferença)</div>';
+    html += tbNotes.map(function(t){return '<div style="font-size:12px;color:#ccc;padding:4px 0">'+t+'</div>';}).join('');
+    html += '</div>';
+  }
+
+  // Decisao final
+  html += '<div style="padding:16px 20px">';
+  if (r.nivel === 'skip') {
+    html += '<div style="font-size:12px;color:#f97316;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:12px">Corrida marcada como <strong>Skip</strong> — margem insuficiente pra indicação confiável.</div>';
+  } else {
+    html += '<div style="font-size:13px;color:#fff;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:14px">'
+      // Odd media de cada lado ao lado do nome. Com o modo avb_parelho o
+      // trapFav/trapUnd ja e' o par de odds mais proximas, entao ver as duas
+      // juntas mostra na hora o quao equilibrada e' a disputa.
+      + 'Favorito: <strong style="color:#22c55e">T'+r.trapFav+' '+(r.nameFav||'')+'</strong> <span style="color:#9aa4b2">('+_fmtOdd(r.oddFav)+')</span> vence Underdog: <strong style="color:#ef4444">T'+r.trapUnd+' '+(r.nameUnd||'')+'</strong> <span style="color:#9aa4b2">('+_fmtOdd(r.oddUnd)+')</span><br>'
+      + 'Confiança: <strong>'+r.pct+'% ('+r.nivel+')</strong>'
+      + (r.vencedor ? '<br><span style="color:#22c55e;font-weight:700">★ Recomendação de Back</span>' : '')
+      + '</div>';
+  }
+  html += '</div>';
+
+  return html;
+}
+function extrairRemarks(mixed){
+  if(!mixed)return'';
+  var commaIdx=mixed.indexOf(',');
+  if(commaIdx>=0){var wordStart=mixed.lastIndexOf(' ',commaIdx)+1;return mixed.substring(wordStart);}
+  var tokens=mixed.trim().split(' ');
+  for(var i=tokens.length-1;i>=0;i--){if(/^[A-Z]/.test(tokens[i]))return tokens.slice(i).join(' ');}
+  return mixed;
+}
+function buildDogCard(trap,nome,perfil,hist,compact){
+  var tc=['','t1','t2','t3','t4','t5','t6'];
+  function classRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
+  var caltms=(hist||[]).filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
+  var bestCaltm=caltms.length?Math.min.apply(null,caltms):null;
+  var bestClass=Math.min.apply(null,(hist||[]).map(function(h){return classRank(h.classe);}));
+  var rows=(hist||[]).map(function(h){
+    var rem=extrairRemarks(h.remarks||'');
+    var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
+    var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
+    var isBestCl=classRank(h.classe)===bestClass&&bestClass<999;
+    return'<tr>'
+      +'<td class="val-td-date">'+h.data+'</td>'
+      +'<td class="val-td-track">'+h.pista+'</td>'
+      +'<td class="val-td-muted" style="text-align:center">'+h.dist+'m</td>'
+      +'<td class="val-td-muted" style="text-align:center">['+h.trap+']</td>'
+      +'<td class="val-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
+      +'<td class="val-td-bends">'+(h.bends||'')+'</td>'
+      +'<td class="val-td-muted" style="text-align:center">'+(h.pos||'-')+'</td>'
+      +'<td class="val-td-rem">'+rem+'</td>'
+      +'<td style="text-align:center"><span class="val-badge-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
+      +'<td class="val-td-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
+      +'</tr>';
+  }).join('');
+  var cw=compact?['32','32','28','20','28','24','18','44','20','30']:['40','40','40','30','40','35','25','60','30','40'];
+  return'<div class="val-dog">'
+    +'<div class="val-dog-hdr">'
+    +'<span class="trap-badge '+tc[trap]+'">'+trap+'</span>'
+    +'<span class="val-name">'+nome+'</span>'
+    +(perfil?'<span class="val-perfil">'+perfil+'</span>':'')
+    +'</div>'
+    +'<table class="val-tbl">'
+    +'<colgroup>'
+    +'<col style="width:'+cw[0]+'px"><col style="width:'+cw[1]+'px"><col style="width:'+cw[2]+'px">'
+    +'<col style="width:'+cw[3]+'px"><col style="width:'+cw[4]+'px"><col style="width:'+cw[5]+'px">'
+    +'<col style="width:'+cw[6]+'px"><col style="width:'+cw[7]+'px"><col style="width:'+cw[8]+'px"><col style="width:'+cw[9]+'px">'
+    +'</colgroup>'
+    +'<thead><tr>'
+    +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
+    +'<th>Split</th><th>Bends</th><th>Fin</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'</div>';
 }
 
-function recalcKpisHist(){
-  var vis=Array.prototype.filter.call(document.querySelectorAll('tr[data-race]'),function(tr){return tr.style.display!=='none';});
-  var resolv=vis.filter(function(tr){return tr.getAttribute('data-bateu');});
-  var ac=vis.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
-  var apost=vis.filter(function(tr){return (tr.getAttribute('data-odd')||'')!=='';});
-  var green=apost.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
-  _histSet('kpi-corridas',vis.length);
-  _histSet('kpi-acertos',ac);
-  // A taxa e o contador saem das MESMAS linhas visiveis. Antes o "33/64"
-  // embaixo do numero era fixo do servidor: filtrar mudava a porcentagem e
-  // deixava a fracao antiga, dizendo uma coisa diferente logo abaixo.
-  var pctTaxa = resolv.length ? Math.round(ac/resolv.length*100) : null;
-  _histSet('kpi-taxa', pctTaxa==null ? '—' : pctTaxa+'%');
-  var elTaxa = document.getElementById('kpi-taxa');
-  if(elTaxa) elTaxa.style.color = pctTaxa==null ? '#666' : (pctTaxa>=50 ? '#22C65E' : '#ef4444');
-  var elCnt = document.getElementById('kpi-taxa-cnt');
-  if(elCnt) elCnt.textContent = resolv.length ? (ac+'/'+resolv.length) : '';
-  redesenhaTurnos(vis);
-  _histSet('kpi-apostas',apost.length);
-  _histSet('kpi-green',green);
-  _histSet('kpi-pctgreen',(apost.length?Math.round(green/apost.length*100):0)+'%');
-}
-function aplicarFiltroHist(){
-  var et=document.getElementById('fh-turno'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
-  var ea=document.getElementById('fh-aberto');
-  var em=document.getElementById('fh-motor');
-  var ft=et?et.value:'', fc=ec?ec.value:'', fb=eb?eb.value:'', fa=ea?ea.value:'', fm=em?em.value:'';
-  document.querySelectorAll('tr[data-race]').forEach(function(tr){
-    var t=tr.getAttribute('data-turno')||'';
-    var p=tr.getAttribute('data-pista')||'';
-    var b=tr.getAttribute('data-bateu')||'';
-    // 'nao'/'sim' olham a MEDICAO do captador; 'semdado' e' corrida nao
-    // monitorada, que nao e' a mesma coisa que nao ter aberto; 'manual' e' a
-    // marca pessoal, que existe em paralelo e pode discordar da medicao.
-    var na=tr.getAttribute('data-naoaberto')==='1';
-    var ab=tr.getAttribute('data-abriu')||'';
-    var casaAberto = !fa ? true
-      : fa==='nao' ? ab==='0'
-      : fa==='sim' ? ab==='1'
-      : fa==='semdado' ? ab===''
-      : fa==='manual' ? na
-      : true;
-    var mo=tr.getAttribute('data-motor')||'';
-    // 'fora' = a corrida nao passou em nenhuma das duas reguas (tier vazio).
-    var casaMotor = !fm ? true : (fm==='fora' ? mo==='' : mo===fm);
-    var ok=casaAberto&&casaMotor&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
-    tr.style.display=ok?'':'none';
+/* filtro panel */
+function injectFilterPanel(){
+  var tb=document.getElementById('tb');if(!tb)return;
+  var fp=document.createElement('div');fp.id='filter-panel';fp.style.display='none';
+  fp.innerHTML=''
+    +'<div class="fp-group"><span class="fp-label">Pista</span>'
+    +'<select id="fp-pista"><option value="">Todas as pistas</option></select></div>'
+    +'<div class="fp-divider"></div>'
+    +'<div class="fp-group"><span class="fp-label">Hor\u00e1rio BR</span>'
+    +'<div class="fp-hora-pair"><input type="time" id="fp-hora-min" title="De"><span class="fp-hora-sep">\u2013</span><input type="time" id="fp-hora-max" title="At\u00e9"></div></div>'
+    +'<div class="fp-divider"></div>'
+    +'<div class="fp-group"><span class="fp-label">Confian\u00e7a</span>'
+    +'<select id="fp-conf"><option value="">Todas</option><option value="alta">Alta</option><option value="media">M\u00e9dia</option><option value="baixa">Baixa</option><option value="skip">Skip</option></select></div>'
+    +'<div class="fp-divider"></div>'+'<div class="fp-group"><label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:rgba(255,255,255,.5);font-size:11px"><input type="checkbox" id="fp-skip" style="accent-color:#22c55e;cursor:pointer"> Descartadas</label></div>'+'<button id="btn-fp-clear" title="Limpar filtros">\u00d7</button>'
+    +'<span id="fp-count"></span>';
+  var table=tb.closest('table');
+  if(table&&table.parentElement)table.parentElement.insertBefore(fp,table);
+  else tb.parentElement.insertBefore(fp,tb);
+  document.getElementById('fp-pista').addEventListener('change',function(){filterState.pista=this.value;renderTable();});
+  var skipEl=document.getElementById('fp-skip');if(skipEl)skipEl.addEventListener('change',function(){filterState.mostrarSkip=this.checked;renderTable();});
+  document.getElementById('fp-hora-min').addEventListener('change',function(){filterState.horaMin=this.value;renderTable();});
+  document.getElementById('fp-hora-max').addEventListener('change',function(){filterState.horaMax=this.value;renderTable();});
+  document.getElementById('fp-conf').addEventListener('change',function(){filterState.confianca=this.value;renderTable();});
+  document.getElementById('btn-fp-clear').addEventListener('click',function(){
+    filterState={pista:'',horaMin:'',horaMax:'',confianca:''};
+    document.getElementById('fp-pista').value='';
+    document.getElementById('fp-hora-min').value='';
+    document.getElementById('fp-hora-max').value='';
+    document.getElementById('fp-conf').value='';
+    var skipCb=document.getElementById('fp-skip');if(skipCb)skipCb.checked=false;
+    filterState.mostrarSkip=false;
+    renderTable();
   });
-  recalcKpisHist();
+}
+function updateFilterPanel(){
+  var fp=document.getElementById('filter-panel');if(!fp)return;
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  if(!avbs.length){fp.style.display='none';return;}
+  fp.style.display='flex';
+  var pistaSet={};avbs.forEach(function(r){var p=getPista(r.corrida||'');if(p)pistaSet[p]=1;});
+  var pistas=Object.keys(pistaSet).sort();
+  var sel=document.getElementById('fp-pista');
+  if(sel){var cur=sel.value;sel.innerHTML='<option value="">Todas as pistas</option>';pistas.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;if(p===cur)o.selected=true;sel.appendChild(o);});}
+  var filtered=applyFiltersToAvbs(avbs);
+  var countEl=document.getElementById('fp-count');
+  if(countEl){if(filtered.length<avbs.length)countEl.textContent='Exibindo '+filtered.length+' de '+avbs.length;else countEl.textContent=avbs.length+' corridas';}
 }
 
-// Recalcula UMA vez ao abrir, antes de qualquer filtro.
-//
-// Sem isto os cards nascem do servidor e passam a ser recalculados so no
-// primeiro filtro — e as duas contagens nao sao a mesma: Acertos/Corridas
-// contam de um jeito, a Taxa de outro. Enquanto ninguem filtrava, os dois
-// numeros conviviam discordando na mesma tela.
-// Recalculando na abertura, todo mundo passa a sair das MESMAS linhas.
-document.addEventListener('DOMContentLoaded', recalcKpisHist);
-</script>
-</div></body></html>`);
-});
+/* render tabela */
+function renderTable(){
+  var tb=document.getElementById('tb');
+  if(!results.length){tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sem resultados</h3></div></td></tr>';document.getElementById('ab').style.display='none';updateFilterPanel();return;}
+  var winMap={};
+  results.forEach(function(r){if(r.tipo==='vencedor'&&r.nivel!=='skip'&&r.trapFav)winMap[(r.hora||'')+'_'+(r.corrida||'')]=r;});
+  var avbs=results.filter(function(r){return r.tipo==='avb';});
+  avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
+  var filtered=applyFiltersToAvbs(avbs);
+  if(!filtered.length){
+    tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Nenhuma corrida com os filtros selecionados</h3><p style="color:var(--mut);font-size:13px;margin-top:8px">Tente ampliar os filtros</p></div></td></tr>';
+    document.getElementById('ab').style.display='flex';updateFilterPanel();return;
+  }
+  var rows='';
+  filtered.forEach(function(r){
+    var i=avbs.indexOf(r);
+    var sk=r.nivel==='skip';
+    var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':r.nivel==='baixa'?'bb':'bs';
+    var bt=r.nivel==='alta'?'Alta':r.nivel==='media'?'Media':r.nivel==='baixa'?'Baixa':'Skip';
+    var fc=r.pct>=65?'cfg':r.pct>=50?'cfa':'cfr';
+    var tf=r.trapFav||0,tu=r.trapUnd||0,nf=r.nameFav||'',nu=r.nameUnd||'';
+    var wd=winMap[(r.hora||'')+'_'+(r.corrida||'')];
+    var wt=wd?'<div class="win-tag">&#127942; Back T'+wd.trapFav+' '+((wd.nameFav||'').split(' ')[0])+'</div>':'';
+    var hh='<strong style="color:var(--grn)">'+(r.hora||'-')+'</strong><div class="hora-br">'+convertHora(r.hora)+'</div>';
+    var top3=(function(){if(!r.top3)return'';var v=Array.isArray(r.top3)?r.top3.filter(function(x){return x>0;}).join('-'):r.top3;return v?'<div class="top3-tag" style="display:inline-flex;align-items:center;gap:4px"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2A4 4 0 0 1 17 9"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2A4 4 0 0 0 7 9"/></svg> '+v+'</div>':'';}());
+    var ch=sk?'':'<span class="badge '+bc+'">'+bt+'</span><br><span style="font-size:10px;color:var(--mut)">'+r.pct+'%</span><span class="cbar"><span class="cfill '+fc+'" style="width:'+r.pct+'%"></span></span>';
+    var cap=r.needsCap?'<button class="cap-btn" data-fav="'+nf+'" data-und="'+nu+'">Cap</button>':'<span class="cap-ok">OK</span>';
+    var rh=sk?'-':'<input type="text" placeholder="1" data-i="'+i+'" data-f="r1" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="2" data-i="'+i+'" data-f="r2" style="width:50px;margin-bottom:2px"><br><input type="text" placeholder="3" data-i="'+i+'" data-f="r3" style="width:50px">';
+    var obsText=(r.obs||'-').replace(/CalTm/gi,'Tempo');
+    var obsParts=obsText.split('\n');
+    var obsHtml='<span style="font-size:10px;color:var(--mut)">'+obsParts[0]+'</span>'+(obsParts[1]?'<div style="font-size:11px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.06);font-style:italic">'+obsParts[1]+'</div>':'');
+    var fn=function(n){return(n||'').split(' ')[0];};
+    var perfilFavLabel=r.perfilFav?'<div style="font-size:9px;color:var(--mut);margin-top:2px">'+r.perfilFav+'</div>':'';
+    var perfilUndLabel=r.perfilUnd?'<div style="font-size:9px;color:var(--mut);margin-top:2px">'+r.perfilUnd+'</div>':'';
+    var shComPerfil=sk?'<span style="color:var(--mut)">Descartada</span>':
+      '<div style="display:flex;align-items:flex-start;justify-content:center;gap:10px">'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">'
+          +'<div class="trap-badge '+trapClass(tf)+'" style="width:28px;height:28px;font-size:13px">'+tf+'</div>'
+          +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">'+fn(nf)+'</div>'
+          +(r.perfilFav?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilFav+'</div>':'')
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--mut);padding-top:8px">vs</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px">'
+          +'<div class="trap-badge '+trapClass(tu)+'" style="width:28px;height:28px;font-size:13px">'+tu+'</div>'
+          +'<div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">'+fn(nu)+'</div>'
+          +(r.perfilUnd?'<div style="font-size:9px;color:var(--mut);text-align:center">'+r.perfilUnd+'</div>':'')
+        +'</div>'
+      +'</div>';
+    var oddValHtml=sk?'-':'<div style="display:flex;flex-direction:column;gap:6px;align-items:center"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><span style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">Odd</span><input type="text" placeholder="-" value="'+(r.odd||'')+'" data-i="'+i+'" data-f="odd" style="width:52px;text-align:center"></div><div style="display:flex;align-items:center;justify-content:space-between;width:100%"><label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--mut);cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="'+i+'" data-f="avb_nao_aberto" style="cursor:pointer" '+(r.avbNaoAberto?'checked':'')+'> Não aberto</label><a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:15px;height:15px;vertical-align:middle"></a><a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:15px;height:15px;vertical-align:middle"></a></div></div>';
+    var valLink=sk?'':'<a class="val-link" onclick="openValModal(\''+r.hora+'|'+r.corrida+'\')">[ver historico]</a>';
+    rows+='<tr class="row-avb'+(sk?' sk':'')+(isOldRaceCard(r)?' old-row':'')+'">'
+      +'<td style="text-align:center;vertical-align:middle">'+hh+'</td>'
+      +'<td style="vertical-align:middle"><div style="font-weight:700;font-size:12px">'+corridaDisplay(r)+'</div><div style="font-size:10px;color:var(--mut)">'+(r.dist||'')+'</div>'+top3+wt+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+shComPerfil+'<div style="margin-top:4px">'+valLink+'</div></td>'
+      +'<td style="text-align:center;vertical-align:middle">'+ch+'</td>'
+      +'<td style="font-size:11px;line-height:1.5;vertical-align:middle;padding-left:12px">'+obsHtml+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+oddValHtml+'</td>'
+      +'<td style="text-align:center;vertical-align:middle">'+rh+'</td>'
+      +'<td style="text-align:center;vertical-align:middle"><select data-i="'+i+'" data-f="hit" style="text-align:center"><option value="">-</option><option value="sim">Sim</option><option value="nao">Nao</option></select></td>'
+      +'<td style="text-align:center;vertical-align:middle">'+cap+'</td>'
+      +'</tr>';
+  });
+  tb.innerHTML=rows;
+  document.getElementById('ab').style.display='flex';
+  updCards();updateFilterPanel();
+}
 
-module.exports = router;
-module.exports.navBar = navBar;
+async function runChunk(files,caps){
+  var fd=new FormData();
+  files.forEach(function(f){fd.append('pdfs',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:'application/pdf'}),f.name);});
+  caps.forEach(function(f){fd.append('caps',new Blob([Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0))],{type:f.mime}),f.name);});
+  var resp=await fetch(BASE+'/api/analyze',{method:'POST',body:fd});
+  if(!resp.ok){var e=await resp.json();throw new Error(e.error||'Erro '+resp.status);}
+  var reader=resp.body.getReader(),decoder=new TextDecoder(),buffer='',evtCount=0;
+  while(true){
+    var _r=await reader.read();if(_r.done)break;
+    buffer+=decoder.decode(_r.value,{stream:true});
+    var lines=buffer.split('\n');buffer=lines.pop();
+    for(var li=0;li<lines.length;li++){
+      var line=lines[li].trim();if(!line.startsWith('data:'))continue;
+      try{
+        var evt=JSON.parse(line.slice(5).trim());evtCount++;
+        if(evt.type==='races'){results=results.concat(evt.races||[]);renderTable();saveSessionState();updCards();}
+        else if(evt.type==='limitReached'){alert('Limite de analises atingido!');return false;}
+        else if(evt.type==='error'){throw new Error(evt.error);}
+      }catch(pe){console.warn('[runChunk] parse err:',pe.message);}
+    }
+  }
+  return true;
+}
+
+async function runAnalysis(){
+  // Ponto 3: verifica se já existe sessão do dia ao usar pasta automática
+  if(!raceFiles.length){
+    var now=new Date();
+    var todayLabel=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+    var sessionName='Races '+todayLabel;
+    try{
+      var sr=await fetch(BASE+'/api/sessions');
+      var sessions=await sr.json();
+      var existing=sessions.find(function(s){return s.name===sessionName;});
+      if(existing){
+        showOverwriteConfirmModal(sessionName, existing.id);
+        return;
+      }
+    }catch(e){}
+  }
+  await proceedAnalysis();
+}
+
+// Mostra o modal perguntando se quer sobrescrever a sessao de hoje ja existente
+// (reaproveita o mesmo modal ps-* usado no fluxo de salvar sessao manual)
+function showOverwriteConfirmModal(sessionName, existingId){
+  var modal=document.getElementById('ps-modal');
+  if(!modal){
+    // Fallback, caso o modal nao tenha sido injetado por algum motivo
+    if(confirm('Já existe uma sessão carregada com o mesmo nome para hoje ("'+sessionName+'"). Deseja sobrescrever?')){
+      overwriteAndAnalyze(existingId);
+    }
+    return;
+  }
+  document.getElementById('ps-icon').textContent='\u26A0\uFE0F';
+  document.getElementById('ps-title').textContent='Sessão já existe';
+  document.getElementById('ps-sub').innerHTML='Já existe uma sessão carregada com o mesmo nome para hoje: <strong style="color:#fff">"'+sessionName+'"</strong>.<br>Deseja sobrescrever? A sessão atual será apagada e uma nova análise será feita.';
+  document.getElementById('ps-inp').style.display='none';
+  var btns=document.getElementById('ps-btns');
+  btns.innerHTML='';
+  var cancel=document.createElement('button');cancel.className='ps-btn-sec';cancel.textContent='Cancelar';cancel.onclick=closePsModal;btns.appendChild(cancel);
+  var yes=document.createElement('button');yes.className='ps-btn-warn';yes.textContent='Sim, sobrescrever';yes.onclick=function(){overwriteAndAnalyze(existingId);};btns.appendChild(yes);
+  modal.classList.add('open');
+}
+
+// Guarda temporariamente os dados de resultado/odd/valor/flag da sessao
+// antiga entre o momento em que o usuario confirma a sobrescrita e o
+// momento em que a nova sessao e salva — pra nao perder o que o robo de
+// resultados e/ou o proprio usuario ja tinham preenchido.
+var preserveDataMap = null;
+
+async function overwriteAndAnalyze(existingId){
+  closePsModal();
+  preserveDataMap = null;
+  try {
+    var resp = await fetch(BASE+'/api/session/'+existingId+'/races');
+    var data = await resp.json();
+    if (data && Array.isArray(data.races)) {
+      preserveDataMap = {};
+      data.races.forEach(function(r){
+        var key = r.hora+'|'+r.corrida;
+        preserveDataMap[key] = {
+          odd: r.odd, valor: r.valor,
+          resultado_1: r.resultado_1, resultado_2: r.resultado_2, resultado_3: r.resultado_3,
+          bateu: r.bateu, avb_nao_aberto: r.avb_nao_aberto, video_url: r.video_url
+        };
+      });
+    }
+  } catch(e) { console.error('[overwriteAndAnalyze] erro ao carregar dados da sessao anterior', e); }
+  // Nao deleta aqui na frente — se a nova analise nao encontrar PDFs/AvBs
+  // por algum motivo, a sessao antiga precisa continuar existindo. O
+  // autoSaveSession() (chamado no final da analise) ja faz delete-e-recria
+  // com o mesmo nome com seguranca, só quando ha dados novos de fato — e
+  // agora tambem reaplica os dados preservados acima antes de salvar.
+  await proceedAnalysis();
+}
+
+async function proceedAnalysis(){
+  var usandoPasta=false;
+  if(!raceFiles.length){
+    setSt('Verificando corridas disponíveis...');
+    try{
+      var r=await fetch(BASE+'/api/pdfs/hoje');
+      var d=await r.json();
+      if(!d.count){
+        setSt('');
+        results = [];
+        focusRaceIdx = -1;
+        saveSessionState();
+        showAllExpiredMsg();
+        return;
+      }
+      var dateParts=(d.date||'').split('-');
+      var dateLabel=dateParts.length===3?dateParts[2]+'/'+dateParts[1]:d.date;
+      setSt(d.count+' corridas do dia '+dateLabel+' encontradas. Iniciando análise...');
+      usandoPasta=true;
+    }catch(e){
+      setSt('');
+      results = [];
+      focusRaceIdx = -1;
+      saveSessionState();
+      showAllExpiredMsg();
+      return;
+    }
+  }
+  var _btngo=document.getElementById('btngo'); if(_btngo){_btngo.disabled=true;_btngo.innerHTML='<span class="spinner"></span>Analisando...';}
+  try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='none';a.style.opacity='0.3';});}catch(e){}
+  prog(5,'Preparando...');results=[];filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
+  try{
+    if(usandoPasta){
+      // Análise da pasta — chama sem arquivos, servidor lê da pasta
+      prog(10,'Lendo PDFs da pasta...');
+      var ok=await runChunk([],[]);
+      if(ok===false){}
+    } else {
+      var CHUNK=30,chunks=[];
+      for(var ci=0;ci<raceFiles.length;ci+=CHUNK)chunks.push(raceFiles.slice(ci,ci+CHUNK));
+      for(var chunkIdx=0;chunkIdx<chunks.length;chunkIdx++){
+        prog(Math.round(5+(chunkIdx/chunks.length)*90),'Grupo '+(chunkIdx+1)+'/'+chunks.length+' ('+chunks[chunkIdx].length+' PDFs)...');
+        var ok2=await runChunk(chunks[chunkIdx],chunkIdx===0?capFiles:[]);
+        if(ok2===false)break;
+      }
+    }
+    var avbs=results.filter(function(r){return r.nivel!=='skip';}).length;
+    setSt('Concluido: '+avbs+' AvBs de '+results.length+' corridas');
+    prog(100,'');setTimeout(function(){document.getElementById('pw').style.display='none';},1200);
+    setTimeout(function(){enterFocusMode();},800);
+
+    // Limpa a lista de PDFs carregados assim que a analise termina — tanto
+    // pra corridas de hoje quanto antigas, nao precisa esperar a escolha de
+    // salvar/nao salvar.
+    clearUploadedPdfList();
+
+    // Avisa se alguma das corridas carregadas for de data anterior a hoje
+    var avbList = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+    var oldDates = Array.from(new Set(avbList.filter(function(r){return isOldRaceCard(r);}).map(function(r){return r.dataCard;})));
+    if (oldDates.length) {
+      var datesLabel = oldDates.map(function(d){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}).join(', ');
+      setTimeout(function(){
+        showToast('\u26A0\uFE0F Corridas de data anterior a hoje ('+datesLabel+') — disponíveis só para consulta na aba Analisar, não serão salvas no Histórico.', false);
+      }, 900);
+    }
+
+    // Corridas de hoje que ja aconteceram (nao antigas — so ja passou o
+    // horario) tambem nao devem ser salvas nem oferecer a opcao de salvar.
+    var allExpiredToday = avbList.length>0 && !oldDates.length && !avbList.some(isUpcoming);
+    if (allExpiredToday) {
+      setTimeout(function(){
+        showToast('\u23F1\uFE0F As corridas carregadas já foram realizadas hoje. Selecione corridas ainda vigentes.', false);
+      }, 900);
+    }
+
+    // Corrida antiga ou ja realizada hoje NUNCA e salva no Historico nem
+    // oferece a opcao de salvar — serve so como referencia/estudo na aba
+    // Analisar. Nenhuma configuracao de tempo/refresh/auto-save se aplica.
+    if (oldDates.length || allExpiredToday) {
+      // nao salva, nao pergunta — fica so disponivel na aba Analisar
+    } else if(usandoPasta){
+      // Fluxo automático — salva direto sem popup
+      setTimeout(function(){autoSaveSession(autoDateLabel);},1600);
+    } else {
+      // Upload manual — pergunta se quer salvar
+      setTimeout(function(){openPsModal();},1600);
+    }
+  }catch(ex){setSt('Erro: '+ex.message);alert('Erro: '+ex.message);document.getElementById('pw').style.display='none';}
+  var _btngoR=document.getElementById('btngo'); if(_btngoR){_btngoR.disabled=false;_btngoR.innerHTML='&#9889; Automaticamente';}
+  try{document.querySelectorAll('nav a, .nl').forEach(function(a){a.style.pointerEvents='';a.style.opacity='';});}catch(e){}
+}
+
+document.addEventListener('DOMContentLoaded',async function(){
+  injectStyles();
+  injectPostSaveModal();
+  injectSaveModal();
+  injectValModal();
+  injectFilterPanel();
+
+  // Alerta em segundo plano: retoma o audio e pede permissao de notificacao no
+  // primeiro gesto (exigencia dos navegadores). E para de piscar o titulo assim
+  // que voce volta pra aba.
+  ['click','keydown','touchstart'].forEach(function(ev){ document.addEventListener(ev, initAlertaUserGesto); });
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) pararFlashTitulo(); });
+
+  // Entra imediatamente no foco com loading — ANTES de qualquer await
+  var mainEl = document.getElementById('main-layout');
+  if (mainEl) mainEl.classList.add('focus-mode');
+  var focusColEl = document.getElementById('focus-col');
+  if (focusColEl) focusColEl.innerHTML =
+    '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--mut);text-align:center">'
+    +'<div style="font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(34,197,94,.6);text-transform:uppercase">Greyhound Factory</div>'
+    +'<div style="width:40px;height:40px;border:3px solid rgba(34,197,94,.2);border-top-color:#22c55e;border-radius:50%;animation:sp .8s linear infinite"></div>'
+    +'<div style="font-size:15px;font-weight:700;color:var(--mut2)">Carregando corridas do dia...</div>'
+    +'</div>';
+
+  await loadSystemConfig();
+  loadAcertosResumo();
+  if(restoreSessionState()){
+    updCards();
+    setSt('Restaurado: '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs');
+    enterFocusMode();
+    // Sincroniza com o servidor na hora, mesmo restaurando do cache — sem
+    // isso, qualquer mudanca feita em OUTRA tela (ex: marcar "atrasada" no
+    // Historico) enquanto essa aba ficou fechada/em segundo plano so
+    // apareceria depois do proximo ciclo automatico (ate 1 min de atraso).
+    // Achado 14/07/2026.
+    syncFromServer();
+  } else {
+    setTimeout(autoCheckAndAnalyze, 100);
+  }
+
+  _focoVipDaUrl();
+
+  document.getElementById('race-input').addEventListener('change',async function(){
+    if (!this.files.length) return;
+    for(var i=0;i<this.files.length;i++){var file=this.files[i],id='f'+Date.now()+i;addFI(file.name,id);try{var b64=await readB64(file);raceFiles.push({name:file.name,b64:b64,id:id,mime:'application/pdf'});updFI(id,true);}catch(e){updFI(id,false);}}updCards();
+    // Dispara a analise direto, sem precisar clicar em outro botao
+    runAnalysis();
+  });
+  document.getElementById('rz').addEventListener('dragover',function(e){e.preventDefault();this.classList.add('drag');});
+  document.getElementById('rz').addEventListener('dragleave',function(){this.classList.remove('drag');});
+  document.getElementById('rz').addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag');var inp=document.getElementById('race-input');inp.files=e.dataTransfer.files;inp.dispatchEvent(new Event('change'));});
+  document.getElementById('rlist').addEventListener('click',function(e){if(e.target.classList.contains('fi-rm')){var id=e.target.getAttribute('data-id');raceFiles=raceFiles.filter(function(f){return f.id!==id;});var el=document.getElementById('fi-'+id);if(el)el.remove();updCards();}});
+  var _bgClick=document.getElementById('btngo'); if(_bgClick)_bgClick.addEventListener('click',runAnalysis);
+  document.getElementById('tb').addEventListener('input',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){saveRaceField(i,f,el.value);}});
+  document.getElementById('tb').addEventListener('change',function(e){var el=e.target,i=parseInt(el.getAttribute('data-i')),f=el.getAttribute('data-f');if(!isNaN(i)&&f&&results[i]){var val=el.type==='checkbox'?(el.checked?1:0):el.value;saveRaceField(i,f,val);if(f==='hit'){el.style.color=el.value==='sim'?'var(--grn)':el.value==='nao'?'var(--red)':'var(--txt)';}}});
+  document.getElementById('tb').addEventListener('click',function(e){if(e.target.classList.contains('cap-btn')){document.getElementById('cm-body').textContent='Carregue capivara de '+e.target.getAttribute('data-fav');document.getElementById('cap-modal-list').innerHTML='';document.getElementById('cap-st').style.display='none';document.getElementById('btn-cap-ok').disabled=true;capModalFilesList=[];document.getElementById('cap-modal').classList.add('open');}});
+  document.getElementById('cap-modal-inp').addEventListener('change',async function(){for(var i=0;i<this.files.length;i++){var file=this.files[i],id='cm'+Date.now()+i;try{var b64=await readB64(file);var isImg=/\.(jpg|jpeg|png|webp)$/i.test(file.name);capModalFilesList.push({name:file.name,b64:b64,id:id,mime:isImg?file.type:'application/pdf',isImg:isImg});var d=document.createElement('div');d.className='fi';d.innerHTML='<span class="fi-name">'+file.name+'</span><span class="fi-st fi-ok">OK</span>';document.getElementById('cap-modal-list').appendChild(d);document.getElementById('btn-cap-ok').disabled=false;}catch(e){alert('Erro ao ler.');}}});
+  document.getElementById('btn-cap-cancel').addEventListener('click',function(){document.getElementById('cap-modal').classList.remove('open');});
+  document.addEventListener('paste',async function(e){
+    if(!document.getElementById('cap-modal').classList.contains('open'))return;
+    var items=(e.clipboardData||e.originalEvent.clipboardData).items;
+    for(var i=0;i<items.length;i++){if(items[i].type.indexOf('image')!==-1){var file=items[i].getAsFile();var id='cm'+Date.now();try{var b64=await readB64(file);capModalFilesList.push({name:'capivara-colada.png',b64:b64,id:id,mime:'image/png',isImg:true});var d=document.createElement('div');d.className='fi';d.innerHTML='<span class="fi-name">&#128247; Imagem colada</span><span class="fi-st fi-ok">OK</span>';document.getElementById('cap-modal-list').appendChild(d);var st=document.getElementById('cap-st');st.className='cap-st ok';st.textContent='Imagem colada com sucesso!';st.style.display='block';document.getElementById('btn-cap-ok').disabled=false;}catch(err){console.error('Erro ao colar:',err);}}}
+  });
+  document.getElementById('btn-cap-ok').addEventListener('click',async function(){if(!capModalFilesList.length)return;capFiles=capModalFilesList.slice();document.getElementById('cap-modal').classList.remove('open');await runAnalysis();});
+  document.getElementById('btn-pdf-ready-ok').addEventListener('click',function(){document.getElementById('pdf-ready-modal').classList.remove('open');});
+  document.getElementById('btn-exp').addEventListener('click',function(){
+    var h='Hora,HoraBR,Corrida,Dist,TrapFav,Favorito,TrapUnd,Underdog,Conf,Nivel,PerfilFav,PerfilUnd,Obs,Odd,Valor,1o,2o,3o,Bateu';
+    var avbs=results.filter(function(r){return r.tipo==='avb';});
+    var rows=avbs.map(function(r){return[r.hora,convertHora(r.hora),r.corrida,r.dist,r.trapFav||'',r.nameFav||'',r.trapUnd||'',r.nameUnd||'',r.pct,r.nivel,r.perfilFav||'',r.perfilUnd||'',r.obs||'',r.odd||'',r.valor||'',r.r1||'',r.r2||'',r.r3||'',r.hit||''].join(',');});
+    var b=new Blob([[h].concat(rows).join(String.fromCharCode(10))],{type:'text/csv'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='greyhound_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  });
+
+  // Mantem "Historico do dia" e "Sessoes recentes" sempre atualizados, mesmo
+  // se a aba ficar aberta e o robo salvar a sessao de hoje so depois
+  refreshSidebarSessions();
+  setInterval(refreshSidebarSessions, 90000);
+
+  // Re-le a config do sistema periodicamente pra que mudancas salvas em
+  // Configuracoes (ex: "Alarme para filtro selecionado", som/tempo de alerta)
+  // passem a valer nesta tela sem precisar recarregar a pagina.
+  setInterval(loadSystemConfig, 30000);
+});
