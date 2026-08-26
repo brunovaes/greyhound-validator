@@ -482,6 +482,15 @@ var FILTRO_TIER = (function(){
   } catch(e){ return ''; }
 })();
 // Cicla entre os tres estados no mesmo botao: todas -> TOP -> REGULAR -> todas.
+// Volta direto pra TODAS. O botao cicla, mas quando a lista esta vazia por
+// causa do filtro o que voce quer e' sair dele, nao avancar pro proximo.
+function verTodasAsCorridas(){
+  FILTRO_TIER = '';
+  try { localStorage.setItem('gh_tier', ''); } catch(e){}
+  _pintaBotaoTier();
+  refreshFocusMode();
+}
+
 function alternarTier(){
   FILTRO_TIER = FILTRO_TIER === '' ? 'top' : (FILTRO_TIER === 'top' ? 'regular' : '');
   try { localStorage.setItem('gh_tier', FILTRO_TIER); } catch(e){}
@@ -500,15 +509,23 @@ function _pintaBotaoTier(){
   b.textContent = m[3]; b.title = m[4];
 }
 
+// O filtro de regua NAO entra no shouldShowRace, de proposito.
+//
+// Aquela funcao responde "esta corrida esta na janela de hoje?", e a MESMA
+// resposta alimenta o isDayClosed. Com o filtro dentro dela, ligar o filtro e
+// nao haver corrida daquela regua fazia o app concluir que o DIA ACABOU e
+// mostrar a tela de encerrado — que nao tem o botao do filtro, entao nao dava
+// nem pra voltar. Filtro de exibicao nao pode opinar sobre o dia ter acabado.
+function passaNoFiltroTier(r) {
+  return !FILTRO_TIER || (r && r.tier === FILTRO_TIER);
+}
+
 function shouldShowRace(r) {
   if (typeof _SIM_AVB !== 'undefined' && _SIM_AVB) return true;
   // Skip que a lista VIP destravou entra em tela dentro da janela, mesmo
   // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
   // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
   if (_vipSkipLiberado(r)) return true;
-  // O filtro entra por ultimo: as regras acima decidem se a corrida esta na
-  // janela, e ele so corta o que nao e' da regua escolhida.
-  if (FILTRO_TIER && r.tier !== FILTRO_TIER) return false;
   return isOldRaceCard(r) || isUpcoming(r);
 }
 
@@ -739,7 +756,9 @@ function refreshFocusMode() {
   // Sempre mostra as proximas N corridas (RACAS_EM_TELA), nunca corridas ja
   // passadas — exceto corridas antigas (data anterior a hoje), que ficam
   // sempre visiveis independente do horario.
-  var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
+  // A janela primeiro, o filtro de regua depois: o corte por RACAS_EM_TELA vale
+  // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
+  var toShow = avbs.filter(shouldShowRace).filter(passaNoFiltroTier).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
 
@@ -802,7 +821,9 @@ function enterFocusMode() {
     return;
   }
 
-  var toShow = avbs.filter(shouldShowRace).slice(0, RACAS_EM_TELA);
+  // A janela primeiro, o filtro de regua depois: o corte por RACAS_EM_TELA vale
+  // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
+  var toShow = avbs.filter(shouldShowRace).filter(passaNoFiltroTier).slice(0, RACAS_EM_TELA);
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
   var next = toShow[0];
@@ -2252,11 +2273,14 @@ function renderRaceListPanel(avbs) {
   // acontece de manha, antes do primeiro ciclo de 4 min gravar o bw — nesse
   // intervalo TODAS as corridas vem com bw:0, e a lista vazia pareceria falta
   // de corrida em vez de filtro.
+  // avbs aqui JA vem filtrado (e o toShow). Vazio + filtro ligado = o filtro
+  // escondeu tudo. O cabecalho com o botao ja foi desenhado acima, entao daqui
+  // da' pra voltar — foi isso que faltou na primeira versao.
   if (FILTRO_TIER && !avbs.length) {
     var av = document.createElement('div');
     av.style.cssText = 'padding:14px 12px;font-size:11px;color:var(--mut);line-height:1.6;text-align:center';
-    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' por enquanto.'
-      + '<div style="margin-top:6px"><button type="button" onclick="alternarTier()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">trocar filtro</button></div>';
+    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
+      + '<div style="margin-top:6px"><button type="button" onclick="verTodasAsCorridas()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver todas</button></div>';
     col.appendChild(av);
   }
   if (!avbs.length) {
