@@ -302,11 +302,14 @@ async function autoCheckAndAnalyze() {
                 pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
                 obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
                 avbNaoAberto: !!r.avb_nao_aberto,
-                // bw: o motor unico aprovou esta corrida (4 eixos + nao e'
-                // nao-segura). NAO confundir com avbNaoAberto/abriu, que e' se
-                // o par ficou disponivel na casa. Uma corrida pode ter bw=1 e
-                // nunca ter aberto.
-                bw: !!r.bw,
+                // tier: 'top' | 'regular' | null. E' a regua em que a corrida
+                // passou. null = ficou fora das duas e nao aparece em filtro
+                // nenhum. NAO confundir com avbNaoAberto/abriu, que e' se o par
+                // ficou disponivel na casa: uma corrida pode ser TOP e nunca
+                // ter aberto.
+                // bw=1 continua sendo o atalho de TOP, pra linha antiga (antes
+                // do tier existir) nao virar "fora".
+                tier: r.tier || (r.bw ? 'top' : null),
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
                 eliminados: r.eliminados?JSON.parse(r.eliminados):[],
                 postPick: r.post_pick||'',
@@ -467,28 +470,34 @@ function isOldRaceCard(r) {
 // independente do relogio bater ou nao com o horario dela no card — ela e
 // so pra consulta/estudo, nao participa da logica de "ja passou". Corridas
 // de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
-// Filtro "só BW": mostra apenas as corridas aprovadas pelo motor unico.
-// Fonte: races.bw, que vem do /api/session/:id/races. Nao inferimos pela
-// etiqueta dos 4 eixos — o booleano e' a fonte limpa, e a etiqueta so explica
-// o porque.
-var SO_BW = (function(){
-  // Lembra a escolha: se voce opera so na nata, nao faz sentido reativar o
-  // filtro a cada vez que abre a tela.
-  try { return localStorage.getItem('gh_so_bw') === '1'; } catch(e){ return false; }
+// Filtro por regua: '' (todas) | 'top' | 'regular'.
+// Fonte: races.tier, do /api/session/:id/races. Corrida com tier null ficou
+// fora das duas reguas e nao aparece em nenhum dos filtros.
+var FILTRO_TIER = (function(){
+  // Lembra a escolha: se voce opera so no TOP, nao faz sentido reativar o
+  // filtro toda vez que abre a tela.
+  try {
+    var v = localStorage.getItem('gh_tier');
+    return (v === 'top' || v === 'regular') ? v : '';
+  } catch(e){ return ''; }
 })();
-function alternarSoBW(){
-  SO_BW = !SO_BW;
-  try { localStorage.setItem('gh_so_bw', SO_BW ? '1' : '0'); } catch(e){}
-  _pintaBotaoBW();
+// Cicla entre os tres estados no mesmo botao: todas -> TOP -> REGULAR -> todas.
+function alternarTier(){
+  FILTRO_TIER = FILTRO_TIER === '' ? 'top' : (FILTRO_TIER === 'top' ? 'regular' : '');
+  try { localStorage.setItem('gh_tier', FILTRO_TIER); } catch(e){}
+  _pintaBotaoTier();
   refreshFocusMode();
 }
-function _pintaBotaoBW(){
-  var b = document.getElementById('btn-so-bw');
+function _pintaBotaoTier(){
+  var b = document.getElementById('btn-tier');
   if(!b) return;
-  b.style.background = SO_BW ? 'rgba(212,175,55,.16)' : 'transparent';
-  b.style.borderColor = SO_BW ? '#D4AF37' : 'var(--bdr2)';
-  b.style.color = SO_BW ? '#D4AF37' : 'var(--mut)';
-  b.title = SO_BW ? 'mostrando só as corridas aprovadas pelo motor' : 'mostrar só as corridas aprovadas pelo motor';
+  var m = {
+    '':        ['transparent',            'var(--bdr2)', 'var(--mut)', 'TODAS',   'mostrando todas as corridas; clique para ver só as TOP'],
+    'top':     ['rgba(212,175,55,.16)',   '#D4AF37',     '#D4AF37',    'TOP',     'mostrando só as TOP; clique para ver só as REGULAR'],
+    'regular': ['rgba(96,165,250,.16)',   '#60a5fa',     '#60a5fa',    'REGULAR', 'mostrando só as REGULAR; clique para voltar a todas']
+  }[FILTRO_TIER];
+  b.style.background = m[0]; b.style.borderColor = m[1]; b.style.color = m[2];
+  b.textContent = m[3]; b.title = m[4];
 }
 
 function shouldShowRace(r) {
@@ -498,8 +507,8 @@ function shouldShowRace(r) {
   // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
   if (_vipSkipLiberado(r)) return true;
   // O filtro entra por ultimo: as regras acima decidem se a corrida esta na
-  // janela, e ele so corta o que nao e' da nata.
-  if (SO_BW && !r.bw) return false;
+  // janela, e ele so corta o que nao e' da regua escolhida.
+  if (FILTRO_TIER && r.tier !== FILTRO_TIER) return false;
   return isOldRaceCard(r) || isUpcoming(r);
 }
 
@@ -580,9 +589,9 @@ async function syncFromServer() {
       cur.trapUnd = r.trap_und; cur.nameUnd = _limpaNome(r.name_und); cur.pct = r.pct;
       cur.perfilFav = r.perfil_fav; cur.perfilUnd = r.perfil_und; cur.obs = r.obs;
       cur.odd = r.odd; cur.valor = r.valor; cur.avbNaoAberto = !!r.avb_nao_aberto;
-      // O bw muda a cada ciclo de 4 min (corrida pode sair da nata antes de
-      // largar), entao o sync tem que atualizar, nao so a carga inicial.
-      cur.bw = !!r.bw;
+      // O tier muda a cada ciclo (corrida pode cair de TOP pra REGULAR, ou
+      // sair das duas, antes de largar), entao o sync atualiza tambem.
+      cur.tier = r.tier || (r.bw ? 'top' : null);
       cur.top3 = r.top3;
       cur.histFav = r.hist_fav?JSON.parse(r.hist_fav):[];
       cur.histUnd = r.hist_und?JSON.parse(r.hist_und):[];
@@ -2132,11 +2141,11 @@ function renderRaceListPanel(avbs) {
     + '<span style="display:flex;align-items:center;gap:8px">'
     // Botao "so BW": mostra apenas o que o motor unico aprovou. Fica ao lado do
     // Atualizar porque as duas acoes sao da lista, nao da corrida.
-    + '<button type="button" id="btn-so-bw" onclick="alternarSoBW()" style="font-size:9px;font-weight:800;letter-spacing:.4px;background:transparent;border:1px solid var(--bdr2);color:var(--mut);border-radius:10px;padding:2px 8px;cursor:pointer">BW</button>'
+    + '<button type="button" id="btn-tier" onclick="alternarTier()" style="font-size:9px;font-weight:800;letter-spacing:.4px;background:transparent;border:1px solid var(--bdr2);color:var(--mut);border-radius:10px;padding:2px 8px;cursor:pointer;min-width:56px">TODAS</button>'
     + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</span>'
     + '</div>';
-  _pintaBotaoBW();
+  _pintaBotaoTier();
   var first = true;
   var tc = ['','t1','t2','t3','t4','t5','t6'];
   avbs.forEach(function(r, i) {
@@ -2195,11 +2204,11 @@ function renderRaceListPanel(avbs) {
   // acontece de manha, antes do primeiro ciclo de 4 min gravar o bw — nesse
   // intervalo TODAS as corridas vem com bw:0, e a lista vazia pareceria falta
   // de corrida em vez de filtro.
-  if (SO_BW && !avbs.length) {
+  if (FILTRO_TIER && !avbs.length) {
     var av = document.createElement('div');
     av.style.cssText = 'padding:14px 12px;font-size:11px;color:var(--mut);line-height:1.6;text-align:center';
-    av.innerHTML = 'Nenhuma corrida aprovada pelo motor por enquanto.'
-      + '<div style="margin-top:6px"><button type="button" onclick="alternarSoBW()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver todas</button></div>';
+    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' por enquanto.'
+      + '<div style="margin-top:6px"><button type="button" onclick="alternarTier()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">trocar filtro</button></div>';
     col.appendChild(av);
   }
   if (!avbs.length) {

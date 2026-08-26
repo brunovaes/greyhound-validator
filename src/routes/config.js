@@ -324,28 +324,68 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-automacao">
 
 <div class="section">
-<div class="sec-title">Motor de análise</div>
-<p class="hint" style="margin-bottom:10px">Os cortes que calibram o motor. Um par só vira indicação quando o favorito ganha nos quatro eixos (categoria, CalTm, split e pódio) e não é um galgo que costuma desabar na reta.</p>
+<div class="sec-title">Motor de análise — duas réguas</div>
+<p class="hint" style="margin-bottom:10px">Cada corrida é classificada em <strong>TOP</strong> (a régua exigente) ou <strong>REGULAR</strong> (a mais frouxa). O que não passa em nenhuma das duas fica de fora e não aparece nos filtros. Deixe um campo <strong>em branco</strong> para manter o valor atual sem alterá-lo.</p>
+
+<div class="sec-title" style="font-size:12px;opacity:.85">Régua TOP</div>
 <div class="bloco-fields">
   <div class="field">
     <label>SP colado (máximo)</label>
-    <input type="number" step="0.01" min="1" max="2" name="sp_ratio_max" value="${config.sp_ratio_max != null ? config.sp_ratio_max : 1.15}">
-    <div class="hint" style="margin-top:3px">O quanto as SPs dos dois galgos podem estar distantes para o par ainda ser considerado colado. Menor = mais exigente.</div>
+    <input type="number" step="0.01" min="1" max="3" name="sp_ratio_max" value="${config.sp_ratio_max != null ? config.sp_ratio_max : ''}" placeholder="1.15">
+    <div class="hint" style="margin-top:3px">O quanto as SPs dos dois galgos podem estar distantes para o par ainda ser colado. Menor = mais exigente.</div>
   </div>
   <div class="field">
     <label>Corte de CalTm (segundos)</label>
-    <input type="number" step="0.01" min="0" max="2" name="caltm_min_dif" value="${config.caltm_min_dif != null ? config.caltm_min_dif : 0.20}">
-    <div class="hint" style="margin-top:3px">Vantagem mínima de tempo, ajustada por categoria, para o eixo de CalTm passar. Maior = menos indicações e mais folga em cada uma.</div>
+    <input type="number" step="0.01" min="0" max="3" name="caltm_min_dif" value="${config.caltm_min_dif != null ? config.caltm_min_dif : ''}" placeholder="0.20">
+    <div class="hint" style="margin-top:3px">Vantagem mínima de tempo, ajustada por categoria.</div>
   </div>
   <div class="field">
-    <label>Desabamento: posições perdidas</label>
-    <input type="number" step="1" min="1" max="5" name="desaba_queda" value="${config.desaba_queda != null ? config.desaba_queda : 2}">
-    <div class="hint" style="margin-top:3px">Quantas posições o galgo precisa perder da última curva até a chegada para aquela corrida contar como desabamento.</div>
+    <label>Corte de split</label>
+    <input type="number" step="0.01" min="0" max="3" name="split_min" value="${config.split_min != null ? config.split_min : ''}" placeholder="">
+    <div class="hint" style="margin-top:3px">Vantagem mínima de largada para o eixo de split passar.</div>
+  </div>
+  <div class="field">
+    <label>Corte de pódio</label>
+    <input type="number" step="0.01" min="0" max="6" name="podio_min" value="${config.podio_min != null ? config.podio_min : ''}" placeholder="">
+    <div class="hint" style="margin-top:3px">Vantagem mínima de pódio para o eixo de pódio passar.</div>
   </div>
   <div class="field">
     <label>Desabamento: quantas das últimas 5</label>
-    <input type="number" step="1" min="1" max="5" name="desaba_min" value="${config.desaba_min != null ? config.desaba_min : 2}">
-    <div class="hint" style="margin-top:3px">Quantas das últimas cinco corridas precisam ter desabamento para o galgo ser reprovado como pick. Menor = mais exigente.</div>
+    <input type="number" step="1" min="1" max="5" name="desaba_min" value="${config.desaba_min != null ? config.desaba_min : ''}" placeholder="2">
+    <div class="hint" style="margin-top:3px">Quantas das últimas cinco com desabamento reprovam o pick. Menor = mais exigente.</div>
+  </div>
+</div>
+
+<div class="sec-title" style="font-size:12px;opacity:.85">Régua REGULAR</div>
+<div class="bloco-fields">
+  <div class="field">
+    <label>SP colado (máximo)</label>
+    <input type="number" step="0.01" min="1" max="3" name="reg_sp_ratio_max" value="${config.reg_sp_ratio_max != null ? config.reg_sp_ratio_max : ''}" placeholder="">
+  </div>
+  <div class="field">
+    <label>Corte de CalTm (segundos)</label>
+    <input type="number" step="0.01" min="0" max="3" name="reg_caltm_min_dif" value="${config.reg_caltm_min_dif != null ? config.reg_caltm_min_dif : ''}" placeholder="">
+  </div>
+  <div class="field">
+    <label>Corte de split</label>
+    <input type="number" step="0.01" min="0" max="3" name="reg_split_min" value="${config.reg_split_min != null ? config.reg_split_min : ''}" placeholder="">
+  </div>
+  <div class="field">
+    <label>Corte de pódio</label>
+    <input type="number" step="0.01" min="0" max="6" name="reg_podio_min" value="${config.reg_podio_min != null ? config.reg_podio_min : ''}" placeholder="">
+  </div>
+  <div class="field">
+    <label>Desabamento: quantas das últimas 5</label>
+    <input type="number" step="1" min="1" max="5" name="reg_desaba_min" value="${config.reg_desaba_min != null ? config.reg_desaba_min : ''}" placeholder="">
+  </div>
+</div>
+
+<div class="sec-title" style="font-size:12px;opacity:.85">Vale para as duas réguas</div>
+<div class="bloco-fields">
+  <div class="field">
+    <label>Desabamento: posições perdidas</label>
+    <input type="number" step="1" min="1" max="5" name="desaba_queda" value="${config.desaba_queda != null ? config.desaba_queda : ''}" placeholder="2">
+    <div class="hint" style="margin-top:3px">Quantas posições o galgo precisa perder da última curva até a chegada para aquela corrida contar como desabamento.</div>
   </div>
 </div>
 
@@ -1160,6 +1200,20 @@ function desenharPizza(porPista, hostId, valKey){
 </script></body></html>`);
 });
 
+// Campo em branco (ou ausente) vira null: com o COALESCE do UPDATE, isso
+// significa "nao mexe neste corte". Valor invalido tambem vira null, pra um
+// erro de digitacao nao virar corte zerado no motor.
+function _num(v){
+  if (v == null || String(v).trim() === '') return null;
+  const n = parseFloat(String(v).replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+function _int(v){
+  if (v == null || String(v).trim() === '') return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : n;
+}
+
 router.post('/save', requireAdmin, express.json(), (req, res) => {
   try {
     const user = req.user;
@@ -1233,7 +1287,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_linha TEXT DEFAULT '#161B27'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=?,caltm_min_dif=?,desaba_queda=?,desaba_min=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=COALESCE(?,sp_ratio_max),caltm_min_dif=COALESCE(?,caltm_min_dif),split_min=COALESCE(?,split_min),podio_min=COALESCE(?,podio_min),desaba_min=COALESCE(?,desaba_min),reg_sp_ratio_max=COALESCE(?,reg_sp_ratio_max),reg_caltm_min_dif=COALESCE(?,reg_caltm_min_dif),reg_split_min=COALESCE(?,reg_split_min),reg_podio_min=COALESCE(?,reg_podio_min),reg_desaba_min=COALESCE(?,reg_desaba_min),desaba_queda=COALESCE(?,desaba_queda),updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1275,12 +1329,17 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       // String vazia e' escolha valida (sem fundo), entao NAO cai no default.
       d.vip_cor_linha != null ? String(d.vip_cor_linha).trim() : '#161B27',
       d.vip_premium_cor_linha != null ? String(d.vip_premium_cor_linha).trim() : '#161B27',
-      // Os dois cortes do motor unico. O motor le direto da analysis_config.
-      d.sp_ratio_max != null && d.sp_ratio_max !== '' ? parseFloat(d.sp_ratio_max) : 1.15,
-      d.caltm_min_dif != null && d.caltm_min_dif !== '' ? parseFloat(d.caltm_min_dif) : 0.20,
-      // Desabamento: o galgo que lidera e cai na reta. Reprova o pick.
-      d.desaba_queda != null && d.desaba_queda !== '' ? parseInt(d.desaba_queda) : 2,
-      d.desaba_min != null && d.desaba_min !== '' ? parseInt(d.desaba_min) : 2,
+      // Os cortes das duas reguas. Campo em BRANCO vira null e, com o COALESCE
+      // do UPDATE, mantem o valor que ja esta no banco.
+      //
+      // E' de proposito: o motor e' dono desses defaults, e a tela nao conhece
+      // todos. Chutar um numero aqui gravaria por cima da calibragem do motor
+      // no primeiro save, sem ninguem perceber.
+      _num(d.sp_ratio_max),      _num(d.caltm_min_dif),
+      _num(d.split_min),         _num(d.podio_min),      _int(d.desaba_min),
+      _num(d.reg_sp_ratio_max),  _num(d.reg_caltm_min_dif),
+      _num(d.reg_split_min),     _num(d.reg_podio_min),  _int(d.reg_desaba_min),
+      _int(d.desaba_queda),
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
