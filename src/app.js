@@ -516,8 +516,24 @@ function _pintaBotaoTier(){
 // nao haver corrida daquela regua fazia o app concluir que o DIA ACABOU e
 // mostrar a tela de encerrado — que nao tem o botao do filtro, entao nao dava
 // nem pra voltar. Filtro de exibicao nao pode opinar sobre o dia ter acabado.
-function passaNoFiltroTier(r) {
-  return !FILTRO_TIER || _tierDe(r) === FILTRO_TIER;
+// TODAS = TOP + REGULAR. Nao existe terceiro grupo: corrida que nao passou em
+// nenhuma das duas reguas nao aparece nem no "todas".
+//
+// PROTECAO: sessao em que NENHUMA corrida tem regua e' sessao anterior ao
+// motor de duas reguas (o campo nem existia). Aplicar a regra ali deixaria a
+// tela em branco, e o usuario nao teria como saber por que. Nesse caso a
+// sessao inteira e' exibida, como era antes.
+function _sessaoTemRegua(lista) {
+  return (lista || []).some(function(x){ return _tierDe(x) !== null; });
+}
+// sessaoClassificada e' BOOLEANO, nao a lista, e nao usa arguments.length:
+// passar esta funcao direto pra um .filter() faz o segundo argumento ser o
+// INDICE do item, e ai a protecao dispararia sozinha na primeira posicao.
+function passaNoFiltroTier(r, sessaoClassificada) {
+  if (sessaoClassificada === false) return true;   // sessao anterior ao motor
+  var t = _tierDe(r);
+  if (!FILTRO_TIER) return t !== null;
+  return t === FILTRO_TIER;
 }
 
 // Normaliza o tier na ENTRADA. O motor escreve TOP/REGULAR, e o resto da tela
@@ -769,7 +785,9 @@ function refreshFocusMode() {
   // sempre visiveis independente do horario.
   // A janela primeiro, o filtro de regua depois: o corte por RACAS_EM_TELA vale
   // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
-  var toShow = avbs.filter(shouldShowRace).filter(passaNoFiltroTier).slice(0, RACAS_EM_TELA);
+  var _naJanela = avbs.filter(shouldShowRace);
+  var _classificada = _sessaoTemRegua(_naJanela);
+  var toShow = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); }).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
 
@@ -834,7 +852,9 @@ function enterFocusMode() {
 
   // A janela primeiro, o filtro de regua depois: o corte por RACAS_EM_TELA vale
   // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
-  var toShow = avbs.filter(shouldShowRace).filter(passaNoFiltroTier).slice(0, RACAS_EM_TELA);
+  var _naJanela = avbs.filter(shouldShowRace);
+  var _classificada = _sessaoTemRegua(_naJanela);
+  var toShow = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); }).slice(0, RACAS_EM_TELA);
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
   var next = toShow[0];
@@ -2289,11 +2309,15 @@ function renderRaceListPanel(avbs) {
   // avbs aqui JA vem filtrado (e o toShow). Vazio + filtro ligado = o filtro
   // escondeu tudo. O cabecalho com o botao ja foi desenhado acima, entao daqui
   // da' pra voltar — foi isso que faltou na primeira versao.
-  if (FILTRO_TIER && !avbs.length) {
+  if (!avbs.length) {
     var av = document.createElement('div');
     av.style.cssText = 'padding:14px 12px;font-size:11px;color:var(--mut);line-height:1.6;text-align:center';
-    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
-      + '<div style="margin-top:6px"><button type="button" onclick="verTodasAsCorridas()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver todas</button></div>';
+    av.innerHTML = FILTRO_TIER
+      ? 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
+        + '<div style="margin-top:6px"><button type="button" onclick="verTodasAsCorridas()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver TOP e REGULAR</button></div>'
+      // Sem filtro e mesmo assim vazio: o motor ainda nao classificou nada
+      // hoje. Dizer isso e' melhor que uma lista muda, que pareceria falha.
+      : 'Nenhuma corrida classificada pelo motor até agora.';
     col.appendChild(av);
   }
   if (!avbs.length) {
