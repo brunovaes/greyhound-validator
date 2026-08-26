@@ -17,7 +17,8 @@ const DEFAULTS = {
   //    nos QUATRO eixos. Estes sao os cortes de cada eixo (o SP colado e' checado por
   //    quem chama). ──
   caltmMinDif: 0.20,      // pick precisa ser >= isto mais rapido (aj. categoria) p/ "ganhar" o CalTm
-  splitEps: 0.01,         // pick precisa arrancar melhor (split) por pelo menos isto
+  splitMin: 0.01,         // pick precisa arrancar melhor (split) por pelo menos isto (margem)
+  podioMin: 0.001,        // vantagem minima de podio recente (0.001 = estritamente melhor; 0 = aceita empate)
   // ── "NAO-SEGURA" (fumador — Bruno ago/2026): galgo que lidera na ultima curva e
   //    DESABA na reta. Compara a posicao na ULTIMA curva (ultimo digito de bends) com a
   //    CHEGADA (FIN). queda = FIN - ultimaCurva. Conta "desabou" quando queda >= desabaQueda
@@ -91,9 +92,11 @@ function limparHistorico(hist, track, dist, limiarS) {
 // atrapalho (se levou toco, a queda e' desculpavel, nao e' o galgo). True = desabou em
 // >= desabaMin das ultimas 5 -> nao pode ser pick. Roda no historico CRU (as ultimas
 // corridas de verdade que o Bruno ve na tela), nao no ja filtrado por tempo.
-function ehNaoSegura(hist, o) {
-  const q = (o && o.desabaQueda > 0) ? o.desabaQueda : 2;
-  const minN = (o && o.desabaMin > 0) ? o.desabaMin : 2;
+// Conta em quantas das ultimas 5 corridas o galgo DESABOU (queda >= desabaQueda da ultima
+// curva pra chegada, sem remark de atrapalho). E' a medida crua do bend/fin — cada regua
+// (TOP/REGULAR) aplica seu proprio desabaMin em cima disto.
+function contaDesaba(hist, desabaQueda) {
+  const q = (desabaQueda > 0) ? desabaQueda : 2;
   const recentes = (hist || []).filter(l => l && l.caltm > 0 && !ehTrial(l)).slice(0, 5);
   let desabou = 0;
   for (const l of recentes) {
@@ -104,7 +107,24 @@ function ehNaoSegura(hist, o) {
     if (!(ultimaCurva > 0) || !(fin > 0)) continue;
     if ((fin - ultimaCurva) >= q && !ATRAPALHO.test(l.remarks || '')) desabou++;
   }
-  return desabou >= minN;
+  return desabou;
+}
+function ehNaoSegura(hist, o) {
+  return contaDesaba(hist, (o && o.desabaQueda) || 2) >= ((o && o.desabaMin > 0) ? o.desabaMin : 2);
+}
+
+// Uma corrida passa numa REGUA? medidas = saida crua do avaliarPar; ratioSp = razao das
+// odds do par (null quando quem chama nao quer checar SP aqui). regua = { sp_ratio_max,
+// caltm_min_dif, split_min, podio_min, desaba_min }. Categoria (igual ou melhor) e' fixa.
+function passaRegua(medidas, ratioSp, regua) {
+  if (!medidas) return false; regua = regua || {};
+  if (regua.sp_ratio_max > 0 && ratioSp != null && ratioSp > regua.sp_ratio_max) return false;
+  if (!medidas.categoria_ok) return false;
+  if (medidas.caltm_dif < (regua.caltm_min_dif != null ? regua.caltm_min_dif : 0)) return false;
+  if (medidas.split_dif < (regua.split_min != null ? regua.split_min : 0)) return false;
+  if (medidas.podio_dif < (regua.podio_min != null ? regua.podio_min : 0)) return false;
+  if (medidas.desaba_count >= (regua.desaba_min != null ? regua.desaba_min : 2)) return false;
+  return true;
 }
 
 // media das posicoes por curva a partir da string de bends ("3222" -> 2.25).
@@ -235,35 +255,39 @@ function avaliarPar(d1, d2, ctx) {
   let A = d1, B = d2, pct = pct1, R = r1, Rb = r2;
   if (pct1 < 50) { A = d2; B = d1; pct = 100 - pct1; R = r2; Rb = r1; }
 
-  // ── GATE "nata das natas" (Bruno ago/2026) ─────────────────────────────────
-  // So e' pick TOP quando o FAVORITO (A) ganha nos QUATRO eixos, cada um por si:
-  //   categoria: A vem de categoria igual ou MELHOR (nunca mais fraca) que B
-  //   caltm:     A mais rapido por >= caltmMinDif (segundos aj. categoria)
-  //   split:     A arranca melhor (splitEf menor por >= splitEps)
-  //   podio:     A com melhor podio recente (podioRate estritamente maior)
-  // O SP colado NAO entra aqui — quem chama (motorManha/BW) so manda par de odd colada.
-  // 'top' e 'eixos' sao ADITIVOS: consumidores antigos que ignoram esses campos seguem
-  // funcionando igual (o pct/obs/flags nao mudaram de forma).
+  // ── MEDIDAS CRUAS de cada eixo (Bruno ago/2026: duas reguas TOP/REGULAR) ────────
+  // O avaliarPar mede; quem CLASSIFICA e' o passaRegua, com a regua de cada tier. Assim o
+  // mesmo par pode ser TOP numa regua e REGULAR noutra, sem reavaliar. Categoria fixa (igual
+  // ou melhor). caltm_dif em s aj. categoria; split_dif/podio_dif = vantagem do pick (>0 = melhor);
+  // desaba_count = bend/fin (fumador) do favorito, cru — cada regua aplica seu desaba_min.
   const vantTempoA = (A === d1) ? vantTempo : -vantTempo;   // seg aj. categoria, a favor do pick A
-  const eixoCategoria = (R.catNivel != null && Rb.catNivel != null) ? (R.catNivel <= Rb.catNivel) : false;
-  const eixoCaltm     = vantTempoA >= o.caltmMinDif;
-  const eixoSplit     = (R.splitEf != null && Rb.splitEf != null) ? (R.splitEf < Rb.splitEf - o.splitEps) : false;
-  const eixoPodio     = (R.podioRate > Rb.podioRate);
-  const eixos = { categoria: eixoCategoria, caltm: eixoCaltm, split: eixoSplit, podio: eixoPodio };
-  // desqualificador do PICK: se o favorito e' "nao-segura" (lidera e desaba na reta),
-  // reprova por mais que ganhe os 4 eixos — o CalTm/split/bends dele mentem, so a
-  // chegada e' honesta. Roda no historico CRU do favorito.
+  const categoria_ok = (R.catNivel != null && Rb.catNivel != null) ? (R.catNivel <= Rb.catNivel) : false;
+  const split_dif = (R.splitEf != null && Rb.splitEf != null) ? +(Rb.splitEf - R.splitEf).toFixed(3) : -999;
+  const podio_dif = +(R.podioRate - Rb.podioRate).toFixed(3);
   const favHist = (A === d1) ? d1.historico : d2.historico;
-  const naoSeguraPick = ehNaoSegura(favHist, o);
-  const top = eixoCategoria && eixoCaltm && eixoSplit && eixoPodio && !naoSeguraPick;
+  const desaba_count = contaDesaba(favHist, o.desabaQueda);
+  const medidas = { caltm_dif: +vantTempoA.toFixed(3), split_dif, podio_dif, categoria_ok, desaba_count };
+
+  // 'top'/'eixos' = classificacao contra a regua da CONFIG passada (o.*) — a regua TOP por
+  // padrao. O SP e' checado por quem chama (motorManha/BW), entao aqui vai null. Retrocompat:
+  // consumidores antigos que so olham 'top' seguem funcionando.
+  const eixos = {
+    categoria: categoria_ok,
+    caltm: medidas.caltm_dif >= o.caltmMinDif,
+    split: medidas.split_dif >= o.splitMin,
+    podio: medidas.podio_dif >= o.podioMin
+  };
+  const naoSeguraPick = desaba_count >= o.desabaMin;
+  const top = eixos.categoria && eixos.caltm && eixos.split && eixos.podio && !naoSeguraPick;
 
   return {
     descartar: false,
     aTrap: A.trap, aNome: A.nome, bTrap: B.trap, bNome: B.nome,
     avaliacao: pct, favoritoTrap: A.trap, flags,
-    top: top, eixos: eixos,                       // GATE nata: passou nos 4 eixos (e nao e' fumador)?
-    nao_segura: naoSeguraPick,                    // pick lidera e desaba na reta? (reprova mesmo ganhando os 4)
-    caltm_dif: +vantTempoA.toFixed(3),            // vantagem de tempo do pick (aj. categoria)
+    medidas,                                      // margens cruas p/ classificar em qualquer regua
+    top: top, eixos: eixos,                       // classificacao contra a regua da config (TOP por padrao)
+    nao_segura: naoSeguraPick,                    // pick lidera e desaba na reta?
+    caltm_dif: medidas.caltm_dif, split_dif: split_dif, podio_dif: podio_dif, desaba_count: desaba_count,
     cat_pick: R.catNivel, cat_outro: Rb.catNivel, // niveis de categoria (menor = mais forte)
     obs: montarObs(A, B, R, Rb, Math.abs(vantTempo), flags),
     _debug: { vantTempo: +vantTempo.toFixed(3), vantSplit: +vantSplit.toFixed(3), vantBends: +vantBends.toFixed(3), vantPodio: +vantPodio.toFixed(3), net: +net.toFixed(3) }
@@ -315,4 +339,4 @@ function rankearAvbs(pares, dogsByTrap, ctx, topN, opts) {
   return out.slice(0, topN).map((a, i) => Object.assign({}, a, { pos: i + 1 }));
 }
 
-module.exports = { avaliarPar, rankearAvbs, rankPodio, resumoGalgo, ehNaoSegura, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };
+module.exports = { avaliarPar, rankearAvbs, rankPodio, resumoGalgo, ehNaoSegura, contaDesaba, passaRegua, nivelCat, ehTrial, bendMedio, limparHistorico, DEFAULTS };

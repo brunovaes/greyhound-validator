@@ -58,12 +58,23 @@ function _nomeMascara(nomeCru, trap) {
 // raceCard: [{trap,nome}] (p/ traps vazias)  ctxBase: {dataCorrida,trackCorrida,distCorrida}
 function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   opts = opts || {};
-  const spRatioMax = opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX;
-  // corte de CalTm do gate da nata (aj. categoria). Vem da config; senao o default do engine.
-  const caltmMinDif = opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif;
-  // regra do "nao-segura" (fumador): vem da config; senao os defaults do engine.
-  const desabaQueda = opts.desabaQueda > 0 ? opts.desabaQueda : reanalise.DEFAULTS.desabaQueda;
-  const desabaMin = opts.desabaMin > 0 ? opts.desabaMin : reanalise.DEFAULTS.desabaMin;
+  const D = reanalise.DEFAULTS;
+  // DUAS REGUAS (Bruno ago/2026): o mesmo motor classifica cada par em TOP (nata) ou REGULAR.
+  const reguaTop = {
+    sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX,
+    caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : D.caltmMinDif,
+    split_min: opts.splitMin != null ? opts.splitMin : D.splitMin,
+    podio_min: opts.podioMin != null ? opts.podioMin : D.podioMin,
+    desaba_min: opts.desabaMin > 0 ? opts.desabaMin : D.desabaMin
+  };
+  const reguaReg = {
+    sp_ratio_max: opts.regSpRatioMax > 0 ? opts.regSpRatioMax : 1.20,
+    caltm_min_dif: opts.regCaltmMinDif != null ? opts.regCaltmMinDif : 0.10,
+    split_min: opts.regSplitMin != null ? opts.regSplitMin : 0,
+    podio_min: opts.regPodioMin != null ? opts.regPodioMin : 0,
+    desaba_min: opts.regDesabaMin > 0 ? opts.regDesabaMin : 3
+  };
+  const desabaQueda = opts.desabaQueda > 0 ? opts.desabaQueda : D.desabaQueda;
 
   const dogsByTrap = {};
   for (const g of (Array.isArray(histFull) ? histFull : [])) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g;
@@ -75,58 +86,58 @@ function slotsDaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   const trapsVazias = Array.from(vaz);
   // QUAIS traps vazias estao ao lado (nao so "tem/nao tem") — pra a nota dizer o numero.
   const vaziasAoLado = t => [t - 1, t + 1].filter(x => x >= 1 && x <= 6 && vaz.has(x));
-  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null, config: { caltmMinDif, desabaQueda, desabaMin } };
+  // config passada ao avaliarPar = a regua TOP (o av.eixos reflete o TOP; a classificacao
+  // real vem do passaRegua com as medidas cruas). desabaQueda e' global aos dois tiers.
+  const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null,
+    config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min } };
 
   const oddMedia = _oddMediaPorTrap(histAll);
-  // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card (galgo
-  // retirado sai do pareamento; o proximo par colado assume o slot automaticamente).
+  // ITEM 6 — retirada: so pareia trap que TEM galgo E esta PRESENTE no card.
   const traps = Object.keys(dogsByTrap).map(Number).filter(t => oddMedia[t] > 0 && presentes.has(t));
 
-  // todos os pares de SP colada, ordenados do mais colado (menor razão) pro menos
+  // pareia pelo SP MAIS FROUXO (o da REGULAR), pra os DOIS tiers verem os candidatos.
+  const spPair = Math.max(reguaTop.sp_ratio_max, reguaReg.sp_ratio_max);
   const pares = [];
   for (let i = 0; i < traps.length; i++) for (let j = i + 1; j < traps.length; j++) {
     const a = traps[i], b = traps[j];
     const ratio = Math.max(oddMedia[a], oddMedia[b]) / Math.min(oddMedia[a], oddMedia[b]);
-    if (ratio > spRatioMax) continue;
+    if (ratio > spPair) continue;
     pares.push({ a, b, ratio });
   }
   pares.sort((x, y) => x.ratio - y.ratio);
 
   const nomeTrap = t => { const g = dogsByTrap[t]; return g ? _nomeMascara(g.nome, t) : ('b' + t + ' (sem nome)'); };
+  const montaSlot = (av, par, tier) => ({
+    ratio_sp: +par.ratio.toFixed(3),
+    pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
+    outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
+    pct: av.avaliacao, pct_pick: av.avaliacao, pct_outro: 100 - av.avaliacao,
+    tier: tier, top: tier === 'TOP',
+    eixos: av.eixos,                                    // {categoria,caltm,split,podio} contra a regua TOP
+    caltm_dif: av.caltm_dif, split_dif: av.split_dif, podio_dif: av.podio_dif, desaba_count: av.desaba_count,
+    cat_pick: av.cat_pick, cat_outro: av.cat_outro,
+    pick_vazia_lado: vaziasAoLado(av.aTrap).length > 0, pick_vazia_traps: vaziasAoLado(av.aTrap),
+    outro_vazia_lado: vaziasAoLado(av.bTrap).length > 0, outro_vazia_traps: vaziasAoLado(av.bTrap),
+    obs: av.obs || null, flags: av.flags || null
+  });
 
-  const slots = [];
-  const rotulos = ['principal', 'secundario_1', 'secundario_2'];
+  const topSlots = [], regSlots = [];
   for (const par of pares) {
-    if (slots.length >= N_SLOTS) break;
+    if (topSlots.length >= N_SLOTS && regSlots.length >= N_SLOTS) break;
     const av = reanalise.avaliarPar(dogsByTrap[par.a], dogsByTrap[par.b], ctx);
-    if (!av || av.descartar) continue;                    // sem histórico p/ avaliar → pula pro próximo par
-    // ── GATE "nata das natas": só entra o par onde o favorito GANHA NOS 4 EIXOS
-    //    (categoria, CalTm >= corte, split, pódio). Não passou → não é top, não aparece.
-    //    (SP colado já foi garantido no pareamento acima.) Sem meio-termo, sem parelho.
-    if (!av.top) continue;
-    const pct = av.avaliacao;                             // % do favorito (av.aTrap) vencer
-    slots.push({
-      slot: rotulos[slots.length],
-      ratio_sp: +par.ratio.toFixed(3),
-      pick_trap: av.aTrap, pick_nome: nomeTrap(av.aTrap),
-      outro_trap: av.bTrap, outro_nome: nomeTrap(av.bTrap),
-      pct: pct,
-      pct_pick: pct, pct_outro: 100 - pct,
-      top: true,                                          // passou nos 4 eixos (a nata)
-      eixos: av.eixos,                                    // {categoria,caltm,split,podio} — todos true aqui
-      caltm_dif: av.caltm_dif,                            // vantagem de CalTm do pick (aj. categoria)
-      cat_pick: av.cat_pick, cat_outro: av.cat_outro,     // niveis de categoria (menor = mais forte)
-      // ITEM 5 — nota de trap vazia ao lado, indicando QUAL trap (atualiza tardio: le o
-      // card fresco a cada chamada). pick_vazia_traps = ex.: [3] (box 3 vazio ao lado do pick).
-      pick_vazia_lado: vaziasAoLado(av.aTrap).length > 0,
-      pick_vazia_traps: vaziasAoLado(av.aTrap),
-      outro_vazia_lado: vaziasAoLado(av.bTrap).length > 0,
-      outro_vazia_traps: vaziasAoLado(av.bTrap),
-      obs: av.obs || null,
-      flags: av.flags || null
-    });
+    if (!av || av.descartar) continue;                    // sem histórico p/ avaliar
+    // classifica: passa a regua TOP -> TOP; senao a REGULAR -> REGULAR; senao fora.
+    if (reanalise.passaRegua(av.medidas, par.ratio, reguaTop)) {
+      if (topSlots.length < N_SLOTS) topSlots.push(montaSlot(av, par, 'TOP'));
+    } else if (reanalise.passaRegua(av.medidas, par.ratio, reguaReg)) {
+      if (regSlots.length < N_SLOTS) regSlots.push(montaSlot(av, par, 'REGULAR'));
+    }
   }
-  return slots;
+  // a corrida e' TOP se tem QUALQUER pick TOP; senao REGULAR se tem regular; senao vazia.
+  // (nao mistura tiers numa corrida — os secundarios seguem o tier do principal.)
+  const escolhidos = topSlots.length ? topSlots : regSlots;
+  const rotulos = ['principal', 'secundario_1', 'secundario_2'];
+  return escolhidos.slice(0, N_SLOTS).map((s, i) => Object.assign({ slot: rotulos[i] }, s));
 }
 
 // Pódio pela MESMA lógica dos 4 eixos, SEM SP (Bruno ago/2026): ranqueia o grid inteiro
@@ -161,12 +172,23 @@ function _podioOk(podio, principal) {
 // cai nos defaults (SP_RATIO_MAX 1.15 / engine caltmMinDif 0.20).
 function _aplicaConfigMotor(db, opts) {
   try {
-    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, desaba_queda, desaba_min FROM analysis_config WHERE user_id=1").get();
+    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min FROM analysis_config WHERE user_id=1").get();
     if (c) {
-      if (!(opts.spRatioMax > 0) && c.sp_ratio_max > 0) opts = Object.assign({}, opts, { spRatioMax: c.sp_ratio_max });
-      if (!(opts.caltmMinDif > 0) && c.caltm_min_dif > 0) opts = Object.assign({}, opts, { caltmMinDif: c.caltm_min_dif });
-      if (!(opts.desabaQueda > 0) && c.desaba_queda > 0) opts = Object.assign({}, opts, { desabaQueda: c.desaba_queda });
-      if (!(opts.desabaMin > 0) && c.desaba_min > 0) opts = Object.assign({}, opts, { desabaMin: c.desaba_min });
+      const m = {};
+      // regua TOP
+      if (!(opts.spRatioMax > 0) && c.sp_ratio_max > 0) m.spRatioMax = c.sp_ratio_max;
+      if (!(opts.caltmMinDif > 0) && c.caltm_min_dif > 0) m.caltmMinDif = c.caltm_min_dif;
+      if (opts.splitMin == null && c.split_min != null) m.splitMin = c.split_min;
+      if (opts.podioMin == null && c.podio_min != null) m.podioMin = c.podio_min;
+      if (!(opts.desabaQueda > 0) && c.desaba_queda > 0) m.desabaQueda = c.desaba_queda;
+      if (!(opts.desabaMin > 0) && c.desaba_min > 0) m.desabaMin = c.desaba_min;
+      // regua REGULAR
+      if (!(opts.regSpRatioMax > 0) && c.reg_sp_ratio_max > 0) m.regSpRatioMax = c.reg_sp_ratio_max;
+      if (opts.regCaltmMinDif == null && c.reg_caltm_min_dif != null) m.regCaltmMinDif = c.reg_caltm_min_dif;
+      if (opts.regSplitMin == null && c.reg_split_min != null) m.regSplitMin = c.reg_split_min;
+      if (opts.regPodioMin == null && c.reg_podio_min != null) m.regPodioMin = c.reg_podio_min;
+      if (!(opts.regDesabaMin > 0) && c.reg_desaba_min > 0) m.regDesabaMin = c.reg_desaba_min;
+      opts = Object.assign({}, opts, m);
     }
   } catch (e) {}
   return opts;
@@ -187,6 +209,7 @@ function _corridaDeRow(row, date, opts) {
   const considerados = Array.from(new Set(slots.flatMap(s => [s.pick_trap, s.outro_trap]))).sort((a, b) => a - b);
   return {
     hora: row.hora, corrida: row.corrida, dist: row.dist, nivel: row.nivel,
+    tier: slots[0] ? slots[0].tier : null,             // TOP | REGULAR | null(fora): pro filtro da tela
     principal: slots[0] || null,
     secundarios: slots.slice(1),
     slots,
@@ -218,16 +241,17 @@ function listar(db, opts) {
   return {
     date, total_corridas: corridas.length,
     parametros: {
-      sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX,
-      caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif,
+      top: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif, split_min: opts.splitMin != null ? opts.splitMin : reanalise.DEFAULTS.splitMin, podio_min: opts.podioMin != null ? opts.podioMin : reanalise.DEFAULTS.podioMin, desaba_min: opts.desabaMin > 0 ? opts.desabaMin : reanalise.DEFAULTS.desabaMin },
+      regular: { sp_ratio_max: opts.regSpRatioMax > 0 ? opts.regSpRatioMax : 1.20, caltm_min_dif: opts.regCaltmMinDif != null ? opts.regCaltmMinDif : 0.10, split_min: opts.regSplitMin != null ? opts.regSplitMin : 0, podio_min: opts.regPodioMin != null ? opts.regPodioMin : 0, desaba_min: opts.regDesabaMin > 0 ? opts.regDesabaMin : 3 },
+      desaba_queda: opts.desabaQueda > 0 ? opts.desabaQueda : reanalise.DEFAULTS.desabaQueda,
       n_slots: N_SLOTS
     },
     corridas,
-    legenda: 'MOTOR ÚNICO (a nata das natas): só entra como pick o par de SP colada (razão <= sp_ratio_max) '
-      + 'cujo favorito GANHA NOS 4 EIXOS — categoria (igual ou melhor), CalTm (>= caltm_min_dif, aj. categoria), '
-      + 'split (arranca melhor) e pódio (melhor pódio recente). top=true e eixos={categoria,caltm,split,podio}. '
-      + 'Não passou nos 4 → não aparece (sem meio-termo, sem parelho). O pódio é ranqueado pela MESMA lógica dos '
-      + '4 eixos, mas SEM exigir SP (podio_fonte:"4-eixos"). Perto da largada atualiza com o card fresco (trap vazia, retirada).'
+    legenda: 'MOTOR ÚNICO, DUAS RÉGUAS. Cada corrida vira TOP (nata) se um par de SP colada passa na régua TOP '
+      + '(categoria igual/melhor, CalTm>=corte, split, pódio, e não-segura); senão vira REGULAR se passa na régua '
+      + 'mais frouxa; senão fica fora. tier=TOP|REGULAR|null por corrida (e por slot). Cada slot traz as margens '
+      + 'cruas (caltm_dif/split_dif/podio_dif/desaba_count) pra calibragem. O pódio segue os 4 eixos SEM SP '
+      + '(podio_fonte:"4-eixos"). Trap vazia só avisa (não descarta). Perto da largada atualiza com o card fresco.'
   };
 }
 
@@ -336,8 +360,9 @@ function paraPersistir(db, opts) {
     out.push({
       id: row.id, hora: row.hora, corrida: row.corrida,
       largou: !!(row.final_check_at || row.finishing_order_json),
+      tier: principal.tier,                                      // TOP | REGULAR
       principal,
-      // TODOS os pares aprovados (nata), principal 1o, depois secundarios — ex.: "4x2,1x5".
+      // TODOS os pares aprovados (mesmo tier), principal 1o, depois secundarios — ex.: "4x2,1x5".
       // Pro Historico cruzar com avb_escolhido e saber se o Bruno ficou na nata e em qual slot.
       bw_pares: slots.map(s => s.pick_trap + 'x' + s.outro_trap).join(','),
       podio_str: pod.podio.join('-'),

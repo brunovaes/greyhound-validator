@@ -1380,11 +1380,21 @@ router.get('/config', (req, res) => {
       // MOTOR UNICO (a nata das natas): os DOIS unicos botoes que calibram o motor.
       // sp_ratio_max = SP colado (razao max das odds medias do par). caltm_min_dif =
       // corte de CalTm (aj. categoria, em s) p/ o pick "ganhar" o eixo do tempo.
+      // ── REGUA TOP (nata) ──
       sp_ratio_max: config.sp_ratio_max != null ? config.sp_ratio_max : 1.15,
       caltm_min_dif: config.caltm_min_dif != null ? config.caltm_min_dif : 0.20,
-      // "nao-segura" (fumador): pick que lidera e desaba na reta e' reprovado.
+      split_min: config.split_min != null ? config.split_min : 0.01,
+      podio_min: config.podio_min != null ? config.podio_min : 0.001,
+      // "nao-segura" (fumador): desaba_queda = o que conta como desabamento (global aos 2 tiers);
+      // desaba_min = quantos desabamentos reprovam (por tier).
       desaba_queda: config.desaba_queda != null ? config.desaba_queda : 2,
-      desaba_min: config.desaba_min != null ? config.desaba_min : 2
+      desaba_min: config.desaba_min != null ? config.desaba_min : 2,
+      // ── REGUA REGULAR (mais frouxa) — mesmo motor, tier de baixo ──
+      reg_sp_ratio_max: config.reg_sp_ratio_max != null ? config.reg_sp_ratio_max : 1.20,
+      reg_caltm_min_dif: config.reg_caltm_min_dif != null ? config.reg_caltm_min_dif : 0.10,
+      reg_split_min: config.reg_split_min != null ? config.reg_split_min : 0,
+      reg_podio_min: config.reg_podio_min != null ? config.reg_podio_min : 0,
+      reg_desaba_min: config.reg_desaba_min != null ? config.reg_desaba_min : 3
     });
   } catch(e) { res.json({ visibility_interval_min: 120 }); }
 });

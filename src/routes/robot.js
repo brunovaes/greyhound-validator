@@ -2829,37 +2829,40 @@ function _persistirManha(date, aplicar){
     date = /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : getTodayDate();
     const mm = require('../utils/motorManha');
     const recs = mm.paraPersistir(db, { date });
-    // FLAG BW: marca as corridas aprovadas pelo motor unico (a nata) pro filtro "BW" da tela.
-    // Antes de remarcar, zera o bw das corridas de hoje que ainda NAO largaram (as que sairam
-    // da nata perdem a marca); as ja largadas ficam congeladas. Logo abaixo, as tops voltam a 1.
+    // TIER + FLAG BW: marca cada corrida com o tier do motor unico (TOP nata / REGULAR) e
+    // bw=1 so pra TOP (atalho do filtro). Antes de remarcar, zera tier/bw das corridas de
+    // hoje que ainda NAO largaram (as que sairam do motor perdem a marca); as ja largadas
+    // ficam congeladas. Logo abaixo, cada corrida com pick recebe seu tier.
     if(aplicar){
-      try { db.prepare("UPDATE races SET bw=0, bw_pares=NULL WHERE final_check_at IS NULL AND finishing_order_json IS NULL AND id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date); } catch(e){}
+      try { db.prepare("UPDATE races SET bw=0, bw_pares=NULL, tier=NULL WHERE final_check_at IS NULL AND finishing_order_json IS NULL AND id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date); } catch(e){}
     }
     const upd = aplicar ? db.prepare(
       'UPDATE races SET trap_fav=?, name_fav=?, trap_und=?, name_und=?, perfil_fav=?, perfil_und=?, '
-      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=?, bw=1, bw_pares=? WHERE id=?') : null;
-    let n=0, cong=0; const preview=[];
+      + 'hist_fav=?, hist_und=?, pct=?, obs=?, top3=?, avb_fechamento=?, tier=?, bw=?, bw_pares=? WHERE id=?') : null;
+    let n=0, cong=0, nTop=0, nReg=0; const preview=[];
     for(const r of recs){
       if(r.largou){ cong++; continue; }                      // FREEZE na largada
       const p = r.principal;
+      const ehTop = (r.tier === 'TOP');
       const registro = JSON.stringify({
         aTrap:p.pick_trap, aNome:p.pick_nome, bTrap:p.outro_trap, bNome:p.outro_nome,
         odd:null, marketPct:null, reanalisePct:p.pct, motorOrigPct:null, edge:null,
-        obs:p.obs||null, origem:'reanalise', parelho:!!p.parelho, ts:Math.floor(Date.now()/1000)
+        obs:p.obs||null, origem:'reanalise', tier:r.tier, ts:Math.floor(Date.now()/1000)
       });
       if(aplicar){
         upd.run(
           p.pick_trap, p.pick_nome, p.outro_trap, p.outro_nome,
           r.perfil_fav||'', r.perfil_und||'',
           r.hist_fav?JSON.stringify(r.hist_fav):null, r.hist_und?JSON.stringify(r.hist_und):null,
-          p.pct, p.obs||null, r.podio_str||null, registro, r.bw_pares||null, r.id
+          p.pct, p.obs||null, r.podio_str||null, registro, r.tier||null, ehTop?1:0, r.bw_pares||null, r.id
         );
       } else if(preview.length < 20){
-        preview.push({ hora:r.hora, corrida:r.corrida, trap_fav:p.pick_trap, name_fav:p.pick_nome, trap_und:p.outro_trap, name_und:p.outro_nome, pct:p.pct, parelho:p.parelho, top3:r.podio_str, perfil_fav:r.perfil_fav, perfil_und:r.perfil_und });
+        preview.push({ hora:r.hora, corrida:r.corrida, tier:r.tier, trap_fav:p.pick_trap, name_fav:p.pick_nome, trap_und:p.outro_trap, name_und:p.outro_nome, pct:p.pct, top3:r.podio_str });
       }
+      if(ehTop) nTop++; else nReg++;
       n++;
     }
-    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_principal: n, congeladas_ja_largaram: cong, preview: aplicar?undefined:preview };
+    return { date, modo: aplicar?'APLICADO':'dry-run (nada gravado)', corridas_com_pick: n, top: nTop, regular: nReg, congeladas_ja_largaram: cong, preview: aplicar?undefined:preview };
   }catch(e){ return { erro: e.message }; }
 }
 
@@ -2895,7 +2898,10 @@ router.get('/diag/lista-dia', requireAdmin, (req, res) => {
     const mm = require('../utils/motorManha');
     const { bateuPar } = require('../utils/avbResultado');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-    const recs = mm.paraPersistir(db, { date });
+    // ?tier=TOP (default) | REGULAR | ALL — a lista da nata (TOP) por padrao.
+    const tierQ = String(req.query.tier || 'TOP').toUpperCase();
+    let recs = mm.paraPersistir(db, { date });
+    if (tierQ === 'TOP' || tierQ === 'REGULAR') recs = recs.filter(r => r.tier === tierQ);
     const q = db.prepare('SELECT abriu, odd_abertura, avb_fechamento, finishing_order_json FROM races WHERE id=?');
     let nAbriu = 0, nComResultado = 0, nBateu = 0;
     const linhas = recs.map(r => {
@@ -2909,7 +2915,7 @@ router.get('/diag/lista-dia', requireAdmin, (req, res) => {
       if (bateu !== null) nComResultado++;
       if (bateu === true) nBateu++;
       return {
-        hora: r.hora, pista: String(r.corrida || '').split(' ')[0], corrida: r.corrida,
+        hora: r.hora, pista: String(r.corrida || '').split(' ')[0], corrida: r.corrida, tier: r.tier,
         avb: 'T' + p.pick_trap + ' ' + (p.pick_nome || '') + '  x  T' + p.outro_trap + ' ' + (p.outro_nome || ''),
         pct: p.pct, caltm_dif: p.caltm_dif,
         odd_bw: oddBW,
@@ -2919,13 +2925,12 @@ router.get('/diag/lista-dia', requireAdmin, (req, res) => {
       };
     });
     res.json({
-      date, total_avbs: linhas.length,
+      date, tier: tierQ, total_avbs: linhas.length,
       abriram_na_bw: nAbriu, com_resultado: nComResultado, bateram: nBateu,
       taxa_acerto_pct: nComResultado ? Math.round(nBateu / nComResultado * 100) : null,
       linhas,
-      legenda: 'AvBs do motor unico (4 eixos + nao-segura). odd_bw = odd de abertura na BW '
-        + '(ou a do fechamento se nao capturou a abertura). abriu = o par abriu na BW. '
-        + 'bateu = o pick chegou na frente do outro (placar real); aguardando = sem resultado ainda.'
+      legenda: 'AvBs do motor unico. ?tier=TOP (default, a nata) | REGULAR | ALL. odd_bw = odd de abertura na BW '
+        + '(ou a do fechamento). abriu = o par abriu na BW. bateu = o pick chegou na frente do outro (placar real).'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -2940,13 +2945,13 @@ router.get('/diag/backfill-bw', requireAdmin, (req, res) => {
     const { db } = require('../db/database');
     const mm = require('../utils/motorManha');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-    const recs = mm.paraPersistir(db, { date });   // todas as corridas COM principal (nata), incl. largadas
-    // zera o dia inteiro (rotulo), depois marca a nata — sem respeitar freeze (e' so label)
-    db.prepare("UPDATE races SET bw=0, bw_pares=NULL WHERE id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date);
-    const upd = db.prepare('UPDATE races SET bw=1, bw_pares=? WHERE id=?');
-    let n = 0;
-    for (const r of recs) { upd.run(r.bw_pares || null, r.id); n++; }
-    res.json({ date, marcadas_nata: n, legenda: 'Marcou bw=1 e bw_pares nas corridas da nata do dia (inclusive as que ja largaram). As demais ficaram bw=0.' });
+    const recs = mm.paraPersistir(db, { date });   // todas as corridas COM pick (TOP+REGULAR), incl. largadas
+    // zera o dia inteiro (rotulo), depois marca tier/bw — sem respeitar freeze (e' so label)
+    db.prepare("UPDATE races SET bw=0, bw_pares=NULL, tier=NULL WHERE id IN (SELECT r.id FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?)").run(date);
+    const upd = db.prepare('UPDATE races SET tier=?, bw=?, bw_pares=? WHERE id=?');
+    let nTop = 0, nReg = 0;
+    for (const r of recs) { const ehTop = r.tier === 'TOP'; upd.run(r.tier || null, ehTop ? 1 : 0, r.bw_pares || null, r.id); if (ehTop) nTop++; else nReg++; }
+    res.json({ date, top: nTop, regular: nReg, legenda: 'Marcou tier (TOP/REGULAR) + bw (1 so p/ TOP) + bw_pares nas corridas com pick do dia (inclusive largadas). As demais ficaram sem tier.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 

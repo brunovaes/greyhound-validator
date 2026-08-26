@@ -317,6 +317,21 @@ const migrations = [
   // Pares aprovados da nata (principal 1o, depois secundarios): "4x2,1x5". Pro Historico
   // cruzar com avb_escolhido e medir "troquei de par dentro da nata, melhorou ou piorou?".
   "ALTER TABLE races ADD COLUMN bw_pares TEXT",
+  // DUAS REGUAS (Bruno ago/2026): o mesmo motor classifica cada corrida em TOP (nata) ou
+  // REGULAR (regua mais frouxa), calibradas no Config. A regua TOP ja usa sp_ratio_max /
+  // caltm_min_dif / desaba_queda / desaba_min; faltavam split e podio (agora configuraveis):
+  "ALTER TABLE analysis_config ADD COLUMN split_min REAL DEFAULT 0.01",   // TOP: vantagem minima de split
+  "ALTER TABLE analysis_config ADD COLUMN podio_min REAL DEFAULT 0.001",  // TOP: vantagem minima de podio (0.001 = estritamente melhor)
+  // Regua REGULAR (mais frouxa). desaba_queda (o que conta como desabamento) e' global —
+  // so o desaba_min (quantos toleram) muda por tier.
+  "ALTER TABLE analysis_config ADD COLUMN reg_sp_ratio_max REAL DEFAULT 1.20",
+  "ALTER TABLE analysis_config ADD COLUMN reg_caltm_min_dif REAL DEFAULT 0.10",
+  "ALTER TABLE analysis_config ADD COLUMN reg_split_min REAL DEFAULT 0",     // aceita empate no split
+  "ALTER TABLE analysis_config ADD COLUMN reg_podio_min REAL DEFAULT 0",     // aceita empate no podio
+  "ALTER TABLE analysis_config ADD COLUMN reg_desaba_min INTEGER DEFAULT 3", // tolera ate 2 desabamentos (reprova com 3)
+  // Tier do motor unico na corrida: 'TOP' (nata) | 'REGULAR' | NULL(fora). Pro filtro TOP/REGULAR
+  // da Analisar. bw=1 continua sendo o atalho booleano de TOP.
+  "ALTER TABLE races ADD COLUMN tier TEXT",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
