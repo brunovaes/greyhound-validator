@@ -482,6 +482,8 @@ function _gravarInicialAvb(inic){
 // CALIBRAR o limiar do avb_parelho: depois cruzamos estes pares com as SPs dos
 // PDFs (races.hist_all) e medimos a distancia de odd que o betwinner realmente
 // abre. Puramente aditivo — nunca pode afetar o robo (try/catch total).
+// GRITO de AvB novo (Bruno ago/2026): uma vez por corrida (reseta no restart, tudo bem).
+const _surpresaGritada = new Set();
 function _gravarParesAbertos(info){
   try{
     if(!info || !info.gameId || !Array.isArray(info.pares) || !info.pares.length) return;
@@ -494,6 +496,32 @@ function _gravarParesAbertos(info){
       + 'ON CONFLICT(game_id) DO UPDATE SET data=excluded.data,corrida=excluded.corrida,hora=excluded.hora,'
       + 'track=excluded.track,pares_json=excluded.pares_json,n_pares=excluded.n_pares,capturado_em=CURRENT_TIMESTAMP'
     ).run(info.gameId, getTodayDate(), info.corrida||null, info.hora||null, info.track||null, JSON.stringify(info.pares), info.pares.length);
+    // GRITO: acabou de abrir par novo -> checa se surgiu AvB NOVO (fora da lista da manha) >=75%.
+    // Se sim, dispara push pro admin (PC + mobile). So-leitura + push; ISOLADO (nunca derruba o captador).
+    try {
+      const date = getTodayDate();
+      const chave = date + '|' + (info.hora||'') + '|' + (info.corrida||'');
+      if (info.corrida && info.hora && !_surpresaGritada.has(chave)) {
+        const mm = require('../utils/motorManha');
+        const r = mm.umaCorrida(db, { date, hora: info.hora, corrida: info.corrida });
+        const bw = r && r.bw;
+        if (bw && bw.alerta_forte && Array.isArray(bw.surpresas) && bw.surpresas.length) {
+          const s = bw.surpresas.filter(x => x.alerta_forte).sort((a,b)=>b.pct-a.pct)[0];
+          let sender = null; try { sender = require('../push/sender'); } catch(e){}
+          if (s && sender && sender.disponivel && sender.disponivel() && sender.montarPayloadCorrida && sender.enviarParaUsuario) {
+            const partes = String(info.corrida).trim().split(/\s+/);
+            const payload = sender.montarPayloadCorrida({
+              horaBr: info.hora, pista: partes[0]||'', classe: partes.slice(1).join(' ')||'',
+              trapFav: s.pick_trap, trapUnd: s.outro_trap, nivel: 'AvB NOVO', pct: s.pct,
+              dist: info.dist||0, minutos: 0, url: (process.env.BASE_PATH || '/greyhound')
+            }, { negrito: true });
+            sender.enviarParaUsuario(1, payload);
+            _surpresaGritada.add(chave);
+            console.log('[grito] AvB NOVO ' + info.corrida + ' ' + info.hora + ' T' + s.pick_trap + 'xT' + s.outro_trap + ' pct ' + s.pct);
+          }
+        }
+      }
+    } catch(e){ /* grito nunca derruba o captador */ }
   }catch(e){ /* captacao nunca derruba o robo */ }
 }
 
