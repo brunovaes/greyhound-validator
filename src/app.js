@@ -838,12 +838,17 @@ function enterFocusMode() {
 // de um trap qualquer dentro do que o motor ja mandou em r.histAll / r.scores,
 // pra arena conseguir se redesenhar pra qualquer dupla.
 
-// Par escolhido pelo usuario (fica) > par ao vivo do momento > fav x und do motor.
-// Uma vez que o usuario ESCOLHE, aquele par manda e nao muda mais sozinho —
+// Par escolhido pelo usuario (fica) > principal do motor unico.
+//
+// O "par ao vivo" SAIU desta conta. Ele vinha do pos-1 da lista de odds e
+// trocava a arena a cada 5 segundos; agora o principal e' do motor unico e
+// nunca muda pela lista ao vivo. So a retirada, no ciclo de 4 min do motor,
+// pode ajustar o pick — e ai o proprio trap_fav muda na origem.
+//
+// Uma vez que o usuario ESCOLHE, aquele par manda e nao muda mais sozinho:
 // e' ele que vai pro historico e pra banca.
 function _parEmFoco(r){
   if (r && r.avbEscolhido && r.avbEscolhido.a) return { a:r.avbEscolhido.a, b:r.avbEscolhido.b, escolhido:true };
-  if (r && r._parAoVivo && r._parAoVivo.a)     return { a:r._parAoVivo.a, b:r._parAoVivo.b, aoVivo:true };
   return { a: r && r.trapFav || 1, b: r && r.trapUnd || 2 };
 }
 // ── Fonte do historico: aHist/bHist do robo, com fallback pro histAll ───────
@@ -1066,7 +1071,7 @@ function _mmAgendarPulso(r){
     if (!atual || _mmChave(atual) !== chave) { clearInterval(MM_PULSO); MM_PULSO = null; return; }
     var min = minutesToRace(atual);
     if (min === null || min > 12 || min < -2) return;   // fora da janela
-    _mmBuscar(atual, function(){ _mmPintarNotas(atual); });
+    _mmBuscar(atual, function(){ _mmPintarNotas(atual); _mmPintarBw(atual); });
   }, 75000);
 }
 
@@ -1077,6 +1082,46 @@ function _mmSlotPrincipal(r){
   var c = MM_CACHE[_mmChave(r)];
   if (!c || !c.dados || !c.dados.encontrada) return null;
   return { slot: c.dados.corrida_obj && c.dados.corrida_obj.principal, match: c.dados.match };
+}
+
+// ── Bloco bw: o que a BetWinner ja abriu pra esta corrida ────────────────
+// Vem no mesmo payload da corrida (corrida_obj + bw), no pulso perto da
+// largada. Tres estados, e cada um pede uma tela diferente:
+//   nao monitorada -> a BW ainda nem olhou; so o principal, sem odd
+//   abriu          -> a odd do principal existe e vale
+//   nao abriu      -> mostra os secundarios que ABRIRAM, sem trocar o principal
+//
+// O principal NUNCA e' trocado por nada disso. Ele e' do motor unico, congelado
+// desde a analise da manha.
+function _mmBw(r){
+  var c = MM_CACHE[_mmChave(r)];
+  return (c && c.dados && c.dados.encontrada && c.dados.bw) ? c.dados.bw : null;
+}
+
+function _mmPintarBw(r){
+  var box = document.getElementById('fp-alts');
+  var bw = _mmBw(r);
+  if (!box) return;
+
+  // Sem dado, ou o par principal ja abriu: nao ha alternativa a oferecer.
+  if (!bw || bw.abriu || !bw.secundarios || !bw.secundarios.length) {
+    box.innerHTML = ''; box.style.display = 'none';
+    return;
+  }
+
+  // O principal nao abriu, mas estes pares abriram e passam nas mesmas regras.
+  // Sao oferta, nao substituicao: entrar neles e' escolha sua, pelo botao.
+  box.innerHTML =
+    '<div style="font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--mut);text-transform:uppercase;text-align:center;margin-bottom:2px">'
+    + 'o par principal não abriu</div>'
+    + bw.secundarios.slice(0,2).map(function(a){
+        return _cardAlternativa(r, {
+          aTrap:a.pick_trap, bTrap:a.outro_trap,
+          aNome:a.pick_nome, bNome:a.outro_nome,
+          odd:a.odd, pct:a.pct, tier:a.tier, obs:a.obs
+        }, r.avbEscolhido);
+      }).join('');
+  box.style.display = 'flex';
 }
 
 function _mmPintarNotas(r){
@@ -1154,6 +1199,20 @@ function _mmPintarNotas(r){
   if (soOutro.length) {
     out.push(nota('#f97316', '&#9888; box ' + soOutro.join(', ') + ' livre ao lado do rival T' + sl.outro_trap,
       'o rival tem espaço livre e pode furar pelo buraco: atenção'));
+  }
+
+  // Estado da BW. "nao monitorada" e "nao abriu" sao coisas diferentes: a
+  // primeira e' a casa nem ter olhado ainda, a segunda e' ter olhado e o par
+  // nao estar la. Juntar as duas esconderia buraco de cobertura.
+  var bw = _mmBw(r);
+  if (bw) {
+    if (!bw.monitorada) {
+      out.push(nota('#8a94a6', 'BW ainda não monitorou esta corrida', 'a casa ainda não abriu o mercado; a odd aparece quando abrir'));
+    } else if (bw.abriu) {
+      out.push(nota('#60a5fa', 'o par abriu na BW' + (bw.odd != null ? ': ' + bw.odd : ''), 'o par principal está disponível na casa'));
+    } else {
+      out.push(nota('#f97316', '&#9888; o par principal não abriu na BW', 'a corrida foi monitorada e o par do motor não está disponível'));
+    }
   }
 
   if (out.length && info.match === 'aproximado') {
@@ -1329,8 +1388,8 @@ function renderFocusPanel(r, idx) {
   // Notas do Motor da Manha. Pinta na hora com o que ja estiver em cache (pra
   // nao piscar ao voltar numa corrida) e busca uma vez; o pulso so entra perto
   // da largada, que e' quando a nota de box vazio pode mudar.
-  _mmPintarNotas(r);
-  if (!MM_CACHE[_mmChave(r)]) _mmBuscar(r, function(){ _mmPintarNotas(r); });
+  _mmPintarNotas(r); _mmPintarBw(r);
+  if (!MM_CACHE[_mmChave(r)]) _mmBuscar(r, function(){ _mmPintarNotas(r); _mmPintarBw(r); });
   _mmAgendarPulso(r);
 
   startOddsLive(r);
@@ -1730,34 +1789,23 @@ function _pintaOddsLive(r, d){
             + '<div style="font-size:9px;color:var(--mut)">motor '+s0.enginePct+'%</div>';
         } else { hb.innerHTML=''; }
       }
-      // ── Alternativas (pos 2 e 3) + par da arena ──────────────────────────
-      // A lista ja vem ranqueada do motor: o primeiro e' a arena grande, os
-      // demais viram cards a direita (maximo 2, total 3).
+      // ── O que este ciclo de 5s NAO faz mais ──────────────────────────────
+      // Duas coisas foram aposentadas aqui, a pedido do motor:
+      //
+      // 1) TROCAR O PRINCIPAL. Antes, quando o pos-1 da lista ao vivo mudava e
+      //    o usuario ainda nao tinha escolhido, a arena se redesenhava com o
+      //    novo par. Agora o principal e' do motor unico e nunca troca pela
+      //    lista ao vivo: o par que aparece de manha e' o que fica (so a
+      //    retirada, no ciclo de 4 min do motor, pode ajustar).
+      //
+      // 2) PREENCHER a coluna da direita. O fp-alts agora vem de bw.secundarios
+      //    (pulso de 60-90s). Se os dois escrevessem ali, o de 5s sobrescrevia
+      //    o de 75s e os cards do motor apareciam e sumiam sozinhos.
+      //
+      // O que sobrou pra ele: as odds e o mercado ao vivo, que e' onde os 5s
+      // fazem diferenca de verdade.
       r._avbsAoVivo = avbs.length ? avbs : sug;
       r._snapAoVivo = snap;   // guarda o snapshot pro link da casa
-      var box3 = document.getElementById('fp-alts');
-      var lista3 = avbs.length ? avbs : sug;
-      // Depois da hora exata da largada, as alternativas somem e fica so a
-      // principal: nao ha mais o que escolher, e manter 3 opcoes na tela
-      // convida a clicar em algo que ja nao vale.
-      var _largou = snap.startTs && (Date.now()/1000 >= snap.startTs);
-      if(box3){
-        if(lista3.length > 1 && !_largou){
-          box3.innerHTML = lista3.slice(1,3).map(function(a){ return _cardAlternativa(r, a, r.avbEscolhido); }).join('');
-          box3.style.display = 'flex';   // so ocupa espaco quando ha alternativa
-        } else { box3.innerHTML=''; box3.style.display='none'; }
-      }
-      // A pos 1 pode mudar de um ciclo pro outro. Se mudou E o usuario ainda
-      // nao escolheu nada, a arena grande se redesenha pro novo par.
-      if(lista3.length && !r.avbEscolhido){
-        var top1 = lista3[0];
-        var mudou = !r._parAoVivo || String(r._parAoVivo.a)!==String(top1.aTrap) || String(r._parAoVivo.b)!==String(top1.bTrap);
-        if(mudou){
-          r._parAoVivo = { a: top1.aTrap, b: top1.bTrap };
-          renderFocusPanel(r, focusRaceIdx);   // re-render completo com o novo par
-          return;                              // o proprio re-render dispara o ciclo de novo
-        }
-      }
       // O bloco de baixo virou so uma FAIXA DE STATUS. As linhas de AvB que
       // ficavam aqui foram removidas de proposito: depois que a arena e os
       // cards de alternativa passaram a mostrar par, odd, mercado, motor e

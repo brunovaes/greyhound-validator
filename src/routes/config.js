@@ -341,12 +341,12 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
   </div>
   <div class="field">
     <label>Corte de split</label>
-    <input type="number" step="0.01" min="0" max="3" name="split_min" value="${config.split_min != null ? config.split_min : ''}" placeholder="">
+    <input type="number" step="0.01" min="0" max="3" name="split_min" value="${config.split_min != null ? config.split_min : ''}" placeholder="0.01">
     <div class="hint" style="margin-top:3px">Vantagem mínima de largada para o eixo de split passar.</div>
   </div>
   <div class="field">
     <label>Corte de pódio</label>
-    <input type="number" step="0.01" min="0" max="6" name="podio_min" value="${config.podio_min != null ? config.podio_min : ''}" placeholder="">
+    <input type="number" step="0.01" min="0" max="6" name="podio_min" value="${config.podio_min != null ? config.podio_min : ''}" placeholder="0.001">
     <div class="hint" style="margin-top:3px">Vantagem mínima de pódio para o eixo de pódio passar.</div>
   </div>
   <div class="field">
@@ -360,23 +360,23 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="bloco-fields">
   <div class="field">
     <label>SP colado (máximo)</label>
-    <input type="number" step="0.01" min="1" max="3" name="reg_sp_ratio_max" value="${config.reg_sp_ratio_max != null ? config.reg_sp_ratio_max : ''}" placeholder="">
+    <input type="number" step="0.01" min="1" max="3" name="reg_sp_ratio_max" value="${config.reg_sp_ratio_max != null ? config.reg_sp_ratio_max : ''}" placeholder="1.20">
   </div>
   <div class="field">
     <label>Corte de CalTm (segundos)</label>
-    <input type="number" step="0.01" min="0" max="3" name="reg_caltm_min_dif" value="${config.reg_caltm_min_dif != null ? config.reg_caltm_min_dif : ''}" placeholder="">
+    <input type="number" step="0.01" min="0" max="3" name="reg_caltm_min_dif" value="${config.reg_caltm_min_dif != null ? config.reg_caltm_min_dif : ''}" placeholder="0.10">
   </div>
   <div class="field">
     <label>Corte de split</label>
-    <input type="number" step="0.01" min="0" max="3" name="reg_split_min" value="${config.reg_split_min != null ? config.reg_split_min : ''}" placeholder="">
+    <input type="number" step="0.01" min="0" max="3" name="reg_split_min" value="${config.reg_split_min != null ? config.reg_split_min : ''}" placeholder="0">
   </div>
   <div class="field">
     <label>Corte de pódio</label>
-    <input type="number" step="0.01" min="0" max="6" name="reg_podio_min" value="${config.reg_podio_min != null ? config.reg_podio_min : ''}" placeholder="">
+    <input type="number" step="0.01" min="0" max="6" name="reg_podio_min" value="${config.reg_podio_min != null ? config.reg_podio_min : ''}" placeholder="0">
   </div>
   <div class="field">
     <label>Desabamento: quantas das últimas 5</label>
-    <input type="number" step="1" min="1" max="5" name="reg_desaba_min" value="${config.reg_desaba_min != null ? config.reg_desaba_min : ''}" placeholder="">
+    <input type="number" step="1" min="1" max="5" name="reg_desaba_min" value="${config.reg_desaba_min != null ? config.reg_desaba_min : ''}" placeholder="3">
   </div>
 </div>
 
