@@ -472,57 +472,28 @@ function isOldRaceCard(r) {
 // de hoje (ou sem dataCard) seguem a regra normal de isUpcoming.
 // Filtro por regua: '' (todas) | 'top' | 'regular'.
 // Fonte: races.tier, do /api/session/:id/races. Corrida com tier null ficou
-// fora das duas reguas e nao aparece em nenhum dos filtros.
-// So DOIS tipos de corrida: TOP e REGULAR. Nao existe "todas" — corrida que
-// nao entra em nenhuma das duas nao e' corrida pra olhar, e por isso nao ha
-// estado que mostre as duas juntas nem as reprovadas.
-var FILTRO_TIER = (function(){
-  try {
-    return localStorage.getItem('gh_tier') === 'regular' ? 'regular' : 'top';
-  } catch(e){ return 'top'; }   // abre em TOP
-})();
-
-function alternarTier(){
-  FILTRO_TIER = FILTRO_TIER === 'top' ? 'regular' : 'top';
-  try { localStorage.setItem('gh_tier', FILTRO_TIER); } catch(e){}
-  _pintaBotaoTier();
-  refreshFocusMode();
-}
-
-function _pintaBotaoTier(){
-  var b = document.getElementById('btn-tier');
-  if(!b) return;
-  var m = {
-    'top':     ['rgba(212,175,55,.16)',   '#D4AF37',     '#D4AF37',    'TOP',     'mostrando as TOP; clique para ver as REGULAR'],
-    'regular': ['rgba(96,165,250,.16)',   '#60a5fa',     '#60a5fa',    'REGULAR', 'mostrando as REGULAR; clique para ver as TOP']
-  }[FILTRO_TIER];
-  b.style.background = m[0]; b.style.borderColor = m[1]; b.style.color = m[2];
-  b.textContent = m[3]; b.title = m[4];
-}
-
-// O filtro de regua NAO entra no shouldShowRace, de proposito.
+// Acabou o TOP/REGULAR de corrida. O tier agora e' 'TOP' quando a corrida tem
+// um principal, e vazio quando nao tem — e corrida sem principal nao entra na
+// lista. Nao ha mais o que filtrar: a lista JA e' so o classificado, e por isso
+// o botao de regua saiu do cabecalho.
 //
-// Aquela funcao responde "esta corrida esta na janela de hoje?", e a MESMA
-// resposta alimenta o isDayClosed. Com o filtro dentro dela, ligar o filtro e
-// nao haver corrida daquela regua fazia o app concluir que o DIA ACABOU e
-// mostrar a tela de encerrado — que nao tem o botao do filtro, entao nao dava
-// nem pra voltar. Filtro de exibicao nao pode opinar sobre o dia ter acabado.
-// TODAS = TOP + REGULAR. Nao existe terceiro grupo: corrida que nao passou em
-// nenhuma das duas reguas nao aparece nem no "todas".
+// A checagem continua fora do shouldShowRace de proposito: aquela funcao
+// responde "esta corrida esta na janela de hoje?", e a MESMA resposta alimenta
+// o isDayClosed. Com ela dentro, um dia sem classificacao faria o app concluir
+// que o DIA ACABOU e mostrar a tela de encerrado.
 //
-// PROTECAO: sessao em que NENHUMA corrida tem regua e' sessao anterior ao
-// motor de duas reguas (o campo nem existia). Aplicar a regra ali deixaria a
-// tela em branco, e o usuario nao teria como saber por que. Nesse caso a
-// sessao inteira e' exibida, como era antes.
+// PROTECAO: sessao em que NINGUEM tem classificacao e' anterior a este modelo.
+// Aplicar a regra ali deixaria a tela em branco sem explicacao, entao a sessao
+// inteira e' exibida.
 function _sessaoTemRegua(lista) {
   return (lista || []).some(function(x){ return _tierDe(x) !== null; });
 }
 // sessaoClassificada e' BOOLEANO, nao a lista, e nao usa arguments.length:
-// passar esta funcao direto pra um .filter() faz o segundo argumento ser o
-// INDICE do item, e ai a protecao dispararia sozinha na primeira posicao.
+// passar esta funcao direto pra um .filter() faz o segundo argumento virar o
+// INDICE do item, e a protecao dispararia sozinha na primeira posicao.
 function passaNoFiltroTier(r, sessaoClassificada) {
-  if (sessaoClassificada === false) return true;   // sessao anterior ao motor
-  return _tierDe(r) === FILTRO_TIER;
+  if (sessaoClassificada === false) return true;
+  return _tierDe(r) !== null;
 }
 
 // Normaliza o tier na ENTRADA. O motor escreve TOP/REGULAR, e o resto da tela
@@ -531,7 +502,7 @@ function passaNoFiltroTier(r, sessaoClassificada) {
 // Tambem aceita o bw=1 como TOP, pra linha antiga (antes do tier existir).
 function _tierDe(r){
   var t = String((r && r.tier) || '').trim().toLowerCase();
-  if (t === 'top' || t === 'regular') return t;
+  if (t === 'top' || t === 'regular') return 'top';
   if (r && (r.bw === 1 || r.bw === true || r.bw === '1')) return 'top';
   return null;
 }
@@ -1240,6 +1211,22 @@ function _mmPintarNotas(r){
   if (soOutro.length) {
     out.push(nota('#f97316', '&#9888; box ' + soOutro.join(', ') + ' livre ao lado do rival T' + sl.outro_trap,
       'o rival tem espaço livre e pode furar pelo buraco: atenção'));
+  }
+
+  // AvB NOVO, nao mapeado: par que a BW abriu e que a analise da manha nao
+  // tinha. E' a informacao mais perecivel da tela — some quando a corrida
+  // larga — entao vem ANTES das outras notas, nao depois.
+  var bwS = _mmBw(r);
+  if (bwS && bwS.tem_surpresa && bwS.surpresas && bwS.surpresas.length) {
+    var forte = bwS.alerta_forte;
+    var pares = bwS.surpresas.slice(0,3).map(function(x){
+      return 'T' + x.pick_trap + ' x T' + x.outro_trap
+        + (x.pct != null ? ' (' + x.pct + '%' + (x.odd != null ? ', ' + x.odd : '') + ')' : '');
+    }).join('  ·  ');
+    out.push(nota(forte ? '#ef4444' : '#f59e0b',
+      (forte ? '&#9889; ' : '') + 'AvB novo, não mapeado: ' + pares,
+      forte ? 'par forte (75% ou mais) que a BW abriu e a análise da manhã não tinha'
+            : 'a BW abriu um par que não estava na análise da manhã'));
   }
 
   // Estado da BW. "nao monitorada" e "nao abriu" sao coisas diferentes: a
@@ -2229,14 +2216,8 @@ function renderRaceListPanel(avbs) {
     // O rotulo "Próximas" saiu: a lista em sequencia ja diz o que e', e o
     // espaco vale mais pro filtro.
     + '<span></span>'
-    + '<span style="display:flex;align-items:center;gap:8px">'
-    // Botao "so BW": mostra apenas o que o motor unico aprovou. Fica ao lado do
-    // Atualizar porque as duas acoes sao da lista, nao da corrida.
-    + '<button type="button" id="btn-tier" onclick="alternarTier()" style="font-size:9px;font-weight:800;letter-spacing:.4px;background:transparent;border:1px solid var(--bdr2);color:var(--mut);border-radius:10px;padding:2px 8px;cursor:pointer;min-width:56px">TODAS</button>'
     + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
-    + '</span>'
     + '</div>';
-  _pintaBotaoTier();
   var first = true;
   var tc = ['','t1','t2','t3','t4','t5','t6'];
   avbs.forEach(function(r, i) {
@@ -2295,15 +2276,13 @@ function renderRaceListPanel(avbs) {
   // acontece de manha, antes do primeiro ciclo de 4 min gravar o bw — nesse
   // intervalo TODAS as corridas vem com bw:0, e a lista vazia pareceria falta
   // de corrida em vez de filtro.
-  // avbs aqui JA vem filtrado (e o toShow). Vazio + filtro ligado = o filtro
-  // escondeu tudo. O cabecalho com o botao ja foi desenhado acima, entao daqui
-  // da' pra voltar — foi isso que faltou na primeira versao.
+  // Lista vazia: ou o motor ainda nao classificou nada hoje, ou nao ha corrida
+  // com AvB nas proximas. Dizer isso e' melhor que uma lista muda, que
+  // pareceria falha da tela.
   if (!avbs.length) {
     var av = document.createElement('div');
     av.style.cssText = 'padding:14px 12px;font-size:11px;color:var(--mut);line-height:1.6;text-align:center';
-    var outro = FILTRO_TIER === 'top' ? 'REGULAR' : 'TOP';
-    av.innerHTML = 'Nenhuma corrida ' + (FILTRO_TIER === 'top' ? 'TOP' : 'REGULAR') + ' nas próximas.'
-      + '<div style="margin-top:6px"><button type="button" onclick="alternarTier()" style="font-size:10px;background:transparent;border:1px solid var(--bdr2);color:var(--grn);border-radius:10px;padding:3px 10px;cursor:pointer">ver as ' + outro + '</button></div>';
+    av.innerHTML = 'Nenhuma corrida com AvB nas próximas.';
     col.appendChild(av);
   }
   if (!avbs.length) {
