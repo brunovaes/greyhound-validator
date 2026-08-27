@@ -621,6 +621,26 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .fp-vence-lbl{font-size:8px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase}
 .fp-vence-arrow{font-size:26px;color:var(--grn);animation:pulse-arrow 1.5s ease-in-out infinite}
 @keyframes pulse-arrow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.9)}}
+/* ── Grade dos AvBs no painel de disputa ──────────────────────────────────
+   Um card por par: o principal, mais as alternativas que a BW for abrindo.
+   A quantidade decide o arranjo, e a classe (g1..g4) e' posta pelo app.js:
+     1 -> ocupa a largura toda
+     2 -> lado a lado
+     3 -> dois em cima, o terceiro centralizado embaixo
+     4 -> quadrado
+   Acima de 4 continua 2 por linha, que e' o limite em que o card ainda cabe
+   legivel. */
+.fp-grid{display:grid;gap:10px;align-items:start}
+.fp-grid.g1{grid-template-columns:1fr}
+.fp-grid.g2,.fp-grid.g3,.fp-grid.g4{grid-template-columns:1fr 1fr}
+.fp-grid.g3 > :nth-child(3){grid-column:1 / -1;justify-self:center;width:calc(50% - 5px)}
+.fp-card-avb{min-width:0}
+/* Em tela estreita empilha: dois cards lado a lado ficariam ilegiveis, e o
+   galgo e' a informacao principal aqui. */
+@media(max-width:1100px){
+  .fp-grid,.fp-grid.g2,.fp-grid.g3,.fp-grid.g4{grid-template-columns:1fr}
+  .fp-grid.g3 > :nth-child(3){grid-column:auto;justify-self:stretch;width:auto}
+}
 .fp-gauges-row{display:flex;justify-content:space-around;padding:8px 16px 10px;flex-shrink:0;gap:4px}
 .fp-gauges-grp{display:flex;gap:8px;flex:1;justify-content:center}
 .fp-gauges-div{width:1px;background:var(--bdr2);margin:0 8px;align-self:stretch}

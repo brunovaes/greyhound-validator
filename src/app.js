@@ -1138,12 +1138,25 @@ function _origemPickDoPar(r, ta, tb){
   return 'secundario';
 }
 
+// Poe a classe da grade conforme quantos cards ha. Roda depois de qualquer
+// mudanca na lista de alternativas — o principal esta sempre la, entao o total
+// e' 1 + a quantidade de alternativas.
+function _ajustaGradeAvb(){
+  var g = document.getElementById('fp-grid');
+  var alts = document.getElementById('fp-alts');
+  if (!g) return;
+  // conta so os CARDS: os titulos ("AvB novo", "o par principal nao abriu")
+  // tambem sao filhos e nao podem entrar na conta.
+  var n = 1 + (alts ? alts.querySelectorAll('.fp-alt-card').length : 0);
+  g.className = 'fp-grid g' + Math.min(n, 4);
+}
+
 function _mmPintarBw(r){
   var box = document.getElementById('fp-alts');
   var bw = _mmBw(r);
   if (!box) return;
 
-  if (!bw) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  if (!bw) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
 
   var card = function(a){
     return _cardAlternativa(r, {
@@ -1182,7 +1195,7 @@ function _mmPintarBw(r){
   }
 
   box.innerHTML = html;
-  box.style.display = html ? 'flex' : 'none';
+  _ajustaGradeAvb();
 }
 
 function _mmPintarNotas(r){
@@ -1389,8 +1402,12 @@ function renderFocusPanel(r, idx) {
     // Notas do Motor da Manha (parelha / box vazio). Ficam ACIMA da arena, que
     // e' onde voce olha antes de decidir; no rodape chegariam tarde.
     + '<div id="fp-notas" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 8px"></div>'
-    + '<div class="fp-arena-wrap" style="display:flex;gap:12px;align-items:flex-start">'
-    + '<div class="fp-arena-col" style="flex:1 1 auto;min-width:0">'
+    // GRADE dos AvBs. Um card por par: o principal e as alternativas que a BW
+    // for abrindo. A quantidade decide o arranjo (1 ocupa tudo, 2 lado a lado,
+    // 3 com o ultimo centralizado embaixo, 4 em quadrado) — a classe e' posta
+    // por _ajustaGradeAvb() sempre que a lista muda.
+    + '<div id="fp-grid" class="fp-grid g1">'
+    + '<div class="fp-arena-col fp-card-avb">'
     + '<div class="fp-arena" style="flex:1 1 70%">'
     // Dog fav (esquerda, corre para direita)
     + '<div class="fp-dog-side">'
@@ -1422,7 +1439,10 @@ function renderFocusPanel(r, idx) {
     + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
     + '</div>'
     + '</div>'
-    + '<div id="fp-alts" style="display:none;flex:0 0 33%;min-width:260px;flex-direction:column;gap:10px;align-self:center"></div>'
+    // display:contents faz esta caixa sumir do layout: os cards dentro dela
+    // viram irmaos do principal na grade, em vez de uma coluna a parte. Sem
+    // isso nao da pra ter o arranjo 2x2.
+    + '<div id="fp-alts" style="display:contents"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
     // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
@@ -1549,6 +1569,17 @@ function _cardAlternativa(r, a, escolhidoAtual){
     + '<div style="font-size:10px;color:#cbd5e1;text-align:center;font-weight:600;margin-top:3px">T'+ta+' '+(a.aNome||'')+' &times; T'+tb+' '+(a.bNome||'')+'</div>'
     + '<div style="font-size:9px;color:var(--mut);text-align:center;display:flex;gap:5px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:2px">'
     +   nums.join(' &middot; ') + ' ' + edgeStr + ' ' + seta + ' ' + selo + '</div>'
+    // Gauges tambem nos cards de alternativa. Antes so o principal tinha, e a
+    // comparacao entre os pares ficava impossivel: voce via os numeros de um e
+    // tinha que abrir o outro pra ver os dele.
+    //
+    // A classe fp-gauges-row e' a mesma da arena, entao o espacamento e o corte
+    // em tela estreita valem igual — e' o que evita um card sobrepor o outro.
+    + '<div class="fp-gauges-row" style="padding:6px 4px 2px">'
+    +   '<div class="fp-gauges-grp">' + buildGauges(_histDoTrap(r, ta, ta, tb), getRaceClass(r.corrida||''), _histDoTrap(r, tb, ta, tb)) + '</div>'
+    +   '<div class="fp-gauges-div"></div>'
+    +   '<div class="fp-gauges-grp">' + buildGauges(_histDoTrap(r, tb, ta, tb), getRaceClass(r.corrida||''), _histDoTrap(r, ta, ta, tb)) + '</div>'
+    + '</div>'
     + '<div style="display:flex;gap:4px;margin-top:5px">'
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'" style="flex:1;font-size:9px;padding:3px;background:#161b27;border:1px solid var(--bdr2);color:#cbd5e1;border-radius:4px;cursor:pointer">Analisar</button>'
     +   '<button type="button" class="alt-entrar" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(odd!=null?odd:'')+'" style="flex:1;font-size:9px;padding:3px;background:'+(ehEscolhido?'#1d4ed8':'transparent')+';border:1px solid '+(ehEscolhido?'#1d4ed8':'#22c55e')+';color:'+(ehEscolhido?'#fff':'#22c55e')+';border-radius:4px;cursor:pointer;font-weight:700">'+(ehEscolhido?'ESCOLHIDO':'Entrar')+'</button>'
@@ -1807,7 +1838,7 @@ function _pintaOddsLive(r, d){
           + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner</span>'
           + '<span>aguardando esta corrida abrir (ou pista ainda não mapeada)</span></div>';
         var hb0 = document.getElementById('fp-odds-hdr'); if(hb0) hb0.innerHTML='';
-        var ba0 = document.getElementById('fp-alts'); if(ba0){ ba0.innerHTML=''; ba0.style.display='none'; }
+        var ba0 = document.getElementById('fp-alts'); if(ba0){ ba0.innerHTML=''; _ajustaGradeAvb(); }
         return;
       }
       var avbs = snap.avbs||[], sug = snap.sugeridos||[];
@@ -2307,9 +2338,13 @@ function renderRaceListPanel(avbs) {
       + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;padding-left:6px">'
       + '<div style="display:flex;align-items:center;gap:3px">'
-      + '<span class="trap-badge '+tc[r.trapFav||1]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapFav||'?')+'</span>'
+      // O par que voce escolheu manda aqui tambem. Antes a lista mostrava
+      // sempre o do motor, entao escolher uma alternativa mudava o painel e a
+      // lista continuava afirmando o par antigo — a mesma corrida com dois
+      // pares diferentes na mesma tela.
+      + '<span class="trap-badge '+tc[_parEmFoco(r).a||1]+'" style="width:22px;height:22px;font-size:10px">'+(_parEmFoco(r).a||'?')+'</span>'
       + '<span style="font-size:9px;color:var(--mut)">vs</span>'
-      + '<span class="trap-badge '+tc[r.trapUnd||2]+'" style="width:22px;height:22px;font-size:10px">'+(r.trapUnd||'?')+'</span>'
+      + '<span class="trap-badge '+tc[_parEmFoco(r).b||2]+'" style="width:22px;height:22px;font-size:10px">'+(_parEmFoco(r).b||'?')+'</span>'
       + '</div>'
       + top3Html
       // Selo do nivel embaixo do top3, na coluna da direita: a corrida ja se
