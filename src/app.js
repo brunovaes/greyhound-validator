@@ -1536,13 +1536,13 @@ function _cardAvb(r, a, opts){
   var ta = a.aTrap, tb = a.bTrap;
   var esc = opts.escolhido;
   var ehEscolhido = esc && String(esc.a) === String(ta) && String(esc.b) === String(tb);
-  var borda = opts.principal ? '#38bdf8' : (ehEscolhido ? '#1d4ed8' : 'var(--bdr2)');
+  var borda = opts.principal ? '#21AB58' : (ehEscolhido ? '#1d4ed8' : 'var(--bdr2)');
   var classe = getRaceClass(r.corrida || '');
   var hA = _histDoTrap(r, ta, ta, tb), hB = _histDoTrap(r, tb, ta, tb);
   var nomeA = a.aNome || _nomeDoTrap(r, ta, ta, tb) || ('T' + ta);
   var nomeB = a.bNome || _nomeDoTrap(r, tb, ta, tb) || ('T' + tb);
   var etiqueta = opts.principal ? 'PRINCIPAL' : (opts.rotulo || '');
-  var corEtq = opts.principal ? '#38bdf8' : (opts.corRotulo || 'var(--mut)');
+  var corEtq = opts.principal ? '#21AB58' : (opts.corRotulo || 'var(--mut)');
 
   return '<div class="fp-card-avb' + (ehEscolhido ? ' escolhido' : '') + '" style="border-color:' + borda + '">'
     + (etiqueta ? '<div class="fp-card-tag" style="color:' + corEtq + '">' + etiqueta + '</div>' : '')

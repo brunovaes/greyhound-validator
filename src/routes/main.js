@@ -655,7 +655,7 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   grid-auto-rows:minmax(0,1fr)}
 /* Card de AvB: todos do MESMO tamanho, o principal marcado so pela borda. */
 .fp-card-avb{display:flex;flex-direction:column;min-width:0;min-height:0;
-  background:var(--sur2);border:2px solid var(--bdr2);border-radius:10px;padding:6px 8px;overflow:hidden}
+  background:#0D1117;border:2px solid var(--bdr2);border-radius:10px;padding:6px 8px;overflow:hidden}
 .fp-card-avb.escolhido{background:rgba(29,78,216,.10)}
 .fp-card-tag{font-size:9px;font-weight:800;letter-spacing:.6px;text-align:center;margin-bottom:2px;flex:0 0 auto}
 /* A arena ocupa o espaco que sobrar dentro do card. */
