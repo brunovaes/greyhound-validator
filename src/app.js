@@ -311,6 +311,12 @@ async function autoCheckAndAnalyze() {
                 // do tier existir) nao virar "fora".
                 tier: r.tier != null ? r.tier : (r.bw ? 'top' : null),
                 histAll: r.hist_all?JSON.parse(r.hist_all):[],
+                // TODOS os galgos do card, inclusive os que o motor descartou.
+                // O histAll tem so os pontuados; sem esta fonte, abrir a
+                // disputa de um par com galgo descartado mostrava "sem
+                // historico disponivel" — e o dado existia no banco o tempo
+                // todo, so nao era carregado.
+                histFull: r.hist_full?JSON.parse(r.hist_full):[],
                 eliminados: r.eliminados?JSON.parse(r.eliminados):[],
                 postPick: r.post_pick||'',
                 dataCard: r.data_card||null,
@@ -600,6 +606,7 @@ async function syncFromServer() {
       cur.histFav = r.hist_fav?JSON.parse(r.hist_fav):[];
       cur.histUnd = r.hist_und?JSON.parse(r.hist_und):[];
       cur.histAll = r.hist_all?JSON.parse(r.hist_all):[];
+      try { cur.histFull = r.hist_full?JSON.parse(r.hist_full):(cur.histFull||[]); } catch(e){ cur.histFull = cur.histFull||[]; }
       cur.dataCard = r.data_card||null;
       cur.trackFull = r.track_full||cur.trackFull;
       cur.cardSuspect = !!r.card_suspect;
@@ -993,9 +1000,15 @@ function _nomeDoTrap(r, trap, parA, parB){
   if(String(trap)===String(r.trapFav)) return _limpaNome(r.nameFav)||'';
   if(String(trap)===String(r.trapUnd)) return _limpaNome(r.nameUnd)||'';
   var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
-  if(g && g.nome) return g.nome;
+  if(g && g.nome) return _limpaNome(g.nome);
   var sc=(r.scores||[]).find(function(x){return String(x.trap)===String(trap);});
-  return (sc && sc.nome) || '';
+  if(sc && sc.nome) return _limpaNome(sc.nome);
+  // Mesma cadeia do historico: o card completo e a ultima fonte. Sem ela o
+  // titulo saia como "T2 ?" pra galgo que o motor descartou.
+  var f=(r.histFull||[]).find(function(x){return String(x.trap)===String(trap);});
+  if(f && f.nome) return _limpaNome(f.nome);
+  var rc=(r.raceCard||[]).find(function(x){return String(x.trap)===String(trap);});
+  return (rc && rc.nome) ? _limpaNome(rc.nome) : '';
 }
 function _histDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return null;
@@ -1004,7 +1017,12 @@ function _histDoTrap(r, trap, parA, parB){
   if(String(trap)===String(r.trapFav) && r.histFav) return r.histFav;
   if(String(trap)===String(r.trapUnd) && r.histUnd) return r.histUnd;
   var g=(r.histAll||[]).find(function(x){return String(x.trap)===String(trap);});
-  return g ? (g.historico||[]) : null;
+  if (g && g.historico && g.historico.length) return g.historico;
+  // Ultima fonte: o card COMPLETO. Galgo descartado pelo motor nao entra no
+  // histAll, mas corre a prova do mesmo jeito — e voce pode querer olhar o
+  // historico dele. O dado ja vinha do banco; faltava consultar.
+  var f=(r.histFull||[]).find(function(x){return String(x.trap)===String(trap);});
+  return f ? (f.historico||[]) : (g ? (g.historico||[]) : null);
 }
 function _perfilDoTrap(r, trap, parA, parB){
   if(!r || trap==null) return '';
@@ -1623,16 +1641,18 @@ function openValModalPar(key, trapA, trapB){
   document.getElementById('val-title').textContent='T'+trapA+' '+(nA||'?')+' vs T'+trapB+' '+(nB||'?');
   var body=document.getElementById('val-body');
   body.classList.remove('val-compact');
-  // Quando um dos galgos nao tem historico nesta corrida, mostra um aviso no
-  // lugar da tabela vazia. Antes o lado simplesmente vinha em branco, e nao
-  // dava pra saber se o galgo era ruim ou se o dado nao existia.
+  // O card do galgo aparece SEMPRE, mesmo que o motor nao o tenha sugerido: o
+  // historico vem do card completo (histFull), nao so dos galgos pontuados.
+  //
+  // O aviso antigo ("o robo sugeriu este galgo, mas...") saiu daqui: ele
+  // aparecia porque a busca so olhava o histAll, e nao porque o dado faltasse.
+  // So sobra a linha curta pro caso raro de a corrida nao ter historico
+  // nenhum gravado — ai nao ha o que mostrar mesmo.
   var cardOuAviso = function(trap, nome, hist){
     if (hist && hist.length) return buildDogCard(trap, nome, _perfilDoTrap(r,trap,trapA,trapB), hist);
     return '<div style="padding:18px;text-align:center;color:rgba(255,255,255,.45);font-size:12px">'
       + '<strong style="color:#eab308">T'+trap+(nome?' '+nome:'')+'</strong><br>'
-      + 'sem histórico disponível nesta corrida.<br>'
-      + '<span style="font-size:11px;color:rgba(255,255,255,.3)">O robô sugeriu este galgo, mas ele não está na análise carregada '
-      + '(card trocado ou análise anterior à reanálise).</span></div>';
+      + 'sem histórico gravado para este galgo.</div>';
   };
   body.innerHTML = cardOuAviso(trapA,nA,hA) + '<div class="val-sep"></div>' + cardOuAviso(trapB,nB,hB);
   document.getElementById('val-modal').classList.add('open');
