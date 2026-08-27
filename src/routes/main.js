@@ -804,7 +804,12 @@ body{display:flex;flex-direction:column;overflow:hidden;background:#000}
 /* Teto tambem em vh: em tela baixa o banner deixa de comer a area util. */
 .hero img{max-height:min(160px,15vh)}
 nav{flex:0 0 auto}
-.main{flex:1 1 auto;min-height:0}
+.main{flex:1 1 auto;min-height:0;
+  /* A LINHA do grid tambem precisa ser limitada. Sem isto ela e' 'auto', ou
+     seja, cresce com o conteudo: a coluna de foco ficava mais alta que a
+     janela e o fim dela (a barra de Odd) era cortado pelo overflow do body.
+     min-height:0 na coluna nao resolvia — quem manda no tamanho e' a linha. */
+  grid-template-rows:minmax(0,1fr)}
 .sidebar,.race-list-col,.focus-col,.content{min-height:0}
 
 @media(max-width:900px){
