@@ -672,19 +672,45 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .fp-card-arena .fp-center{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center}
 
-/* Tamanho do galgo POR ARRANJO: com 1 disputa ele pode ser grande, com 4 tem
-   que ser pequeno. O max-height acima continua valendo em cima disto, entao
-   em janela baixa (ou com zoom) ele encolhe sozinho — o teto e' teto, nao
-   altura fixa. */
+/* Tamanho do galgo POR ARRANJO. E' TETO, nao altura fixa: a imagem continua
+   encolhendo dentro do card, entao zoom e janela baixa se ajustam sozinhos. */
 .fp-grid.g1{--dogh:230px;--dogn:15px}
 .fp-grid.g2{--dogh:180px;--dogn:13px}
-.fp-grid.g3,.fp-grid.g4{--dogh:120px;--dogn:11px}
+.fp-grid.g3,.fp-grid.g4{--dogh:130px;--dogn:11px}
 @media(max-height:800px){
   .fp-grid.g1{--dogh:180px}
   .fp-grid.g2{--dogh:140px}
-  .fp-grid.g3,.fp-grid.g4{--dogh:96px}
+  .fp-grid.g3,.fp-grid.g4{--dogh:110px}
 }
-.fp-card-acoes{display:flex;gap:5px;margin-top:5px;flex:0 0 auto}
+
+/* ── O que sai quando o espaco aperta ─────────────────────────────────────
+   Decisao do Bruno: num card pequeno bastam OS GALGOS E A ODD. Os gauges sao
+   os primeiros a sair.
+
+   Com 3 ou 4 disputas eles somem por completo. Antes eu so encolhia o card e
+   mantinha tudo: a arena era espremida ate a imagem sumir, e os gauges, que
+   nao encolhem, vazavam por cima do nome e do "VENCE". Espremer o mesmo
+   conteudo nao e' a mesma coisa que mostrar menos conteudo. */
+.fp-grid.g3 .fp-gauges-row,
+.fp-grid.g4 .fp-gauges-row{display:none}
+/* Em janela baixa some ja a partir de 2, pelo mesmo motivo. */
+@media(max-height:800px){
+  .fp-grid.g2 .fp-gauges-row{display:none}
+}
+
+/* Rede de seguranca: nada dentro do card pode transbordar, mesmo que a conta
+   acima erre em alguma resolucao. */
+.fp-card-avb > *{max-width:100%}
+.fp-card-avb .fp-gauges-row{overflow:hidden;flex-shrink:1;min-height:0}
+
+/* Dentro do card, o "VENCE" e a seta encolhem junto. No card baixo eles
+   mantinham o tamanho da arena antiga e ficavam por cima do nome do galgo. */
+.fp-card-avb .fp-vence-arrow{font-size:clamp(14px,2vh,26px);line-height:1}
+.fp-card-avb .fp-vence-lbl{font-size:7px;letter-spacing:1px}
+.fp-grid.g3 .fp-vence-lbl,.fp-grid.g4 .fp-vence-lbl{display:none}
+.fp-card-acoes{display:flex;gap:5px;margin-top:5px;flex:0 0 auto;align-items:center}
+.fp-card-odd{font-size:11px;color:#cbd5e1;white-space:nowrap;padding:0 4px;flex:0 0 auto}
+.fp-card-odd strong{color:#fff}
 .fp-card-acoes button{flex:1;font-size:10px;padding:4px;background:#161b27;color:#e5e7eb;
   border:1px solid rgba(255,255,255,.15);border-radius:6px;cursor:pointer}
 .fp-card-acoes button.alt-entrar{border-color:#22c55e;color:#22c55e}

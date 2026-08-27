@@ -1533,10 +1533,12 @@ function _cardAvb(r, a, opts){
     +     '<img class="fp-dog-img" src="' + getDogImg(ta, r.corrida||'') + '" alt="T'+ta+'" onerror="this.style.opacity=\'.2\'">'
     +     '<div class="fp-dog-name">' + nomeA + '</div>'
     +   '</div>'
+    // A odd NAO fica mais no meio da arena: com o card baixo ela caia por cima
+    // do nome do galgo. Foi pro rodape, ao lado dos botoes, onde tem linha
+    // propria e nao disputa espaco com nada.
     +   '<div class="fp-center">'
     +     '<div class="fp-vence-lbl">VENCE</div>'
     +     '<div class="fp-vence-arrow">&#9658;</div>'
-    +     (a.odd != null ? '<div style="font-size:11px;color:#cbd5e1;margin-top:2px">odd <strong>' + a.odd + '</strong></div>' : '')
     +   '</div>'
     +   '<div class="fp-dog-side fp-dog-und">'
     +     '<img class="fp-dog-img" src="' + getDogImg(tb, r.corrida||'x') + '" alt="T'+tb+'" onerror="this.style.opacity=\'.2\'">'
@@ -1549,6 +1551,7 @@ function _cardAvb(r, a, opts){
     +   '<div class="fp-gauges-grp">' + buildGauges(hB, classe, hA) + '</div>'
     + '</div>'
     + '<div class="fp-card-acoes">'
+    +   (a.odd != null ? '<span class="fp-card-odd">odd <strong>' + a.odd + '</strong></span>' : '')
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'">Analisar</button>'
     +   (opts.principal ? '<button type="button" onclick="inverterAvb()" title="trocar o sentido">&#8646;</button>' : '')
     +   '<button type="button" class="alt-entrar' + (ehEscolhido ? ' on' : '') + '" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(a.odd!=null?a.odd:'')+'">'
@@ -1908,12 +1911,16 @@ function _pintaOddsLive(r, d){
             +   (_avbMotorOrig(top)!=null ? 'motor '+_avbMotorOrig(top)+'% &middot; ' : '')
             +   'mkt '+top.marketPct+'%'+edgeH+'</div>';
                   }
-        } else if(sug.length){
-          var s0 = sug[0];
-          hb.innerHTML = '<div style="font-size:9px;color:#f59e0b;font-weight:800;letter-spacing:.5px">&#9889; SUGERIDO</div>'
-            + '<div style="font-size:12px;color:#cbd5e1;font-weight:700;white-space:nowrap">T'+s0.aTrap+'&times;T'+s0.bTrap+'</div>'
-            + '<div style="font-size:9px;color:var(--mut)">motor '+s0.enginePct+'%</div>';
-        } else { hb.innerHTML=''; }
+        } else {
+          // O chip "SUGERIDO" foi removido. Ele vinha do robo de odds e
+          // anunciava um par DIFERENTE do que estava na arena, sem botao
+          // nenhum pra agir sobre ele — o principal e' do motor da manha e nao
+          // muda mais pela lista ao vivo, entao a sugestao so confundia.
+          //
+          // O "AO VIVO" acima continua: la o par citado e' o que abriu de
+          // verdade na casa, e isso e' informacao, nao palpite.
+          hb.innerHTML = '';
+        }
       }
       // ── O que este ciclo de 5s NAO faz mais ──────────────────────────────
       // Duas coisas foram aposentadas aqui, a pedido do motor:
