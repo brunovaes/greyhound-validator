@@ -596,7 +596,10 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .main.focus-mode .race-list-col{display:block}
 .main.focus-mode .content{display:none}
 .main.focus-mode .focus-col{display:flex}
-.focus-col{display:none;flex-direction:column;overflow-y:auto;background:var(--bg);flex:1}
+/* overflow HIDDEN, nao auto: a grade dos AvBs se ajusta a altura disponivel,
+   entao nao ha o que rolar aqui — e com auto ela ganharia altura infinita e o
+   grid-auto-rows:1fr deixaria de dividir. */
+.focus-col{display:none;flex-direction:column;overflow:hidden;background:var(--bg);flex:1;min-height:0;padding:8px 10px}
 .rc{padding:7px 10px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
 .rc:hover{background:rgba(34,197,94,.05);border-left-color:rgba(34,197,94,.3)}
 .rc.rc-active{background:rgba(34,197,94,.09);border-left-color:var(--grn)}
@@ -630,7 +633,24 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
      4 -> quadrado
    Acima de 4 continua 2 por linha, que e' o limite em que o card ainda cabe
    legivel. */
-.fp-grid{display:grid;gap:10px;align-items:start}
+.fp-grid{display:grid;gap:10px;flex:1 1 auto;min-height:0;
+  /* as linhas dividem a altura disponivel: com 2 cards cada um ocupa a coluna
+     inteira, com 4 cada um fica com um quarto da area. Sem isto o primeiro
+     card cresce com o conteudo e empurra o resto pra fora da tela. */
+  grid-auto-rows:minmax(0,1fr)}
+/* Card de AvB: todos do MESMO tamanho, o principal marcado so pela borda. */
+.fp-card-avb{display:flex;flex-direction:column;min-width:0;min-height:0;
+  background:var(--sur2);border:2px solid var(--bdr2);border-radius:10px;padding:6px 8px;overflow:hidden}
+.fp-card-avb.escolhido{background:rgba(29,78,216,.10)}
+.fp-card-tag{font-size:9px;font-weight:800;letter-spacing:.6px;text-align:center;margin-bottom:2px;flex:0 0 auto}
+/* a arena ocupa o espaco que sobrar; a imagem encolhe junto */
+.fp-card-arena{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:space-around;gap:6px}
+.fp-card-arena .fp-dog-img{max-height:100%;height:auto;width:auto;max-width:100%;object-fit:contain}
+.fp-card-acoes{display:flex;gap:5px;margin-top:5px;flex:0 0 auto}
+.fp-card-acoes button{flex:1;font-size:10px;padding:4px;background:#161b27;color:#e5e7eb;
+  border:1px solid rgba(255,255,255,.15);border-radius:6px;cursor:pointer}
+.fp-card-acoes button.alt-entrar{border-color:#22c55e;color:#22c55e}
+.fp-card-acoes button.alt-entrar.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff;font-weight:700}
 .fp-grid.g1{grid-template-columns:1fr}
 .fp-grid.g2,.fp-grid.g3,.fp-grid.g4{grid-template-columns:1fr 1fr}
 .fp-grid.g3 > :nth-child(3){grid-column:1 / -1;justify-self:center;width:calc(50% - 5px)}

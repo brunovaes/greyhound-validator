@@ -1147,7 +1147,7 @@ function _ajustaGradeAvb(){
   if (!g) return;
   // conta so os CARDS: os titulos ("AvB novo", "o par principal nao abriu")
   // tambem sao filhos e nao podem entrar na conta.
-  var n = 1 + (alts ? alts.querySelectorAll('.fp-alt-card').length : 0);
+  var n = 1 + (alts ? alts.querySelectorAll('.fp-card-avb').length : 0);
   g.className = 'fp-grid g' + Math.min(n, 4);
 }
 
@@ -1158,16 +1158,11 @@ function _mmPintarBw(r){
 
   if (!bw) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
 
-  var card = function(a){
-    return _cardAlternativa(r, {
+  var card = function(a, rotulo, cor){
+    return _cardAvb(r, {
       aTrap:a.pick_trap, bTrap:a.outro_trap,
-      aNome:a.pick_nome, bNome:a.outro_nome,
-      odd:a.odd, pct:a.pct, tier:a.tier, obs:a.obs
-    }, r.avbEscolhido);
-  };
-  var titulo = function(cor, txt){
-    return '<div style="font-size:9px;font-weight:700;letter-spacing:.4px;color:' + cor
-      + ';text-transform:uppercase;text-align:center;margin:2px 0">' + txt + '</div>';
+      aNome:a.pick_nome, bNome:a.outro_nome, odd:a.odd
+    }, { rotulo:rotulo, corRotulo:cor, escolhido:_parEmFoco(r) });
   };
   var html = '';
 
@@ -1176,9 +1171,11 @@ function _mmPintarBw(r){
   // aviso — sem botao voce nao consegue entrar numa delas.
   var sur = (bw.surpresas || []).slice(0, 2);
   if (sur.length) {
-    html += titulo(bw.alerta_forte ? '#ef4444' : '#f59e0b',
-      (bw.alerta_forte ? '\u26a1 ' : '') + 'AvB novo, não mapeado');
-    html += sur.map(card).join('');
+    // a etiqueta vai DENTRO do card: titulo separado viraria mais um filho da
+    // grade e bagunçaria a contagem do arranjo.
+    html += sur.map(function(a){
+      return card(a, (bw.alerta_forte ? '\u26a1 ' : '') + 'SURPRESA', bw.alerta_forte ? '#ef4444' : '#f59e0b');
+    }).join('');
   }
 
   // Secundarios: so quando o principal NAO abriu (com ele aberto nao ha o que
@@ -1189,8 +1186,7 @@ function _mmPintarBw(r){
       return !sur.some(function(x){ return String(x.pick_trap)===String(a.pick_trap) && String(x.outro_trap)===String(a.outro_trap); });
     }).slice(0, 2);
     if (sec.length) {
-      html += titulo('var(--mut)', 'o par principal não abriu');
-      html += sec.map(card).join('');
+      html += sec.map(function(a){ return card(a, 'SECUNDÁRIO', 'var(--mut)'); }).join('');
     }
   }
 
@@ -1407,42 +1403,12 @@ function renderFocusPanel(r, idx) {
     // 3 com o ultimo centralizado embaixo, 4 em quadrado) — a classe e' posta
     // por _ajustaGradeAvb() sempre que a lista muda.
     + '<div id="fp-grid" class="fp-grid g1">'
-    + '<div class="fp-arena-col fp-card-avb">'
-    + '<div class="fp-arena" style="flex:1 1 70%">'
-    // Dog fav (esquerda, corre para direita)
-    + '<div class="fp-dog-side">'
-    + '<img class="fp-dog-img" src="'+imgF+'" alt="'+nf+'" onerror="this.style.opacity=\'.2\'">'
-    + '<div class="fp-dog-name">'+nf+'</div>'
-    + (perfF?'<div class="fp-dog-perfil" style="color:'+perfColorF+'">'+perfF+'</div>':'')
-    + '</div>'
-    // Centro
-    + '<div class="fp-center">'
-    + '<div class="fp-vence-lbl">VENCE</div>'
-    + '<div class="fp-vence-arrow">&#9658;</div>'
-    + '<button type="button" class="alt-analisar" data-a="'+tf+'" data-b="'+tu+'" style="margin-top:8px;font-size:11px;font-weight:700;color:#fff;background:#161b27;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;letter-spacing:.3px">Analisar disputa</button>'
-    // Inverter o sentido do par. Fica junto do "vence" porque e' exatamente o
-    // que ele muda: quem vence quem.
-    + '<button type="button" id="btn-inverter" onclick="inverterAvb()" title="trocar o sentido: T'+tu+' vence T'+tf+'" style="margin-top:6px;font-size:10px;font-weight:600;color:#8a94a6;background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 10px;cursor:pointer;white-space:nowrap;display:block;margin-left:auto;margin-right:auto">&#8646; inverter</button>'
-    + '<button type="button" class="alt-entrar" data-a="'+tf+'" data-b="'+tu+'" data-odd="'+(_parOddAtual(r,tf,tu)||'')+'" style="margin-top:5px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;cursor:pointer;background:'+(_parEmFoco(r).escolhido?'#1d4ed8':'transparent')+';border:1px solid '+(_parEmFoco(r).escolhido?'#1d4ed8':'#22c55e')+';color:'+(_parEmFoco(r).escolhido?'#fff':'#22c55e')+'">'+(_parEmFoco(r).escolhido?'ESCOLHIDO':'Entrar')+'</button>'
-    + (_parEmFoco(r).escolhido ? _botaoApostar(r) : '')
-    + '</div>'
-    // Dog und (direita, espelhado — corre para esquerda)
-    + '<div class="fp-dog-side fp-dog-und">'
-    + '<img class="fp-dog-img" src="'+imgU+'" alt="'+nu+'" onerror="this.style.opacity=\'.2\'">'
-    + '<div class="fp-dog-name">'+nu+'</div>'
-    + (perfU?'<div class="fp-dog-perfil" style="color:'+perfColorU+'">'+perfU+'</div>':'')
-    + '</div>'
-    + '</div>'
-    + '<div class="fp-gauges-row">'
-    + '<div class="fp-gauges-grp">' + buildGauges(histF, raceClass, histU) + '</div>'
-    + '<div class="fp-gauges-div"></div>'
-    + '<div class="fp-gauges-grp">' + buildGauges(histU, raceClass, histF) + '</div>'
-    + '</div>'
-    + '</div>'
-    // display:contents faz esta caixa sumir do layout: os cards dentro dela
-    // viram irmaos do principal na grade, em vez de uma coluna a parte. Sem
-    // isso nao da pra ter o arranjo 2x2.
-    + '<div id="fp-alts" style="display:contents"></div>'
+    // O PRINCIPAL agora e' um card igual aos outros, marcado so pela borda.
+    // Antes ele era a arena grande e ocupava a tela toda, empurrando as
+    // alternativas pro rodape — a grade nao acontecia, virava pilha.
+    + _cardAvb(r, { aTrap:tf, bTrap:tu, aNome:nf, bNome:nu, odd:_parOddAtual(r,tf,tu) },
+               { principal:true, escolhido:_parEmFoco(r) })
+    '<div id="fp-alts" style="display:contents"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
     // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
@@ -1538,6 +1504,58 @@ function _botaoApostar(r){
     + 'background:'+(direto ? '#22c55e' : 'transparent')+';color:'+(direto ? '#000' : '#22c55e')+';'
     + (direto ? '' : 'border:1px solid rgba(34,197,94,.45);')
     + 'text-decoration:none">'+(direto ? 'Entre na BW' : 'Ao vivo na BW')+'</a>';
+}
+
+// UM card de AvB. Serve o principal e as alternativas — a diferenca e' so a
+// borda e a etiqueta. Todos do mesmo tamanho: e' o que permite o arranjo em
+// grade (2 lado a lado, 3 com o ultimo embaixo, 4 em quadrado).
+//
+// opts.principal  -> borda azul + etiqueta PRINCIPAL
+// opts.rotulo     -> etiqueta propria (ex.: SURPRESA)
+// opts.escolhido  -> o par que o usuario escolheu, pra marcar qual e'
+function _cardAvb(r, a, opts){
+  opts = opts || {};
+  var ta = a.aTrap, tb = a.bTrap;
+  var esc = opts.escolhido;
+  var ehEscolhido = esc && String(esc.a) === String(ta) && String(esc.b) === String(tb);
+  var borda = opts.principal ? '#38bdf8' : (ehEscolhido ? '#1d4ed8' : 'var(--bdr2)');
+  var classe = getRaceClass(r.corrida || '');
+  var hA = _histDoTrap(r, ta, ta, tb), hB = _histDoTrap(r, tb, ta, tb);
+  var nomeA = a.aNome || _nomeDoTrap(r, ta, ta, tb) || ('T' + ta);
+  var nomeB = a.bNome || _nomeDoTrap(r, tb, ta, tb) || ('T' + tb);
+  var etiqueta = opts.principal ? 'PRINCIPAL' : (opts.rotulo || '');
+  var corEtq = opts.principal ? '#38bdf8' : (opts.corRotulo || 'var(--mut)');
+
+  return '<div class="fp-card-avb' + (ehEscolhido ? ' escolhido' : '') + '" style="border-color:' + borda + '">'
+    + (etiqueta ? '<div class="fp-card-tag" style="color:' + corEtq + '">' + etiqueta + '</div>' : '')
+    + '<div class="fp-card-arena">'
+    +   '<div class="fp-dog-side">'
+    +     '<img class="fp-dog-img" src="' + getDogImg(ta, r.corrida||'') + '" alt="T'+ta+'" onerror="this.style.opacity=\'.2\'">'
+    +     '<div class="fp-dog-name">' + nomeA + '</div>'
+    +   '</div>'
+    +   '<div class="fp-center">'
+    +     '<div class="fp-vence-lbl">VENCE</div>'
+    +     '<div class="fp-vence-arrow">&#9658;</div>'
+    +     (a.odd != null ? '<div style="font-size:11px;color:#cbd5e1;margin-top:2px">odd <strong>' + a.odd + '</strong></div>' : '')
+    +   '</div>'
+    +   '<div class="fp-dog-side fp-dog-und">'
+    +     '<img class="fp-dog-img" src="' + getDogImg(tb, r.corrida||'x') + '" alt="T'+tb+'" onerror="this.style.opacity=\'.2\'">'
+    +     '<div class="fp-dog-name">' + nomeB + '</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="fp-gauges-row">'
+    +   '<div class="fp-gauges-grp">' + buildGauges(hA, classe, hB) + '</div>'
+    +   '<div class="fp-gauges-div"></div>'
+    +   '<div class="fp-gauges-grp">' + buildGauges(hB, classe, hA) + '</div>'
+    + '</div>'
+    + '<div class="fp-card-acoes">'
+    +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'">Analisar</button>'
+    +   (opts.principal ? '<button type="button" onclick="inverterAvb()" title="trocar o sentido">&#8646;</button>' : '')
+    +   '<button type="button" class="alt-entrar' + (ehEscolhido ? ' on' : '') + '" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(a.odd!=null?a.odd:'')+'">'
+    +     (ehEscolhido ? 'ESCOLHIDO' : 'Entrar') + '</button>'
+    + '</div>'
+    + (ehEscolhido ? _botaoApostar(r) : '')
+    + '</div>';
 }
 
 function _cardAlternativa(r, a, escolhidoAtual){
