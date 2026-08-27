@@ -601,10 +601,20 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
    grid-auto-rows:1fr deixaria de dividir. */
 .focus-col{display:none;flex-direction:column;overflow:hidden;background:var(--bg);flex:1;min-height:0;padding:8px 10px}
 /* Só a GRADE se estica. Cabecalho, notas de alerta e a barra de Odd/Stake ficam
-   com o tamanho que precisam e NUNCA saem da tela — foi o que aconteceu quando
-   a grade passou a tomar a altura toda. */
+   com o tamanho que precisam e NUNCA saem da tela. */
 .focus-col > *{flex:0 0 auto}
 .focus-col > .fp-grid{flex:1 1 auto;min-height:0}
+
+/* A barra de Odd/Stake e o painel de odds ao vivo ficam GRUDADOS no rodape.
+   O margin-top:auto empurra os dois pra baixo, entao eles ocupam o fim da tela
+   mesmo quando a grade nao preenche tudo. */
+.focus-col > .fp-inputs-row{margin-top:auto;position:relative;z-index:2}
+
+/* O painel de odds ao vivo era o unico filho SEM teto de altura. Num container
+   recortado (overflow:hidden), um filho que cresce sem limite empurra o resto
+   pra fora — e quem sai e' justamente o que esta no fim, a barra de Odd. Agora
+   ele tem teto proprio e rola por dentro. */
+.focus-col > #fp-odds-live{max-height:26vh;overflow-y:auto}
 .rc{padding:7px 10px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
 .rc:hover{background:rgba(34,197,94,.05);border-left-color:rgba(34,197,94,.3)}
 .rc.rc-active{background:rgba(34,197,94,.09);border-left-color:var(--grn)}
