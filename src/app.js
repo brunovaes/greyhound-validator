@@ -1408,7 +1408,7 @@ function renderFocusPanel(r, idx) {
     // alternativas pro rodape — a grade nao acontecia, virava pilha.
     + _cardAvb(r, { aTrap:tf, bTrap:tu, aNome:nf, bNome:nu, odd:_parOddAtual(r,tf,tu) },
                { principal:true, escolhido:_parEmFoco(r) })
-    '<div id="fp-alts" style="display:contents"></div>'
+    + '<div id="fp-alts" style="display:contents"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
     // sem sub-grupos empilhados (isso e o que causava o desalinhamento antes)
