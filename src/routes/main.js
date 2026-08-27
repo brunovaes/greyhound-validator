@@ -600,6 +600,11 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
    entao nao ha o que rolar aqui — e com auto ela ganharia altura infinita e o
    grid-auto-rows:1fr deixaria de dividir. */
 .focus-col{display:none;flex-direction:column;overflow:hidden;background:var(--bg);flex:1;min-height:0;padding:8px 10px}
+/* Só a GRADE se estica. Cabecalho, notas de alerta e a barra de Odd/Stake ficam
+   com o tamanho que precisam e NUNCA saem da tela — foi o que aconteceu quando
+   a grade passou a tomar a altura toda. */
+.focus-col > *{flex:0 0 auto}
+.focus-col > .fp-grid{flex:1 1 auto;min-height:0}
 .rc{padding:7px 10px;border-bottom:1px solid var(--bdr2);cursor:pointer;transition:all .15s;border-left:3px solid transparent;position:relative}
 .rc:hover{background:rgba(34,197,94,.05);border-left-color:rgba(34,197,94,.3)}
 .rc.rc-active{background:rgba(34,197,94,.09);border-left-color:var(--grn)}
@@ -643,9 +648,32 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
   background:var(--sur2);border:2px solid var(--bdr2);border-radius:10px;padding:6px 8px;overflow:hidden}
 .fp-card-avb.escolhido{background:rgba(29,78,216,.10)}
 .fp-card-tag{font-size:9px;font-weight:800;letter-spacing:.6px;text-align:center;margin-bottom:2px;flex:0 0 auto}
-/* a arena ocupa o espaco que sobrar; a imagem encolhe junto */
-.fp-card-arena{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:space-around;gap:6px}
-.fp-card-arena .fp-dog-img{max-height:100%;height:auto;width:auto;max-width:100%;object-fit:contain}
+/* A arena ocupa o espaco que sobrar dentro do card. */
+.fp-card-arena{flex:1 1 auto;min-height:0;display:flex;align-items:stretch;justify-content:space-around;gap:6px}
+
+/* Cada lado e' uma coluna: a IMAGEM encolhe (flex:1, min-height:0) e o NOME
+   nao (flex:0 0 auto). Sem isso a imagem tomava a altura toda e o nome
+   transbordava por cima dos gauges — foi o que apareceu com 1 card so. */
+.fp-card-arena .fp-dog-side{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  min-height:0;min-width:0;flex:1 1 0}
+.fp-card-arena .fp-dog-img{flex:1 1 auto;min-height:0;max-height:var(--dogh,200px);
+  width:auto;max-width:100%;object-fit:contain}
+.fp-card-arena .fp-dog-name{flex:0 0 auto;font-size:var(--dogn,13px);line-height:1.2;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.fp-card-arena .fp-center{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center}
+
+/* Tamanho do galgo POR ARRANJO: com 1 disputa ele pode ser grande, com 4 tem
+   que ser pequeno. O max-height acima continua valendo em cima disto, entao
+   em janela baixa (ou com zoom) ele encolhe sozinho — o teto e' teto, nao
+   altura fixa. */
+.fp-grid.g1{--dogh:230px;--dogn:15px}
+.fp-grid.g2{--dogh:180px;--dogn:13px}
+.fp-grid.g3,.fp-grid.g4{--dogh:120px;--dogn:11px}
+@media(max-height:800px){
+  .fp-grid.g1{--dogh:180px}
+  .fp-grid.g2{--dogh:140px}
+  .fp-grid.g3,.fp-grid.g4{--dogh:96px}
+}
 .fp-card-acoes{display:flex;gap:5px;margin-top:5px;flex:0 0 auto}
 .fp-card-acoes button{flex:1;font-size:10px;padding:4px;background:#161b27;color:#e5e7eb;
   border:1px solid rgba(255,255,255,.15);border-radius:6px;cursor:pointer}
