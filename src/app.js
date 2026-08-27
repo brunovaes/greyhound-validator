@@ -1110,30 +1110,79 @@ function _mmBw(r){
   return (c && c.dados && c.dados.encontrada && c.dados.bw) ? c.dados.bw : null;
 }
 
+// De qual balde veio o par: 'principal', 'secundario' ou 'surpresa'.
+// Vai gravado dentro do avb_escolhido, no "Entrei !", e e' o que o Historico
+// usa pra separar as tres categorias.
+//
+// SURPRESA e' balde proprio de proposito: o motor nao previu aquele par de
+// manha, entao contar como VIP inflaria a estatistica de acerto DELE com algo
+// que quem viu foi voce.
+function _origemPickDoPar(r, ta, tb){
+  var iguais = function(x, y){ return String(x) === String(y); };
+  if (iguais(ta, r && r.trapFav) && iguais(tb, r && r.trapUnd)) return 'principal';
+  var bw = _mmBw(r);
+  if (bw) {
+    var acha = function(lista){
+      return (lista || []).filter(function(a){
+        return iguais(a.pick_trap, ta) && iguais(a.outro_trap, tb);
+      })[0];
+    };
+    var nasSurpresas = acha(bw.surpresas);
+    if (nasSurpresas) return 'surpresa';
+    var nosSecundarios = acha(bw.secundarios);
+    if (nosSecundarios) return nosSecundarios.nova ? 'surpresa' : 'secundario';
+  }
+  // Par que nao e' o principal e nao esta em lista nenhuma: inversao, ou par
+  // que ele montou na mao. Conta como secundario, nao como surpresa — surpresa
+  // e' especificamente o que a BW abriu e o motor nao tinha.
+  return 'secundario';
+}
+
 function _mmPintarBw(r){
   var box = document.getElementById('fp-alts');
   var bw = _mmBw(r);
   if (!box) return;
 
-  // Sem dado, ou o par principal ja abriu: nao ha alternativa a oferecer.
-  if (!bw || bw.abriu || !bw.secundarios || !bw.secundarios.length) {
-    box.innerHTML = ''; box.style.display = 'none';
-    return;
+  if (!bw) { box.innerHTML = ''; box.style.display = 'none'; return; }
+
+  var card = function(a){
+    return _cardAlternativa(r, {
+      aTrap:a.pick_trap, bTrap:a.outro_trap,
+      aNome:a.pick_nome, bNome:a.outro_nome,
+      odd:a.odd, pct:a.pct, tier:a.tier, obs:a.obs
+    }, r.avbEscolhido);
+  };
+  var titulo = function(cor, txt){
+    return '<div style="font-size:9px;font-weight:700;letter-spacing:.4px;color:' + cor
+      + ';text-transform:uppercase;text-align:center;margin:2px 0">' + txt + '</div>';
+  };
+  var html = '';
+
+  // SURPRESAS primeiro: sao os pares que a BW abriu e a manha nao tinha, e e'
+  // a informacao que some quando a corrida larga. Precisam ser CARDS, nao so
+  // aviso — sem botao voce nao consegue entrar numa delas.
+  var sur = (bw.surpresas || []).slice(0, 2);
+  if (sur.length) {
+    html += titulo(bw.alerta_forte ? '#ef4444' : '#f59e0b',
+      (bw.alerta_forte ? '\u26a1 ' : '') + 'AvB novo, não mapeado');
+    html += sur.map(card).join('');
   }
 
-  // O principal nao abriu, mas estes pares abriram e passam nas mesmas regras.
-  // Sao oferta, nao substituicao: entrar neles e' escolha sua, pelo botao.
-  box.innerHTML =
-    '<div style="font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--mut);text-transform:uppercase;text-align:center;margin-bottom:2px">'
-    + 'o par principal não abriu</div>'
-    + bw.secundarios.slice(0,2).map(function(a){
-        return _cardAlternativa(r, {
-          aTrap:a.pick_trap, bTrap:a.outro_trap,
-          aNome:a.pick_nome, bNome:a.outro_nome,
-          odd:a.odd, pct:a.pct, tier:a.tier, obs:a.obs
-        }, r.avbEscolhido);
-      }).join('');
-  box.style.display = 'flex';
+  // Secundarios: so quando o principal NAO abriu (com ele aberto nao ha o que
+  // oferecer no lugar).
+  if (!bw.abriu && bw.secundarios && bw.secundarios.length) {
+    var sec = bw.secundarios.filter(function(a){
+      // o que ja saiu como surpresa nao se repete aqui
+      return !sur.some(function(x){ return String(x.pick_trap)===String(a.pick_trap) && String(x.outro_trap)===String(a.outro_trap); });
+    }).slice(0, 2);
+    if (sec.length) {
+      html += titulo('var(--mut)', 'o par principal não abriu');
+      html += sec.map(card).join('');
+    }
+  }
+
+  box.innerHTML = html;
+  box.style.display = html ? 'flex' : 'none';
 }
 
 function _mmPintarNotas(r){
@@ -1919,6 +1968,10 @@ function confirmarEntrada(){
   if (pe && pe.a && pe.b) {
     var snap = _snapshotDoPar(r, pe.a, pe.b, odd);
     snap.origem = r._avbOrigem || 'principal';
+    // De qual balde veio o par. O Historico separa VIP, secundario e SURPRESA
+    // por este campo — sem ele, uma surpresa entraria na conta do motor como
+    // se ele tivesse previsto.
+    snap.origem_pick = _origemPickDoPar(r, pe.a, pe.b);
     _persistirEscolha(r, snap);
   }
 
