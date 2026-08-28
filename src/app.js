@@ -1181,7 +1181,7 @@ function _mmPintarBw(r){
     return _cardAvb(r, {
       aTrap:a.pick_trap, bTrap:a.outro_trap,
       aNome:a.pick_nome, bNome:a.outro_nome, odd:a.odd
-    }, { rotulo:rotulo, corRotulo:cor, escolhido:_parEmFoco(r) });
+    }, { rotulo:rotulo, corRotulo:cor, escolhido:r.avbEscolhido });
   };
   var html = '';
 
@@ -1437,8 +1437,12 @@ function renderFocusPanel(r, idx) {
     + _cardAvb(r, { aTrap:_parEmFoco(r).a, bTrap:_parEmFoco(r).b,
                     aNome:_nomeDoTrap(r,_parEmFoco(r).a), bNome:_nomeDoTrap(r,_parEmFoco(r).b),
                     odd:_parOddAtual(r,_parEmFoco(r).a,_parEmFoco(r).b) },
+               // escolhido: SO o que voce escolheu de fato (r.avbEscolhido).
+               // Passar _parEmFoco aqui era o erro: ele devolve o principal
+               // quando nao ha escolha, entao o card nascia marcado e o botao
+               // ja vinha como DESISTIR sem ninguem ter clicado em nada.
                { principal:!r.avbEscolhido, rotulo:r.avbEscolhido?'SEU AvB':'',
-                 corRotulo:'#1d4ed8', escolhido:_parEmFoco(r) })
+                 corRotulo:'#1d4ed8', escolhido:r.avbEscolhido })
     + '<div id="fp-alts" style="display:contents"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
