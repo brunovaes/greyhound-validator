@@ -1174,7 +1174,8 @@ function _mmPintarBw(r){
   var bw = _mmBw(r);
   if (!box) return;
 
-  if (!bw) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
+  // Escolha feita: a tela fica so com ela. Nada de alternativa por baixo.
+  if (r.avbEscolhido || !bw) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
 
   var card = function(a, rotulo, cor){
     return _cardAvb(r, {
@@ -1187,7 +1188,12 @@ function _mmPintarBw(r){
   // SURPRESAS primeiro: sao os pares que a BW abriu e a manha nao tinha, e e'
   // a informacao que some quando a corrida larga. Precisam ser CARDS, nao so
   // aviso — sem botao voce nao consegue entrar numa delas.
-  var sur = (bw.surpresas || []).slice(0, 2);
+  // O par do PRINCIPAL nao pode voltar como alternativa: apareciam dois cards
+  // do mesmo par, os dois marcados como escolhido.
+  var ehPrincipal = function(x){
+    return String(x.pick_trap) === String(r.trapFav) && String(x.outro_trap) === String(r.trapUnd);
+  };
+  var sur = (bw.surpresas || []).filter(function(x){ return !ehPrincipal(x); }).slice(0, 2);
   if (sur.length) {
     // a etiqueta vai DENTRO do card: titulo separado viraria mais um filho da
     // grade e bagunçaria a contagem do arranjo.
@@ -1200,6 +1206,7 @@ function _mmPintarBw(r){
   // oferecer no lugar).
   if (!bw.abriu && bw.secundarios && bw.secundarios.length) {
     var sec = bw.secundarios.filter(function(a){
+      if (ehPrincipal(a)) return false;   // nem o principal
       // o que ja saiu como surpresa nao se repete aqui
       return !sur.some(function(x){ return String(x.pick_trap)===String(a.pick_trap) && String(x.outro_trap)===String(a.outro_trap); });
     }).slice(0, 2);
@@ -1424,8 +1431,14 @@ function renderFocusPanel(r, idx) {
     // O PRINCIPAL agora e' um card igual aos outros, marcado so pela borda.
     // Antes ele era a arena grande e ocupava a tela toda, empurrando as
     // alternativas pro rodape — a grade nao acontecia, virava pilha.
-    + _cardAvb(r, { aTrap:tf, bTrap:tu, aNome:nf, bNome:nu, odd:_parOddAtual(r,tf,tu) },
-               { principal:true, escolhido:_parEmFoco(r) })
+    // Quando ha escolha, a tela mostra SO ela, ocupando tudo: e' o par em que
+    // voce esta pensando em entrar, e as outras opcoes so atrapalhariam. O
+    // botao vira DESISTIR e traz todas de volta.
+    + _cardAvb(r, { aTrap:_parEmFoco(r).a, bTrap:_parEmFoco(r).b,
+                    aNome:_nomeDoTrap(r,_parEmFoco(r).a), bNome:_nomeDoTrap(r,_parEmFoco(r).b),
+                    odd:_parOddAtual(r,_parEmFoco(r).a,_parEmFoco(r).b) },
+               { principal:!r.avbEscolhido, rotulo:r.avbEscolhido?'SEU AvB':'',
+                 corRotulo:'#1d4ed8', escolhido:_parEmFoco(r) })
     + '<div id="fp-alts" style="display:contents"></div>'
     + '</div>'
     // Odd / Apostei+Unidades / AvB nao aberto — tudo numa unica linha flat,
@@ -1573,7 +1586,7 @@ function _cardAvb(r, a, opts){
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'">Analisar</button>'
     +   (opts.principal ? '<button type="button" onclick="inverterAvb()" title="trocar o sentido">&#8646;</button>' : '')
     +   '<button type="button" class="alt-entrar' + (ehEscolhido ? ' on' : '') + '" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(a.odd!=null?a.odd:'')+'">'
-    +     (ehEscolhido ? 'ESCOLHIDO' : 'Entrar') + '</button>'
+    +     (ehEscolhido ? 'DESISTIR' : 'Entrar') + '</button>'
     + '</div>'
     + (ehEscolhido ? _botaoApostar(r) : '')
     + '</div>';
@@ -1749,22 +1762,20 @@ function escolherAvb(trapA, trapB, odd, origem){
   if(!r) return;
   var jaEra = r.avbEscolhido && String(r.avbEscolhido.a)===String(trapA) && String(r.avbEscolhido.b)===String(trapB);
 
+  // Clicar de novo no par ja escolhido = DESISTIR. Volta a mostrar todos os
+  // AvBs pra voce escolher outro. Sem modal de confirmacao: o caminho de volta
+  // tem que ser tao rapido quanto o de ida, e nada foi gravado ainda — quem
+  // grava e' o "Entrei !".
   if(jaEra){
-    _confirmarNaTela(
-      'Desfazer a escolha?',
-      'A corrida volta a seguir o AvB mais bem avaliado no momento pela reanalise, e a odd acompanha esse par.',
-      'Desfazer',
-      function(){
-        r.avbEscolhido = null;
-        _persistirEscolha(r, null);
-        // A odd tem que acompanhar o par que fica na arena. Sem isto o campo
-        // guardava a odd do AvB desfeito — dado errado, e silencioso.
-        var p = _parEmFoco(r);
-        _aplicarOdd(_parOddAtual(r, p.a, p.b));
-        saveSessionState();
-        renderFocusPanel(r, idx);
-      }
-    );
+    r.avbEscolhido = null;
+    r._avbOrigem = null;
+    _persistirEscolha(r, null);
+    // A odd acompanha o par que volta a valer. Sem isto o campo guardava a odd
+    // do AvB desistido — dado errado, e silencioso.
+    var p = _parEmFoco(r);
+    _aplicarOdd(_parOddAtual(r, p.a, p.b));
+    saveSessionState();
+    renderFocusPanel(r, idx);
     return;
   }
 
