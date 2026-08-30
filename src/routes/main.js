@@ -1463,8 +1463,10 @@ router.get('/cascata', requireAdmin, (req, res) => {
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cascata de Cortes</title>
-${designTokensCSS()}
 <style>
+/* Os tokens vao DENTRO do <style>: o designTokensCSS() devolve CSS cru, sem a
+   tag. Fora dela o navegador imprime tudo como texto no topo da pagina. */
+${designTokensCSS()}
 body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;margin:0}
 .wrap{max-width:1400px;margin:0 auto;padding:16px}
 .casc-hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
