@@ -154,7 +154,20 @@ function _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   // passam de `parelhoAte` (60% por padrao) qualificam. O de MAIOR pct vira PRINCIPAL; os outros,
   // SECUNDARIOS. Corrida so entra na lista se tiver >=1 candidato — e' o filtro de "corrida que
   // vale" (avaliar a corrida como um todo). Sem fumador, sem gate extra. Principal = "VIP" no Historico.
-  const candidatos = todos.filter(s => s.bw_provavel && s.pct > parelhoAte)
+  // PENEIRAS ATIVAS (Painel ADMIN cascata, Bruno ago/2026): SP-colada (bw_provavel) e pct sao a
+  // espinha dorsal — sempre valem. As do meio so filtram se o Bruno as LIGOU no APLICAR
+  // (opts.cascAtivos). Default (nenhuma ligada) = passaMeio sempre true = comportamento de hoje.
+  // Usam as MEDIDAS CRUAS ja no slot, contra a regua TOP (a mais firme) — mesma leitura da tela.
+  const gA = opts.cascAtivos || {};
+  const passaMeio = s => {
+    if (gA.categoria && !(s.cat_pick != null && s.cat_outro != null && s.cat_pick <= s.cat_outro)) return false;
+    if (gA.caltm && !(s.caltm_dif >= reguaTop.caltm_min_dif)) return false;
+    if (gA.split && !(s.split_dif >= reguaTop.split_min)) return false;
+    if (gA.podio && !(s.podio_dif >= reguaTop.podio_min)) return false;
+    if (gA.fumador && !(s.desaba_count < reguaTop.desaba_min)) return false;
+    return true;
+  };
+  const candidatos = todos.filter(s => s.bw_provavel && s.pct > parelhoAte && passaMeio(s))
     .sort((x, y) => y.pct - x.pct);
   const rotulos = ['principal', 'secundario_1', 'secundario_2'];
   const slots = candidatos.slice(0, N_SLOTS).map((s, i) => Object.assign({}, s, { slot: rotulos[i], tier: i === 0 ? 'TOP' : 'REGULAR' }));
@@ -206,7 +219,7 @@ function _podioOk(podio, principal) {
 // cai nos defaults (SP_RATIO_MAX 1.15 / engine caltmMinDif 0.20).
 function _aplicaConfigMotor(db, opts) {
   try {
-    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min FROM analysis_config WHERE user_id=1").get();
+    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min, avb_parelho_pct, casc_ativo_categoria, casc_ativo_caltm, casc_ativo_split, casc_ativo_podio, casc_ativo_fumador FROM analysis_config WHERE user_id=1").get();
     if (c) {
       const m = {};
       // regua TOP
@@ -222,6 +235,16 @@ function _aplicaConfigMotor(db, opts) {
       if (opts.regSplitMin == null && c.reg_split_min != null) m.regSplitMin = c.reg_split_min;
       if (opts.regPodioMin == null && c.reg_podio_min != null) m.regPodioMin = c.reg_podio_min;
       if (!(opts.regDesabaMin > 0) && c.reg_desaba_min > 0) m.regDesabaMin = c.reg_desaba_min;
+      // corte final de chance (Painel ADMIN): pct > isto. Se a coluna existir, vira o parelhoAte.
+      if (!(opts.parelhoAte > 0) && c.avb_parelho_pct > 0) m.parelhoAte = c.avb_parelho_pct;
+      // PENEIRAS ATIVAS (cascata): default 0 = desligada = comportamento de hoje. So entram no
+      // opts as que o Bruno LIGOU no APLICAR — o _analisaCorrida filtra candidatos por elas.
+      if (opts.cascAtivos == null) {
+        m.cascAtivos = {
+          categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1,
+          split: c.casc_ativo_split === 1, podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1
+        };
+      }
       opts = Object.assign({}, opts, m);
     }
   } catch (e) {}

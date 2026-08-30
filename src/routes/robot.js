@@ -3010,6 +3010,131 @@ router.get('/diag/precalc', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// CASCATA DE CORTES (admin, SO-LEITURA — Bruno ago/2026): simula a esteira de peneiras do
+// motor unico sobre as corridas reais do dia e devolve o FUNIL (quantos pares sobram depois
+// de cada corte) + onde cada par caiu. NAO grava nada, NAO toca producao — e' a ferramenta
+// de calibragem do Painel ADMIN. Parametros por query (todos opcionais):
+//   ?date=YYYY-MM-DD   (default hoje)
+//   ?regua=top|regular (base dos cortes; default top)
+//   ?sp=1.15 &caltm=0.20 &split=0.01 &podio=0.001 &dqueda=2 &dmin=2 &pct=60  (sobrescreve corte a corte)
+//   ?off=caltm,split,podio,fumador   (desliga peneiras — default TODAS ligadas)
+router.get('/diag/cascata', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const casc = require('../utils/cascataMotor');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const base = String(req.query.regua || 'top').toLowerCase() === 'regular' ? casc.CORTES_REGULAR : casc.CORTES_PADRAO;
+    const cortes = Object.assign({}, base);
+    const num = (q, k) => { if (req.query[q] != null && req.query[q] !== '' && !Number.isNaN(Number(req.query[q]))) cortes[k] = Number(req.query[q]); };
+    num('sp', 'sp_ratio_max'); num('caltm', 'caltm_min_dif'); num('split', 'split_min');
+    num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
+    // ativos: default todas ligadas; ?off=lista desliga.
+    const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
+    String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    res.json(casc.cascata(db, { date, cortes, ativos }));
+  } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
+});
+
+// EXEMPLO SINTETICO de um corte (admin, SO-LEITURA): um confronto que PASSA e um que MORRE
+// naquele corte, com numeros reais do avaliarPar. ?corte=sp|categoria|caltm|split|podio|fumador|pct
+// &valor=0.20 (opcional — mostra com o valor que voce testar).
+router.get('/diag/cascata-exemplo', requireAdmin, (req, res) => {
+  try {
+    const casc = require('../utils/cascataMotor');
+    const corte = String(req.query.corte || '').trim();
+    if (!corte) return res.status(400).json({ erro: 'informe ?corte=sp|categoria|caltm|split|podio|fumador|pct' });
+    res.json({ corte, exemplo: casc.exemploCorte(corte, req.query.valor != null ? Number(req.query.valor) : null) });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// RASCUNHO do Painel ADMIN (cascata). Guarda/le o estado que o Bruno esta MEXENDO —
+// cortes + peneiras ligadas — sem tocar producao. So o APLICAR grava no analysis_config.
+//   GET  /diag/cascata-rascunho          -> devolve o rascunho salvo (ou os defaults)
+//   POST /diag/cascata-rascunho  {regua,cortes,ativos}  -> salva o rascunho
+router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const casc = require('../utils/cascataMotor');
+    const row = db.prepare('SELECT rascunho_json, updated_at FROM motor_rascunho WHERE user_id=1').get();
+    let rascunho = null;
+    if (row && row.rascunho_json) { try { rascunho = JSON.parse(row.rascunho_json); } catch (e) {} }
+    // se nao tem rascunho, devolve os valores QUE ESTAO VALENDO hoje no analysis_config (ponto de partida)
+    if (!rascunho) {
+      const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador FROM analysis_config WHERE user_id=1').get() || {};
+      rascunho = {
+        regua: 'top',
+        cortes: {
+          sp_ratio_max: c.sp_ratio_max != null ? c.sp_ratio_max : casc.CORTES_PADRAO.sp_ratio_max,
+          caltm_min_dif: c.caltm_min_dif != null ? c.caltm_min_dif : casc.CORTES_PADRAO.caltm_min_dif,
+          split_min: c.split_min != null ? c.split_min : casc.CORTES_PADRAO.split_min,
+          podio_min: c.podio_min != null ? c.podio_min : casc.CORTES_PADRAO.podio_min,
+          desaba_queda: c.desaba_queda != null ? c.desaba_queda : casc.CORTES_PADRAO.desaba_queda,
+          desaba_min: c.desaba_min != null ? c.desaba_min : casc.CORTES_PADRAO.desaba_min,
+          parelho_pct: c.avb_parelho_pct != null ? c.avb_parelho_pct : casc.CORTES_PADRAO.parelho_pct
+        },
+        ativos: {
+          categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1,
+          podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1
+        }
+      };
+    }
+    res.json({ rascunho, salvo_em: row ? row.updated_at : null, tem_rascunho: !!row,
+      legenda: 'rascunho = o que voce esta mexendo. So o APLICAR grava em producao. Sem rascunho, vem o que esta VALENDO hoje.' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+router.post('/diag/cascata-rascunho', requireAdmin, express.json(), (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const body = req.body || {};
+    const rascunho = { regua: body.regua === 'regular' ? 'regular' : 'top', cortes: body.cortes || {}, ativos: body.ativos || {} };
+    db.prepare("INSERT INTO motor_rascunho (user_id, rascunho_json, updated_at) VALUES (1,?,CURRENT_TIMESTAMP) " +
+      "ON CONFLICT(user_id) DO UPDATE SET rascunho_json=excluded.rascunho_json, updated_at=CURRENT_TIMESTAMP")
+      .run(JSON.stringify(rascunho));
+    res.json({ ok: true, rascunho, legenda: 'rascunho salvo. Nada em producao mudou — clique APLICAR pra valer.' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// APLICAR (admin): grava os cortes + peneiras ligadas do rascunho (ou do body) no analysis_config.
+// A partir daqui, o motor unico passa a usar esses valores. SP-colada e pct sao a espinha dorsal
+// (sempre ligadas) — o liga/desliga so vale pras 5 peneiras do meio. So-escrita controlada.
+//   POST /diag/cascata-aplicar   (body opcional {regua,cortes,ativos}; sem body usa o rascunho salvo)
+router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    let src = req.body && (req.body.cortes || req.body.ativos) ? req.body : null;
+    if (!src) {
+      const row = db.prepare('SELECT rascunho_json FROM motor_rascunho WHERE user_id=1').get();
+      if (row && row.rascunho_json) { try { src = JSON.parse(row.rascunho_json); } catch (e) {} }
+    }
+    if (!src) return res.status(400).json({ erro: 'sem rascunho salvo e sem body — nada pra aplicar' });
+    const regula = src.regua === 'regular' ? 'regular' : 'top';
+    const cortes = src.cortes || {}, ativos = src.ativos || {};
+    const sets = [], args = [];
+    const numOk = v => v != null && v !== '' && !Number.isNaN(Number(v));
+    const put = (col, v) => { if (numOk(v)) { sets.push(col + '=?'); args.push(Number(v)); } };
+    if (regula === 'regular') {
+      put('reg_sp_ratio_max', cortes.sp_ratio_max); put('reg_caltm_min_dif', cortes.caltm_min_dif);
+      put('reg_split_min', cortes.split_min); put('reg_podio_min', cortes.podio_min); put('reg_desaba_min', cortes.desaba_min);
+    } else {
+      put('sp_ratio_max', cortes.sp_ratio_max); put('caltm_min_dif', cortes.caltm_min_dif);
+      put('split_min', cortes.split_min); put('podio_min', cortes.podio_min); put('desaba_min', cortes.desaba_min);
+    }
+    // globais (valem pras duas reguas)
+    put('desaba_queda', cortes.desaba_queda); put('avb_parelho_pct', cortes.parelho_pct);
+    // peneiras ativas (5 do meio; SP/pct nunca desligam em producao)
+    const flag = (col, v) => { sets.push(col + '=?'); args.push(v ? 1 : 0); };
+    flag('casc_ativo_categoria', ativos.categoria); flag('casc_ativo_caltm', ativos.caltm);
+    flag('casc_ativo_split', ativos.split); flag('casc_ativo_podio', ativos.podio); flag('casc_ativo_fumador', ativos.fumador);
+    if (!sets.length) return res.status(400).json({ erro: 'nada valido pra aplicar' });
+    args.push(1); // user_id
+    db.prepare('UPDATE analysis_config SET ' + sets.join(', ') + ' WHERE user_id=?').run(...args);
+    const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador FROM analysis_config WHERE user_id=1').get();
+    res.json({ ok: true, regua: regula, aplicado,
+      legenda: 'APLICADO no analysis_config. O motor unico ja usa esses valores no proximo ciclo. As 5 peneiras do meio filtram so se casc_ativo_*=1; SP-colada e pct sempre valem.' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // LISTA DO DIA (admin): os AvBs do MOTOR UNICO (gate dos 4 eixos + nao-segura) de hoje,
 // com hora/pista, o AvB (pick x outro), pct, a ODD da BW (abertura), se ABRIU e se BATEU.
 // Junta motorManha.paraPersistir (os picks recalculados agora) com abriu/odd_abertura +

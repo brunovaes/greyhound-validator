@@ -219,6 +219,17 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_precalc_data ON avb_precalc(data);
   CREATE INDEX IF NOT EXISTS idx_precalc_race ON avb_precalc(race_id);
+
+  -- RASCUNHO do Painel ADMIN (cascata de cortes, Bruno ago/2026). Guarda o
+  -- ultimo estado que o usuario esta MEXENDO (cortes + peneiras ligadas/desligadas),
+  -- por usuario, sem afetar producao. So o botao APLICAR copia daqui pro analysis_config.
+  -- rascunho_json = { regua, cortes:{...}, ativos:{...} }. Sobrevive a refresh.
+  CREATE TABLE IF NOT EXISTS motor_rascunho (
+    user_id INTEGER PRIMARY KEY,
+    rascunho_json TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 // Migracoes seguras para banco existente
@@ -358,6 +369,16 @@ const migrations = [
   // Tier do motor unico na corrida: 'TOP' (nata) | 'REGULAR' | NULL(fora). Pro filtro TOP/REGULAR
   // da Analisar. bw=1 continua sendo o atalho booleano de TOP.
   "ALTER TABLE races ADD COLUMN tier TEXT",
+  // PENEIRAS ATIVAS do motor unico (Painel ADMIN cascata, Bruno ago/2026). Default 0 =
+  // peneira DESLIGADA na selecao = EXATAMENTE o comportamento de hoje (so SP-colada + pct>60
+  // decidem). O APLICAR do painel liga (1) as peneiras do meio que o Bruno escolher, e ai o
+  // motor passa a filtrar tambem por elas. SP e pct sao a espinha dorsal — sempre ligadas,
+  // nao tem coluna (nao da pra desligar em producao). Sao globais (nao por regua).
+  "ALTER TABLE analysis_config ADD COLUMN casc_ativo_categoria INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN casc_ativo_caltm INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN casc_ativo_split INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN casc_ativo_podio INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN casc_ativo_fumador INTEGER DEFAULT 0",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
