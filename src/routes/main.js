@@ -28,6 +28,7 @@ function navBar(user, active) {
       ${can(user,'screen.banca') ? `<a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Painel Admin</a>` : ''}
+      ${isAdmin ? `<a href="${BASE}/cascata" class="nl${active==='cascata'?' na':''}">Cascata</a>` : ''}
       ${can(user,'screen.live') ? `<a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>` : ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">
@@ -1449,6 +1450,157 @@ function cssCardGalgo() {
 .sv-grade{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid #444;color:#aaa}
 .sv-caltm{font-weight:700;color:#f0f0f0}`;
 }
+
+// ── Painel ADMIN: Cascata de Cortes ─────────────────────────────────────────
+// Calibra as 7 peneiras do motor sobre as corridas REAIS do dia. Tudo aqui e'
+// simulacao ate o APLICAR — o JS da tela repete isso em varios lugares, porque
+// o risco desta pagina e' alguem calibrar por meia hora achando que ja vale.
+//
+// O HTML e' so a moldura; quem conversa com os 4 endpoints do motor e' o
+// public/js/cascata.js.
+router.get('/cascata', requireAdmin, (req, res) => {
+  const user = req.user;
+  res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cascata de Cortes</title>
+${designTokensCSS()}
+<style>
+body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;margin:0}
+.wrap{max-width:1400px;margin:0 auto;padding:16px}
+.casc-hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.casc-hd h1{font-size:19px;margin:0}
+.casc-sub{font-size:12px;color:var(--mut);max-width:680px;line-height:1.5}
+.casc-aviso{background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.45);color:#f59e0b;
+  border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:14px;line-height:1.5}
+.casc-kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.kpi{background:var(--sur);border:1px solid var(--bdr2);border-radius:10px;padding:10px 16px;min-width:150px}
+.kpi-lbl{font-size:10px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px}
+.kpi-val{font-size:26px;font-weight:800;color:#21AB58;line-height:1.1}
+.kpi-sub{font-size:11px;color:var(--mut)}
+.casc-cols{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:14px;align-items:start}
+@media(max-width:1000px){.casc-cols{grid-template-columns:1fr}}
+.casc-card{background:var(--sur);border:1px solid var(--bdr2);border-radius:10px;padding:12px}
+.casc-card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut2);margin:0 0 10px}
+.casc-lever{border:1px solid var(--bdr2);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#0D1117}
+.casc-lever.off{opacity:.5}
+.casc-lever-top{display:flex;align-items:center;gap:8px}
+.casc-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;
+  background:var(--bdr2);color:var(--mut);font-size:10px;font-weight:800;flex:0 0 auto}
+.casc-lever-nome{font-weight:700;font-size:12px;flex:1}
+.casc-guarda{font-size:9px;color:#f59e0b;border:1px solid rgba(245,158,11,.5);border-radius:8px;padding:1px 6px;cursor:help}
+.casc-sw input{display:none}
+.casc-sw span{display:block;width:30px;height:16px;border-radius:9px;background:#333;position:relative;cursor:pointer;transition:.15s}
+.casc-sw span:after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#888;transition:.15s}
+.casc-sw input:checked+span{background:rgba(33,171,88,.35)}
+.casc-sw input:checked+span:after{left:16px;background:#21AB58}
+.casc-lever-ctl{display:flex;align-items:center;gap:8px;margin-top:8px}
+.casc-lever-ctl input[type=range]{flex:1;accent-color:#21AB58}
+.casc-lever-ctl input[type=number]{width:66px;background:#0d0d0d;border:1px solid #333;border-radius:5px;color:#e9edf2;padding:3px 5px;font-size:12px}
+.casc-op{font-size:11px;color:var(--mut);white-space:nowrap}
+.casc-sem-num{font-size:11px;color:var(--mut)}
+.casc-ex{margin-top:8px;border-top:1px dashed var(--bdr2);padding-top:6px}
+.casc-explica{font-size:11px;color:var(--mut);line-height:1.45;margin-bottom:5px}
+.casc-caso{display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0}
+.casc-caso-tag{font-size:9px;font-weight:800;padding:1px 5px;border-radius:6px;border:1px solid}
+.casc-caso.ok .casc-caso-tag{color:#21AB58;border-color:#21AB58}
+.casc-caso.ko .casc-caso-tag{color:#ef4444;border-color:#ef4444}
+.casc-caso-txt{flex:1;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.casc-caso-num{color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
+.casc-step{margin-bottom:10px}
+.casc-step.off{opacity:.45}
+.casc-step-hd{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:3px}
+.casc-corte{font-size:11px;color:#21AB58;font-weight:700}
+.casc-desl{font-size:10px;color:var(--mut);border:1px solid var(--bdr2);border-radius:6px;padding:0 5px}
+.casc-inerte{font-size:10px;color:#f59e0b;cursor:help}
+.casc-bar{display:flex;height:16px;background:#0d0d0d;border-radius:4px;overflow:hidden;border:1px solid var(--bdr2)}
+.casc-bar i{display:block;height:100%}
+.casc-viva{background:#21AB58}
+.casc-morta{background:#ef4444;opacity:.65}
+.casc-step-ft{display:flex;gap:12px;font-size:10px;color:var(--mut);margin-top:2px}
+.casc-ok{color:#21AB58}.casc-ko{color:#ef4444}.casc-mut{color:var(--mut)}
+.casc-desc{font-size:10px;color:var(--mut2);margin-top:1px}
+.casc-corrida{border:1px solid var(--bdr2);border-radius:8px;margin-bottom:6px;background:#0D1117}
+.casc-corrida.entrou{border-color:rgba(33,171,88,.45)}
+.casc-corrida-hd{display:flex;align-items:center;gap:10px;padding:7px 10px;cursor:pointer;font-size:12px}
+.casc-corrida-hd:hover{background:rgba(255,255,255,.03)}
+.casc-hora{font-weight:800;color:#21AB58;min-width:44px}
+.casc-nome{font-weight:600;min-width:120px}
+.casc-pick{margin-left:auto;color:#cbd5e1}
+.casc-pick em{color:#21AB58;font-style:normal;font-weight:700}
+.casc-conta{font-size:11px;color:var(--mut);min-width:44px;text-align:right}
+.casc-pares{padding:0 10px 10px}
+.casc-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.casc-tbl th{text-align:left;color:var(--mut2);font-size:9px;text-transform:uppercase;letter-spacing:.4px;padding:4px;border-bottom:1px solid var(--bdr2)}
+.casc-tbl td{padding:4px;border-bottom:1px solid rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
+.casc-destino{font-size:10px;font-weight:700;border:1px solid;border-radius:8px;padding:1px 6px;white-space:nowrap}
+.casc-vazio{padding:16px;text-align:center;color:var(--mut);font-size:12px}
+.casc-acoes{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+#casc-aplicar{background:#21AB58;border:none;color:#04140a;font-weight:800;font-size:13px;
+  padding:9px 20px;border-radius:8px;cursor:pointer}
+#casc-aplicar:disabled{opacity:.5;cursor:default}
+#casc-toast{display:none;padding:7px 12px;border-radius:8px;border:1px solid;font-size:12px}
+select,input[type=date]{background:#0d0d0d;border:1px solid #333;border-radius:5px;color:#e9edf2;padding:4px 7px;font-size:12px}
+</style></head><body>
+${navBar(user, 'cascata')}
+<div class="wrap">
+
+  <div class="casc-hd">
+    <h1>Cascata de Cortes</h1>
+    <select onchange="cascRegua(this.value)" title="Qual régua está sendo calibrada">
+      <option value="top">régua TOP</option>
+      <option value="regular">régua REGULAR</option>
+    </select>
+    <input type="date" onchange="cascData(this.value)" title="Dia a simular (padrão: hoje)">
+    <span class="casc-sub" id="casc-origem">carregando…</span>
+  </div>
+
+  <div class="casc-aviso">
+    Tudo nesta tela é <strong>simulação</strong>. Arraste à vontade: o rascunho é salvo sozinho e
+    <strong>não muda nada em produção</strong>. Só o botão APLICAR faz o motor passar a usar estes valores.
+    <br>As peneiras <strong>SP colada</strong> e <strong>Chance</strong> podem ser desligadas aqui para você ver o efeito,
+    mas em produção elas continuam sempre valendo.
+  </div>
+
+  <div class="casc-kpis">
+    <div class="kpi">
+      <div class="kpi-lbl">Corridas que valem</div>
+      <div class="kpi-val" id="casc-kpi-valem">—</div>
+      <div class="kpi-sub" id="casc-kpi-dia">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Pares sobreviventes</div>
+      <div class="kpi-val" style="color:#60a5fa;font-size:20px" id="casc-kpi-pares">—</div>
+      <div class="kpi-sub">do dia inteiro</div>
+    </div>
+  </div>
+
+  <div class="casc-cols">
+    <div class="casc-card">
+      <h2>As 7 peneiras, na ordem</h2>
+      <div id="casc-alavancas"></div>
+      <div class="casc-acoes">
+        <button id="casc-aplicar" onclick="cascAplicar()">APLICAR em produção</button>
+        <span id="casc-toast"></span>
+      </div>
+    </div>
+
+    <div>
+      <div class="casc-card" style="margin-bottom:12px">
+        <h2>O funil do dia</h2>
+        <div id="casc-funil"><div class="casc-vazio">carregando…</div></div>
+      </div>
+      <div class="casc-card">
+        <h2>Corridas do dia — clique para ver par a par</h2>
+        <div id="casc-corridas"><div class="casc-vazio">carregando…</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>window.BASE_CASCATA = '${BASE}';</script>
+<script src="${BASE}/static/js/cascata.js"></script>
+</body></html>`);
+});
 
 router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
