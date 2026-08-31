@@ -3669,24 +3669,35 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
     let cardRows = [];
     try {
       cardRows = db.prepare(
-        "SELECT r.hora, r.hora_br, r.corrida FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+        "SELECT r.hora, r.hora_br, r.corrida, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id " +
         "WHERE date(s.created_at,'-3 hours')=?"
       ).all(date);
     } catch (e) {}
-    const cardIdx = cardRows.map(r => ({ cnorm: _cnorm(r.corrida), uk: _hnorm(r.hora), br: _hnorm(r.hora_br), hora: r.hora }));
-    // dada a corrida+hora do pedido (que pode vir em BR), devolve a hora UK canonica (ou a propria)
-    const resolveUK = (cnorm, hInput) => {
+    const cardIdx = cardRows.map(r => ({ cnorm: _cnorm(r.corrida), uk: _hnorm(r.hora), br: _hnorm(r.hora_br), hora: r.hora, chegada: r.finishing_order_json }));
+    // dada a corrida+hora do pedido (que pode vir em BR), devolve a corrida do card que casa (com a
+    // hora UK canonica e a chegada real). Sem chumbar offset — aguenta horario de verao.
+    const acharCard = (cnorm, hInput) => {
       const h = _hnorm(hInput);
       // 1) casa corrida + (hora_br == input)  -> a corrida que o Bruno esta vendo na tela
       let c = cardIdx.find(x => x.cnorm === cnorm && x.br === h);
       // 2) ou corrida + (hora UK == input), caso ele ja tenha passado em UK
       if (!c) c = cardIdx.find(x => x.cnorm === cnorm && x.uk === h);
-      return c ? c.uk : h;
+      return c || null;
+    };
+    // "bateu": o pick chegou A FRENTE do outro na chegada real? true/false/null (fonte unica).
+    let bateuPar = null; try { bateuPar = require('../utils/avbResultado').bateuPar; } catch (e) {}
+    const calcBateu = (card, pick, outro) => {
+      if (!card || !card.chegada || !bateuPar || pick == null || outro == null) return null;
+      try { return bateuPar(card.chegada, pick, outro); } catch (e) { return null; }
     };
 
+    const _bateuTxt = b => b === true ? 'BATEU (pick na frente)' : b === false ? 'nao bateu (outro na frente)' : 'indefinido (chegada incompleta / trap fora)';
     const itens = pedidos.map(q => {
       const cq = _cnorm(q.corrida);
-      const ukHora = resolveUK(cq, q.hora);            // hora UK canonica (resolve o fuso BR->UK)
+      const card = acharCard(cq, q.hora);              // a corrida do card que casa (resolve o fuso BR->UK)
+      const ukHora = card ? card.uk : _hnorm(q.hora);  // hora UK canonica
+      // "bateu" vem da CHEGADA real (independe da BW ter aberto o par ou nao)
+      const bateu = calcBateu(card, q.pick, q.outro);
       // acha a corrida aberta que casa (corrida igual + hora UK igual, normalizadas)
       let row = idx.find(a => a.cnorm === cq && a.hnorm === ukHora);
       // fallback: so pela hora UK, se a corrida veio meio torta do parse
@@ -3695,6 +3706,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       if (!row) {
         return { pedido: q.texto, corrida: q.corrida, hora: q.hora, hora_uk: ukHora, fuso: _fuso, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
           abriu_corrida: false, abriu_par: false, odds: null,
+          bateu, bateu_txt: _bateuTxt(bateu),
           nota: 'a BW nao abriu NENHUM par nessa corrida nesse dia (ou nao foi monitorada / data errada)' };
       }
       const p = (q.pick != null && q.outro != null) ? row.pares.find(x => _mesmoPar(x, q.pick, q.outro)) : null;
@@ -3702,6 +3714,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       if (!p) {
         return { pedido: q.texto, corrida: row.corrida, hora: row.hora, hora_uk: row.hora, fuso: _fuso, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
           abriu_corrida: true, abriu_par: false, odds: null,
+          bateu, bateu_txt: _bateuTxt(bateu),
           pares_que_abriram: outros, capturado_em: row.capturado_em,
           nota: 'a corrida abriu ' + row.n_pares + ' par(es) na BW, mas ESTE par nao' };
       }
@@ -3711,6 +3724,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       return { pedido: q.texto, corrida: row.corrida, hora: row.hora, hora_uk: row.hora, fuso: _fuso, par: 'T' + q.pick + 'xT' + q.outro,
         abriu_corrida: true, abriu_par: true,
         odds: { pick_vence_outro: (oddPickVenceOutro > 0 ? oddPickVenceOutro : null), outro_vence_pick: (oddOutroVencePick > 0 ? oddOutroVencePick : null) },
+        bateu, bateu_txt: _bateuTxt(bateu),
         pares_que_abriram: outros, capturado_em: row.capturado_em };
     });
 
@@ -3732,11 +3746,20 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
         dica: 'Compare a hora/corrida do seu pedido com as duas listas. Se a corrida aparece no card mas nao em '
           + 'corridas_abertas_bw, a BW nao abriu par nela. Se aparece nas duas mas com hora diferente, e formato/fuso.' };
     }
-    res.json({ date, pedidos: pedidos.length, corridas_abertas_no_dia: idx.length, itens, debug,
+    // RESUMO do "bateu" (so conta os definidos: true/false; null = indefinido nao entra na taxa)
+    const _def = itens.filter(i => i.bateu === true || i.bateu === false);
+    const _bat = itens.filter(i => i.bateu === true).length;
+    const resumo = {
+      bateram: _bat, com_resultado: _def.length, indefinidos: itens.length - _def.length,
+      taxa_bateu: _def.length ? +(100 * _bat / _def.length).toFixed(1) : null,
+      abriram_par: itens.filter(i => i.abriu_par).length
+    };
+    res.json({ date, pedidos: pedidos.length, corridas_abertas_no_dia: idx.length, resumo, itens, debug,
       legenda: 'Por item: abriu_corrida = a BW abriu algum par nessa corrida. abriu_par = ESTE par especifico abriu. '
-        + 'odds.pick_vence_outro = odd do 1o trap do par vencer o 2o (AvB). Se date estiver errada ou a corrida nao foi '
-        + 'monitorada, abriu_corrida vem false. Fonte: tabela avb_abertos (o que a BetWinner realmente abriu). '
-        + 'Use ?debug=1 pra listar as corridas abertas e as do card e comparar formato.' });
+        + 'odds.pick_vence_outro = odd do 1o trap do par (o pick) vencer o 2o (AvB), na abertura da BW. '
+        + 'bateu = na CHEGADA real, o pick chegou a FRENTE do outro (true), atras (false) ou indefinido (null=chegada '
+        + 'incompleta/trap fora). taxa_bateu so conta os definidos. Fonte odds: avb_abertos; fonte bateu: '
+        + 'races.finishing_order_json (mesma regra do Historico). Use ?debug=1 pra comparar formato/fuso.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
