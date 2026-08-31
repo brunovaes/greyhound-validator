@@ -3259,6 +3259,68 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// REPROCESSAR SsnSupp (admin — Bruno ago/2026): re-parseia os PDFs SALVOS de um dia e injeta
+// o flag ssnSupp no hist_full JA GRAVADO (cirurgico — nao mexe em mais nada). Serve pra fazer o
+// veto de SsnSupp valer RETROATIVO em dias antigos (o hist_full deles foi salvo antes do flag
+// existir). ?date=YYYY-MM-DD. PREVIEW por padrao (nao grava); ?apply=1 grava de fato.
+router.get('/diag/reprocessar-ssnsupp', requireAdmin, async (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const apply = req.query.apply === '1' || req.query.apply === 'true';
+    const rows = db.prepare(
+      "SELECT r.id, r.hora, r.corrida, r.hist_full, r.race_card FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+    ).all(date);
+    const PDF_DIR = getPdfDir(date);
+    let arquivos = [];
+    try { arquivos = fs.readdirSync(PDF_DIR); } catch (e) { return res.json({ date, erro: 'sem pasta de PDFs pra essa data', pdf_dir: PDF_DIR }); }
+    const palette = getTrapBadgeColors() || undefined;
+
+    const corridas = [];
+    let totalFlag = 0, atualizadas = 0, semPdf = 0;
+    for (const row of rows) {
+      let histFull = null, raceCard = null;
+      try { histFull = JSON.parse(row.hist_full); } catch (e) { continue; }
+      try { raceCard = JSON.parse(row.race_card); } catch (e) {}
+      const trackAbbr = (row.corrida || '').split(' ')[0].toLowerCase();
+      const candidato = encontrarPdfDaCorrida(arquivos, formatTime(row.hora), trackAbbr);
+      if (!candidato) { semPdf++; continue; }
+      let parse = null;
+      try { parse = await parseRacingPostPDF(fs.readFileSync(path.join(PDF_DIR, candidato)), palette); } catch (e) { continue; }
+      if (!parse || !Array.isArray(parse.galgos)) continue;
+      // trap -> ssnSupp, do PDF re-parseado (agora o parser captura o flag)
+      const suppPorTrap = {};
+      parse.galgos.forEach(g => { if (g && g.trap != null && g.ssnSupp) suppPorTrap[Number(g.trap)] = true; });
+      // injeta SO o flag no hist_full/race_card existentes (nao toca em mais nada)
+      const flagged = [];
+      if (Array.isArray(histFull)) histFull.forEach(d => { if (d && suppPorTrap[Number(d.trap)]) { d.ssnSupp = true; flagged.push({ trap: d.trap, nome: d.nome }); } });
+      if (Array.isArray(raceCard)) raceCard.forEach(d => { if (d && suppPorTrap[Number(d.trap)]) d.ssnSupp = true; });
+      if (flagged.length) {
+        totalFlag += flagged.length;
+        corridas.push({ hora: row.hora, corrida: row.corrida, galgos_ssnsupp: flagged });
+        if (apply) {
+          db.prepare('UPDATE races SET hist_full=?, race_card=? WHERE id=?')
+            .run(JSON.stringify(histFull), raceCard ? JSON.stringify(raceCard) : row.race_card, row.id);
+          atualizadas++;
+        }
+      }
+    }
+    res.json({
+      date, apply,
+      total_corridas: rows.length,
+      corridas_com_ssnsupp: corridas.length,
+      galgos_flagados: totalFlag,
+      sem_pdf: semPdf,
+      atualizadas,
+      corridas,
+      legenda: apply
+        ? 'APLICADO: o flag ssnSupp foi gravado no hist_full desses galgos. Agora o funil/motor exclui os AvBs deles nesse dia.'
+        : 'PREVIEW: nada foi gravado. Confira a lista e rode com ?apply=1 pra gravar o flag e valer retroativo.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
+});
+
 // LISTA DO DIA (admin): os AvBs do MOTOR UNICO (gate dos 4 eixos + nao-segura) de hoje,
 // com hora/pista, o AvB (pick x outro), pct, a ODD da BW (abertura), se ABRIU e se BATEU.
 // Junta motorManha.paraPersistir (os picks recalculados agora) com abriu/odd_abertura +

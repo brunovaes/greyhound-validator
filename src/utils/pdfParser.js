@@ -202,8 +202,11 @@ function extractBrtInfo(brtLine, nameLine) {
   // do nome (dependendo de onde o pdf.js colocou). "(SsnSupp)"/sem data -> null.
   const ssnMatch = ((brtLine || '') + ' ' + (nameLine || '')).match(SSN_DATE_RE);
   const ssnDate = ssnMatch ? parseSsnDate(ssnMatch[1]) : null;
+  // "(SsnSupp)" = femea em supressor de cio (Bruno ago/2026: excluir do AvB). Nao tem data,
+  // entao nao casa no SSN_DATE_RE — capturado aqui como flag booleano proprio.
+  const ssnSupp = /\(SsnSupp\)/i.test((brtLine || '') + ' ' + (nameLine || ''));
 
-  return { nome, brt, brtClasse, ssnDate };
+  return { nome, brt, brtClasse, ssnDate, ssnSupp };
 }
 
 // ── Parse da direita: CALTM, GRADE, [SP], WGHT, GNG, WNTM ──────────────────
@@ -359,10 +362,10 @@ async function parseRacingPostPDF(buffer, trapPalette) {
   }
 
   const galgos = dogSections.map((section, idx) => {
-    const brt = brtEntries[idx] || { nome: `Dog ${idx+1}`, brt: 0, brtClasse: '', ssnDate: null };
+    const brt = brtEntries[idx] || { nome: `Dog ${idx+1}`, brt: 0, brtClasse: '', ssnDate: null, ssnSupp: false };
     const historico = section.map(r => parseHistoryLine(r.text)).filter(h => h !== null);
     const trap = trapsConfiaveis ? trapsPorIndice[idx] : idx + 1;
-    return { trap, nome: brt.nome, brt: brt.brt, brtClasse: brt.brtClasse, ssnDate: brt.ssnDate || null, historico };
+    return { trap, nome: brt.nome, brt: brt.brt, brtClasse: brt.brtClasse, ssnDate: brt.ssnDate || null, ssnSupp: !!brt.ssnSupp, historico };
   }).filter(g => g.historico.length > 0);
 
   // Oportunidade de recalibrar a paleta: card com os 6 galgos completos (sem

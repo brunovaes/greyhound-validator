@@ -229,6 +229,11 @@ function montarObs(A, B, R, Rb, vantTempoAbs, flags) {
 // Retorna A orientado como FAVORITO (avaliacao = % de A vencer B).
 function avaliarPar(d1, d2, ctx) {
   const o = Object.assign({}, DEFAULTS, (ctx && ctx.config) || {});
+  // SsnSupp (Bruno ago/2026): femea em supressor de cio. Qualquer AvB que contenha um galgo
+  // marcado "(SsnSupp)" e' DESCARTADO — nao vira par, nos dois motores e no funil. O flag vem
+  // do pdfParser -> histFull. (So vale pra analises novas; hist_full antigo nao tem o flag.)
+  if ((d1 && d1.ssnSupp) || (d2 && d2.ssnSupp))
+    return { descartar: true, motivo: 'SsnSupp (supressor de cio)', aTrap: d1.trap, bTrap: d2.trap };
   // Regra do Bruno: antes de avaliar, filtra p/ mesma pista+dist e descarta as
   // linhas-problema (>1s pior que a media dos 2 melhores tempos do local).
   const trk = (ctx && ctx.trackCorrida != null) ? ctx.trackCorrida : null;
