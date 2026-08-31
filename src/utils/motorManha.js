@@ -56,6 +56,19 @@ function _lastSpPorTrap(histAll) {
 function _distNum(d) { return parseInt(String(d || '').replace(/[^0-9]/g, '')) || 0; }
 function _pista(corrida) { return String(corrida || '').trim().split(/\s+/)[0] || '?'; }
 
+// FILTRO DE PISTA de PRODUCAO (Bruno ago/2026): a corrida passa se a pista esta no escopo
+// configurado. opts.pistasInc = whitelist (so essas); se nao houver inc, opts.pistasExc =
+// blacklist (todas menos essas). Sem nenhum dos dois = todas passam (comportamento de hoje).
+// A pista e' o 1o token do codigo ("Clnml A5" -> "clnml"), casado sem caixa.
+function _pistaPassa(track, opts) {
+  const t = String(track || '').trim().toLowerCase();
+  const inc = Array.isArray(opts && opts.pistasInc) ? opts.pistasInc : null;
+  const exc = Array.isArray(opts && opts.pistasExc) ? opts.pistasExc : null;
+  if (inc && inc.length) return inc.includes(t);
+  if (exc && exc.length) return !exc.includes(t);
+  return true;
+}
+
 // Alguns galgos vêm SEM nome na origem (só cor+cria, ex.: "bdw b Sire-Dam"). Quando o
 // nome limpo começa com código de cor, não há nome de verdade → mascara pra "b{trap} (sem nome)".
 const _CORES_INICIO = /^(?:lt|dk|lg)?(?:bk|bd|be|f|w|br|bkw|wbk|bdw|wbd|bew|wbe|bebd|bkbd)$/i;
@@ -220,7 +233,7 @@ function _podioOk(podio, principal) {
 // cai nos defaults (SP_RATIO_MAX 1.15 / engine caltmMinDif 0.20).
 function _aplicaConfigMotor(db, opts) {
   try {
-    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min, avb_parelho_pct, casc_ativo_categoria, casc_ativo_caltm, casc_ativo_split, casc_ativo_podio, casc_ativo_fumador, recencia_ativa, recencia_n, recencia_decay FROM analysis_config WHERE user_id=1").get();
+    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min, avb_parelho_pct, casc_ativo_categoria, casc_ativo_caltm, casc_ativo_split, casc_ativo_podio, casc_ativo_fumador, recencia_ativa, recencia_n, recencia_decay, pistas_filtro FROM analysis_config WHERE user_id=1").get();
     if (c) {
       const m = {};
       // regua TOP
@@ -251,6 +264,18 @@ function _aplicaConfigMotor(db, opts) {
         m.recenciaAtiva = true;
         if (c.recencia_n > 0) m.recenciaN = c.recencia_n;
         if (c.recencia_decay > 0) m.recenciaDecay = c.recencia_decay;
+      }
+      // FILTRO DE PISTA (default NULL = todas = comportamento de hoje). Vira opts.pistasInc
+      // (whitelist) / opts.pistasExc (blacklist), ja em minuscula. So aplica se o chamador
+      // nao passou o proprio filtro (ex.: preview do funil manda o dele).
+      if (opts.pistasInc == null && opts.pistasExc == null && c.pistas_filtro) {
+        try {
+          const pf = JSON.parse(c.pistas_filtro) || {};
+          const norm = a => (Array.isArray(a) ? a : []).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+          const inc = norm(pf.inc), exc = norm(pf.exc);
+          if (inc.length) m.pistasInc = inc;
+          else if (exc.length) m.pistasExc = exc;
+        } catch (e) {}
       }
       opts = Object.assign({}, opts, m);
     }
@@ -298,6 +323,7 @@ function listar(db, opts) {
 
   const corridas = [];
   for (const row of rows) {
+    if (!_pistaPassa(_pista(row.corrida), opts)) continue;   // filtro de pista (Painel ADMIN)
     const c = _corridaDeRow(row, date, opts);
     if (c) corridas.push(c);
   }
@@ -308,7 +334,8 @@ function listar(db, opts) {
       top: { sp_ratio_max: opts.spRatioMax > 0 ? opts.spRatioMax : SP_RATIO_MAX, caltm_min_dif: opts.caltmMinDif > 0 ? opts.caltmMinDif : reanalise.DEFAULTS.caltmMinDif, split_min: opts.splitMin != null ? opts.splitMin : reanalise.DEFAULTS.splitMin, podio_min: opts.podioMin != null ? opts.podioMin : reanalise.DEFAULTS.podioMin, desaba_min: opts.desabaMin > 0 ? opts.desabaMin : reanalise.DEFAULTS.desabaMin },
       regular: { sp_ratio_max: opts.regSpRatioMax > 0 ? opts.regSpRatioMax : 1.20, caltm_min_dif: opts.regCaltmMinDif != null ? opts.regCaltmMinDif : 0.10, split_min: opts.regSplitMin != null ? opts.regSplitMin : 0, podio_min: opts.regPodioMin != null ? opts.regPodioMin : 0, desaba_min: opts.regDesabaMin > 0 ? opts.regDesabaMin : 3 },
       desaba_queda: opts.desabaQueda > 0 ? opts.desabaQueda : reanalise.DEFAULTS.desabaQueda,
-      n_slots: N_SLOTS
+      n_slots: N_SLOTS,
+      pistas: { inc: Array.isArray(opts.pistasInc) ? opts.pistasInc : [], exc: Array.isArray(opts.pistasExc) ? opts.pistasExc : [] }
     },
     corridas,
     legenda: 'MOTOR ÚNICO, DUAS RÉGUAS. Cada corrida vira TOP (nata) se um par de SP colada passa na régua TOP '
@@ -490,6 +517,7 @@ function paraPersistir(db, opts) {
 
   const out = [];
   for (const row of rows) {
+    if (!_pistaPassa(_pista(row.corrida), opts)) continue;   // filtro de pista (Painel ADMIN)
     let histFull = null, histAll = null, raceCard = null;
     try { histFull = JSON.parse(row.hist_full); } catch (e) { continue; }
     try { histAll = JSON.parse(row.hist_all); } catch (e) {}

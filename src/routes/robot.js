@@ -3188,7 +3188,8 @@ router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
     if (row && row.rascunho_json) { try { rascunho = JSON.parse(row.rascunho_json); } catch (e) {} }
     // se nao tem rascunho, devolve os valores QUE ESTAO VALENDO hoje no analysis_config (ponto de partida)
     if (!rascunho) {
-      const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay FROM analysis_config WHERE user_id=1').get() || {};
+      const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get() || {};
+      let _pf = {}; try { _pf = c.pistas_filtro ? (JSON.parse(c.pistas_filtro) || {}) : {}; } catch (e) {}
       rascunho = {
         regua: 'top',
         cortes: {
@@ -3204,7 +3205,8 @@ router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
           categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1,
           podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1
         },
-        recencia: { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 }
+        recencia: { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 },
+        pistas: { inc: Array.isArray(_pf.inc) ? _pf.inc : [], exc: Array.isArray(_pf.exc) ? _pf.exc : [] }
       };
     }
     res.json({ rascunho, salvo_em: row ? row.updated_at : null, tem_rascunho: !!row,
@@ -3216,7 +3218,7 @@ router.post('/diag/cascata-rascunho', requireAdmin, express.json(), (req, res) =
   try {
     const { db } = require('../db/database');
     const body = req.body || {};
-    const rascunho = { regua: body.regua === 'regular' ? 'regular' : 'top', cortes: body.cortes || {}, ativos: body.ativos || {}, recencia: body.recencia || {} };
+    const rascunho = { regua: body.regua === 'regular' ? 'regular' : 'top', cortes: body.cortes || {}, ativos: body.ativos || {}, recencia: body.recencia || {}, pistas: body.pistas || {} };
     db.prepare("INSERT INTO motor_rascunho (user_id, rascunho_json, updated_at) VALUES (1,?,CURRENT_TIMESTAMP) " +
       "ON CONFLICT(user_id) DO UPDATE SET rascunho_json=excluded.rascunho_json, updated_at=CURRENT_TIMESTAMP")
       .run(JSON.stringify(rascunho));
@@ -3259,10 +3261,19 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
     const recencia = src.recencia || {};
     flag('recencia_ativa', recencia.ativa);
     put('recencia_n', recencia.n); put('recencia_decay', recencia.decay);
+    // FILTRO DE PISTA (global): {inc:[...],exc:[...]}. inc = whitelist; se inc vazio, exc = blacklist.
+    // Grava sempre (inclusive vazio, pra permitir LIMPAR o filtro). NULL/{} = todas as pistas.
+    if (src.pistas !== undefined) {
+      const p = src.pistas || {};
+      const _lst = a => (Array.isArray(a) ? a : []).map(s => String(s).trim()).filter(Boolean);
+      const inc = _lst(p.inc), exc = _lst(p.exc);
+      const json = (inc.length || exc.length) ? JSON.stringify({ inc, exc: inc.length ? [] : exc }) : null;
+      sets.push('pistas_filtro=?'); args.push(json);
+    }
     if (!sets.length) return res.status(400).json({ erro: 'nada valido pra aplicar' });
     args.push(1); // user_id
     db.prepare('UPDATE analysis_config SET ' + sets.join(', ') + ' WHERE user_id=?').run(...args);
-    const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay FROM analysis_config WHERE user_id=1').get();
+    const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get();
     res.json({ ok: true, regua: regula, aplicado,
       legenda: 'APLICADO no analysis_config. O motor unico ja usa esses valores no proximo ciclo. As 5 peneiras do meio filtram so se casc_ativo_*=1; SP-colada e pct sempre valem.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }

@@ -386,6 +386,11 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN recencia_ativa INTEGER DEFAULT 0",
   "ALTER TABLE analysis_config ADD COLUMN recencia_n INTEGER DEFAULT 3",
   "ALTER TABLE analysis_config ADD COLUMN recencia_decay REAL DEFAULT 0.5",
+  // FILTRO DE PISTA (Painel ADMIN, Bruno ago/2026). JSON {inc:[...], exc:[...]} — inc =
+  // whitelist (so essas pistas); se inc vazio, exc = blacklist (todas menos essas). Vazio/NULL
+  // nos dois = todas as pistas (comportamento de hoje). So o APLICAR grava aqui; o motor unico
+  // usa isso pra decidir em quais pistas ele opera no ciclo da manha. Global.
+  "ALTER TABLE analysis_config ADD COLUMN pistas_filtro TEXT DEFAULT NULL",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
