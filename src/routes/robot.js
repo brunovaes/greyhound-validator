@@ -3662,20 +3662,45 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
     const abertos = db.prepare('SELECT corrida, hora, pares_json, n_pares, capturado_em FROM avb_abertos WHERE data=?').all(date);
     const idx = abertos.map(a => { let pares = []; try { pares = JSON.parse(a.pares_json) || []; } catch (e) {} return { corrida: a.corrida, hora: a.hora, hnorm: _hnorm(a.hora), cnorm: _cnorm(a.corrida), n_pares: a.n_pares, capturado_em: a.capturado_em, pares }; });
 
+    // FUSO (Bruno ago/2026): a TELA mostra hora_br (Brasilia), mas avb_abertos.hora e races.hora
+    // guardam a hora UK. Entao a hora que o Bruno cola e' BR e nunca casa direto. Aqui montamos o
+    // mapa por corrida: (hora_br OU hora) -> hora UK canonica, lido de races (sem chumbar offset,
+    // aguenta horario de verao). Resolvemos o pedido pra hora UK antes de bater em avb_abertos.
+    let cardRows = [];
+    try {
+      cardRows = db.prepare(
+        "SELECT r.hora, r.hora_br, r.corrida FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+        "WHERE date(s.created_at,'-3 hours')=?"
+      ).all(date);
+    } catch (e) {}
+    const cardIdx = cardRows.map(r => ({ cnorm: _cnorm(r.corrida), uk: _hnorm(r.hora), br: _hnorm(r.hora_br), hora: r.hora }));
+    // dada a corrida+hora do pedido (que pode vir em BR), devolve a hora UK canonica (ou a propria)
+    const resolveUK = (cnorm, hInput) => {
+      const h = _hnorm(hInput);
+      // 1) casa corrida + (hora_br == input)  -> a corrida que o Bruno esta vendo na tela
+      let c = cardIdx.find(x => x.cnorm === cnorm && x.br === h);
+      // 2) ou corrida + (hora UK == input), caso ele ja tenha passado em UK
+      if (!c) c = cardIdx.find(x => x.cnorm === cnorm && x.uk === h);
+      return c ? c.uk : h;
+    };
+
     const itens = pedidos.map(q => {
-      // acha a corrida aberta que casa (corrida igual + hora igual, normalizadas)
-      let row = idx.find(a => a.cnorm === _cnorm(q.corrida) && a.hnorm === _hnorm(q.hora));
-      // fallback: so pela hora, se a corrida veio meio torta do parse
-      if (!row && q.hora) row = idx.find(a => a.hnorm === _hnorm(q.hora));
+      const cq = _cnorm(q.corrida);
+      const ukHora = resolveUK(cq, q.hora);            // hora UK canonica (resolve o fuso BR->UK)
+      // acha a corrida aberta que casa (corrida igual + hora UK igual, normalizadas)
+      let row = idx.find(a => a.cnorm === cq && a.hnorm === ukHora);
+      // fallback: so pela hora UK, se a corrida veio meio torta do parse
+      if (!row && ukHora) row = idx.find(a => a.hnorm === ukHora);
+      const _fuso = (_hnorm(q.hora) !== ukHora) ? { hora_informada_br: q.hora, hora_uk: ukHora } : undefined;
       if (!row) {
-        return { pedido: q.texto, corrida: q.corrida, hora: q.hora, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
+        return { pedido: q.texto, corrida: q.corrida, hora: q.hora, hora_uk: ukHora, fuso: _fuso, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
           abriu_corrida: false, abriu_par: false, odds: null,
           nota: 'a BW nao abriu NENHUM par nessa corrida nesse dia (ou nao foi monitorada / data errada)' };
       }
       const p = (q.pick != null && q.outro != null) ? row.pares.find(x => _mesmoPar(x, q.pick, q.outro)) : null;
       const outros = row.pares.map(x => 'T' + x.aTrap + 'xT' + x.bTrap);
       if (!p) {
-        return { pedido: q.texto, corrida: row.corrida, hora: row.hora, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
+        return { pedido: q.texto, corrida: row.corrida, hora: row.hora, hora_uk: row.hora, fuso: _fuso, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
           abriu_corrida: true, abriu_par: false, odds: null,
           pares_que_abriram: outros, capturado_em: row.capturado_em,
           nota: 'a corrida abriu ' + row.n_pares + ' par(es) na BW, mas ESTE par nao' };
@@ -3683,7 +3708,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       // odd do PICK vencer o OUTRO respeitando a orientacao guardada (aTrap/bTrap)
       const oddPickVenceOutro = Number(q.pick) === Number(p.aTrap) ? p.oddAvenceB : p.oddBvenceA;
       const oddOutroVencePick = Number(q.pick) === Number(p.aTrap) ? p.oddBvenceA : p.oddAvenceB;
-      return { pedido: q.texto, corrida: row.corrida, hora: row.hora, par: 'T' + q.pick + 'xT' + q.outro,
+      return { pedido: q.texto, corrida: row.corrida, hora: row.hora, hora_uk: row.hora, fuso: _fuso, par: 'T' + q.pick + 'xT' + q.outro,
         abriu_corrida: true, abriu_par: true,
         odds: { pick_vence_outro: (oddPickVenceOutro > 0 ? oddPickVenceOutro : null), outro_vence_pick: (oddOutroVencePick > 0 ? oddOutroVencePick : null) },
         pares_que_abriram: outros, capturado_em: row.capturado_em };
