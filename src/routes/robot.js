@@ -3673,7 +3673,48 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
         "WHERE date(s.created_at,'-3 hours')=?"
       ).all(date);
     } catch (e) {}
-    const cardIdx = cardRows.map(r => ({ cnorm: _cnorm(r.corrida), uk: _hnorm(r.hora), br: _hnorm(r.hora_br), hora: r.hora, chegada: r.finishing_order_json }));
+    const cardIdx = cardRows.map(r => ({ cnorm: _cnorm(r.corrida), uk: _hnorm(r.hora), br: _hnorm(r.hora_br), hora: r.hora, corrida: r.corrida, chegada: r.finishing_order_json }));
+
+    // DIAGNOSTICO (?diag=1): por item, RECALCULA o que o motor achou do par (bw_provavel, razao de
+    // SP pela ultima corrida, rank de cada trap) e mapeia os pares que a BW abriu nesse mesmo rank.
+    // Responde "por que a BW nao abriu o par indicado": o motor coa por SP da ULTIMA corrida; a BW
+    // abre pelo mercado ao vivo. So-leitura, recalcula na hora (nao depende do precalc persistir).
+    const wantDiag = String(req.query.diag || '') === '1';
+    let mm = null, mopts = null;
+    if (wantDiag) { try { mm = require('../utils/motorManha'); mopts = mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date }; } catch (e) {} }
+    const _selRace = db.prepare(
+      "SELECT r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.corrida=? AND r.hora=? LIMIT 1"
+    );
+    const diagDoItem = (card, pick, outro, paresBw) => {
+      if (!wantDiag || !mm || !card) return undefined;
+      try {
+        const rr = _selRace.get(date, card.corrida, card.hora);
+        if (!rr) return { erro: 'corrida nao encontrada em races pra recalcular' };
+        const hf = JSON.parse(rr.hist_full), ha = JSON.parse(rr.hist_all || 'null'), rc = JSON.parse(rr.race_card || 'null');
+        if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) return { erro: 'sem historico avaliavel' };
+        const ctxBase = { dataCorrida: rr.data_card || date, trackCorrida: (String(card.corrida).trim().split(/\s+/)[0] || '?'), distCorrida: rr.dist || null };
+        const pc = mm.precalcDaCorrida(hf, ha, rc, ctxBase, mopts);
+        const rankDe = pc.rankDe || {};
+        const par = (pc.todos || []).find(s => _mesmoPar({ aTrap: s.pick_trap, bTrap: s.outro_trap }, pick, outro));
+        const bwRanks = (Array.isArray(paresBw) ? paresBw : []).map(p => {
+          const ra = rankDe[Number(p.aTrap)], rb = rankDe[Number(p.bTrap)];
+          return { par: 'T' + p.aTrap + 'xT' + p.bTrap, rank: (ra && rb) ? [ra, rb].sort((x, y) => x - y).join('x') : '?' };
+        });
+        return {
+          motor_bw_provavel: par ? !!par.bw_provavel : null,
+          motor_ratio_sp: par ? par.ratio_sp : null,
+          rank_pick: rankDe[Number(pick)] || null, rank_outro: rankDe[Number(outro)] || null,
+          total_traps: Object.keys(rankDe).length,
+          pct_motor: par ? par.pct : null, tier_qualidade: par ? par.tier : null,
+          bw_abriu_ranks: bwRanks,
+          nota_diag: par
+            ? (par.bw_provavel ? 'o motor MARCOU colada (SP da ultima corrida <= teto), mas a BW abriu outros pares — divergencia entre SP-ultima e mercado ao vivo'
+              : 'o motor NAO marcou este par como colada (bw_provavel=false) — nao era pra ser apostavel na BW')
+            : 'par nao apareceu na tabela recalculada (trap sem SP na ultima corrida, retirada, ou historico insuficiente)'
+        };
+      } catch (e) { return { erro: e.message }; }
+    };
     // dada a corrida+hora do pedido (que pode vir em BR), devolve a corrida do card que casa (com a
     // hora UK canonica e a chegada real). Sem chumbar offset — aguenta horario de verao.
     const acharCard = (cnorm, hInput) => {
@@ -3706,7 +3747,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       if (!row) {
         return { pedido: q.texto, corrida: q.corrida, hora: q.hora, hora_uk: ukHora, fuso: _fuso, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
           abriu_corrida: false, abriu_par: false, odds: null,
-          bateu, bateu_txt: _bateuTxt(bateu),
+          bateu, bateu_txt: _bateuTxt(bateu), diagnostico: diagDoItem(card, q.pick, q.outro, []),
           nota: 'a BW nao abriu NENHUM par nessa corrida nesse dia (ou nao foi monitorada / data errada)' };
       }
       const p = (q.pick != null && q.outro != null) ? row.pares.find(x => _mesmoPar(x, q.pick, q.outro)) : null;
@@ -3714,7 +3755,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       if (!p) {
         return { pedido: q.texto, corrida: row.corrida, hora: row.hora, hora_uk: row.hora, fuso: _fuso, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
           abriu_corrida: true, abriu_par: false, odds: null,
-          bateu, bateu_txt: _bateuTxt(bateu),
+          bateu, bateu_txt: _bateuTxt(bateu), diagnostico: diagDoItem(card, q.pick, q.outro, row.pares),
           pares_que_abriram: outros, capturado_em: row.capturado_em,
           nota: 'a corrida abriu ' + row.n_pares + ' par(es) na BW, mas ESTE par nao' };
       }
@@ -3724,7 +3765,7 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
       return { pedido: q.texto, corrida: row.corrida, hora: row.hora, hora_uk: row.hora, fuso: _fuso, par: 'T' + q.pick + 'xT' + q.outro,
         abriu_corrida: true, abriu_par: true,
         odds: { pick_vence_outro: (oddPickVenceOutro > 0 ? oddPickVenceOutro : null), outro_vence_pick: (oddOutroVencePick > 0 ? oddOutroVencePick : null) },
-        bateu, bateu_txt: _bateuTxt(bateu),
+        bateu, bateu_txt: _bateuTxt(bateu), diagnostico: diagDoItem(card, q.pick, q.outro, row.pares),
         pares_que_abriram: outros, capturado_em: row.capturado_em };
     });
 
