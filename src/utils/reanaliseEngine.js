@@ -13,6 +13,14 @@ const DEFAULTS = {
   pesoUltima: 0.5,        // media SIMPLES das 2 recentes (Bruno ago/2026: sem peso extra na ultima)
   pesoPenultima: 0.5,
   nRecentes: 5,           // olhar ate 5 corridas p/ split/bends/podio
+  // ── PESO DE RECENCIA no CalTm (Bruno ago/2026): a corrida mais recente pesa MAIS que as
+  //    antigas. Quando recenciaAtiva, a media do tempo passa a ser ponderada por pesos que
+  //    caem geometricamente: 1, decay, decay^2, ... sobre as recenciaN corridas recentes
+  //    (ja limpas). recenciaDecay menor = a ultima domina mais (0.5 => ~57/29/14 em 3 corridas;
+  //    1.0 => media chapada). OFF (default) = comportamento de hoje (2 recentes, 50/50).
+  recenciaAtiva: false,
+  recenciaN: 3,           // quantas corridas recentes entram na media ponderada
+  recenciaDecay: 0.5,     // fator de queda do peso (0<d<=1); menor = recente pesa mais
   // ── GATE "nata das natas" (Bruno ago/2026): o favorito so vira pick TOP se ganhar
   //    nos QUATRO eixos. Estes sao os cortes de cada eixo (o SP colado e' checado por
   //    quem chama). ──
@@ -155,11 +163,27 @@ function resumoGalgo(hist, o) {
   const limAtr = (o.descartaAtrapalhoSeg > 0) ? o.descartaAtrapalhoSeg : 0;
   const lentaComDesculpa = l => limAtr > 0 && base2 != null && l.caltm > 0
     && l.caltm >= base2 + limAtr && ATRAPALHO.test(l.remarks || '');
-  const paraTempo = naoTrial.filter(l => !GRAVE.test(l.remarks || '') && !lentaComDesculpa(l)).slice(0, 2);
+  const paraTempoAll = naoTrial.filter(l => !GRAVE.test(l.remarks || '') && !lentaComDesculpa(l));
   const aj = l => l.caltm + o.segPorNivelCat * (nivelCat(l.classe) || 4);
   let caltmEf = null;
-  if (paraTempo.length >= 2) caltmEf = o.pesoUltima * aj(paraTempo[0]) + o.pesoPenultima * aj(paraTempo[1]);
-  else if (paraTempo.length === 1) caltmEf = aj(paraTempo[0]);
+  if (o.recenciaAtiva) {
+    // MEDIA COM PESO DE RECENCIA: a mais recente pesa mais. pesos = 1, d, d^2, ... (d=recenciaDecay)
+    // sobre as recenciaN corridas ja limpas. Se a ultima real foi descartada (grave/desculpa), a
+    // ponderacao comeca da proxima valida — a regra de descarte segue mandando antes.
+    const n = o.recenciaN > 0 ? o.recenciaN : 3;
+    const d = (o.recenciaDecay > 0 && o.recenciaDecay <= 1) ? o.recenciaDecay : 0.5;
+    const use = paraTempoAll.slice(0, n);
+    if (use.length) {
+      let s = 0, ws = 0;
+      for (let i = 0; i < use.length; i++) { const w = Math.pow(d, i); s += w * aj(use[i]); ws += w; }
+      caltmEf = s / ws;
+    }
+  } else {
+    // comportamento de hoje: media chapada das 2 recentes (pesoUltima/pesoPenultima = 0.5/0.5).
+    const paraTempo = paraTempoAll.slice(0, 2);
+    if (paraTempo.length >= 2) caltmEf = o.pesoUltima * aj(paraTempo[0]) + o.pesoPenultima * aj(paraTempo[1]);
+    else if (paraTempo.length === 1) caltmEf = aj(paraTempo[0]);
+  }
 
   // SPLIT / BENDS / PODIO das recentes nao-trial.
   const rec = naoTrial.slice(0, o.nRecentes);

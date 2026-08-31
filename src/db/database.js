@@ -379,6 +379,13 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN casc_ativo_split INTEGER DEFAULT 0",
   "ALTER TABLE analysis_config ADD COLUMN casc_ativo_podio INTEGER DEFAULT 0",
   "ALTER TABLE analysis_config ADD COLUMN casc_ativo_fumador INTEGER DEFAULT 0",
+  // PESO DE RECENCIA no CalTm (Painel ADMIN, Bruno ago/2026). recencia_ativa=0 (default) =
+  // media chapada das 2 recentes = EXATAMENTE o comportamento de hoje. =1 liga a media com
+  // peso decrescente (a mais recente pesa mais). recencia_n = quantas corridas recentes;
+  // recencia_decay = fator de queda do peso (0<d<=1; menor = a ultima domina mais). Global.
+  "ALTER TABLE analysis_config ADD COLUMN recencia_ativa INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN recencia_n INTEGER DEFAULT 3",
+  "ALTER TABLE analysis_config ADD COLUMN recencia_decay REAL DEFAULT 0.5",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

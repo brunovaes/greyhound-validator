@@ -167,6 +167,11 @@ function cascata(db, opts) {
   const date = opts.date;
   const cortes = _cortes(opts.cortes);
   const ativos = _ativos(opts.ativos);
+  // PESO DE RECENCIA (opcional): quando ligado, recalcula o CalTm de cada galgo dando mais
+  // peso à corrida mais recente — o que muda os números (CALTM/CHANCE) e, portanto, o funil.
+  const rec = opts.recencia || {};
+  const precalcOpts = {};
+  if (rec.ativa) { precalcOpts.recenciaAtiva = true; if (rec.n > 0) precalcOpts.recenciaN = Number(rec.n); if (rec.decay > 0) precalcOpts.recenciaDecay = Number(rec.decay); }
   const rows = db.prepare(
     "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
@@ -187,7 +192,7 @@ function cascata(db, opts) {
     if (!Array.isArray(histFull) || histFull.length < 2 || !Array.isArray(histAll)) continue;
     const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
     let todos = [];
-    try { todos = mm.precalcDaCorrida(histFull, histAll, raceCard, ctxBase, {}).todos || []; } catch (e) { continue; }
+    try { todos = mm.precalcDaCorrida(histFull, histAll, raceCard, ctxBase, precalcOpts).todos || []; } catch (e) { continue; }
     const c = cascataCorrida(todos, cortes, ativos);
     // acumula no funil agregado
     c.funil.forEach((f, i) => { agregado[i].entraram += f.entraram; agregado[i].sobraram += f.sobraram; agregado[i].mortos += f.mortos; });
@@ -205,6 +210,7 @@ function cascata(db, opts) {
 
   return {
     date, cortes, ativos,
+    recencia: { ativa: !!rec.ativa, n: precalcOpts.recenciaN || 3, decay: precalcOpts.recenciaDecay || 0.5 },
     total_corridas: rows.length,
     corridas_no_dia: corridas.length,      // as que tinham histórico avaliável
     corridas_que_valem: corridasComPar,    // as que sobrou >=1 par vivo (o "volume" final)

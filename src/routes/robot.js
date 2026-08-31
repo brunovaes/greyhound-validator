@@ -3031,7 +3031,11 @@ router.get('/diag/cascata', requireAdmin, (req, res) => {
     // ativos: default todas ligadas; ?off=lista desliga.
     const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
     String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
-    res.json(casc.cascata(db, { date, cortes, ativos }));
+    // PESO DE RECENCIA (opcional): ?rec=1 liga; &recn=3 (quantas) &recd=0.5 (forca). Recalcula o funil.
+    const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
+      n: req.query.recn != null ? Number(req.query.recn) : undefined,
+      decay: req.query.recd != null ? Number(req.query.recd) : undefined };
+    res.json(casc.cascata(db, { date, cortes, ativos, recencia }));
   } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
 });
 
@@ -3047,6 +3051,64 @@ router.get('/diag/cascata-exemplo', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// IMPACTO (admin, SO-LEITURA — Bruno ago/2026): compara a indicacao de HOJE (config que esta
+// valendo agora) com a indicacao SE aplicar as regras da query (cortes + peneiras + recencia),
+// e lista SO as corridas cujo AvB PRINCIPAL mudaria. Responde "houve modificacao nos AvBs?"
+// sem aplicar nada. Mesmos params do /diag/cascata (sp,caltm,split,podio,dqueda,dmin,pct,off,
+// rec,recn,recd,regua). Ex.: ?date=2026-08-31&sp=1.25&caltm=0.07&split=0.05&pct=80&off=podio
+router.get('/diag/cascata-impacto', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const casc = require('../utils/cascataMotor');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    // BASELINE = o que esta indicado HOJE (config aplicada, do jeito que aparece na tela).
+    const hoje = mm.listar(db, { date });
+    // NOVO = cascade com as regras da query (mesma leitura de params do /diag/cascata).
+    const base = String(req.query.regua || 'top').toLowerCase() === 'regular' ? casc.CORTES_REGULAR : casc.CORTES_PADRAO;
+    const cortes = Object.assign({}, base);
+    const num = (q, k) => { if (req.query[q] != null && req.query[q] !== '' && !Number.isNaN(Number(req.query[q]))) cortes[k] = Number(req.query[q]); };
+    num('sp', 'sp_ratio_max'); num('caltm', 'caltm_min_dif'); num('split', 'split_min');
+    num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
+    const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
+    String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
+      n: req.query.recn != null ? Number(req.query.recn) : undefined, decay: req.query.recd != null ? Number(req.query.recd) : undefined };
+    const novo = casc.cascata(db, { date, cortes, ativos, recencia });
+
+    const novoBy = {}; novo.corridas.forEach(c => { novoBy[c.hora + '|' + c.corrida] = c; });
+    const chave = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+    const mudancas = [];
+    let comIndHoje = 0, comIndNovo = 0;
+    for (const c of hoje.corridas) {
+      const p0 = c.principal;                       // AvB indicado HOJE
+      const n = novoBy[c.hora + '|' + c.corrida];
+      const p1 = n ? n.principal : null;            // AvB que seria indicado com as regras novas
+      if (p0) comIndHoje++;
+      if (p1) comIndNovo++;
+      const k0 = p0 ? chave(p0.pick_trap, p0.outro_trap) : null;
+      const k1 = p1 ? chave(p1.pick_trap, p1.outro_trap) : null;
+      if (k0 === k1) continue;                       // nao mudou o par principal
+      mudancas.push({
+        hora: c.hora, corrida: c.corrida,
+        hoje: p0 ? { avb: 'T' + p0.pick_trap + ' x T' + p0.outro_trap, pct: p0.pct } : null,
+        novo: p1 ? { avb: 'T' + p1.pick_trap + ' x T' + p1.outro_trap, pct: p1.pct } : null,
+        tipo: !p0 ? 'ENTROU (corrida nova)' : !p1 ? 'SAIU (corrida deixou de indicar)' : 'TROCOU o par'
+      });
+    }
+    res.json({
+      date,
+      total_corridas: hoje.corridas.length,
+      indicadas_hoje: comIndHoje, indicadas_novo: comIndNovo,
+      avbs_que_mudaram: mudancas.length,
+      regras: { cortes, ativos, recencia: novo.recencia },
+      mudancas,
+      legenda: 'Compara o AvB PRINCIPAL de cada corrida: HOJE (config aplicada) x com as regras da query. '
+        + 'Lista so as que mudariam. tipo = TROCOU/SAIU/ENTROU. NADA foi aplicado — e so simulacao (read-only).'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
+});
+
 // RASCUNHO do Painel ADMIN (cascata). Guarda/le o estado que o Bruno esta MEXENDO —
 // cortes + peneiras ligadas — sem tocar producao. So o APLICAR grava no analysis_config.
 //   GET  /diag/cascata-rascunho          -> devolve o rascunho salvo (ou os defaults)
@@ -3060,7 +3122,7 @@ router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
     if (row && row.rascunho_json) { try { rascunho = JSON.parse(row.rascunho_json); } catch (e) {} }
     // se nao tem rascunho, devolve os valores QUE ESTAO VALENDO hoje no analysis_config (ponto de partida)
     if (!rascunho) {
-      const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador FROM analysis_config WHERE user_id=1').get() || {};
+      const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay FROM analysis_config WHERE user_id=1').get() || {};
       rascunho = {
         regua: 'top',
         cortes: {
@@ -3075,7 +3137,8 @@ router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
         ativos: {
           categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1,
           podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1
-        }
+        },
+        recencia: { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 }
       };
     }
     res.json({ rascunho, salvo_em: row ? row.updated_at : null, tem_rascunho: !!row,
@@ -3087,7 +3150,7 @@ router.post('/diag/cascata-rascunho', requireAdmin, express.json(), (req, res) =
   try {
     const { db } = require('../db/database');
     const body = req.body || {};
-    const rascunho = { regua: body.regua === 'regular' ? 'regular' : 'top', cortes: body.cortes || {}, ativos: body.ativos || {} };
+    const rascunho = { regua: body.regua === 'regular' ? 'regular' : 'top', cortes: body.cortes || {}, ativos: body.ativos || {}, recencia: body.recencia || {} };
     db.prepare("INSERT INTO motor_rascunho (user_id, rascunho_json, updated_at) VALUES (1,?,CURRENT_TIMESTAMP) " +
       "ON CONFLICT(user_id) DO UPDATE SET rascunho_json=excluded.rascunho_json, updated_at=CURRENT_TIMESTAMP")
       .run(JSON.stringify(rascunho));
@@ -3126,10 +3189,14 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
     const flag = (col, v) => { sets.push(col + '=?'); args.push(v ? 1 : 0); };
     flag('casc_ativo_categoria', ativos.categoria); flag('casc_ativo_caltm', ativos.caltm);
     flag('casc_ativo_split', ativos.split); flag('casc_ativo_podio', ativos.podio); flag('casc_ativo_fumador', ativos.fumador);
+    // PESO DE RECENCIA (global): grava se veio no rascunho/body.
+    const recencia = src.recencia || {};
+    flag('recencia_ativa', recencia.ativa);
+    put('recencia_n', recencia.n); put('recencia_decay', recencia.decay);
     if (!sets.length) return res.status(400).json({ erro: 'nada valido pra aplicar' });
     args.push(1); // user_id
     db.prepare('UPDATE analysis_config SET ' + sets.join(', ') + ' WHERE user_id=?').run(...args);
-    const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador FROM analysis_config WHERE user_id=1').get();
+    const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay FROM analysis_config WHERE user_id=1').get();
     res.json({ ok: true, regua: regula, aplicado,
       legenda: 'APLICADO no analysis_config. O motor unico ja usa esses valores no proximo ciclo. As 5 peneiras do meio filtram so se casc_ativo_*=1; SP-colada e pct sempre valem.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }

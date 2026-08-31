@@ -102,7 +102,8 @@ function _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   // config passada ao avaliarPar = a regua TOP (o av.eixos reflete o TOP; a classificacao
   // real vem do passaRegua com as medidas cruas). desabaQueda e' global aos dois tiers.
   const ctx = { trapsVazias, dataCorrida: ctxBase.dataCorrida || null, trackCorrida: ctxBase.trackCorrida || null, distCorrida: ctxBase.distCorrida || null,
-    config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min } };
+    config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min,
+      recenciaAtiva: !!opts.recenciaAtiva, recenciaN: opts.recenciaN, recenciaDecay: opts.recenciaDecay } };
 
   const oddMedia = _oddMediaPorTrap(histAll);       // media das 2 ultimas — mantida so como referencia
   const lastSp = _lastSpPorTrap(histAll);           // SO a ultima corrida (mais recente) — define a colagem
@@ -219,7 +220,7 @@ function _podioOk(podio, principal) {
 // cai nos defaults (SP_RATIO_MAX 1.15 / engine caltmMinDif 0.20).
 function _aplicaConfigMotor(db, opts) {
   try {
-    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min, avb_parelho_pct, casc_ativo_categoria, casc_ativo_caltm, casc_ativo_split, casc_ativo_podio, casc_ativo_fumador FROM analysis_config WHERE user_id=1").get();
+    const c = db.prepare("SELECT sp_ratio_max, caltm_min_dif, split_min, podio_min, desaba_queda, desaba_min, reg_sp_ratio_max, reg_caltm_min_dif, reg_split_min, reg_podio_min, reg_desaba_min, avb_parelho_pct, casc_ativo_categoria, casc_ativo_caltm, casc_ativo_split, casc_ativo_podio, casc_ativo_fumador, recencia_ativa, recencia_n, recencia_decay FROM analysis_config WHERE user_id=1").get();
     if (c) {
       const m = {};
       // regua TOP
@@ -244,6 +245,12 @@ function _aplicaConfigMotor(db, opts) {
           categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1,
           split: c.casc_ativo_split === 1, podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1
         };
+      }
+      // PESO DE RECENCIA no CalTm (default 0 = desligado = comportamento de hoje).
+      if (opts.recenciaAtiva == null && c.recencia_ativa === 1) {
+        m.recenciaAtiva = true;
+        if (c.recencia_n > 0) m.recenciaN = c.recencia_n;
+        if (c.recencia_decay > 0) m.recenciaDecay = c.recencia_decay;
       }
       opts = Object.assign({}, opts, m);
     }
@@ -378,7 +385,8 @@ function _bwDaCorrida(db, row, corridaObj, opts, date) {
   try { const hf = JSON.parse(row.hist_full); if (Array.isArray(hf)) for (const g of hf) if (g && g.trap != null) dogsByTrap[Number(g.trap)] = g; } catch (e) {}
   const nomeTrap = t => { const g = dogsByTrap[t]; return g ? _nomeMascara(g.nome, t) : ('b' + t + ' (sem nome)'); };
   const ctx = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null,
-    config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min } };
+    config: { caltmMinDif: reguaTop.caltm_min_dif, splitMin: reguaTop.split_min, podioMin: reguaTop.podio_min, desabaQueda, desabaMin: reguaTop.desaba_min,
+      recenciaAtiva: !!opts.recenciaAtiva, recenciaN: opts.recenciaN, recenciaDecay: opts.recenciaDecay } };
   const mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2) || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
 
   // 1) o principal abriu? qual odd?
