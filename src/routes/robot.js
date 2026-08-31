@@ -3333,6 +3333,7 @@ router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
     const datas = db.prepare("SELECT DISTINCT date(s.created_at,'-3 hours') AS d FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE r.hist_full IS NOT NULL AND r.finishing_order_json IS NOT NULL ORDER BY d DESC LIMIT ?").all(dias).map(x => x.d);
 
     const porDia = [];
+    const porPista = {};   // pista -> {indicadas, com_resultado, bateram}
     let TIndic = 0, TResult = 0, TBateu = 0;
     for (const date of datas) {
       const c = casc.cascata(db, { date, cortes, ativos, recencia });
@@ -3345,15 +3346,28 @@ router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
         const fo = fBy[co.hora + '|' + co.corrida];
         const b = fo ? bateuPar(fo, co.principal.pick_trap, co.principal.outro_trap) : null;
         if (b === true) { bat++; resu++; } else if (b === false) { resu++; }
+        // acumula por PISTA (o 1o token do codigo da corrida, ex.: "Clnml A5" -> "Clnml")
+        const pista = (co.corrida || '').split(' ')[0] || '?';
+        const P = porPista[pista] || (porPista[pista] = { indicadas: 0, com_resultado: 0, bateram: 0 });
+        P.indicadas++;
+        if (b === true) { P.bateram++; P.com_resultado++; } else if (b === false) { P.com_resultado++; }
       }
       porDia.push({ date, indicadas: ind, com_resultado: resu, bateram: bat, taxa_pct: resu ? Math.round(bat / resu * 100) : null });
       TIndic += ind; TResult += resu; TBateu += bat;
     }
+    // ranking de pistas por taxa (so as com >=1 resultado), melhor primeiro; empate -> mais amostra
+    const pistas = Object.keys(porPista).map(p => {
+      const P = porPista[p];
+      return { pista: p, indicadas: P.indicadas, com_resultado: P.com_resultado, bateram: P.bateram,
+        taxa_pct: P.com_resultado ? Math.round(P.bateram / P.com_resultado * 100) : null };
+    }).sort((a, b) => (b.taxa_pct || -1) - (a.taxa_pct || -1) || b.com_resultado - a.com_resultado);
+
     res.json({
       dias_com_dados: datas.length, de: datas[datas.length - 1] || null, ate: datas[0] || null,
       regras: { cortes, ativos, recencia },
       total_indicadas: TIndic, total_com_resultado: TResult, total_bateram: TBateu, total_nao_bateram: TResult - TBateu,
       taxa_acerto_geral_pct: TResult ? Math.round(TBateu / TResult * 100) : null,
+      por_pista: pistas,
       por_dia: porDia,
       legenda: 'Backtest: a MESMA cascata rodada em varios dias, cada AvB principal cruzado com a chegada real. '
         + 'taxa_acerto_geral = bateram / com_resultado no periodo. Read-only, nada aplicado.'
