@@ -3628,6 +3628,74 @@ router.get('/diag/sp-vs-bw', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// "ESSES AvBs ABRIRAM E A QUE ODD?" (Bruno ago/2026): pergunta direta pra uma LISTA de AvBs.
+// Cruza cada item pedido com a tabela avb_abertos (o que a BW REALMENTE abriu naquele dia) e diz,
+// por item: abriu ou nao, e as duas odds do par (A vence B / B vence A). So-leitura.
+//   GET /diag/avb-abriu?date=YYYY-MM-DD&itens=<lista>
+//   itens: itens separados por ';'. Cada item pode ser colado no formato do Bruno, ex.:
+//     "7:27 Romfd A7 - T3 x T4 ; 8:38 Youghl A6 - T6 x T5"
+//   De cada item extraimos: a HORA (HH:MM), o PAR (T?nº x/× T?nº) e a CORRIDA (o texto do meio).
+router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const bruto = String(req.query.itens || '').trim();
+    if (!bruto) return res.status(400).json({ erro: 'passe ?itens= (separados por ;). Ex.: itens=7:27 Romfd A7 - T3 x T4 ; 8:38 Youghl A6 - T6 x T5' });
+
+    // normaliza hora "7:27" -> "07:27" (compara com/sem zero a esquerda)
+    const _hnorm = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
+    const _cnorm = c => String(c || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const _mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2) || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
+
+    // parse de cada item colado
+    const pedidos = bruto.split(';').map(s => s.trim()).filter(Boolean).map(txt => {
+      const mh = txt.match(/(\d{1,2}:\d{2})/);
+      const mp = txt.match(/T?\s*(\d)\s*[x×X]\s*T?\s*(\d)/);
+      let corrida = txt;
+      if (mh) corrida = corrida.replace(mh[1], ' ');
+      if (mp) corrida = corrida.replace(mp[0], ' ');
+      corrida = corrida.replace(/[-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+      return { texto: txt, hora: mh ? mh[1] : null, corrida, pick: mp ? Number(mp[1]) : null, outro: mp ? Number(mp[2]) : null };
+    });
+
+    // todas as corridas que a BW abriu nesse dia (uma linha por game_id)
+    const abertos = db.prepare('SELECT corrida, hora, pares_json, n_pares, capturado_em FROM avb_abertos WHERE data=?').all(date);
+    const idx = abertos.map(a => { let pares = []; try { pares = JSON.parse(a.pares_json) || []; } catch (e) {} return { corrida: a.corrida, hora: a.hora, hnorm: _hnorm(a.hora), cnorm: _cnorm(a.corrida), n_pares: a.n_pares, capturado_em: a.capturado_em, pares }; });
+
+    const itens = pedidos.map(q => {
+      // acha a corrida aberta que casa (corrida igual + hora igual, normalizadas)
+      let row = idx.find(a => a.cnorm === _cnorm(q.corrida) && a.hnorm === _hnorm(q.hora));
+      // fallback: so pela hora, se a corrida veio meio torta do parse
+      if (!row && q.hora) row = idx.find(a => a.hnorm === _hnorm(q.hora));
+      if (!row) {
+        return { pedido: q.texto, corrida: q.corrida, hora: q.hora, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
+          abriu_corrida: false, abriu_par: false, odds: null,
+          nota: 'a BW nao abriu NENHUM par nessa corrida nesse dia (ou nao foi monitorada / data errada)' };
+      }
+      const p = (q.pick != null && q.outro != null) ? row.pares.find(x => _mesmoPar(x, q.pick, q.outro)) : null;
+      const outros = row.pares.map(x => 'T' + x.aTrap + 'xT' + x.bTrap);
+      if (!p) {
+        return { pedido: q.texto, corrida: row.corrida, hora: row.hora, par: q.pick != null ? ('T' + q.pick + 'xT' + q.outro) : null,
+          abriu_corrida: true, abriu_par: false, odds: null,
+          pares_que_abriram: outros, capturado_em: row.capturado_em,
+          nota: 'a corrida abriu ' + row.n_pares + ' par(es) na BW, mas ESTE par nao' };
+      }
+      // odd do PICK vencer o OUTRO respeitando a orientacao guardada (aTrap/bTrap)
+      const oddPickVenceOutro = Number(q.pick) === Number(p.aTrap) ? p.oddAvenceB : p.oddBvenceA;
+      const oddOutroVencePick = Number(q.pick) === Number(p.aTrap) ? p.oddBvenceA : p.oddAvenceB;
+      return { pedido: q.texto, corrida: row.corrida, hora: row.hora, par: 'T' + q.pick + 'xT' + q.outro,
+        abriu_corrida: true, abriu_par: true,
+        odds: { pick_vence_outro: (oddPickVenceOutro > 0 ? oddPickVenceOutro : null), outro_vence_pick: (oddOutroVencePick > 0 ? oddOutroVencePick : null) },
+        pares_que_abriram: outros, capturado_em: row.capturado_em };
+    });
+
+    res.json({ date, pedidos: pedidos.length, corridas_abertas_no_dia: idx.length, itens,
+      legenda: 'Por item: abriu_corrida = a BW abriu algum par nessa corrida. abriu_par = ESTE par especifico abriu. '
+        + 'odds.pick_vence_outro = odd do 1o trap do par vencer o 2o (AvB). Se date estiver errada ou a corrida nao foi '
+        + 'monitorada, abriu_corrida vem false. Fonte: tabela avb_abertos (o que a BetWinner realmente abriu).' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // EXERCICIO COLADA x BW (Bruno ago/2026): pro dia, cruza os pares COLADOS do motor (razao <= teto
 // do Config, em QUALQUER lugar do grid) com os pares que a BW ABRIU, e conta quantos passam do
 // corte (60% por padrao). Responde exatamente: "quantos AvBs colados a BW abriu, e quantos a gente
