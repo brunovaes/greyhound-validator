@@ -3109,6 +3109,63 @@ router.get('/diag/cascata-impacto', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
 });
 
+// EFEITO DA RECENCIA (admin, SO-LEITURA — Bruno ago/2026): roda a MESMA config (mesmos cortes
+// e peneiras) DUAS vezes — uma SEM recencia, outra COM — e mostra so o que a recencia mudou:
+// quantas corridas valem em cada, quais corridas trocaram o par principal, e onde so o pct
+// mexeu (mesmo par, chance diferente). Isola o efeito da recencia, nada mais. Mesmos params de
+// corte do /diag/cascata (sp,caltm,split,podio,dqueda,dmin,pct,off,regua) + &recn=3 &recd=0.5.
+router.get('/diag/cascata-recencia', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const casc = require('../utils/cascataMotor');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const base = String(req.query.regua || 'top').toLowerCase() === 'regular' ? casc.CORTES_REGULAR : casc.CORTES_PADRAO;
+    const cortes = Object.assign({}, base);
+    const num = (q, k) => { if (req.query[q] != null && req.query[q] !== '' && !Number.isNaN(Number(req.query[q]))) cortes[k] = Number(req.query[q]); };
+    num('sp', 'sp_ratio_max'); num('caltm', 'caltm_min_dif'); num('split', 'split_min');
+    num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
+    const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
+    String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    const n = req.query.recn != null ? Number(req.query.recn) : 3;
+    const d = req.query.recd != null ? Number(req.query.recd) : 0.5;
+
+    const sem = casc.cascata(db, { date, cortes, ativos, recencia: { ativa: false } });
+    const com = casc.cascata(db, { date, cortes, ativos, recencia: { ativa: true, n, decay: d } });
+
+    const comBy = {}; com.corridas.forEach(c => { comBy[c.hora + '|' + c.corrida] = c; });
+    const chave = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+    const avbStr = p => p ? ('T' + p.pick_trap + ' x T' + p.outro_trap) : null;
+    const trocaram = [], pct_mexeu = [];
+    for (const cs of sem.corridas) {
+      const cc = comBy[cs.hora + '|' + cs.corrida];
+      const p0 = cs.principal, p1 = cc ? cc.principal : null;
+      const k0 = p0 ? chave(p0.pick_trap, p0.outro_trap) : null;
+      const k1 = p1 ? chave(p1.pick_trap, p1.outro_trap) : null;
+      if (k0 !== k1) {
+        trocaram.push({ hora: cs.hora, corrida: cs.corrida,
+          sem_recencia: p0 ? { avb: avbStr(p0), pct: p0.pct } : null,
+          com_recencia: p1 ? { avb: avbStr(p1), pct: p1.pct } : null,
+          tipo: !p0 ? 'ENTROU com recencia' : !p1 ? 'SAIU com recencia' : 'TROCOU o par' });
+      } else if (p0 && p1 && p0.pct !== p1.pct) {
+        pct_mexeu.push({ hora: cs.hora, corrida: cs.corrida, avb: avbStr(p0), pct_sem: p0.pct, pct_com: p1.pct });
+      }
+    }
+    res.json({
+      date,
+      recencia: { n, decay: d },
+      corridas_que_valem_SEM: sem.corridas_que_valem,
+      corridas_que_valem_COM: com.corridas_que_valem,
+      duplas_SEM: sem.total_sobreviventes, duplas_COM: com.total_sobreviventes,
+      principais_que_trocaram: trocaram.length,
+      trocaram,
+      so_o_pct_mudou: pct_mexeu.length,
+      pct_mexeu,
+      legenda: 'MESMA config, recencia OFF x ON. "trocaram" = corridas onde a recencia mudou o par principal '
+        + '(o mais importante). "pct_mexeu" = mesmo par, so a chance mudou. Read-only, nada aplicado.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
+});
+
 // RASCUNHO do Painel ADMIN (cascata). Guarda/le o estado que o Bruno esta MEXENDO —
 // cortes + peneiras ligadas — sem tocar producao. So o APLICAR grava no analysis_config.
 //   GET  /diag/cascata-rascunho          -> devolve o rascunho salvo (ou os defaults)
