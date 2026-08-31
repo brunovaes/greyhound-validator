@@ -371,14 +371,47 @@ function navBar(user, active) {
           var mins = minutosAteAgoraGlobal(r.hora_br);
           if (mins !== null && mins >= 0 && mins <= alertaMin && mins < proximaMin) { proxima = r; proximaMin = mins; }
         });
+        // ── Alarme TOP ───────────────────────────────────────────────────
+        // Toca so nas corridas da regua TOP, perto da largada, uma vez por
+        // corrida. E' o UNICO som que sai daqui: o alarme de filtro continua
+        // sendo tocado pelo app.js / alertaGlobal.js, e duplicar aqui faria o
+        // aviso soar duas vezes — foi por isso que o som foi removido deste
+        // bloco no passado.
+        //
+        // Convivencia: se a corrida casar nos dois alarmes, o TOP toca e o
+        // outro nao repete, porque quem toca o de filtro pula corrida que ja
+        // esta na lista de tocadas (window.__ghTopTocou).
+        if (d.alarme_top_ativo) {
+          var minTop = d.alarme_top_min_antes != null ? d.alarme_top_min_antes : 5;
+          window.__ghTopTocou = window.__ghTopTocou || {};
+          d.races.forEach(function(r){
+            // Sem tier no payload nao ha como saber o que e' TOP. Nesse caso o
+            // alarme simplesmente nao dispara, em vez de tocar em tudo.
+            var tier = String(r.tier || '').trim().toLowerCase();
+            if (tier !== 'top') return;
+            var m = minutosAteAgoraGlobal(r.hora_br);
+            if (m === null || m < 0 || m > minTop) return;
+            var chave = (r.hora_br || '') + '|' + (r.corrida || '');
+            if (window.__ghTopTocou[chave]) return;
+            window.__ghTopTocou[chave] = true;
+            tocarSomAlertaGlobal(d.alarme_top_som || 'alarme');
+            try {
+              var el = document.querySelector('[data-race-key="' + chave + '"]');
+              if (el) {
+                el.style.setProperty('--alert-col', ({azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'})[d.alarme_top_cor] || '#8b5cf6');
+                el.classList.add('rc-alert-custom');
+              }
+            } catch(e){}
+          });
+        }
+
         if (!proxima) { badge.style.display = 'none'; return; }
         document.getElementById('race-alert-txt').textContent = proxima.corrida + ' em ' + proximaMin + ' min';
         badge.style.display = 'flex';
-        // O SOM saiu daqui de proposito. Este bloco cuida so do SELO no menu.
-        // Quem toca e' o app.js (tela Analisar) ou o alertaGlobal.js (demais
-        // telas) — os dois respeitam o "Alarme para filtro selecionado"
-        // (turno/pista/classe, som e cor), coisa que este trecho antigo nunca
-        // fez. Manter os dois tocando duplicava o aviso.
+        // O SOM DO ALARME DE FILTRO saiu daqui de proposito. Este bloco cuida
+        // do SELO no menu e, agora, do Alarme TOP acima. Quem toca o de filtro
+        // e' o app.js (tela Analisar) ou o alertaGlobal.js (demais telas) —
+        // manter os dois tocando duplicava o aviso.
       }).catch(function(){});
     }
     checkRaceProximity();

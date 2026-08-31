@@ -344,6 +344,49 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 </div>
 
 <div class="section">
+<div class="sec-title">Alarme TOP</div>
+<div class="bloco-toggle">
+  <input type="hidden" name="alarme_top_ativo" value="0">
+  <label class="bloco-switch">
+    <input type="checkbox" name="alarme_top_ativo" value="1" ${config.alarme_top_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label'); var f=document.getElementById('alarme_top_fields'); if(l){l.textContent=this.checked?'Alarme ativo':'Alarme desligado'; l.style.color=this.checked?'#22c55e':'#888';} if(f) f.dataset.ativo=this.checked?'1':'0';">
+    <span class="slider"></span>
+  </label>
+  <span class="bloco-toggle-label" style="color:${config.alarme_top_ativo?'#22c55e':'#888'}">${config.alarme_top_ativo?'Alarme ativo':'Alarme desligado'}</span>
+</div>
+<div class="info-box">Toca <strong>só nas corridas da régua TOP</strong>, perto da largada. É independente do alarme acima: os dois podem ficar ligados ao mesmo tempo. Se uma corrida casar nos dois, toca uma vez só, e o TOP tem prioridade.</div>
+<div class="bloco-fields" id="alarme_top_fields" data-ativo="${config.alarme_top_ativo?'1':'0'}">
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+  <div class="field"><label>Som de Alerta</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select name="alarme_top_som" id="alarme_top_som" style="flex:1">
+        <option value="sino" ${config.alarme_top_som==='sino'?'selected':''}>Sino</option>
+        <option value="beep" ${config.alarme_top_som==='beep'?'selected':''}>Beep</option>
+        <option value="alarme" ${config.alarme_top_som==='alarme'||!config.alarme_top_som?'selected':''}>Alarme</option>
+        <option value="suave" ${config.alarme_top_som==='suave'?'selected':''}>Suave</option>
+      </select>
+      <button type="button" class="btn-teste-som" onclick="testarSomAlarmeTop(this)" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap">&#128266; Testar</button>
+    </div>
+  </div>
+  <div class="field"><label>Cor de Alerta</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select name="alarme_top_cor" id="alarme_top_cor" style="flex:1" onchange="previewCorAlarmeTop()">
+        <option value="azul" ${config.alarme_top_cor==='azul'?'selected':''}>Azul</option>
+        <option value="roxo" ${config.alarme_top_cor==='roxo'||!config.alarme_top_cor?'selected':''}>Roxo</option>
+        <option value="laranja" ${config.alarme_top_cor==='laranja'?'selected':''}>Laranja</option>
+        <option value="rosa" ${config.alarme_top_cor==='rosa'?'selected':''}>Rosa</option>
+      </select>
+      <span id="alarme_top_cor_preview" style="width:22px;height:22px;border-radius:5px;border:1px solid #444;display:inline-block"></span>
+    </div>
+  </div>
+  <div class="field"><label>Minutos antes da largada</label>
+    <input type="number" name="alarme_top_min_antes" min="0" max="60" value="${config.alarme_top_min_antes != null ? config.alarme_top_min_antes : 5}">
+    <div class="hint" style="margin-top:3px">Quando faltar esse tempo, a corrida TOP toca e a linha pisca. Toca uma vez por corrida.</div>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="section">
 <div class="sec-title">Notificações no celular (push)</div>
 <div class="info-box">
   O alarme comum depende de o site estar aberto na tela. A notificação push é diferente: quem envia é o <strong>servidor</strong>, então ela chega com o celular bloqueado, no bolso, com o navegador fechado.<br><br>
@@ -836,6 +879,15 @@ var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4
 function previewCorAlarme(){ var s=document.getElementById('alarme_filtro_cor'), pv=document.getElementById('alarme_cor_preview'); if(s&&pv)pv.style.background=CORES_ALARME_CFG[s.value]||'#3b82f6'; }
 function coletaAlarme(tipo){ var cls=tipo==='pista'?'alarme-pista-cb':'alarme-classe-cb'; var hid=tipo==='pista'?'alarme_pistas_val':'alarme_classes_val'; var vals=[]; document.querySelectorAll('.'+cls).forEach(function(cb){ if(cb.checked)vals.push(cb.value); }); var h=document.getElementById(hid); if(h)h.value=vals.join(','); }
 function testarSom(btn){ var el=document.getElementById('som_alerta'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
+// Bloco do Alarme TOP: mesmas funcoes, apontando pros campos dele. Clonadas em
+// vez de parametrizadas porque as originais sao chamadas por onclick inline em
+// varios lugares — mexer na assinatura delas quebraria os outros botoes.
+function testarSomAlarmeTop(btn){ var el=document.getElementById('alarme_top_som'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
+function previewCorAlarmeTop(){
+  var s=document.getElementById('alarme_top_cor'), pv=document.getElementById('alarme_top_cor_preview');
+  if(s&&pv) pv.style.background = CORES_ALARME_CFG[s.value] || '#8b5cf6';
+}
+try{ document.addEventListener('DOMContentLoaded', previewCorAlarmeTop); }catch(e){}
 // ===== Notificacoes push =====
 // A chave publica VAPID vem em base64url e o PushManager exige Uint8Array.
 function _b64ParaBytes(b64){
@@ -1178,7 +1230,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_linha TEXT DEFAULT '#161B27'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=COALESCE(?,sp_ratio_max),caltm_min_dif=COALESCE(?,caltm_min_dif),split_min=COALESCE(?,split_min),podio_min=COALESCE(?,podio_min),desaba_min=COALESCE(?,desaba_min),reg_sp_ratio_max=COALESCE(?,reg_sp_ratio_max),reg_caltm_min_dif=COALESCE(?,reg_caltm_min_dif),reg_split_min=COALESCE(?,reg_split_min),reg_podio_min=COALESCE(?,reg_podio_min),reg_desaba_min=COALESCE(?,reg_desaba_min),desaba_queda=COALESCE(?,desaba_queda),updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=COALESCE(?,sp_ratio_max),caltm_min_dif=COALESCE(?,caltm_min_dif),split_min=COALESCE(?,split_min),podio_min=COALESCE(?,podio_min),desaba_min=COALESCE(?,desaba_min),reg_sp_ratio_max=COALESCE(?,reg_sp_ratio_max),reg_caltm_min_dif=COALESCE(?,reg_caltm_min_dif),reg_split_min=COALESCE(?,reg_split_min),reg_podio_min=COALESCE(?,reg_podio_min),reg_desaba_min=COALESCE(?,reg_desaba_min),desaba_queda=COALESCE(?,desaba_queda),alarme_top_ativo=?,alarme_top_som=?,alarme_top_cor=?,alarme_top_min_antes=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1231,6 +1283,13 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       _num(d.reg_sp_ratio_max),  _num(d.reg_caltm_min_dif),
       _num(d.reg_split_min),     _num(d.reg_podio_min),  _int(d.reg_desaba_min),
       _int(d.desaba_queda),
+      // Alarme TOP. O checkbox manda '1' e o hidden manda '0' quando desmarcado
+      // — sem o hidden, campo nao marcado nem aparece no POST e o valor antigo
+      // ficaria de pe.
+      (d.alarme_top_ativo === '1' || d.alarme_top_ativo === 1) ? 1 : 0,
+      d.alarme_top_som || 'alarme',
+      d.alarme_top_cor || 'roxo',
+      parseInt(d.alarme_top_min_antes, 10) || 5,
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao
