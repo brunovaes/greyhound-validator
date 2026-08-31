@@ -3310,6 +3310,57 @@ router.get('/diag/cascata-resultado', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
 });
 
+// BACKTEST MULTI-DIAS (admin — Bruno ago/2026): roda a cascata + cruza com a chegada real em
+// VARIOS dias e devolve a taxa de acerto AGREGADA (bateu x nao) + o detalhe por dia. Responde
+// "essas regras se sustentam?" com numero grande, nao um dia so. Mesmos params de corte do
+// /diag/cascata + &dias=N (ultimos N dias com dados; default 14, max 60).
+// Ex.: ?dias=14&rec=1&sp=1.25&caltm=0.07&split=0.05&pct=80&off=podio
+router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const casc = require('../utils/cascataMotor');
+    const { bateuPar } = require('../utils/avbResultado');
+    const base = String(req.query.regua || 'top').toLowerCase() === 'regular' ? casc.CORTES_REGULAR : casc.CORTES_PADRAO;
+    const cortes = Object.assign({}, base);
+    const num = (q, k) => { if (req.query[q] != null && req.query[q] !== '' && !Number.isNaN(Number(req.query[q]))) cortes[k] = Number(req.query[q]); };
+    num('sp', 'sp_ratio_max'); num('caltm', 'caltm_min_dif'); num('split', 'split_min');
+    num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
+    const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
+    String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
+      n: req.query.recn != null ? Number(req.query.recn) : undefined, decay: req.query.recd != null ? Number(req.query.recd) : undefined };
+    const dias = Math.min(Math.max(parseInt(req.query.dias) || 14, 1), 60);
+    const datas = db.prepare("SELECT DISTINCT date(s.created_at,'-3 hours') AS d FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE r.hist_full IS NOT NULL AND r.finishing_order_json IS NOT NULL ORDER BY d DESC LIMIT ?").all(dias).map(x => x.d);
+
+    const porDia = [];
+    let TIndic = 0, TResult = 0, TBateu = 0;
+    for (const date of datas) {
+      const c = casc.cascata(db, { date, cortes, ativos, recencia });
+      const fRows = db.prepare("SELECT r.hora, r.corrida, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
+      const fBy = {}; fRows.forEach(r => { fBy[r.hora + '|' + r.corrida] = r.finishing_order_json; });
+      let ind = 0, resu = 0, bat = 0;
+      for (const co of c.corridas) {
+        if (!co.entrou || !co.principal) continue;
+        ind++;
+        const fo = fBy[co.hora + '|' + co.corrida];
+        const b = fo ? bateuPar(fo, co.principal.pick_trap, co.principal.outro_trap) : null;
+        if (b === true) { bat++; resu++; } else if (b === false) { resu++; }
+      }
+      porDia.push({ date, indicadas: ind, com_resultado: resu, bateram: bat, taxa_pct: resu ? Math.round(bat / resu * 100) : null });
+      TIndic += ind; TResult += resu; TBateu += bat;
+    }
+    res.json({
+      dias_com_dados: datas.length, de: datas[datas.length - 1] || null, ate: datas[0] || null,
+      regras: { cortes, ativos, recencia },
+      total_indicadas: TIndic, total_com_resultado: TResult, total_bateram: TBateu, total_nao_bateram: TResult - TBateu,
+      taxa_acerto_geral_pct: TResult ? Math.round(TBateu / TResult * 100) : null,
+      por_dia: porDia,
+      legenda: 'Backtest: a MESMA cascata rodada em varios dias, cada AvB principal cruzado com a chegada real. '
+        + 'taxa_acerto_geral = bateram / com_resultado no periodo. Read-only, nada aplicado.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
+});
+
 // REPROCESSAR SsnSupp (admin — Bruno ago/2026): re-parseia os PDFs SALVOS de um dia e injeta
 // o flag ssnSupp no hist_full JA GRAVADO (cirurgico — nao mexe em mais nada). Serve pra fazer o
 // veto de SsnSupp valer RETROATIVO em dias antigos (o hist_full deles foi salvo antes do flag
