@@ -3689,10 +3689,29 @@ router.get('/diag/avb-abriu', requireAdmin, (req, res) => {
         pares_que_abriram: outros, capturado_em: row.capturado_em };
     });
 
-    res.json({ date, pedidos: pedidos.length, corridas_abertas_no_dia: idx.length, itens,
+    // DEBUG (?debug=1): lista TODAS as corridas que a BW abriu no dia (hora + corrida como estao
+    // gravadas em avb_abertos) + as corridas do card (races) com a MESMA hora/codigo, pra a gente
+    // comparar formato/fuso quando nada casa. So-leitura.
+    let debug = undefined;
+    if (String(req.query.debug || '') === '1') {
+      const abertasFmt = idx.map(a => ({ hora: a.hora, corrida: a.corrida, n_pares: a.n_pares }))
+        .sort((x, y) => _hnorm(x.hora).localeCompare(_hnorm(y.hora)));
+      let cards = [];
+      try {
+        cards = db.prepare(
+          "SELECT r.hora, r.corrida FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+          "WHERE date(s.created_at,'-3 hours')=? ORDER BY r.hora"
+        ).all(date).map(r => ({ hora: r.hora, corrida: r.corrida }));
+      } catch (e) {}
+      debug = { corridas_abertas_bw: abertasFmt, corridas_no_card: cards,
+        dica: 'Compare a hora/corrida do seu pedido com as duas listas. Se a corrida aparece no card mas nao em '
+          + 'corridas_abertas_bw, a BW nao abriu par nela. Se aparece nas duas mas com hora diferente, e formato/fuso.' };
+    }
+    res.json({ date, pedidos: pedidos.length, corridas_abertas_no_dia: idx.length, itens, debug,
       legenda: 'Por item: abriu_corrida = a BW abriu algum par nessa corrida. abriu_par = ESTE par especifico abriu. '
         + 'odds.pick_vence_outro = odd do 1o trap do par vencer o 2o (AvB). Se date estiver errada ou a corrida nao foi '
-        + 'monitorada, abriu_corrida vem false. Fonte: tabela avb_abertos (o que a BetWinner realmente abriu).' });
+        + 'monitorada, abriu_corrida vem false. Fonte: tabela avb_abertos (o que a BetWinner realmente abriu). '
+        + 'Use ?debug=1 pra listar as corridas abertas e as do card e comparar formato.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
