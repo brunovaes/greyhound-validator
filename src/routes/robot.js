@@ -3259,6 +3259,57 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// RESULTADO DA CASCATA (admin — Bruno ago/2026): roda a cascata com as regras da query e cruza
+// o AvB PRINCIPAL de cada corrida indicada com a CHEGADA real (finishing_order_json) — mostra o
+// que BATEU (pick na frente do outro) ou nao, + a taxa. Mesmos params do /diag/cascata.
+// Ex.: ?date=2026-08-30&rec=1&sp=1.25&caltm=0.07&split=0.05&pct=80&off=podio
+router.get('/diag/cascata-resultado', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const casc = require('../utils/cascataMotor');
+    const { bateuPar } = require('../utils/avbResultado');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const base = String(req.query.regua || 'top').toLowerCase() === 'regular' ? casc.CORTES_REGULAR : casc.CORTES_PADRAO;
+    const cortes = Object.assign({}, base);
+    const num = (q, k) => { if (req.query[q] != null && req.query[q] !== '' && !Number.isNaN(Number(req.query[q]))) cortes[k] = Number(req.query[q]); };
+    num('sp', 'sp_ratio_max'); num('caltm', 'caltm_min_dif'); num('split', 'split_min');
+    num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
+    const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
+    String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
+      n: req.query.recn != null ? Number(req.query.recn) : undefined, decay: req.query.recd != null ? Number(req.query.recd) : undefined };
+    const c = casc.cascata(db, { date, cortes, ativos, recencia });
+
+    // chegada real por hora|corrida
+    const fRows = db.prepare("SELECT r.hora, r.corrida, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
+    const fBy = {}; fRows.forEach(r => { fBy[r.hora + '|' + r.corrida] = r.finishing_order_json; });
+
+    const linhas = [];
+    let bateram = 0, comResultado = 0, aguardando = 0;
+    for (const co of c.corridas) {
+      if (!co.entrou || !co.principal) continue;
+      const p = co.principal;
+      const fo = fBy[co.hora + '|' + co.corrida];
+      const bateu = fo ? bateuPar(fo, p.pick_trap, p.outro_trap) : null;
+      if (bateu === true) { bateram++; comResultado++; }
+      else if (bateu === false) { comResultado++; }
+      else { aguardando++; }
+      linhas.push({ hora: co.hora, corrida: co.corrida,
+        avb: 'T' + p.pick_trap + ' x T' + p.outro_trap, pct: p.pct,
+        bateu: bateu === true ? 'BATEU' : (bateu === false ? 'nao bateu' : 'sem resultado') });
+    }
+    res.json({
+      date,
+      indicadas: linhas.length,
+      com_resultado: comResultado, bateram, nao_bateram: comResultado - bateram, aguardando,
+      taxa_acerto_pct: comResultado ? Math.round(bateram / comResultado * 100) : null,
+      linhas,
+      legenda: 'AvB principal de cada corrida indicada x chegada real. BATEU = o pick chegou na frente do outro. '
+        + 'taxa_acerto_pct = bateram / com_resultado (ignora os sem chegada). Read-only.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
+});
+
 // REPROCESSAR SsnSupp (admin — Bruno ago/2026): re-parseia os PDFs SALVOS de um dia e injeta
 // o flag ssnSupp no hist_full JA GRAVADO (cirurgico — nao mexe em mais nada). Serve pra fazer o
 // veto de SsnSupp valer RETROATIVO em dias antigos (o hist_full deles foi salvo antes do flag
