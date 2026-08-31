@@ -1521,6 +1521,19 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .casc-step-ft{display:flex;gap:12px;font-size:10px;color:var(--mut);margin-top:2px}
 .casc-ok{color:#21AB58}.casc-ko{color:#ef4444}.casc-mut{color:var(--mut)}
 .casc-desc{font-size:10px;color:var(--mut2);margin-top:1px}
+/* Cabecalho da lista de corridas: as MESMAS larguras das linhas, senao os
+   filtros nao apontam pra coluna que filtram. */
+.casc-corr-hd{display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:6px;
+  border-bottom:1px solid var(--bdr2);font-size:9px;letter-spacing:.5px;color:var(--mut2);text-transform:uppercase}
+.casc-corr-hd select{font-size:11px;padding:3px 6px;text-transform:none;letter-spacing:normal;max-width:100%}
+.cc-hora{min-width:44px;flex:0 0 auto}
+.cc-corrida{min-width:120px;flex:0 0 auto}
+.cc-dist{min-width:70px;flex:0 0 auto}
+.cc-pick{margin-left:auto;flex:0 1 auto;text-align:right}
+.cc-conta{min-width:44px;flex:0 0 auto;text-align:right}
+.casc-filtrou{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--mut);padding:0 10px 6px}
+.casc-filtrou button{background:transparent;border:1px solid var(--bdr2);color:#21AB58;
+  border-radius:8px;padding:2px 8px;font-size:10px;cursor:pointer}
 .casc-corrida{border:1px solid var(--bdr2);border-radius:8px;margin-bottom:6px;background:#0D1117}
 .casc-corrida.entrou{border-color:rgba(33,171,88,.45)}
 .casc-corrida-hd{display:flex;align-items:center;gap:10px;padding:7px 10px;cursor:pointer;font-size:12px}

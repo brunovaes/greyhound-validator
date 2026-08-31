@@ -257,21 +257,93 @@ function desenharFunil(d){
 var COR_PENEIRA = { sp:'#f59e0b', categoria:'#a78bfa', caltm:'#60a5fa',
                     split:'#22d3ee', podio:'#f472b6', fumador:'#fb923c', pct:'#ef4444' };
 
+// Filtros da lista de corridas. Ficam num cabecalho com as MESMAS colunas da
+// lista, e filtram o que ja foi carregado — nao refazem a chamada, porque o
+// funil e a lista tem que continuar falando do mesmo conjunto de corridas.
+var filtroCorr = { pista:'', dist:'', vale:'' };
+
+function pistaDe(nome){
+  // "Yrmth A9" -> "Yrmth". A classe muda a cada corrida; a pista, nao.
+  return String(nome||'').trim().split(' ')[0];
+}
+
+// O filtro redesenha a partir do que FOI DESENHADO, guardado aqui, e nao de
+// estado.ultimoFunil. Sao a mesma coisa no fluxo normal, mas se um dia
+// divergirem o filtro mostraria um conjunto e o funil outro — e ninguem
+// perceberia, porque os dois numeros parecem plausiveis.
+var corridasNaTela = [];
+
+function cascFiltro(campo, valor){
+  filtroCorr[campo] = valor || '';
+  redesenharCorridas();
+}
+
+function cascLimparFiltro(){
+  filtroCorr = { pista:'', dist:'', vale:'' };
+  redesenharCorridas();
+}
+
+function cabecalhoCorridas(cs){
+  var uniq = function(arr){ return arr.filter(function(v,i){ return v && arr.indexOf(v)===i; }).sort(); };
+  var pistas = uniq(cs.map(function(c){ return pistaDe(c.corrida); }));
+  var dists  = uniq(cs.map(function(c){ return c.dist; }));
+  var opt = function(lista, sel){
+    return lista.map(function(v){
+      return '<option value="'+esc(v)+'"'+(sel===v?' selected':'')+'>'+esc(v)+'</option>';
+    }).join('');
+  };
+  return '<div class="casc-corr-hd">'
+    + '<span class="cc-hora">HORA</span>'
+    + '<span class="cc-corrida"><select onchange="cascFiltro(\'pista\', this.value)">'
+    +   '<option value="">todas as pistas</option>' + opt(pistas, filtroCorr.pista) + '</select></span>'
+    + '<span class="cc-dist"><select onchange="cascFiltro(\'dist\', this.value)">'
+    +   '<option value="">dist.</option>' + opt(dists, filtroCorr.dist) + '</select></span>'
+    + '<span class="cc-pick"><select onchange="cascFiltro(\'vale\', this.value)">'
+    +   '<option value="">com e sem AvB</option>'
+    +   '<option value="sim"' + (filtroCorr.vale==='sim'?' selected':'') + '>só as que valem</option>'
+    +   '<option value="nao"' + (filtroCorr.vale==='nao'?' selected':'') + '>só as que morreram</option>'
+    + '</select></span>'
+    + '<span class="cc-conta">VIVOS</span>'
+    + '</div>';
+}
+
 function desenharCorridas(d){
+  corridasNaTela = (d && d.corridas) || [];
+  redesenharCorridas();
+}
+
+function redesenharCorridas(){
   var alvo = $('casc-corridas'); if(!alvo) return;
-  var cs = (d && d.corridas) || [];
-  if (!cs.length) { alvo.innerHTML = '<div class="casc-vazio">nenhuma corrida avaliada neste dia.</div>'; return; }
-  alvo.innerHTML = cs.map(function(c, i){
+  var todas = corridasNaTela;
+  if (!todas.length) { alvo.innerHTML = '<div class="casc-vazio">nenhuma corrida avaliada neste dia.</div>'; return; }
+
+  var cs = todas.filter(function(c){
+    if (filtroCorr.pista && pistaDe(c.corrida) !== filtroCorr.pista) return false;
+    if (filtroCorr.dist  && String(c.dist) !== String(filtroCorr.dist)) return false;
+    if (filtroCorr.vale === 'sim' && !c.entrou) return false;
+    if (filtroCorr.vale === 'nao' && c.entrou) return false;
+    return true;
+  });
+
+  // Quantas o filtro escondeu. Sem isto a lista encolhe e parece que o dia
+  // mudou, quando foi so o filtro.
+  var escondidas = todas.length - cs.length;
+  var aviso = escondidas
+    ? '<div class="casc-filtrou">mostrando ' + cs.length + ' de ' + todas.length + ' corridas'
+      + ' <button type="button" onclick="cascLimparFiltro()">limpar filtros</button></div>'
+    : '';
+
+  alvo.innerHTML = cabecalhoCorridas(todas) + aviso + cs.map(function(c, i){
     var p = c.principal;
     return '<div class="casc-corrida' + (c.entrou?' entrou':'') + '">'
       + '<div class="casc-corrida-hd" onclick="cascAbrir(' + i + ')">'
-      +   '<span class="casc-hora">' + esc(c.hora) + '</span>'
-      +   '<span class="casc-nome">' + esc(c.corrida) + '</span>'
-      +   '<span class="casc-mut">' + esc(c.dist||'') + '</span>'
-      +   (p ? '<span class="casc-pick">T' + p.pick_trap + ' × T' + p.outro_trap
+      +   '<span class="casc-hora cc-hora">' + esc(c.hora) + '</span>'
+      +   '<span class="casc-nome cc-corrida">' + esc(c.corrida) + '</span>'
+      +   '<span class="casc-mut cc-dist">' + esc(c.dist||'') + '</span>'
+      +   (p ? '<span class="casc-pick cc-pick">T' + p.pick_trap + ' × T' + p.outro_trap
               + ' <em>' + (p.pct!=null?p.pct+'%':'') + '</em></span>'
-            : '<span class="casc-mut">nenhum par sobreviveu</span>')
-      +   '<span class="casc-conta">' + (c.sobreviventes||0) + '/' + (c.avaliados||0) + '</span>'
+            : '<span class="casc-mut cc-pick">nenhum par sobreviveu</span>')
+      +   '<span class="casc-conta cc-conta">' + (c.sobreviventes||0) + '/' + (c.avaliados||0) + '</span>'
       + '</div>'
       + '<div class="casc-pares" id="pares-' + i + '" style="display:none">' + tabelaPares(c) + '</div>'
       + '</div>';
