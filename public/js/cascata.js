@@ -72,12 +72,17 @@ function debounce(chave, fn, ms){
 }
 
 // ── carga inicial ───────────────────────────────────────────────────────────
-async function cascIniciar(){
+// Carrega o rascunho da regua ATUAL. Usada na abertura e a cada troca de
+// regua: sao a mesma operacao, e ter duas copias faria as duas divergirem.
+async function carregarRascunho(){
   try {
-    var r = await fetch(DIAG + '/cascata-rascunho', { credentials:'same-origin' });
+    var r = await fetch(DIAG + '/cascata-rascunho?regua=' + encodeURIComponent(estado.regua),
+                        { credentials:'same-origin' });
     var d = await r.json();
     var ras = (d && d.rascunho) || {};
-    estado.regua  = ras.regua || 'top';
+    // A regua e' a que a TELA pediu, nao a que veio na resposta: se o backend
+    // ainda nao tem rascunho pra ela e devolve o de producao, a etiqueta viria
+    // errada e o proximo save gravaria na regua errada.
     estado.cortes = Object.assign({}, ras.cortes || {});
     estado.ativos = Object.assign({}, ras.ativos || {});
     var pl = ras.pistas || {};
@@ -90,16 +95,44 @@ async function cascIniciar(){
       if (['regua','cortes','ativos','pistas'].indexOf(k) < 0) estado.extras[k] = ras[k];
     });
     var quando = d && d.salvo_em;
+    var nome = estado.regua === 'top' ? 'TOP' : 'REGULAR';
     // Sem rascunho, o backend devolve o que esta VALENDO. Dizer de onde veio
     // evita a duvida "isso que estou vendo ja e' producao ou nao?".
     $('casc-origem').textContent = (d && d.tem_rascunho)
-      ? ('rascunho salvo em ' + (quando || '?'))
-      : 'partindo do que está valendo em produção';
+      ? ('régua ' + nome + ' · rascunho salvo em ' + (quando || '?'))
+      : ('régua ' + nome + ' · partindo do que está valendo em produção');
   } catch(e){
     toast('não consegui carregar o rascunho: ' + e.message, false);
   }
+}
+
+// Trocar de regua RECARREGA os valores daquela regua ANTES de qualquer save.
+//
+// Antes esta funcao so trocava o rotulo e mantinha os numeros na tela — e o
+// proximo save gravava os valores da regua ANTERIOR com a etiqueta da nova.
+// Nao era "nao salvou": era pior, sobrescrevia a outra regua com o que estava
+// na tela. Quem calibrava a TOP e passava pra REGULAR perdia a TOP.
+async function cascRegua(v){
+  if (v === estado.regua) return;
+  estado.regua = v;
+  var sel = $('casc-regua');
+  // Trava o seletor durante a troca: dois cliques rapidos gravariam a regua
+  // errada no meio do carregamento.
+  if (sel) sel.disabled = true;
+  $('casc-origem').textContent = 'carregando a régua ' + (v === 'top' ? 'TOP' : 'REGULAR') + '…';
+  await carregarRascunho();
+  if (sel) sel.disabled = false;
+  desenharAlavancas();
+  desenharPistas();
+  atualizarFunil();
+  PENEIRAS.forEach(function(p){ carregarExemplo(p.id); });
+}
+
+async function cascIniciar(){
+  await carregarRascunho();
   desenharAlavancas();
   await atualizarFunil();
+  desenharPistas();
   PENEIRAS.forEach(function(p){ carregarExemplo(p.id); });
 }
 
@@ -171,12 +204,6 @@ function cascCorte(id, valor, arrastando){
   debounce('ex-'+id, function(){ carregarExemplo(id); }, 400);
 }
 
-function cascRegua(v){
-  estado.regua = v;
-  // Troca de regua muda os defaults: recarrega do backend em vez de adivinhar.
-  debounce('regua', function(){ salvarRascunho(); atualizarFunil(); }, 100);
-  desenharAlavancas();
-}
 
 // ── pistas (a boca do funil) ────────────────────────────────────────────────
 //

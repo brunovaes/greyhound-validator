@@ -1612,7 +1612,7 @@ ${navBar(user, 'cascata')}
 
   <div class="casc-hd">
     <h1>Cascata de Cortes</h1>
-    <select onchange="cascRegua(this.value)" title="Qual régua está sendo calibrada">
+    <select id="casc-regua" onchange="cascRegua(this.value)" title="Qual régua está sendo calibrada">
       <option value="top">régua TOP</option>
       <option value="regular">régua REGULAR</option>
     </select>
