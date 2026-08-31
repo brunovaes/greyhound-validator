@@ -1348,6 +1348,13 @@ router.get('/config', (req, res) => {
       // vazia e caia no filtro antigo — as regras salvavam no banco e nao
       // surtiam efeito na tela, em silencio (mesmo padrao do racas_em_tela).
       alarme_filtro_regras: config.alarme_filtro_regras || '',
+      // ALARME TOP (Bruno ago/2026): alarme que toca SO nas corridas de regua TOP (a nata).
+      // A tela da lista ja sabe o tier de cada corrida; aqui so entregamos a config. Campo NAO
+      // listado aqui nunca chega na tela (mesmo padrao do resto deste bloco).
+      alarme_top_ativo: config.alarme_top_ativo != null ? config.alarme_top_ativo : 0,
+      alarme_top_som: config.alarme_top_som || 'alarme',
+      alarme_top_cor: config.alarme_top_cor || 'roxo',
+      alarme_top_min_antes: config.alarme_top_min_antes != null ? config.alarme_top_min_antes : 5,
       // VIP Plus: destrave de skip perto da largada, som e cores do destaque.
       vip_skip_ativo: config.vip_skip_ativo != null ? config.vip_skip_ativo : 1,
       vip_skip_min_antes: config.vip_skip_min_antes != null ? config.vip_skip_min_antes : 5,

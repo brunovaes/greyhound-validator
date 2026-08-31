@@ -391,6 +391,14 @@ const migrations = [
   // nos dois = todas as pistas (comportamento de hoje). So o APLICAR grava aqui; o motor unico
   // usa isso pra decidir em quais pistas ele opera no ciclo da manha. Global.
   "ALTER TABLE analysis_config ADD COLUMN pistas_filtro TEXT DEFAULT NULL",
+  // ALARME TOP (Painel Configuracoes de Analise, Bruno ago/2026). Alarme que toca SO nas corridas
+  // de regua TOP (a nata). ativo=0 (default) = desligado. som/cor = qual toque e cor da linha;
+  // min_antes = quantos minutos antes da largada dispara. Independente do alarme_filtro (por
+  // turno/pista/classe) — os dois coexistem; o Bruno liga um, o outro, ou os dois.
+  "ALTER TABLE analysis_config ADD COLUMN alarme_top_ativo INTEGER DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_top_som TEXT DEFAULT 'alarme'",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_top_cor TEXT DEFAULT 'roxo'",
+  "ALTER TABLE analysis_config ADD COLUMN alarme_top_min_antes INTEGER DEFAULT 5",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }
