@@ -1483,6 +1483,19 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 @media(max-width:1000px){.casc-cols{grid-template-columns:1fr}}
 .casc-card{background:var(--sur);border:1px solid var(--bdr2);border-radius:10px;padding:12px}
 .casc-card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut2);margin:0 0 10px}
+.casc-pistas-modo{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.casc-pistas-modo button{background:transparent;border:1px solid var(--bdr2);color:var(--mut);
+  border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer}
+.casc-pistas-modo button.on{border-color:#21AB58;color:#21AB58;background:rgba(33,171,88,.10);font-weight:700}
+.casc-pistas-limpar{margin-left:auto}
+.casc-pistas-resumo{font-size:11px;color:#cbd5e1;margin-bottom:8px;line-height:1.4}
+.casc-pistas-lista{display:flex;flex-wrap:wrap;gap:5px;max-height:170px;overflow-y:auto}
+.casc-pista{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--bdr2);border-radius:8px;
+  padding:3px 8px;font-size:11px;color:var(--mut);cursor:pointer;background:#0D1117}
+.casc-pista.on{border-color:#21AB58;color:#21AB58;background:rgba(33,171,88,.10)}
+.casc-pista input{accent-color:#21AB58;margin:0}
+#casc-eco{background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.45);color:#ef4444;
+  border-radius:8px;padding:6px 10px;font-size:11px;margin-bottom:8px}
 .casc-lever{border:1px solid var(--bdr2);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#0D1117}
 .casc-lever.off{opacity:.5}
 .casc-lever-top{display:flex;align-items:center;gap:8px}
@@ -1590,6 +1603,11 @@ ${navBar(user, 'cascata')}
   </div>
 
   <div class="casc-cols">
+    <div>
+    <div class="casc-card" style="margin-bottom:12px">
+      <h2>Pistas do funil — a boca da esteira</h2>
+      <div id="casc-pistas"><div class="casc-vazio">carregando…</div></div>
+    </div>
     <div class="casc-card">
       <h2>As 7 peneiras, na ordem</h2>
       <div id="casc-alavancas"></div>
@@ -1598,10 +1616,12 @@ ${navBar(user, 'cascata')}
         <span id="casc-toast"></span>
       </div>
     </div>
+    </div>
 
     <div>
       <div class="casc-card" style="margin-bottom:12px">
         <h2>O funil do dia</h2>
+        <div id="casc-eco" style="display:none"></div>
         <div id="casc-funil"><div class="casc-vazio">carregando…</div></div>
       </div>
       <div class="casc-card">
@@ -1612,7 +1632,10 @@ ${navBar(user, 'cascata')}
   </div>
 
 </div>
-<script>window.BASE_CASCATA = '${BASE}';</script>
+<script>window.BASE_CASCATA = '${BASE}';
+// Mapa codigo -> nome completo. A tela mostra o nome; o backend recebe o
+// codigo curto, que e' o que o banco guarda.
+window.NOMES_PISTAS = ${JSON.stringify(NOMES_PISTAS || {})};</script>
 <script src="${BASE}/static/js/cascata.js"></script>
 </body></html>`);
 });

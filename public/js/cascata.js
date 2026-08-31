@@ -37,7 +37,14 @@ var estado = {
   simOff: {},          // sp/pct desligadas SO na simulacao
   data: '',
   ultimoFunil: null,
-  aplicando: false
+  aplicando: false,
+  pistas: { inc: [], exc: [] },
+  modoPista: 'inc',    // 'inc' = so estas | 'exc' = todas menos estas
+  // Campos do rascunho que esta tela NAO controla (ex.: recencia, de um
+  // contrato posterior). Sao guardados e devolvidos intactos no POST: sem
+  // isso, salvar daqui apagaria a calibragem feita em outro lugar, e ninguem
+  // perceberia — o rascunho voltaria sem o campo, sem erro nenhum.
+  extras: {}
 };
 
 // ── util ────────────────────────────────────────────────────────────────────
@@ -73,6 +80,15 @@ async function cascIniciar(){
     estado.regua  = ras.regua || 'top';
     estado.cortes = Object.assign({}, ras.cortes || {});
     estado.ativos = Object.assign({}, ras.ativos || {});
+    var pl = ras.pistas || {};
+    estado.pistas = { inc: (pl.inc||[]).slice(), exc: (pl.exc||[]).slice() };
+    // A whitelist vence quando tem item: o modo segue o mesmo criterio, pra a
+    // tela nunca mostrar um modo que o backend nao vai respeitar.
+    estado.modoPista = estado.pistas.inc.length ? 'inc' : (estado.pistas.exc.length ? 'exc' : 'inc');
+    estado.extras = {};
+    Object.keys(ras).forEach(function(k){
+      if (['regua','cortes','ativos','pistas'].indexOf(k) < 0) estado.extras[k] = ras[k];
+    });
     var quando = d && d.salvo_em;
     // Sem rascunho, o backend devolve o que esta VALENDO. Dizer de onde veio
     // evita a duvida "isso que estou vendo ja e' producao ou nao?".
@@ -162,18 +178,108 @@ function cascRegua(v){
   desenharAlavancas();
 }
 
+// ── pistas (a boca do funil) ────────────────────────────────────────────────
+//
+// A pista filtra CORRIDA INTEIRA, antes das 7 peneiras: decide o que sequer
+// entra na esteira. Dois modos que se anulam — a whitelist vence quando tem
+// item —, por isso um seletor de modo unico, e nao dois campos que o Bruno
+// poderia preencher ao mesmo tempo sem saber qual vale.
+function nomePista(cod){
+  var m = window.NOMES_PISTAS || {};
+  return m[cod] || m[String(cod).toLowerCase()] || cod;
+}
+
+function pistasDoDia(){
+  var cs = (estado.ultimoFunil && estado.ultimoFunil.corridas) || [];
+  var vistas = cs.map(function(c){ return pistaDe(c.corrida); });
+  // As ja escolhidas entram na lista mesmo que nao tenham corrido hoje: senao
+  // uma pista da blacklist sumiria do seletor e nao daria pra desmarcar.
+  var todas = vistas.concat(estado.pistas.inc, estado.pistas.exc);
+  return todas.filter(function(v,i){ return v && todas.indexOf(v)===i; })
+              .sort(function(a,b){ return nomePista(a).localeCompare(nomePista(b)); });
+}
+
+function cascModoPista(modo){
+  estado.modoPista = modo;
+  // Trocar de modo leva a selecao junto: o Bruno acabou de marcar aquelas
+  // pistas, e faze-lo remarcar tudo so pra inverter o sentido seria hostil.
+  var sel = estado.pistas.inc.length ? estado.pistas.inc : estado.pistas.exc;
+  estado.pistas = { inc: modo==='inc' ? sel.slice() : [], exc: modo==='exc' ? sel.slice() : [] };
+  desenharPistas(); salvarRascunho(); atualizarFunil();
+}
+
+function cascPista(cod, marcada){
+  var lista = estado.modoPista === 'inc' ? estado.pistas.inc : estado.pistas.exc;
+  var i = lista.indexOf(cod);
+  if (marcada && i < 0) lista.push(cod);
+  if (!marcada && i >= 0) lista.splice(i, 1);
+  if (estado.modoPista === 'inc') estado.pistas.exc = []; else estado.pistas.inc = [];
+  desenharPistas();
+  debounce('pistas', function(){ salvarRascunho(); atualizarFunil(); }, 400);
+}
+
+function cascPistasTodas(){
+  estado.pistas = { inc: [], exc: [] };
+  desenharPistas(); salvarRascunho(); atualizarFunil();
+}
+
+function desenharPistas(){
+  var box = $('casc-pistas'); if(!box) return;
+  var lista = estado.modoPista === 'inc' ? estado.pistas.inc : estado.pistas.exc;
+  var disp = pistasDoDia();
+
+  // O resumo diz em quantas pistas o funil ESTA rodando, nao quantas foram
+  // marcadas: com blacklist os dois numeros sao diferentes, e o que importa e'
+  // o primeiro.
+  var resumo;
+  if (!lista.length) resumo = 'Todas as pistas (' + disp.length + ')';
+  else if (estado.modoPista === 'inc')
+    resumo = 'Funil rodando em ' + lista.length + (lista.length>1?' pistas: ':' pista: ') + lista.map(nomePista).join(', ');
+  else
+    resumo = 'Funil rodando em ' + Math.max(0, disp.length - lista.length) + ' pistas (fora: ' + lista.map(nomePista).join(', ') + ')';
+
+  box.innerHTML =
+      '<div class="casc-pistas-modo">'
+    +   '<button type="button" class="' + (estado.modoPista==='inc'?'on':'') + '" onclick="cascModoPista(\'inc\')">Só estas</button>'
+    +   '<button type="button" class="' + (estado.modoPista==='exc'?'on':'') + '" onclick="cascModoPista(\'exc\')">Todas menos estas</button>'
+    +   '<button type="button" class="casc-pistas-limpar" onclick="cascPistasTodas()">todas as pistas</button>'
+    + '</div>'
+    + '<div class="casc-pistas-resumo">' + esc(resumo) + '</div>'
+    + (disp.length
+        ? '<div class="casc-pistas-lista">' + disp.map(function(cod){
+            var on = lista.indexOf(cod) >= 0;
+            return '<label class="casc-pista' + (on?' on':'') + '">'
+              + '<input type="checkbox" ' + (on?'checked':'') + ' onchange="cascPista(\'' + esc(cod) + '\', this.checked)">'
+              + '<span>' + esc(nomePista(cod)) + '</span></label>';
+          }).join('') + '</div>'
+        : '<div class="casc-vazio">nenhuma pista no dia carregado.</div>');
+}
+
 // ── rascunho ────────────────────────────────────────────────────────────────
-async function salvarRascunho(){
-  // ativos vai SO com as 5 do meio: sp e pct nao entram (sao sempre-ligadas).
+// O corpo do rascunho e o do APLICAR sao o MESMO objeto, montado num lugar so:
+// se fossem dois, um poderia passar a gravar pista e o outro nao, e a diferenca
+// so apareceria depois, no comportamento do motor.
+function corpoDoRascunho(){
   var ativos = {};
+  // ativos vai SO com as 5 do meio: sp e pct nao entram (sao sempre-ligadas).
   ['categoria','caltm','split','podio','fumador'].forEach(function(k){
     ativos[k] = estado.ativos[k] !== false;
   });
+  // extras primeiro: o que esta tela controla sobrescreve, o resto passa intacto.
+  return Object.assign({}, estado.extras, {
+    regua: estado.regua,
+    cortes: estado.cortes,
+    ativos: ativos,
+    pistas: { inc: estado.pistas.inc.slice(), exc: estado.pistas.exc.slice() }
+  });
+}
+
+async function salvarRascunho(){
   try {
     var r = await fetch(DIAG + '/cascata-rascunho', {
       method:'POST', credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ regua: estado.regua, cortes: estado.cortes, ativos: ativos })
+      body: JSON.stringify(corpoDoRascunho())
     });
     var d = await r.json();
     if (d && d.ok) $('casc-origem').textContent = 'rascunho salvo agora (nada em produção mudou)';
@@ -194,6 +300,10 @@ function paramsSimulacao(){
   // off: as desligadas, incluindo as de guarda (aqui e' simulacao)
   var off = PENEIRAS.filter(function(p){ return !ligada(p.id); }).map(function(p){ return p.id; });
   if (off.length) q.push('off=' + off.join(','));
+  // Pistas: a whitelist vence. Mandar as duas seria pedir pro backend escolher,
+  // e a tela ficaria mostrando um filtro que nao e' o que foi aplicado.
+  if (estado.pistas.inc.length) q.push('pistas=' + estado.pistas.inc.map(encodeURIComponent).join(','));
+  else if (estado.pistas.exc.length) q.push('pistasoff=' + estado.pistas.exc.map(encodeURIComponent).join(','));
   return q.join('&');
 }
 
@@ -206,10 +316,27 @@ async function atualizarFunil(){
     estado.ultimoFunil = d;
     desenharFunil(d);
     desenharCorridas(d);
+    desenharPistas();   // o dia pode ter trazido pistas novas
+    ecoDoFiltro(d);
   } catch(e){
     alvo.innerHTML = '<div class="casc-vazio">não consegui carregar o funil: ' + esc(e.message) + '</div>';
   }
   alvo.style.opacity = '1';
+}
+
+// Confere se o filtro que o backend APLICOU e' o que a tela mostra. Se
+// divergirem, a tela avisa em vez de exibir um funil que nao corresponde aos
+// controles — errar de silencio aqui seria calibrar com base no numero errado.
+function ecoDoFiltro(d){
+  var el = $('casc-eco'); if(!el) return;
+  var norm = function(a){ return (a||[]).map(function(x){ return String(x).toLowerCase(); }).sort().join(','); };
+  var esperadoInc = norm(estado.pistas.inc), esperadoExc = norm(estado.pistas.exc);
+  var veioInc = norm(d && d.pistas), veioExc = norm(d && d.pistas_off);
+  // Com whitelist preenchida, o backend ignora a blacklist: e' o combinado.
+  if (esperadoInc) esperadoExc = '';
+  if (veioInc === esperadoInc && veioExc === esperadoExc) { el.style.display='none'; return; }
+  el.style.display = 'block';
+  el.textContent = 'atenção: o funil foi calculado com um filtro de pistas diferente do que está marcado aqui.';
 }
 
 function desenharFunil(d){
@@ -443,12 +570,10 @@ async function cascAplicar(){
   estado.aplicando = true;
   var btn = $('casc-aplicar'); if(btn){ btn.disabled = true; btn.textContent = 'aplicando…'; }
   try {
-    var ativos = {};
-    ['categoria','caltm','split','podio','fumador'].forEach(function(k){ ativos[k] = estado.ativos[k] !== false; });
     var r = await fetch(DIAG + '/cascata-aplicar', {
       method:'POST', credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ regua: estado.regua, cortes: estado.cortes, ativos: ativos })
+      body: JSON.stringify(corpoDoRascunho())
     });
     var d = await r.json();
     if (d && d.ok) {
