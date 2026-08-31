@@ -1553,7 +1553,9 @@ router.get('/proxima-corrida', (req, res) => {
     const sess = db.prepare('SELECT id FROM race_sessions WHERE user_id=? AND name=?').get(CANONICO, sessionName);
     if (!sess) return res.json({ races: [] });
     const races = db.prepare(
-      "SELECT hora, hora_br, corrida, trap_fav, name_fav, trap_und, name_und FROM races WHERE session_id=? AND nivel!='skip' AND trap_fav>0"
+      // tier (TOP|REGULAR|null) vem da coluna races.tier, gravada pelo motor unico no ciclo de
+      // persistencia. Exposto aqui pro Alarme TOP na lista disparar so nas corridas TOP (Bruno ago/2026).
+      "SELECT hora, hora_br, corrida, trap_fav, name_fav, trap_und, name_und, tier FROM races WHERE session_id=? AND nivel!='skip' AND trap_fav>0"
     ).all(sess.id);
     const { getUserConfig } = require('../db/database');
     const config = getUserConfig(req.user.id);
