@@ -3179,38 +3179,58 @@ router.get('/diag/cascata-recencia', requireAdmin, (req, res) => {
 // cortes + peneiras ligadas — sem tocar producao. So o APLICAR grava no analysis_config.
 //   GET  /diag/cascata-rascunho          -> devolve o rascunho salvo (ou os defaults)
 //   POST /diag/cascata-rascunho  {regua,cortes,ativos}  -> salva o rascunho
+// RASCUNHO POR RÉGUA (Bruno ago/2026): antes era UM rascunho por usuário, com um label `regua`
+// dentro — calibrar a REGULAR apagava a TOP (as duas dividiam o mesmo `cortes`). Agora os CORTES
+// ficam separados por régua no mesmo JSON: { cortes_top:{...}, cortes_regular:{...} }. Já os
+// ativos/recência/pistas seguem GLOBAIS (uma coisa só, valem pras duas). O contrato externo NÃO
+// muda: GET ?regua= devolve a visão daquela régua (um `cortes`); POST {regua,...} grava só ela.
+function _migraRascunho(st) {
+  if (!st || typeof st !== 'object') return {};
+  // shape antigo {regua, cortes, ...} -> joga o `cortes` no slot da régua a que ele pertencia
+  if (st.cortes && !st.cortes_top && !st.cortes_regular) {
+    const r = st.regua === 'regular' ? 'regular' : 'top';
+    st['cortes_' + r] = st.cortes;
+  }
+  delete st.cortes;
+  return st;
+}
+// cortes iniciais de uma régua, lidos do analysis_config (TOP usa as colunas base; REGULAR as reg_*).
+function _cortesDeConfig(c, regua, casc) {
+  c = c || {};
+  const pad = regua === 'regular' ? casc.CORTES_REGULAR : casc.CORTES_PADRAO;
+  const col = regua === 'regular'
+    ? { sp: c.reg_sp_ratio_max, caltm: c.reg_caltm_min_dif, split: c.reg_split_min, podio: c.reg_podio_min, dmin: c.reg_desaba_min }
+    : { sp: c.sp_ratio_max, caltm: c.caltm_min_dif, split: c.split_min, podio: c.podio_min, dmin: c.desaba_min };
+  return {
+    sp_ratio_max: col.sp != null ? col.sp : pad.sp_ratio_max,
+    caltm_min_dif: col.caltm != null ? col.caltm : pad.caltm_min_dif,
+    split_min: col.split != null ? col.split : pad.split_min,
+    podio_min: col.podio != null ? col.podio : pad.podio_min,
+    desaba_min: col.dmin != null ? col.dmin : pad.desaba_min,
+    desaba_queda: c.desaba_queda != null ? c.desaba_queda : casc.CORTES_PADRAO.desaba_queda,
+    parelho_pct: c.avb_parelho_pct != null ? c.avb_parelho_pct : casc.CORTES_PADRAO.parelho_pct
+  };
+}
 router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
     const casc = require('../utils/cascataMotor');
+    const regua = req.query.regua === 'regular' ? 'regular' : 'top';
     const row = db.prepare('SELECT rascunho_json, updated_at FROM motor_rascunho WHERE user_id=1').get();
-    let rascunho = null;
-    if (row && row.rascunho_json) { try { rascunho = JSON.parse(row.rascunho_json); } catch (e) {} }
-    // se nao tem rascunho, devolve os valores QUE ESTAO VALENDO hoje no analysis_config (ponto de partida)
-    if (!rascunho) {
-      const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get() || {};
-      let _pf = {}; try { _pf = c.pistas_filtro ? (JSON.parse(c.pistas_filtro) || {}) : {}; } catch (e) {}
-      rascunho = {
-        regua: 'top',
-        cortes: {
-          sp_ratio_max: c.sp_ratio_max != null ? c.sp_ratio_max : casc.CORTES_PADRAO.sp_ratio_max,
-          caltm_min_dif: c.caltm_min_dif != null ? c.caltm_min_dif : casc.CORTES_PADRAO.caltm_min_dif,
-          split_min: c.split_min != null ? c.split_min : casc.CORTES_PADRAO.split_min,
-          podio_min: c.podio_min != null ? c.podio_min : casc.CORTES_PADRAO.podio_min,
-          desaba_queda: c.desaba_queda != null ? c.desaba_queda : casc.CORTES_PADRAO.desaba_queda,
-          desaba_min: c.desaba_min != null ? c.desaba_min : casc.CORTES_PADRAO.desaba_min,
-          parelho_pct: c.avb_parelho_pct != null ? c.avb_parelho_pct : casc.CORTES_PADRAO.parelho_pct
-        },
-        ativos: {
-          categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1,
-          podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1
-        },
-        recencia: { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 },
-        pistas: { inc: Array.isArray(_pf.inc) ? _pf.inc : [], exc: Array.isArray(_pf.exc) ? _pf.exc : [] }
-      };
-    }
-    res.json({ rascunho, salvo_em: row ? row.updated_at : null, tem_rascunho: !!row,
-      legenda: 'rascunho = o que voce esta mexendo. So o APLICAR grava em producao. Sem rascunho, vem o que esta VALENDO hoje.' });
+    let st = null;
+    if (row && row.rascunho_json) { try { st = _migraRascunho(JSON.parse(row.rascunho_json)); } catch (e) {} }
+    const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get() || {};
+    let _pf = {}; try { _pf = c.pistas_filtro ? (JSON.parse(c.pistas_filtro) || {}) : {}; } catch (e) {}
+    // CORTES: da régua pedida (se já salvou) ou os que estão VALENDO hoje pra ela (ponto de partida)
+    const slot = st && st['cortes_' + regua];
+    const cortes = (slot && Object.keys(slot).length) ? slot : _cortesDeConfig(c, regua, casc);
+    // GLOBAIS: do rascunho se existir, senão o que vale hoje
+    const ativos = (st && st.ativos) ? st.ativos : { categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1, podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1 };
+    const recencia = (st && st.recencia) ? st.recencia : { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 };
+    const pistas = (st && st.pistas) ? st.pistas : { inc: Array.isArray(_pf.inc) ? _pf.inc : [], exc: Array.isArray(_pf.exc) ? _pf.exc : [] };
+    const rascunho = { regua, cortes, ativos, recencia, pistas };
+    res.json({ rascunho, regua, salvo_em: row ? row.updated_at : null, tem_rascunho: !!(slot && Object.keys(slot).length),
+      legenda: 'rascunho POR RÉGUA: ?regua=top|regular devolve os cortes daquela régua — as duas NÃO se sobrescrevem. ativos/recencia/pistas sao globais (uma coisa so). So o APLICAR grava em producao.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -3218,11 +3238,21 @@ router.post('/diag/cascata-rascunho', requireAdmin, express.json(), (req, res) =
   try {
     const { db } = require('../db/database');
     const body = req.body || {};
-    const rascunho = { regua: body.regua === 'regular' ? 'regular' : 'top', cortes: body.cortes || {}, ativos: body.ativos || {}, recencia: body.recencia || {}, pistas: body.pistas || {} };
+    const regua = body.regua === 'regular' ? 'regular' : 'top';
+    const row = db.prepare('SELECT rascunho_json FROM motor_rascunho WHERE user_id=1').get();
+    let st = {}; if (row && row.rascunho_json) { try { st = _migraRascunho(JSON.parse(row.rascunho_json)) || {}; } catch (e) { st = {}; } }
+    // grava SÓ os cortes desta régua; a OUTRA régua fica intacta
+    st['cortes_' + regua] = body.cortes || st['cortes_' + regua] || {};
+    // GLOBAIS (uma coisa so, valem pras duas) — atualiza se vieram no corpo
+    if (body.ativos !== undefined) st.ativos = body.ativos;
+    if (body.recencia !== undefined) st.recencia = body.recencia;
+    if (body.pistas !== undefined) st.pistas = body.pistas;
+    st.regua = regua; // ultima régua mexida (so informativo)
     db.prepare("INSERT INTO motor_rascunho (user_id, rascunho_json, updated_at) VALUES (1,?,CURRENT_TIMESTAMP) " +
       "ON CONFLICT(user_id) DO UPDATE SET rascunho_json=excluded.rascunho_json, updated_at=CURRENT_TIMESTAMP")
-      .run(JSON.stringify(rascunho));
-    res.json({ ok: true, rascunho, legenda: 'rascunho salvo. Nada em producao mudou — clique APLICAR pra valer.' });
+      .run(JSON.stringify(st));
+    const rascunho = { regua, cortes: st['cortes_' + regua], ativos: st.ativos || {}, recencia: st.recencia || {}, pistas: st.pistas || {} };
+    res.json({ ok: true, rascunho, regua, legenda: 'rascunho da régua ' + regua + ' salvo. A OUTRA régua ficou intacta. Nada em producao mudou — clique APLICAR pra valer.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -3233,38 +3263,53 @@ router.post('/diag/cascata-rascunho', requireAdmin, express.json(), (req, res) =
 router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) => {
   try {
     const { db } = require('../db/database');
-    let src = req.body && (req.body.cortes || req.body.ativos) ? req.body : null;
-    if (!src) {
+    // body explícito (uma régua) OU o rascunho salvo (agora separado por régua — aplica AS DUAS
+    // que o Bruno calibrou de uma vez). ativos/recencia/pistas sao globais, aplicados uma vez.
+    let body = req.body && (req.body.cortes || req.body.ativos) ? req.body : null;
+    let draft = null;
+    if (!body) {
       const row = db.prepare('SELECT rascunho_json FROM motor_rascunho WHERE user_id=1').get();
-      if (row && row.rascunho_json) { try { src = JSON.parse(row.rascunho_json); } catch (e) {} }
+      if (row && row.rascunho_json) { try { draft = _migraRascunho(JSON.parse(row.rascunho_json)); } catch (e) {} }
     }
-    if (!src) return res.status(400).json({ erro: 'sem rascunho salvo e sem body — nada pra aplicar' });
-    const regula = src.regua === 'regular' ? 'regular' : 'top';
-    const cortes = src.cortes || {}, ativos = src.ativos || {};
+    if (!body && !draft) return res.status(400).json({ erro: 'sem rascunho salvo e sem body — nada pra aplicar' });
     const sets = [], args = [];
     const numOk = v => v != null && v !== '' && !Number.isNaN(Number(v));
     const put = (col, v) => { if (numOk(v)) { sets.push(col + '=?'); args.push(Number(v)); } };
-    if (regula === 'regular') {
-      put('reg_sp_ratio_max', cortes.sp_ratio_max); put('reg_caltm_min_dif', cortes.caltm_min_dif);
-      put('reg_split_min', cortes.split_min); put('reg_podio_min', cortes.podio_min); put('reg_desaba_min', cortes.desaba_min);
-    } else {
-      put('sp_ratio_max', cortes.sp_ratio_max); put('caltm_min_dif', cortes.caltm_min_dif);
-      put('split_min', cortes.split_min); put('podio_min', cortes.podio_min); put('desaba_min', cortes.desaba_min);
-    }
-    // globais (valem pras duas reguas)
-    put('desaba_queda', cortes.desaba_queda); put('avb_parelho_pct', cortes.parelho_pct);
-    // peneiras ativas (5 do meio; SP/pct nunca desligam em producao)
     const flag = (col, v) => { sets.push(col + '=?'); args.push(v ? 1 : 0); };
+    // grava os cortes de UMA régua nas colunas certas (+ os globais desaba_queda/parelho_pct do cortes)
+    const aplicaCortesRegua = (regua, cortes) => {
+      cortes = cortes || {};
+      if (regua === 'regular') {
+        put('reg_sp_ratio_max', cortes.sp_ratio_max); put('reg_caltm_min_dif', cortes.caltm_min_dif);
+        put('reg_split_min', cortes.split_min); put('reg_podio_min', cortes.podio_min); put('reg_desaba_min', cortes.desaba_min);
+      } else {
+        put('sp_ratio_max', cortes.sp_ratio_max); put('caltm_min_dif', cortes.caltm_min_dif);
+        put('split_min', cortes.split_min); put('podio_min', cortes.podio_min); put('desaba_min', cortes.desaba_min);
+      }
+      put('desaba_queda', cortes.desaba_queda); put('avb_parelho_pct', cortes.parelho_pct); // globais dentro do cortes
+    };
+    const reguasAplicadas = [];
+    let ativos, recencia, pistasSrc;
+    if (body) {
+      const regula = body.regua === 'regular' ? 'regular' : 'top';
+      aplicaCortesRegua(regula, body.cortes || {}); reguasAplicadas.push(regula);
+      ativos = body.ativos || {}; recencia = body.recencia || {}; pistasSrc = body.pistas;
+    } else {
+      if (draft.cortes_top && Object.keys(draft.cortes_top).length) { aplicaCortesRegua('top', draft.cortes_top); reguasAplicadas.push('top'); }
+      if (draft.cortes_regular && Object.keys(draft.cortes_regular).length) { aplicaCortesRegua('regular', draft.cortes_regular); reguasAplicadas.push('regular'); }
+      ativos = draft.ativos || {}; recencia = draft.recencia || {}; pistasSrc = draft.pistas;
+    }
+    // peneiras ativas (5 do meio; SP/pct nunca desligam em producao) — GLOBAIS, uma vez
     flag('casc_ativo_categoria', ativos.categoria); flag('casc_ativo_caltm', ativos.caltm);
     flag('casc_ativo_split', ativos.split); flag('casc_ativo_podio', ativos.podio); flag('casc_ativo_fumador', ativos.fumador);
     // PESO DE RECENCIA (global): grava se veio no rascunho/body.
-    const recencia = src.recencia || {};
+    recencia = recencia || {};
     flag('recencia_ativa', recencia.ativa);
     put('recencia_n', recencia.n); put('recencia_decay', recencia.decay);
     // FILTRO DE PISTA (global): {inc:[...],exc:[...]}. inc = whitelist; se inc vazio, exc = blacklist.
     // Grava sempre (inclusive vazio, pra permitir LIMPAR o filtro). NULL/{} = todas as pistas.
-    if (src.pistas !== undefined) {
-      const p = src.pistas || {};
+    if (pistasSrc !== undefined) {
+      const p = pistasSrc || {};
       const _lst = a => (Array.isArray(a) ? a : []).map(s => String(s).trim()).filter(Boolean);
       const inc = _lst(p.inc), exc = _lst(p.exc);
       const json = (inc.length || exc.length) ? JSON.stringify({ inc, exc: inc.length ? [] : exc }) : null;
@@ -3274,8 +3319,8 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
     args.push(1); // user_id
     db.prepare('UPDATE analysis_config SET ' + sets.join(', ') + ' WHERE user_id=?').run(...args);
     const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get();
-    res.json({ ok: true, regua: regula, aplicado,
-      legenda: 'APLICADO no analysis_config. O motor unico ja usa esses valores no proximo ciclo. As 5 peneiras do meio filtram so se casc_ativo_*=1; SP-colada e pct sempre valem.' });
+    res.json({ ok: true, reguas_aplicadas: reguasAplicadas, regua: reguasAplicadas.join('+') || null, aplicado,
+      legenda: 'APLICADO no analysis_config. Aplica as reguas calibradas no rascunho (TOP e/ou REGULAR) de uma vez; ativos/recencia/pistas sao globais. O motor unico ja usa no proximo ciclo. As 5 peneiras do meio filtram so se casc_ativo_*=1; SP-colada e pct sempre valem.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
