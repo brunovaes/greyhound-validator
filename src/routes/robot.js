@@ -3031,11 +3031,14 @@ router.get('/diag/cascata', requireAdmin, (req, res) => {
     // ativos: default todas ligadas; ?off=lista desliga.
     const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
     String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    // FILTRO DE PISTA: ?pistas=Clnml,Mulgr (so essas) OU ?pistasoff=Harlow,Romfd (todas menos essas).
+    const pistas = String(req.query.pistas || '').split(',').map(s => s.trim()).filter(Boolean);
+    const pistasOff = String(req.query.pistasoff || '').split(',').map(s => s.trim()).filter(Boolean);
     // PESO DE RECENCIA (opcional): ?rec=1 liga; &recn=3 (quantas) &recd=0.5 (forca). Recalcula o funil.
     const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
       n: req.query.recn != null ? Number(req.query.recn) : undefined,
       decay: req.query.recd != null ? Number(req.query.recd) : undefined };
-    res.json(casc.cascata(db, { date, cortes, ativos, recencia }));
+    res.json(casc.cascata(db, { date, cortes, ativos, recencia, pistas, pistasOff }));
   } catch (e) { res.status(500).json({ erro: e.message, stack: e.stack }); }
 });
 
@@ -3072,9 +3075,12 @@ router.get('/diag/cascata-impacto', requireAdmin, (req, res) => {
     num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
     const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
     String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    // FILTRO DE PISTA: ?pistas=Clnml,Mulgr (so essas) OU ?pistasoff=Harlow,Romfd (todas menos essas).
+    const pistas = String(req.query.pistas || '').split(',').map(s => s.trim()).filter(Boolean);
+    const pistasOff = String(req.query.pistasoff || '').split(',').map(s => s.trim()).filter(Boolean);
     const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
       n: req.query.recn != null ? Number(req.query.recn) : undefined, decay: req.query.recd != null ? Number(req.query.recd) : undefined };
-    const novo = casc.cascata(db, { date, cortes, ativos, recencia });
+    const novo = casc.cascata(db, { date, cortes, ativos, recencia, pistas, pistasOff });
 
     const novoBy = {}; novo.corridas.forEach(c => { novoBy[c.hora + '|' + c.corrida] = c; });
     const chave = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
@@ -3126,11 +3132,14 @@ router.get('/diag/cascata-recencia', requireAdmin, (req, res) => {
     num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
     const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
     String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    // FILTRO DE PISTA: ?pistas=Clnml,Mulgr (so essas) OU ?pistasoff=Harlow,Romfd (todas menos essas).
+    const pistas = String(req.query.pistas || '').split(',').map(s => s.trim()).filter(Boolean);
+    const pistasOff = String(req.query.pistasoff || '').split(',').map(s => s.trim()).filter(Boolean);
     const n = req.query.recn != null ? Number(req.query.recn) : 3;
     const d = req.query.recd != null ? Number(req.query.recd) : 0.5;
 
-    const sem = casc.cascata(db, { date, cortes, ativos, recencia: { ativa: false } });
-    const com = casc.cascata(db, { date, cortes, ativos, recencia: { ativa: true, n, decay: d } });
+    const sem = casc.cascata(db, { date, cortes, ativos, recencia: { ativa: false }, pistas, pistasOff });
+    const com = casc.cascata(db, { date, cortes, ativos, recencia: { ativa: true, n, decay: d }, pistas, pistasOff });
 
     const comBy = {}; com.corridas.forEach(c => { comBy[c.hora + '|' + c.corrida] = c; });
     const chave = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
@@ -3276,9 +3285,12 @@ router.get('/diag/cascata-resultado', requireAdmin, (req, res) => {
     num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
     const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
     String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    // FILTRO DE PISTA: ?pistas=Clnml,Mulgr (so essas) OU ?pistasoff=Harlow,Romfd (todas menos essas).
+    const pistas = String(req.query.pistas || '').split(',').map(s => s.trim()).filter(Boolean);
+    const pistasOff = String(req.query.pistasoff || '').split(',').map(s => s.trim()).filter(Boolean);
     const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
       n: req.query.recn != null ? Number(req.query.recn) : undefined, decay: req.query.recd != null ? Number(req.query.recd) : undefined };
-    const c = casc.cascata(db, { date, cortes, ativos, recencia });
+    const c = casc.cascata(db, { date, cortes, ativos, recencia, pistas, pistasOff });
 
     // chegada real por hora|corrida
     const fRows = db.prepare("SELECT r.hora, r.corrida, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
@@ -3327,6 +3339,9 @@ router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
     num('podio', 'podio_min'); num('dqueda', 'desaba_queda'); num('dmin', 'desaba_min'); num('pct', 'parelho_pct');
     const ativos = Object.assign({}, casc.ATIVOS_PADRAO);
     String(req.query.off || '').split(',').map(s => s.trim()).filter(Boolean).forEach(k => { if (k in ativos) ativos[k] = false; });
+    // FILTRO DE PISTA: ?pistas=Clnml,Mulgr (so essas) OU ?pistasoff=Harlow,Romfd (todas menos essas).
+    const pistas = String(req.query.pistas || '').split(',').map(s => s.trim()).filter(Boolean);
+    const pistasOff = String(req.query.pistasoff || '').split(',').map(s => s.trim()).filter(Boolean);
     const recencia = { ativa: req.query.rec === '1' || req.query.rec === 'true',
       n: req.query.recn != null ? Number(req.query.recn) : undefined, decay: req.query.recd != null ? Number(req.query.recd) : undefined };
     const dias = Math.min(Math.max(parseInt(req.query.dias) || 14, 1), 60);
@@ -3336,7 +3351,7 @@ router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
     const porPista = {};   // pista -> {indicadas, com_resultado, bateram}
     let TIndic = 0, TResult = 0, TBateu = 0;
     for (const date of datas) {
-      const c = casc.cascata(db, { date, cortes, ativos, recencia });
+      const c = casc.cascata(db, { date, cortes, ativos, recencia, pistas, pistasOff });
       const fRows = db.prepare("SELECT r.hora, r.corrida, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=?").all(date);
       const fBy = {}; fRows.forEach(r => { fBy[r.hora + '|' + r.corrida] = r.finishing_order_json; });
       let ind = 0, resu = 0, bat = 0;
@@ -3356,7 +3371,7 @@ router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
       TIndic += ind; TResult += resu; TBateu += bat;
     }
     // ranking de pistas por taxa (so as com >=1 resultado), melhor primeiro; empate -> mais amostra
-    const pistas = Object.keys(porPista).map(p => {
+    const pistasRank = Object.keys(porPista).map(p => {
       const P = porPista[p];
       return { pista: p, indicadas: P.indicadas, com_resultado: P.com_resultado, bateram: P.bateram,
         taxa_pct: P.com_resultado ? Math.round(P.bateram / P.com_resultado * 100) : null };
@@ -3367,7 +3382,7 @@ router.get('/diag/cascata-backtest', requireAdmin, (req, res) => {
       regras: { cortes, ativos, recencia },
       total_indicadas: TIndic, total_com_resultado: TResult, total_bateram: TBateu, total_nao_bateram: TResult - TBateu,
       taxa_acerto_geral_pct: TResult ? Math.round(TBateu / TResult * 100) : null,
-      por_pista: pistas,
+      por_pista: pistasRank,
       por_dia: porDia,
       legenda: 'Backtest: a MESMA cascata rodada em varios dias, cada AvB principal cruzado com a chegada real. '
         + 'taxa_acerto_geral = bateram / com_resultado no periodo. Read-only, nada aplicado.'

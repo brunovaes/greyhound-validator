@@ -172,11 +172,19 @@ function cascata(db, opts) {
   const rec = opts.recencia || {};
   const precalcOpts = {};
   if (rec.ativa) { precalcOpts.recenciaAtiva = true; if (rec.n > 0) precalcOpts.recenciaN = Number(rec.n); if (rec.decay > 0) precalcOpts.recenciaDecay = Number(rec.decay); }
-  const rows = db.prepare(
+  let rows = db.prepare(
     "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card " +
     "FROM races r JOIN race_sessions s ON s.id=r.session_id " +
     "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
   ).all(date);
+  // FILTRO DE PISTA (Bruno ago/2026): pre-filtro de CORRIDA (nao de par). `pistas` = so essas
+  // (whitelist); se vazio, `pistasOff` = todas menos essas (blacklist). Vazio nos dois = todas.
+  // A pista e' o 1o token do codigo da corrida ("Clnml A5" -> "clnml"), casado sem caixa.
+  const _pistaDe = corrida => String(corrida || '').split(' ')[0].toLowerCase();
+  const _inc = (Array.isArray(opts.pistas) ? opts.pistas : []).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+  const _exc = (Array.isArray(opts.pistasOff) ? opts.pistasOff : []).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+  if (_inc.length) rows = rows.filter(r => _inc.includes(_pistaDe(r.corrida)));
+  else if (_exc.length) rows = rows.filter(r => !_exc.includes(_pistaDe(r.corrida)));
 
   // funil agregado: mesma estrutura de peneiras, somando entraram/sobraram/mortos.
   const agregado = PENEIRAS.map(pen => ({ id: pen.id, rotulo: pen.rotulo, ativa: !!ativos[pen.ativoKey],
@@ -211,6 +219,7 @@ function cascata(db, opts) {
   return {
     date, cortes, ativos,
     recencia: { ativa: !!rec.ativa, n: precalcOpts.recenciaN || 3, decay: precalcOpts.recenciaDecay || 0.5 },
+    pistas: _inc, pistas_off: _exc,
     total_corridas: rows.length,
     corridas_no_dia: corridas.length,      // as que tinham histórico avaliável
     corridas_que_valem: corridasComPar,    // as que sobrou >=1 par vivo (o "volume" final)
