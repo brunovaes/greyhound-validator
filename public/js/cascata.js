@@ -387,7 +387,27 @@ var COR_PENEIRA = { sp:'#f59e0b', categoria:'#a78bfa', caltm:'#60a5fa',
 // Filtros da lista de corridas. Ficam num cabecalho com as MESMAS colunas da
 // lista, e filtram o que ja foi carregado — nao refazem a chamada, porque o
 // funil e a lista tem que continuar falando do mesmo conjunto de corridas.
-var filtroCorr = { pista:'', dist:'', vale:'' };
+var filtroCorr = { pistas: [], dist:'', vale:'' };
+// Ordenacao da lista. Comeca por hora crescente, que e' a ordem em que as
+// corridas acontecem — a mesma que a Analisar usa.
+var ordemCorr = { campo:'hora', asc:true };
+
+// O payload traz a hora do Reino Unido. A tela toda trabalha em BR, e misturar
+// os dois fusos na mesma pagina e' pedir pra ler a corrida errada.
+// Mesma conversao do resto do sistema: 1-9 viram 13-21 (PM), depois -4h.
+function horaBR(h){
+  var p = String(h||'').split(':');
+  var hh = parseInt(p[0], 10), mm = p[1];
+  if (isNaN(hh) || mm == null) return h || '';
+  if (hh >= 1 && hh <= 9) hh += 12;
+  hh -= 4; if (hh < 0) hh += 24;
+  return hh + ':' + mm;
+}
+function minutosBR(h){
+  var p = horaBR(h).split(':');
+  var hh = parseInt(p[0],10), mm = parseInt(p[1],10);
+  return (isNaN(hh)||isNaN(mm)) ? -1 : hh*60+mm;
+}
 
 function pistaDe(nome){
   // "Yrmth A9" -> "Yrmth". A classe muda a cada corrida; a pista, nao.
@@ -405,8 +425,22 @@ function cascFiltro(campo, valor){
   redesenharCorridas();
 }
 
+// Multipla selecao de pistas no cabecalho da lista. Vem do <select multiple>,
+// entao pode voltar vazio (= todas).
+function cascFiltroPistas(sel){
+  filtroCorr.pistas = Array.prototype.filter.call(sel.options, function(o){ return o.selected && o.value; })
+                                            .map(function(o){ return o.value; });
+  redesenharCorridas();
+}
+
+function cascOrdenar(campo){
+  if (ordemCorr.campo === campo) ordemCorr.asc = !ordemCorr.asc;
+  else { ordemCorr.campo = campo; ordemCorr.asc = true; }
+  redesenharCorridas();
+}
+
 function cascLimparFiltro(){
-  filtroCorr = { pista:'', dist:'', vale:'' };
+  filtroCorr = { pistas: [], dist:'', vale:'' };
   redesenharCorridas();
 }
 
@@ -416,13 +450,18 @@ function cabecalhoCorridas(cs){
   var dists  = uniq(cs.map(function(c){ return c.dist; }));
   var opt = function(lista, sel){
     return lista.map(function(v){
-      return '<option value="'+esc(v)+'"'+(sel===v?' selected':'')+'>'+esc(v)+'</option>';
+      var marcada = sel === v || (sel === null && filtroCorr.pistas.indexOf(v) >= 0);
+      return '<option value="'+esc(v)+'"'+(marcada?' selected':'')+'>'+esc(v)+'</option>';
     }).join('');
   };
+  var seta = ordemCorr.campo==='hora' ? (ordemCorr.asc ? ' \u25B2' : ' \u25BC') : '';
   return '<div class="casc-corr-hd">'
-    + '<span class="cc-hora">HORA</span>'
-    + '<span class="cc-corrida"><select onchange="cascFiltro(\'pista\', this.value)">'
-    +   '<option value="">todas as pistas</option>' + opt(pistas, filtroCorr.pista) + '</select></span>'
+    // Hora BR, e clicavel pra inverter a ordem.
+    + '<span class="cc-hora casc-ord" onclick="cascOrdenar(\'hora\')" title="ordenar por hora">HORA BR' + seta + '</span>'
+    // multiple: segure Ctrl (ou Cmd) pra escolher mais de uma pista.
+    + '<span class="cc-corrida"><select multiple size="1" title="Ctrl (ou Cmd) para escolher mais de uma"'
+    +   ' onchange="cascFiltroPistas(this)">'
+    +   opt(pistas, null) + '</select></span>'
     + '<span class="cc-dist"><select onchange="cascFiltro(\'dist\', this.value)">'
     +   '<option value="">dist.</option>' + opt(dists, filtroCorr.dist) + '</select></span>'
     + '<span class="cc-pick"><select onchange="cascFiltro(\'vale\', this.value)">'
@@ -445,11 +484,14 @@ function redesenharCorridas(){
   if (!todas.length) { alvo.innerHTML = '<div class="casc-vazio">nenhuma corrida avaliada neste dia.</div>'; return; }
 
   var cs = todas.filter(function(c){
-    if (filtroCorr.pista && pistaDe(c.corrida) !== filtroCorr.pista) return false;
+    if (filtroCorr.pistas.length && filtroCorr.pistas.indexOf(pistaDe(c.corrida)) < 0) return false;
     if (filtroCorr.dist  && String(c.dist) !== String(filtroCorr.dist)) return false;
     if (filtroCorr.vale === 'sim' && !c.entrou) return false;
     if (filtroCorr.vale === 'nao' && c.entrou) return false;
     return true;
+  }).sort(function(a,b){
+    var d = minutosBR(a.hora) - minutosBR(b.hora);
+    return ordemCorr.asc ? d : -d;
   });
 
   // Quantas o filtro escondeu. Sem isto a lista encolhe e parece que o dia
@@ -464,7 +506,7 @@ function redesenharCorridas(){
     var p = c.principal;
     return '<div class="casc-corrida' + (c.entrou?' entrou':'') + '">'
       + '<div class="casc-corrida-hd" onclick="cascAbrir(' + i + ')">'
-      +   '<span class="casc-hora cc-hora">' + esc(c.hora) + '</span>'
+      +   '<span class="casc-hora cc-hora">' + esc(horaBR(c.hora)) + '</span>'
       +   '<span class="casc-nome cc-corrida">' + esc(c.corrida) + '</span>'
       +   '<span class="casc-mut cc-dist">' + esc(c.dist||'') + '</span>'
       +   (p ? '<span class="casc-pick cc-pick">T' + p.pick_trap + ' × T' + p.outro_trap

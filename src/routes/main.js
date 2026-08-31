@@ -1539,6 +1539,11 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .casc-corr-hd{display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:6px;
   border-bottom:1px solid var(--bdr2);font-size:9px;letter-spacing:.5px;color:var(--mut2);text-transform:uppercase}
 .casc-corr-hd select{font-size:11px;padding:3px 6px;text-transform:none;letter-spacing:normal;max-width:100%}
+/* select multiple com size=1 vira uma caixa de uma linha que abre a lista:
+   ocupa o mesmo espaco do menu simples e ainda aceita varias pistas. */
+.casc-corr-hd select[multiple]{height:26px;overflow:auto}
+.casc-ord{cursor:pointer;user-select:none}
+.casc-ord:hover{color:#21AB58}
 .cc-hora{min-width:44px;flex:0 0 auto}
 .cc-corrida{min-width:120px;flex:0 0 auto}
 .cc-dist{min-width:70px;flex:0 0 auto}
