@@ -381,19 +381,53 @@ function navBar(user, active) {
         // Convivencia: se a corrida casar nos dois alarmes, o TOP toca e o
         // outro nao repete, porque quem toca o de filtro pula corrida que ja
         // esta na lista de tocadas (window.__ghTopTocou).
+        // Guarda de "ja tocou" que sobrevive a troca de tela dentro da aba.
+        function _topJaTocou(chave){
+          try { return (sessionStorage.getItem('gh_top_tocou')||'').split('|~|').indexOf(chave) >= 0; }
+          catch(e){ return false; }
+        }
+        function _topMarcarTocou(chave){
+          try {
+            var v = (sessionStorage.getItem('gh_top_tocou')||'').split('|~|').filter(Boolean);
+            v.push(chave);
+            // guarda so as ultimas 60: a lista nao pode crescer sem fim
+            sessionStorage.setItem('gh_top_tocou', v.slice(-60).join('|~|'));
+          } catch(e){}
+        }
+
         if (d.alarme_top_ativo) {
           var minTop = d.alarme_top_min_antes != null ? d.alarme_top_min_antes : 5;
           window.__ghTopTocou = window.__ghTopTocou || {};
+          // A data de HOJE, pra comparar com a da corrida.
+          var _hj = new Date();
+          var hojeISO = _hj.getFullYear() + '-'
+            + String(_hj.getMonth()+1).padStart(2,'0') + '-'
+            + String(_hj.getDate()).padStart(2,'0');
+
           d.races.forEach(function(r){
             // Sem tier no payload nao ha como saber o que e' TOP. Nesse caso o
             // alarme simplesmente nao dispara, em vez de tocar em tudo.
             var tier = String(r.tier || '').trim().toLowerCase();
             if (tier !== 'top') return;
+
+            // CORRIDA DE OUTRO DIA. O calculo de minutos compara so hora e
+            // minuto: uma corrida de 13:05 de ONTEM, com a sessao antiga ainda
+            // carregada, "falta 5 minutos" hoje as 13:00 e o alarme tocava sem
+            // haver corrida nenhuma por perto. So conferimos quando a data vem
+            // no payload — sem ela, o comportamento fica como antes.
+            var dataCorrida = r.data || r.date || r.dia || null;
+            if (dataCorrida && String(dataCorrida).slice(0,10) !== hojeISO) return;
+
             var m = minutosAteAgoraGlobal(r.hora_br);
             if (m === null || m < 0 || m > minTop) return;
-            var chave = (r.hora_br || '') + '|' + (r.corrida || '');
-            if (window.__ghTopTocou[chave]) return;
+
+            var chave = hojeISO + '|' + (r.hora_br || '') + '|' + (r.corrida || '');
+            // A marca de "ja tocou" vive na aba, nao so na pagina: trocar de
+            // tela recarregava o script e o alarme tocava de novo pra mesma
+            // corrida, o que parece alarme fantasma.
+            if (window.__ghTopTocou[chave] || _topJaTocou(chave)) return;
             window.__ghTopTocou[chave] = true;
+            _topMarcarTocou(chave);
             tocarSomAlertaGlobal(d.alarme_top_som || 'alarme');
             try {
               var el = document.querySelector('[data-race-key="' + chave + '"]');
