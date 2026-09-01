@@ -1529,6 +1529,8 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
   padding:3px 8px;font-size:11px;color:var(--mut);cursor:pointer;background:#0D1117}
 .casc-pista.on{border-color:#21AB58;color:#21AB58;background:rgba(33,171,88,.10)}
 .casc-pista input{accent-color:#21AB58;margin:0}
+#casc-naoaplicado{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.55);color:#f59e0b;
+  border-radius:8px;padding:9px 13px;font-size:12px;margin-bottom:14px;line-height:1.5}
 #casc-eco{background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.45);color:#ef4444;
   border-radius:8px;padding:6px 10px;font-size:11px;margin-bottom:8px}
 .casc-lever{border:1px solid var(--bdr2);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#0D1117}
@@ -1628,6 +1630,8 @@ ${navBar(user, 'cascata')}
     <br>As peneiras <strong>SP colada</strong> e <strong>Chance</strong> podem ser desligadas aqui para você ver o efeito,
     mas em produção elas continuam sempre valendo.
   </div>
+
+  <div id="casc-naoaplicado" style="display:none"></div>
 
   <div class="casc-kpis">
     <div class="kpi">

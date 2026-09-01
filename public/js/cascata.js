@@ -85,6 +85,13 @@ async function carregarRascunho(){
     // errada e o proximo save gravaria na regua errada.
     estado.cortes = Object.assign({}, ras.cortes || {});
     estado.ativos = Object.assign({}, ras.ativos || {});
+    // O que esta VALENDO em producao, pra tela poder comparar. Quando nao ha
+    // rascunho, o backend devolve a propria producao — nesse caso os dois sao
+    // iguais por definicao.
+    var prod = (d && d.producao) || (d && d.tem_rascunho ? null : ras);
+    estado.producao = prod ? { cortes: Object.assign({}, prod.cortes||{}),
+                               ativos: Object.assign({}, prod.ativos||{}),
+                               pistas: Object.assign({inc:[],exc:[]}, prod.pistas||{}) } : null;
     var pl = ras.pistas || {};
     estado.pistas = { inc: (pl.inc||[]).slice(), exc: (pl.exc||[]).slice() };
     // A whitelist vence quando tem item: o modo segue o mesmo criterio, pra a
@@ -298,6 +305,44 @@ async function salvarRascunho(){
   } catch(e){ toast('não consegui salvar o rascunho: ' + e.message, false); }
 }
 
+// ── rascunho x producao ─────────────────────────────────────────────────────
+//
+// O numero da Cascata sai do RASCUNHO; o tier que o Historico mostra sai do
+// que esta VALENDO. Quando os dois diferem, a tela mostra 10 e o Historico
+// mostra 14 — e nada na tela explicava a diferenca. Este aviso existe pra
+// isso: e' a confusao mais cara desta pagina.
+function diferencasParaProducao(){
+  var p = estado.producao;
+  if (!p) return null;   // sem base de comparacao: nao afirma nada
+  var difs = [];
+  PENEIRAS.forEach(function(pe){
+    if (!pe.chave) return;
+    var novo = estado.cortes[pe.chave], velho = p.cortes[pe.chave];
+    if (novo != null && velho != null && String(novo) !== String(velho))
+      difs.push(pe.rotulo + ' ' + velho + ' \u2192 ' + novo);
+  });
+  ['categoria','caltm','split','podio','fumador'].forEach(function(k){
+    var on = estado.ativos[k] !== false, era = p.ativos[k] !== false;
+    if (on !== era) difs.push(rotuloDe(k) + (on ? ' passa a filtrar' : ' deixa de filtrar'));
+  });
+  var lista = function(a){ return (a||[]).slice().sort().join(','); };
+  if (lista(estado.pistas.inc) !== lista(p.pistas.inc) || lista(estado.pistas.exc) !== lista(p.pistas.exc))
+    difs.push('filtro de pistas');
+  return difs;
+}
+
+function avisarNaoAplicado(){
+  var el = $('casc-naoaplicado'); if(!el) return;
+  var difs = diferencasParaProducao();
+  if (!difs || !difs.length) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<strong>Estes números ainda não estão valendo.</strong> '
+    + 'O funil abaixo usa o rascunho; o motor (e o Histórico) continuam com os valores de produção. '
+    + 'Diferenças: ' + esc(difs.join(' · '))
+    + '<div style="margin-top:6px;font-size:11px;opacity:.85">Clique em APLICAR para o motor passar a usar estes valores '
+    + 'no próximo ciclo. As corridas que já largaram hoje mantêm a marca antiga — a mudança vale das próximas em diante.</div>';
+}
+
 // ── funil ───────────────────────────────────────────────────────────────────
 function paramsSimulacao(){
   var q = ['regua=' + estado.regua];
@@ -330,6 +375,7 @@ async function atualizarFunil(){
     desenharCorridas(d);
     desenharPistas();   // o dia pode ter trazido pistas novas
     ecoDoFiltro(d);
+    avisarNaoAplicado();
   } catch(e){
     alvo.innerHTML = '<div class="casc-vazio">não consegui carregar o funil: ' + esc(e.message) + '</div>';
   }
@@ -633,6 +679,12 @@ async function cascAplicar(){
     if (d && d.ok) {
       toast('aplicado. O motor usa esses valores no próximo ciclo.', true);
       $('casc-origem').textContent = 'aplicado em produção agora';
+      // O que estava no rascunho VIROU producao: a base de comparacao muda
+      // junto, senao o aviso continuaria acusando diferenca que nao existe mais.
+      estado.producao = { cortes: Object.assign({}, estado.cortes),
+                          ativos: Object.assign({}, estado.ativos),
+                          pistas: { inc: estado.pistas.inc.slice(), exc: estado.pistas.exc.slice() } };
+      avisarNaoAplicado();
       atualizarFunil();
     } else {
       toast('não aplicou: ' + ((d && d.erro) || 'resposta inesperada'), false);
