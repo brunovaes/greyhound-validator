@@ -3345,6 +3345,40 @@ router.get('/diag/cascata-config', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// TIER GRAVADO x COMPUTADO (admin — Bruno set/2026): poe lado a lado o tier que ESTA GRAVADO em
+// races.tier (o que a tela Analisar le) e o que o motor CALCULA agora com a config atual. Serve
+// pra achar por que a tela mostra um numero e o dry-run outro. So-leitura.
+//   GET /diag/tier-atual?date=YYYY-MM-DD
+router.get('/diag/tier-atual', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const norm = t => String(t || '').trim().toUpperCase();
+    // sessoes que casam com a data (pra flagrar mismatch de sessao)
+    const sessoes = db.prepare("SELECT s.id, s.name, s.created_at, COUNT(r.id) n FROM race_sessions s LEFT JOIN races r ON r.session_id=s.id WHERE date(s.created_at,'-3 hours')=? GROUP BY s.id").all(date);
+    // tier GRAVADO no banco (exatamente o que a tela le)
+    const rows = db.prepare("SELECT r.hora, r.corrida, r.tier, r.bw, r.final_check_at, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? ORDER BY r.hora").all(date);
+    const gravado = { TOP: 0, REGULAR: 0, vazio: 0 };
+    for (const r of rows) { const t = norm(r.tier); if (t === 'TOP') gravado.TOP++; else if (t === 'REGULAR') gravado.REGULAR++; else gravado.vazio++; }
+    // tier COMPUTADO agora, com a config que esta valendo (nao grava nada)
+    const computado = { com_pick: 0, TOP: 0, REGULAR: 0 };
+    try {
+      const recs = mm.paraPersistir(db, { date });
+      computado.com_pick = recs.length;
+      for (const r of recs) { const t = norm(r.tier); if (t === 'TOP') computado.TOP++; else if (t === 'REGULAR') computado.REGULAR++; }
+    } catch (e) { computado.erro = e.message; }
+    res.json({
+      date, sessoes, total_corridas: rows.length,
+      tier_gravado_no_banco: gravado,
+      tier_computado_agora: computado,
+      confere: (gravado.TOP === computado.TOP && gravado.REGULAR === computado.REGULAR),
+      lista: rows.map(r => ({ hora: r.hora, corrida: r.corrida, tier_gravado: r.tier || null, bw: r.bw, largou: !!(r.final_check_at || r.finishing_order_json) })),
+      legenda: 'tier_gravado_no_banco = o que a tela Analisar le (races.tier). tier_computado_agora = o que o motor daria com a config ATUAL. Se DIFEREM, o ciclo que grava o tier nao reescreveu esta sessao (config mudou depois, servidor nao reiniciou, ou mismatch de data/sessao) — rode /diag/persistir-manha?aplicar=1. Se BATEM mas a tela mostra outro numero, e cache/tela (F5 forte).'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // RESULTADO DA CASCATA (admin — Bruno ago/2026): roda a cascata com as regras da query e cruza
 // o AvB PRINCIPAL de cada corrida indicada com a CHEGADA real (finishing_order_json) — mostra o
 // que BATEU (pick na frente do outro) ou nao, + a taxa. Mesmos params do /diag/cascata.
