@@ -184,7 +184,16 @@ function _analisaCorrida(histFull, histAll, raceCard, ctxBase, opts) {
   const candidatos = todos.filter(s => s.bw_provavel && s.pct > parelhoAte && passaMeio(s))
     .sort((x, y) => y.pct - x.pct);
   const rotulos = ['principal', 'secundario_1', 'secundario_2'];
-  const slots = candidatos.slice(0, N_SLOTS).map((s, i) => Object.assign({}, s, { slot: rotulos[i], tier: i === 0 ? 'TOP' : 'REGULAR' }));
+  // TIER DA CORRIDA (Bruno set/2026): o tier do PRINCIPAL passa a refletir a REGUA que ele de fato
+  // passou — o tierQ do passaRegua: 'TOP' se passa a regua TOP, 'REGULAR' se so passa a mais frouxa.
+  // ANTES era fixado por POSICAO (principal='TOP' sempre), o que descartava o tierQ e ZERAVA a
+  // REGULAR de corrida. Principal que nao passa regua nenhuma (tierQ null) cai em 'TOP' como antes,
+  // pra corrida COM pick nunca sumir da tela. Os secundarios seguem 'REGULAR' (2a/3a linha da MESMA
+  // corrida — e' o papel deles, nao a regua). O `s.tier` aqui e' o tierQ cru vindo do montaSlot.
+  const slots = candidatos.slice(0, N_SLOTS).map((s, i) => Object.assign({}, s, {
+    slot: rotulos[i],
+    tier: i === 0 ? (s.tier === 'REGULAR' ? 'REGULAR' : 'TOP') : 'REGULAR'
+  }));
   return { slots, todos, rankDe, oddMedia, lastSp };
 }
 
