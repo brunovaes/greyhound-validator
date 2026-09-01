@@ -106,27 +106,12 @@ async function carregarRascunho(){
   }
 }
 
-// Trocar de regua RECARREGA os valores daquela regua ANTES de qualquer save.
+// A regua e' SEMPRE 'top': o modelo passou a ter uma so. A funcao de troca
+// saiu junto com o seletor — sem duas reguas, nao ha o que trocar, e manter o
+// caminho vivo so daria chance de alguem gravar numa regua que nao existe.
 //
-// Antes esta funcao so trocava o rotulo e mantinha os numeros na tela — e o
-// proximo save gravava os valores da regua ANTERIOR com a etiqueta da nova.
-// Nao era "nao salvou": era pior, sobrescrevia a outra regua com o que estava
-// na tela. Quem calibrava a TOP e passava pra REGULAR perdia a TOP.
-async function cascRegua(v){
-  if (v === estado.regua) return;
-  estado.regua = v;
-  var sel = $('casc-regua');
-  // Trava o seletor durante a troca: dois cliques rapidos gravariam a regua
-  // errada no meio do carregamento.
-  if (sel) sel.disabled = true;
-  $('casc-origem').textContent = 'carregando a régua ' + (v === 'top' ? 'TOP' : 'REGULAR') + '…';
-  await carregarRascunho();
-  if (sel) sel.disabled = false;
-  desenharAlavancas();
-  desenharPistas();
-  atualizarFunil();
-  PENEIRAS.forEach(function(p){ carregarExemplo(p.id); });
-}
+// O backend continua aceitando ?regua=regular (fica dormente); a tela
+// simplesmente nunca pede.
 
 async function cascIniciar(){
   await carregarRascunho();

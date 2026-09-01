@@ -1504,6 +1504,8 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .wrap{max-width:1400px;margin:0 auto;padding:16px}
 .casc-hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
 .casc-hd h1{font-size:19px;margin:0}
+.casc-regua-fixa{font-size:11px;font-weight:700;letter-spacing:.5px;color:#D4AF37;
+  border:1px solid rgba(212,175,55,.5);border-radius:8px;padding:3px 10px}
 .casc-sub{font-size:12px;color:var(--mut);max-width:680px;line-height:1.5}
 .casc-aviso{background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.45);color:#f59e0b;
   border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:14px;line-height:1.5}
@@ -1612,10 +1614,10 @@ ${navBar(user, 'cascata')}
 
   <div class="casc-hd">
     <h1>Cascata de Cortes</h1>
-    <select id="casc-regua" onchange="cascRegua(this.value)" title="Qual régua está sendo calibrada">
-      <option value="top">régua TOP</option>
-      <option value="regular">régua REGULAR</option>
-    </select>
+    <!-- O seletor de regua SAIU: existe uma regua so (TOP). Um seletor de uma
+         opcao nao decide nada, e era ele a origem do bug em que trocar de
+         regua sobrescrevia a calibragem da outra. -->
+    <span class="casc-regua-fixa">régua TOP</span>
     <input type="date" onchange="cascData(this.value)" title="Dia a simular (padrão: hoje)">
     <span class="casc-sub" id="casc-origem">carregando…</span>
   </div>
@@ -1881,16 +1883,19 @@ function _motorDoAvb(r){
   if (op === 'surpresa') return 'surpresa';
   if (op === 'secundario') return 'secundario';
 
+  // Uma regua so: TOP. O 'regular' continua sendo aceito porque sessao gravada
+  // no modelo anterior tem esse valor no banco — traduzir pra TOP mantem o
+  // historico legivel em vez de virar traco retroativamente.
   var t = String(r.tier || '').trim().toLowerCase();
-  if (t === 'top' || t === 'regular') return 'vip';
-  if (r.bw === 1 || r.bw === true || r.bw === '1') return 'vip';
+  if (t === 'top' || t === 'regular') return 'top';
+  if (r.bw === 1 || r.bw === true || r.bw === '1') return 'top';
   return '';
 }
 
 function _celulaMotor(r){
   var m = _motorDoAvb(r);
   var mapa = {
-    vip:        ['#D4AF37', 'VIP',        'o motor deu um AvB principal para esta corrida'],
+    top:        ['#D4AF37', 'TOP',        'principal na régua TOP (a nata)'],
     secundario: ['#60a5fa', 'SECUNDÁRIO', 'você entrou num par que não era o principal'],
     surpresa:   ['#ef4444', 'SURPRESA',   'você entrou num par que a BW abriu e o motor não tinha previsto de manhã']
   };
@@ -2276,7 +2281,7 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:92px">Origem<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="vip">VIP</option><option value="secundario">Secundário</option><option value="surpresa">Surpresa</option><option value="fora">Sem AvB</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:328px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:92px">Origem<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="top">TOP</option><option value="secundario">Secundária</option><option value="surpresa">Surpresa</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:328px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
@@ -2551,8 +2556,7 @@ function aplicarFiltroHist(){
       : true;
     var mo=tr.getAttribute('data-motor')||'';
     // 'fora' = a corrida nao passou em nenhuma das duas reguas (tier vazio).
-    // 'fora' = a corrida nao teve AvB principal.
-    var casaMotor = !fm ? true : (fm==='fora' ? mo==='' : mo===fm);
+    var casaMotor = !fm ? true : (mo === fm);
     var ok=casaAberto&&casaMotor&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
     tr.style.display=ok?'':'none';
   });
