@@ -3324,6 +3324,27 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// CONFIG VALENDO EM PRODUÇÃO (admin — Bruno ago/2026): so-leitura. Mostra o que ESTA no
+// analysis_config AGORA (o que o motor unico usa), separado por regua + globais. Serve pra
+// conferir depois de um APLICAR. Nao roda funil, nao recalcula nada — so le as colunas.
+router.get('/diag/cascata-config', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const c = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,desaba_queda,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get() || {};
+    let _pf = {}; try { _pf = c.pistas_filtro ? (JSON.parse(c.pistas_filtro) || {}) : {}; } catch (e) {}
+    res.json({
+      top: { sp_ratio_max: c.sp_ratio_max, caltm_min_dif: c.caltm_min_dif, split_min: c.split_min, podio_min: c.podio_min, desaba_min: c.desaba_min },
+      regular: { sp_ratio_max: c.reg_sp_ratio_max, caltm_min_dif: c.reg_caltm_min_dif, split_min: c.reg_split_min, podio_min: c.reg_podio_min, desaba_min: c.reg_desaba_min },
+      globais: { desaba_queda: c.desaba_queda, parelho_pct: c.avb_parelho_pct },
+      ativos: { categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1, podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1 },
+      recencia: { ativa: c.recencia_ativa === 1, n: c.recencia_n, decay: c.recencia_decay },
+      pistas: { inc: Array.isArray(_pf.inc) ? _pf.inc : [], exc: Array.isArray(_pf.exc) ? _pf.exc : [] },
+      legenda: 'O que esta VALENDO em producao agora (analysis_config). top/regular = cortes de cada regua; '
+        + 'globais/ativos/recencia/pistas valem pras duas. Eh isto que o motor unico usa no proximo ciclo.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // RESULTADO DA CASCATA (admin — Bruno ago/2026): roda a cascata com as regras da query e cruza
 // o AvB PRINCIPAL de cada corrida indicada com a CHEGADA real (finishing_order_json) — mostra o
 // que BATEU (pick na frente do outro) ou nao, + a taxa. Mesmos params do /diag/cascata.
