@@ -3229,8 +3229,17 @@ router.get('/diag/cascata-rascunho', requireAdmin, (req, res) => {
     const recencia = (st && st.recencia) ? st.recencia : { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 };
     const pistas = (st && st.pistas) ? st.pistas : { inc: Array.isArray(_pf.inc) ? _pf.inc : [], exc: Array.isArray(_pf.exc) ? _pf.exc : [] };
     const rascunho = { regua, cortes, ativos, recencia, pistas };
-    res.json({ rascunho, regua, salvo_em: row ? row.updated_at : null, tem_rascunho: !!(slot && Object.keys(slot).length),
-      legenda: 'rascunho POR RÉGUA: ?regua=top|regular devolve os cortes daquela régua — as duas NÃO se sobrescrevem. ativos/recencia/pistas sao globais (uma coisa so). So o APLICAR grava em producao.' });
+    // PRODUCAO (Bruno set/2026): o que o motor esta usando AGORA (analysis_config), pra a tela
+    // comparar rascunho x producao e avisar "voce mexeu mas nao aplicou". SEMPRE do config (ignora
+    // o rascunho). cortes = da MESMA regua pedida, pra bater com rascunho.cortes.
+    const producao = {
+      cortes: _cortesDeConfig(c, regua, casc),
+      ativos: { categoria: c.casc_ativo_categoria === 1, caltm: c.casc_ativo_caltm === 1, split: c.casc_ativo_split === 1, podio: c.casc_ativo_podio === 1, fumador: c.casc_ativo_fumador === 1 },
+      recencia: { ativa: c.recencia_ativa === 1, n: c.recencia_n != null ? c.recencia_n : 3, decay: c.recencia_decay != null ? c.recencia_decay : 0.5 },
+      pistas: { inc: Array.isArray(_pf.inc) ? _pf.inc : [], exc: Array.isArray(_pf.exc) ? _pf.exc : [] }
+    };
+    res.json({ rascunho, producao, regua, salvo_em: row ? row.updated_at : null, tem_rascunho: !!(slot && Object.keys(slot).length),
+      legenda: 'rascunho = o que voce esta mexendo; producao = o que o motor usa AGORA (analysis_config). Compare os dois pra avisar divergencia — so o APLICAR faz o rascunho virar producao. Quando tem_rascunho=false, rascunho ja vem == producao. cortes por RÉGUA (?regua=); ativos/recencia/pistas sao globais.' });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
