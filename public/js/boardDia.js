@@ -57,6 +57,13 @@
   function linha(x, piscando) {
     var cam = glob.PainelDia.camadaDe(x);
     var abriu = x.odd_bw != null;
+    // "A BW abriu, mas abriu LARGA": odd preenchida com a camada ainda em
+    // OPORTUNIDADE (razao > 1.5). Nao apita, e nao promoveu.
+    //
+    // Mostramos assim mesmo, marcada. Esconder a odd faria voce se perguntar
+    // por que ela sumiu; mostrar limpa daria a impressao de que qualificou. O
+    // mercado discordou da leitura da manha, e isso e' informacao.
+    var abriuLarga = abriu && String(x.camada || '').toUpperCase() === 'OPORTUNIDADE';
     return '<tr class="bd-linha' + (piscando ? ' bd-pisca' : '') + (x.escolhido && x.entradaCorrida ? ' bd-com-entrada' : '') + '"'
       + ' data-id="' + esc(x.id) + '" style="--bd-cor:' + cam.cor + '">'
       + '<td class="bd-hora">' + esc(x.hora_br || x.hora || '') + '</td>'
@@ -67,9 +74,13 @@
       // Odd e razão só existem depois que a BW abriu. Antes disso a célula fica
       // vazia, e não com zero: zero seria um número, e número errado é pior que
       // ausência.
-      + '<td class="bd-num">' + (abriu ? n2(x.odd_bw) : '<span class="bd-mut">—</span>') + '</td>'
-      + '<td class="bd-num">' + (x.razao_mercado != null ? n2(x.razao_mercado, 3) : '<span class="bd-mut">—</span>') + '</td>'
-      + '<td>' + chipCamada(x) + chipEntrada(x) + '</td>'
+      + '<td class="bd-num' + (abriuLarga ? ' bd-larga' : '') + '">'
+      +   (abriu ? n2(x.odd_bw) : '<span class="bd-mut">—</span>') + '</td>'
+      + '<td class="bd-num' + (abriuLarga ? ' bd-larga' : '') + '">'
+      +   (x.razao_mercado != null ? n2(x.razao_mercado, 3) : '<span class="bd-mut">—</span>') + '</td>'
+      + '<td>' + chipCamada(x)
+      +   (abriuLarga ? '<span class="bd-chip bd-larga-chip" title="a BW abriu este par, mas com odds distantes: não colou, então não virou TOP">abriu, não colou</span>' : '')
+      +   chipEntrada(x) + '</td>'
       + '<td>' + chipResultado(x) + '</td>'
       + '</tr>';
   }

@@ -18,12 +18,14 @@
   }
 
   // ── casamento com a sessão carregada ──────────────────────────────────────
-  // O payload do painel traz o par, mas não o histórico dos galgos — e sem ele
-  // não há gauges. A corrida já está carregada na Analisar (results), com
-  // histAll: casamos por hora+corrida e reaproveitamos.
+  // O payload traz o par e os NOMES (pick_nome/outro_nome), mas não o
+  // histórico dos galgos — e sem histórico não há gauges. A corrida já está
+  // carregada na Analisar (results), com histAll: casamos por hora+corrida e
+  // reaproveitamos só para os gauges.
   //
-  // Sem o casamento o card ainda aparece, só que sem gauges. É melhor mostrar
-  // o par e a odd do que esconder a oportunidade porque falta um detalhe.
+  // Os nomes NÃO dependem mais deste casamento: vêm prontos do payload, então
+  // o snapshot da aposta sai completo mesmo para corrida que não esteja
+  // carregada. Sem o casamento o card ainda aparece, só que sem gauges.
   function corridaDaSessao(x) {
     var lista = glob.results || [];
     for (var i = 0; i < lista.length; i++) {

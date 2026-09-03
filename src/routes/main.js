@@ -1709,6 +1709,10 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .bd-ko{border-color:#ef4444;color:#ef4444}
 .bd-wait{border-color:var(--bdr2);color:var(--mut)}
 .bd-entrei{border-color:#21AB58;color:#04140a;background:#21AB58}
+/* "abriu, nao colou": a odd existe mas o par nao qualificou. Fica apagada pra
+   nao competir com as que valem, sem sumir da tela. */
+.bd-larga{color:var(--mut)}
+.bd-larga-chip{border-color:var(--mut);color:var(--mut);cursor:help}
 
 /* Promoção: a linha pisca E a borda esquerda pisca junto, na cor da camada.
    Só o fundo piscando se perde numa lista longa; a borda dá o contorno que
