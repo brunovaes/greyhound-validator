@@ -1607,6 +1607,45 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .casc-desc{font-size:10px;color:var(--mut2);margin-top:1px}
 /* Cabecalho da lista de corridas: as MESMAS larguras das linhas, senao os
    filtros nao apontam pra coluna que filtram. */
+/* ── Board do dia (Histórico) ─────────────────────────────────────────────
+   Uma linha por confronto. A cor vem da camada, via --bd-cor, posta na
+   propria linha pelo JS: assim TOP, HIGH e GOOD usam o MESMO CSS e a cor nao
+   precisa ser duplicada em regra por camada. */
+.bd-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.bd-tbl th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);
+  padding:6px 8px;border-bottom:1px solid var(--bdr2)}
+.bd-tbl td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
+.bd-linha{border-left:3px solid transparent}
+.bd-com-entrada{background:rgba(33,171,88,.06)}
+.bd-hora{font-weight:800;color:#21AB58;white-space:nowrap}
+.bd-corrida{font-weight:600}
+.bd-par{white-space:nowrap}
+.bd-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bd-mut{color:var(--mut)}
+.bd-vazio{padding:18px;text-align:center;color:var(--mut)}
+.bd-erro{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.5);color:#f59e0b;
+  border-radius:8px;padding:6px 10px;font-size:11px;margin-bottom:8px}
+.bd-chip{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;
+  padding:2px 7px;border-radius:9px;border:1px solid;white-space:nowrap;margin-right:4px}
+.bd-ok{border-color:#22c55e;color:#22c55e}
+.bd-ko{border-color:#ef4444;color:#ef4444}
+.bd-wait{border-color:var(--bdr2);color:var(--mut)}
+.bd-entrei{border-color:#21AB58;color:#04140a;background:#21AB58}
+
+/* Promoção: a linha pisca E a borda esquerda pisca junto, na cor da camada.
+   Só o fundo piscando se perde numa lista longa; a borda dá o contorno que
+   puxa o olho de longe. */
+@keyframes bdPisca{
+  0%,100%{ border-left-color:transparent; box-shadow:none;                 filter:none }
+  50%    { border-left-color:var(--bd-cor);
+           /* inset cobre a linha inteira sem apagar o texto: cor cheia no
+              fundo deixaria as letras ilegiveis justamente no pico do aviso */
+           box-shadow:inset 0 0 0 9999px var(--bd-cor), 0 0 12px var(--bd-cor);
+           filter:brightness(1.25) }
+}
+/* 8 piscadas (~8s): tempo de olhar sem virar estrobo permanente na tela. */
+.bd-pisca{animation:bdPisca 1s ease-in-out 8}
+
 .casc-corr-hd{display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:6px;
   border-bottom:1px solid var(--bdr2);font-size:9px;letter-spacing:.5px;color:var(--mut2);text-transform:uppercase}
 .casc-corr-hd select{font-size:11px;padding:3px 6px;text-transform:none;letter-spacing:normal;max-width:100%}
