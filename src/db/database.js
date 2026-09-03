@@ -185,6 +185,22 @@ db.exec(`
     capturado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  -- set/2026 (Bruno) — ODDS INDIVIDUAIS do mercado "Vencedor" da BW, por corrida. O feed ja traz
+  -- (parseRaceMarkets.dogs), mas so guardavamos os pares (avb_abertos). Aqui guardamos a odd de
+  -- cada trap, INDEPENDENTE de a BW ter aberto frente-a-frente — assim da pra medir a cobertura
+  -- real (quantas corridas a BW abre mercado) e validar a colagem contra o mercado de verdade.
+  -- odds_json = [{trap, nome, odd}]. Uma linha por game_id, atualizada quando aparecem mais traps.
+  CREATE TABLE IF NOT EXISTS odds_vencedor (
+    game_id INTEGER PRIMARY KEY,
+    data TEXT,
+    corrida TEXT,
+    hora TEXT,
+    track TEXT,
+    odds_json TEXT,
+    n_dogs INTEGER DEFAULT 0,
+    capturado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   -- ago/2026 — trafego do proxy por dia (fuso BR), PERSISTIDO pra sobreviver aos
   -- deploys do Railway (o contador em memoria zerava a cada restart). Comparar com
   -- o USED TRAFFIC da Decodo. bytes = comprimidos na rede + overhead por requisicao.

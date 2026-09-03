@@ -482,6 +482,36 @@ function _gravarInicialAvb(inic){
 // CALIBRAR o limiar do avb_parelho: depois cruzamos estes pares com as SPs dos
 // PDFs (races.hist_all) e medimos a distancia de odd que o betwinner realmente
 // abre. Puramente aditivo — nunca pode afetar o robo (try/catch total).
+// Captador do mercado "Vencedor" (Bruno set/2026): grava a odd individual de cada trap que a BW
+// abriu, INDEPENDENTE de haver frente-a-frente. Uma linha por game_id, upsert quando aparecem mais
+// traps. Serve pra (1) medir a cobertura real da BW (quantas corridas ela abre mercado) e (2)
+// validar a colagem contra o mercado de verdade. Puramente aditivo — nunca derruba o captador.
+function _gravarOddsVencedor(info){
+  try{
+    if(!info || !info.gameId || !Array.isArray(info.dogs) || !info.dogs.length) return;
+    const { db } = require('../db/database');
+    // normaliza: [{trap, nome, odd}] a partir de dogs [{trap, nome, winOdd}]
+    const dogs = info.dogs
+      .map(d => ({ trap: Number(d.trap), nome: d.nome || null, odd: (d.winOdd != null ? d.winOdd : d.odd) }))
+      .filter(d => d.trap > 0 && d.odd != null);
+    if (!dogs.length) return;
+    const existe = db.prepare('SELECT n_dogs FROM odds_vencedor WHERE game_id=?').get(info.gameId);
+    if (existe && existe.n_dogs >= dogs.length) return; // ja temos igual/mais traps
+    db.prepare(
+      'INSERT INTO odds_vencedor (game_id,data,corrida,hora,track,odds_json,n_dogs,capturado_em) '
+      + 'VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP) '
+      + 'ON CONFLICT(game_id) DO UPDATE SET data=excluded.data,corrida=excluded.corrida,hora=excluded.hora,'
+      + 'track=excluded.track,odds_json=excluded.odds_json,n_dogs=excluded.n_dogs,capturado_em=CURRENT_TIMESTAMP'
+    ).run(info.gameId, getTodayDate(), info.corrida||null, info.hora||null, info.track||null, JSON.stringify(dogs), dogs.length);
+  } catch(e){ /* captacao nunca pode afetar o robo */ }
+}
+
+// Captador dos AvBs que o betwinner ABRE por corrida (todos os pares, nao so os
+// da reanalise). Grava na tabela avb_abertos, uma linha por game_id, guardando o
+// conjunto MAIS COMPLETO visto (upsert quando aparecem mais pares). Serve pra
+// CALIBRAR o limiar do avb_parelho: depois cruzamos estes pares com as SPs dos
+// PDFs (races.hist_all) e medimos a distancia de odd que o betwinner realmente
+// abre. Puramente aditivo — nunca pode afetar o robo (try/catch total).
 // GRITO de AvB novo (Bruno ago/2026): uma vez por corrida (reseta no restart, tudo bem).
 const _surpresaGritada = new Set();
 function _gravarParesAbertos(info){
@@ -548,6 +578,7 @@ function _iniciarOdds(){
     onClose: _gravarFechamentoAvb,
     onFirst: _gravarInicialAvb,
     onPairs: _gravarParesAbertos,
+    onDogs: _gravarOddsVencedor,
     getOddsCfg: () => { const x = getOddsConfig(); return { maxAvbs: x.maxAvbs, edgeMin: x.edgeMin }; },
     proxyUrl: c.proxyUrl,
     maxAvbs: c.maxAvbs, edgeMin: c.edgeMin
@@ -3330,6 +3361,55 @@ router.post('/diag/cascata-aplicar', requireAdmin, express.json(), (req, res) =>
     const aplicado = db.prepare('SELECT sp_ratio_max,caltm_min_dif,split_min,podio_min,desaba_queda,desaba_min,reg_sp_ratio_max,reg_caltm_min_dif,reg_split_min,reg_podio_min,reg_desaba_min,avb_parelho_pct,casc_ativo_categoria,casc_ativo_caltm,casc_ativo_split,casc_ativo_podio,casc_ativo_fumador,recencia_ativa,recencia_n,recencia_decay,pistas_filtro FROM analysis_config WHERE user_id=1').get();
     res.json({ ok: true, reguas_aplicadas: reguasAplicadas, regua: reguasAplicadas.join('+') || null, aplicado,
       legenda: 'APLICADO no analysis_config. Aplica as reguas calibradas no rascunho (TOP e/ou REGULAR) de uma vez; ativos/recencia/pistas sao globais. O motor unico ja usa no proximo ciclo. As 5 peneiras do meio filtram so se casc_ativo_*=1; SP-colada e pct sempre valem.' });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// COBERTURA DA BW (admin — Bruno set/2026): responde o "de 16 corridas, quantas a BW abriu?".
+// Por dia, cruza as corridas TOP (o que a gente quer apostar) com o que a BW abriu: mercado
+// "Vencedor" (odds_vencedor) e frente-a-frente (avb_abertos). Separa "teto da BW" (ela nem abre
+// mercado) de "abre mercado mas nao o frente-a-frente" de "abre o par". So-leitura.
+//   GET /diag/cobertura-bw?date=YYYY-MM-DD
+// OBS: odds_vencedor so tem dados a partir do deploy desta captura — dias anteriores vem vazios.
+router.get('/diag/cobertura-bw', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const _c = c => String(c || '').trim().toLowerCase();
+    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
+    const k = (co, ho) => _c(co) + '|' + _h(ho);
+    // corridas do dia com principal (tier != null = as que o motor indicou)
+    const races = db.prepare(
+      "SELECT r.hora, r.corrida, r.tier FROM races r JOIN race_sessions s ON s.id=r.session_id " +
+      "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL AND r.trap_fav>0 ORDER BY r.hora"
+    ).all(date);
+    // o que a BW abriu no dia
+    const winRows = db.prepare('SELECT corrida, hora, n_dogs FROM odds_vencedor WHERE data=?').all(date);
+    const h2hRows = db.prepare('SELECT corrida, hora, n_pares FROM avb_abertos WHERE data=?').all(date);
+    const winMap = {}; for (const w of winRows) winMap[k(w.corrida, w.hora)] = w.n_dogs;
+    const h2hMap = {}; for (const p of h2hRows) h2hMap[k(p.corrida, p.hora)] = p.n_pares;
+    const tops = races.filter(r => String(r.tier || '').trim().toUpperCase() === 'TOP');
+    const linhas = tops.map(r => {
+      const key = k(r.corrida, r.hora);
+      return { hora: r.hora, corrida: r.corrida, tem_win_market: key in winMap, n_dogs: winMap[key] || 0, tem_frente_a_frente: key in h2hMap, n_pares: h2hMap[key] || 0 };
+    });
+    const comWin = linhas.filter(l => l.tem_win_market).length;
+    const comH2h = linhas.filter(l => l.tem_frente_a_frente).length;
+    res.json({
+      date,
+      resumo: {
+        corridas_top: tops.length,
+        top_com_win_market: comWin,
+        top_com_frente_a_frente: comH2h,
+        // no dia inteiro (nao so TOP), pra referencia:
+        dia_win_market: winRows.length, dia_frente_a_frente: h2hRows.length
+      },
+      linhas,
+      legenda: 'corridas_top = quantas o motor indicou (TOP). top_com_win_market = dessas, quantas a BW '
+        + 'abriu o mercado Vencedor. top_com_frente_a_frente = quantas a BW abriu AvB. Se win_market for '
+        + 'alto mas frente_a_frente baixo = a BW simplesmente nao oferece AvB nessas (teto da casa). Se '
+        + 'win_market tambem for baixo = a corrida nem foi monitorada/aberta. odds_vencedor so tem dados '
+        + 'a partir do deploy desta captura — rode amanha pra leitura completa.'
+    });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 

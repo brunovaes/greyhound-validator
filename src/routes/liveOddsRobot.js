@@ -491,6 +491,7 @@ let timer = null;
 let _onClose = null; // callback(fechamento) — grava a principal no banco no post (setado por iniciar)
 let _onFirst = null; // callback(inicial) — grava a principal na 1a analise (congelada), uma vez (setado por iniciar)
 let _onPairs = null; // callback(pares abertos) — captador de calibracao do avb_parelho (setado por iniciar)
+let _onDogs = null;  // callback(odds de vitoria por trap) — captador do mercado "Vencedor" (setado por iniciar)
 
 // Cache da DESCOBERTA de pistas/corridas. O GetSportsShortZip (a lista de quais
 // corridas estao ao vivo) e' o endpoint que toma 406 quando batido de 5 em 5s.
@@ -589,6 +590,13 @@ async function umCiclo(getScores) {
       try { _onPairs({ gameId: r.gameId, track: r.track, corrida: (analise && analise.corrida) || null, hora: (analise && analise.hora) || null, pares: snap._avbsBrutos }); }
       catch (err) { /* silencioso — captacao nunca pode afetar o robo */ }
     }
+    // Captador do mercado "Vencedor": grava a odd individual de cada trap — INDEPENDENTE de haver
+    // frente-a-frente (por isso fora do if de pares). Assim medimos a cobertura real da BW e
+    // validamos a colagem contra o mercado. Nunca derruba o ciclo. (Bruno set/2026)
+    if (typeof _onDogs === 'function' && snap && Array.isArray(snap.dogs) && snap.dogs.length) {
+      try { _onDogs({ gameId: r.gameId, track: r.track, corrida: (analise && analise.corrida) || null, hora: (analise && analise.hora) || null, dogs: snap.dogs }); }
+      catch (err) { /* silencioso — captacao nunca pode afetar o robo */ }
+    }
     status.porCorrida[chave] = {
       gameId: r.gameId, li: r.li, track: r.track, pista: r.pista, raceNum: r.raceNum,
       statusLine: r.statusLine, startTs: r.startTs,
@@ -649,6 +657,7 @@ function iniciar(getScores, opts) {
   _onClose = (typeof opts.onClose === 'function') ? opts.onClose : null; // grava o fechamento no banco
   _onFirst = (typeof opts.onFirst === 'function') ? opts.onFirst : null; // grava o AvB inicial (1a analise)
   _onPairs = (typeof opts.onPairs === 'function') ? opts.onPairs : null; // captador de pares abertos (calibracao)
+  _onDogs = (typeof opts.onDogs === 'function') ? opts.onDogs : null;    // captador do mercado "Vencedor" (odds individuais)
   _getOddsCfg = (typeof opts.getOddsCfg === 'function') ? opts.getOddsCfg : null; // config viva (maxAvbs/edgeMin)
   if (opts.proxyUrl !== undefined) setProxy(opts.proxyUrl || process.env.BETWINNER_PROXY_URL || ''); // config vence env
   if (opts.maxAvbs > 0) _maxAvbs = opts.maxAvbs;
