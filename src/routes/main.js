@@ -954,7 +954,12 @@ ${navBar(user, 'analisar')}
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
-  <div class="focus-col" id="focus-col"></div>
+  <div class="focus-col" id="focus-col">
+    <!-- Standby e tiles do Painel do Dia. Fica dentro da coluna de foco, que
+         ja tem a altura certa; o app.js sobrescreve este conteudo quando o
+         Bruno abre uma corrida pela lista, e o painel volta quando ele sai. -->
+    <div id="ap-painel" class="ap-grid ap-g1"></div>
+  </div>
   <div class="content">
     <div class="pw" id="pw"><div class="pb"><div class="pf" id="pf" style="width:0%"></div></div><div class="pt" id="pt"></div></div>
     <div class="kpis">
@@ -1021,7 +1026,26 @@ ${navBar(user, 'analisar')}
 </div>
 
 <script>var BASE='${BASE}';var SS_KEY='ghf_results_v1';</script>
-<script src="${BASE}/app.js"></script></body></html>`);
+<script src="${BASE}/app.js"></script>
+<!-- Depois do app.js de proposito: o tile reaproveita o _cardAvb e o
+     _nomeDoTrap definidos la. -->
+<script src="${BASE}/static/js/painelDia.js"></script>
+<script src="${BASE}/static/js/analisarPainel.js"></script>
+<script>
+(function(){
+  // O painel so desenha quando NAO ha corrida aberta pela lista: abrir uma
+  // corrida e' uma acao deliberada do Bruno, e o painel sobrescrever aquilo
+  // tiraria a tela debaixo dele no meio da analise.
+  function telaLivre(){
+    var c = document.getElementById('focus-col');
+    return !!(c && c.querySelector('#ap-painel'));
+  }
+  window.PainelDia.assinar(function(dados){
+    if (telaLivre()) window.AnalisarPainel.render('ap-painel', dados);
+  });
+  window.PainelDia.iniciar({});
+})();
+</script></body></html>`);
 });
 
 router.get('/live', exigirAcesso('screen.live'), (req, res) => {
@@ -2412,6 +2436,18 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
+<!-- Board do dia: os TOP do dia, ao vivo. Fica ACIMA da tabela de sempre, e
+     nao no lugar dela: o Historico continua sendo o arquivo, com Bateu, Odd,
+     Observacoes e as origens. Trocar uma coisa pela outra tiraria do Bruno a
+     tela que ele usa pra fechar o dia. -->
+<div class="section" id="hist-board-wrap">
+  <div class="sec-title" style="display:flex;align-items:center;gap:10px">
+    Board do dia
+    <span id="hist-board-st" style="font-size:10px;font-weight:400;color:var(--mut);text-transform:none;letter-spacing:normal"></span>
+  </div>
+  <div id="hist-board"><div class="bd-vazio">carregando…</div></div>
+</div>
+
 <div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:92px">Origem<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="top">TOP</option><option value="secundario">Secundária</option><option value="surpresa">Surpresa</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:328px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
@@ -2496,6 +2532,22 @@ ${cssCardGalgo()}
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script src="${BASE}/static/js/cardGalgo.js"></script>
+<script src="${BASE}/static/js/painelDia.js"></script>
+<script src="${BASE}/static/js/boardDia.js"></script>
+<script>
+(function(){
+  var st = document.getElementById('hist-board-st');
+  window.PainelDia.assinar(function(dados, erro){
+    window.BoardDia.render('hist-board', dados, erro);
+    if (st && dados) {
+      var n = window.PainelDia.doBoard(dados).length;
+      st.textContent = n + (n === 1 ? ' oportunidade' : ' oportunidades')
+        + (dados.atualizado_em ? ' · atualizado ' + String(dados.atualizado_em).slice(11,16) : '');
+    }
+  });
+  window.PainelDia.iniciar({});
+})();
+</script>
 <script>
 
 // "leia mais" das Observacoes: um listener so pra tabela inteira, em vez de

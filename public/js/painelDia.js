@@ -36,22 +36,11 @@
     erro: null,
     timer: null,
     ouvintes: [],
-    // Promocoes ja avisadas: id -> promovido_em. Guardar o TIMESTAMP, e nao um
-    // booleano, e' o que permite um MESMO confronto ser promovido de novo
-    // (ex.: reabriu na BW) e apitar outra vez, sem repetir a promocao antiga a
-    // cada volta do polling.
-    avisados: {}
+    // Camada vista de cada confronto na volta anterior: id -> 'TOP' | ...
+    // E' a comparacao entre voltas que dispara o alarme.
+    vistas: {},
+    semBase: true
   };
-
-  function carregarAvisados() {
-    try {
-      var v = sessionStorage.getItem('gh_painel_avisados');
-      st.avisados = v ? JSON.parse(v) : {};
-    } catch (e) { st.avisados = {}; }
-  }
-  function gravarAvisados() {
-    try { sessionStorage.setItem('gh_painel_avisados', JSON.stringify(st.avisados)); } catch (e) {}
-  }
 
   // ── busca ─────────────────────────────────────────────────────────────────
   function urlPainel(data) {
@@ -113,6 +102,10 @@
   function paraEntrar(d) {
     return confrontos(d)
       .filter(function (x) { return x.aguardando_entrada === true; })
+      // Ordena pelo promovido_em, que e' APROXIMADO — e aqui tudo bem: ele so
+      // decide qual tile fica mais a esquerda. Pra disparar alarme ele nao
+      // serve (o motor avisou que o valor se move), e por isso o alarme usa
+      // transicao de camada.
       .sort(function (a, b) {
         return String(b.promovido_em || '').localeCompare(String(a.promovido_em || ''));
       })
@@ -120,25 +113,67 @@
   }
 
   // ── alarme ────────────────────────────────────────────────────────────────
-  // Dispara uma vez por PROMOCAO. O gatilho e' o promovido_em ser novo pra
-  // aquele id — nao a camada, nao a presenca na lista: o polling traz o mesmo
-  // confronto a cada 15s, e qualquer outro criterio apitaria em loop.
+  //
+  // O gatilho e' a TRANSICAO de camada entre uma volta e outra do polling, nao
+  // o promovido_em. O motor avisou que aquele timestamp e' aproximado (vem do
+  // capturado_em do avb_abertos) e pode se mover enquanto o mercado ainda esta
+  // enchendo — deduplicar por ele faria o mesmo confronto apitar varias vezes.
+  //
+  // Duas coisas disparam:
+  //   1) o confronto MUDOU de camada pra uma que apita (OPORTUNIDADE -> TOP)
+  //   2) o confronto APARECEU ja apitando (HIGH e GOOD nascem assim)
+  //
+  // A camada vista de cada id fica na aba, entao trocar de tela nao reapita.
+  function carregarVistas() {
+    try {
+      var v = sessionStorage.getItem('gh_painel_camadas');
+      st.vistas = v ? JSON.parse(v) : {};
+      // Aba nova (nada guardado) = primeira vez que esta aba ve o dia. A
+      // primeira volta so registra o estado, sem apitar: abrir a tela com 3
+      // confrontos ja promovidos dispararia tres alarmes de uma vez, pra
+      // promocoes que aconteceram enquanto ninguem estava olhando.
+      st.semBase = !v;
+    } catch (e) { st.vistas = {}; st.semBase = true; }
+  }
+  function gravarVistas() {
+    try { sessionStorage.setItem('gh_painel_camadas', JSON.stringify(st.vistas)); } catch (e) {}
+  }
+
   function dispararAlarmes(d) {
     var novas = [];
+    var vistasAgora = {};
+
     confrontos(d).forEach(function (x) {
-      if (!x.promovido_em || !x.id) return;
+      if (!x.id) return;
+      var cam = camadaDe(x);
+      var atual = String(x.camada || '').toUpperCase();
+      vistasAgora[x.id] = atual;
+
+      var antes = st.vistas[x.id];
+      st.vistas[x.id] = atual;
+
+      if (!cam.apita) return;
       // CORRIDA ja apostada nao apita — nem nos outros confrontos dela. Como
       // e' uma aposta por corrida, promover um segundo AvB da mesma prova
       // chamaria voce pra uma aposta que voce nao pode mais fazer.
       if (x.entradaCorrida) return;
-      var cam = camadaDe(x);
-      if (!cam.apita) return;
-      if (st.avisados[x.id] === x.promovido_em) return;
-      st.avisados[x.id] = x.promovido_em;
+      // Primeira volta desta aba: so registra.
+      if (st.semBase) return;
+      // Ja estava nesta camada: nao houve promocao agora.
+      if (antes === atual) return;
       novas.push(x);
     });
+
+    // Confronto que sumiu do payload some tambem da memoria: se ele voltar
+    // depois, volta como novidade — e' o comportamento certo, porque para a
+    // tela ele reapareceu.
+    Object.keys(st.vistas).forEach(function (id) {
+      if (!(id in vistasAgora)) delete st.vistas[id];
+    });
+
+    st.semBase = false;
+    gravarVistas();
     if (!novas.length) return;
-    gravarAvisados();
 
     // Toca UMA vez, mesmo com varias promocoes na mesma volta: quatro sons
     // sobrepostos viram ruido e ninguem distingue as camadas. A prioridade e'
@@ -175,7 +210,7 @@
   // intervalo menor multiplicaria a carga sem ganhar decisao.
   function iniciar(opts) {
     opts = opts || {};
-    carregarAvisados();
+    carregarVistas();
     buscar(opts.date);
     if (st.timer) clearInterval(st.timer);
     st.timer = setInterval(function () {
