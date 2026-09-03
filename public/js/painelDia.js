@@ -90,7 +90,13 @@
       (c.confrontos || []).forEach(function (x) {
         out.push(Object.assign({}, x, {
           hora: c.hora, hora_br: c.hora_br, corrida: c.corrida,
-          pista: c.pista, dist: c.dist
+          pista: c.pista, dist: c.dist,
+          // A entrada e' da CORRIDA, nao do confronto: uma aposta por corrida.
+          // Levar race_id e entradaCorrida em cada confronto e' o que permite
+          // a tela saber "esta corrida ja foi apostada" olhando qualquer um
+          // dos ate 4 confrontos dela.
+          race_id: c.race_id,
+          entradaCorrida: c.entrada || null
         }));
       });
     });
@@ -121,10 +127,10 @@
     var novas = [];
     confrontos(d).forEach(function (x) {
       if (!x.promovido_em || !x.id) return;
-      // Ja apostado nao apita. O confronto continua vindo no polling depois da
-      // entrada, e uma repromocao (a BW reabriu o mercado, por exemplo) faria
-      // a tela chamar voce pra uma aposta que ja esta feita.
-      if (x.entrada) return;
+      // CORRIDA ja apostada nao apita — nem nos outros confrontos dela. Como
+      // e' uma aposta por corrida, promover um segundo AvB da mesma prova
+      // chamaria voce pra uma aposta que voce nao pode mais fazer.
+      if (x.entradaCorrida) return;
       var cam = camadaDe(x);
       if (!cam.apita) return;
       if (st.avisados[x.id] === x.promovido_em) return;

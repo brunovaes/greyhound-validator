@@ -40,9 +40,13 @@
   // A marca de ENTREI: mostra a odd e a stake registradas. Sem ela, olhando o
   // board depois não dá pra saber em qual dos AvBs da corrida você entrou — e
   // é justamente isso que a Banca conta.
+  //
+  // A entrada é da CORRIDA; o confronto que a recebeu é o que vem com
+  // escolhido:true. Marcar todos os confrontos da corrida faria parecer 4
+  // apostas onde há uma.
   function chipEntrada(x) {
-    if (!x.entrada) return '';
-    var e = x.entrada;
+    if (!x.entradaCorrida || !x.escolhido) return '';
+    var e = x.entradaCorrida;
     return '<span class="bd-chip bd-entrei" title="aposta registrada">ENTREI'
       + (e.odd != null ? ' &middot; ' + n2(e.odd) : '')
       + (e.stake != null ? ' &middot; ' + n2(e.stake, 1) + 'u' : '')
@@ -53,7 +57,7 @@
   function linha(x, piscando) {
     var cam = glob.PainelDia.camadaDe(x);
     var abriu = x.odd_bw != null;
-    return '<tr class="bd-linha' + (piscando ? ' bd-pisca' : '') + (x.entrada ? ' bd-com-entrada' : '') + '"'
+    return '<tr class="bd-linha' + (piscando ? ' bd-pisca' : '') + (x.escolhido && x.entradaCorrida ? ' bd-com-entrada' : '') + '"'
       + ' data-id="' + esc(x.id) + '" style="--bd-cor:' + cam.cor + '">'
       + '<td class="bd-hora">' + esc(x.hora_br || x.hora || '') + '</td>'
       + '<td class="bd-corrida">' + esc(x.corrida || '') + '</td>'
