@@ -3496,6 +3496,79 @@ router.get('/diag/colagem-bw', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// OPORTUNIDADES (admin — Bruno set/2026): materializa o modelo novo em modo leitura. A MANHA
+// (PDF) lanca a rede larga: TODOS os confrontos que passam nos filtros de qualidade (tier != null)
+// E tem SP colada ate a FAIXA (default 1.8) viram OPORTUNIDADE — pode haver varias por corrida.
+// Depois cruza com a BW (avb_abertos): quais abriram e a colagem no mercado. Nao grava nada; e' o
+// retrato do que a nova tela mostraria. TOP/HIGH/GOOD (a definir) sairao dessa base + o mercado.
+//   GET /diag/oportunidades?date=YYYY-MM-DD&faixa=1.8
+router.get('/diag/oportunidades', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const faixa = (parseFloat(req.query.faixa) > 0) ? parseFloat(req.query.faixa) : 1.8; // teto de SP colada da OPORTUNIDADE
+    const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+    const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+    const _c = c => String(c || '').trim().toLowerCase();
+    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
+    const k = (co, ho) => _c(co) + '|' + _h(ho);
+    const _mesmoPar = (x, t1, t2) => (Number(x.aTrap) === t1 && Number(x.bTrap) === t2) || (Number(x.aTrap) === t2 && Number(x.bTrap) === t1);
+    // BW frente-a-frente por corrida
+    const h2hRows = db.prepare('SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?').all(date);
+    const h2hByRace = {}; for (const p of h2hRows) { let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {} h2hByRace[k(p.corrida, p.hora)] = arr; }
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+    ).all(date);
+    const _pista = c => String(c || '').trim().split(/\s+/)[0] || '?';
+    let totalOp = 0, abriramOp = 0; const corridas = [];
+    for (const row of rows) {
+      let hf = null, ha = null, rc = null;
+      try { hf = JSON.parse(row.hist_full); } catch (e) { continue; }
+      try { ha = JSON.parse(row.hist_all); } catch (e) {}
+      try { rc = JSON.parse(row.race_card); } catch (e) {}
+      if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) continue;
+      const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
+      let pc; try { pc = mm.precalcDaCorrida(hf, ha, rc, ctxBase, opts); } catch (e) { continue; }
+      // OPORTUNIDADE = passa qualidade (tier != null) + pct > corte + SP colada ate a faixa
+      const ops = (pc.todos || [])
+        .filter(s => s.tier != null && s.pct > parelhoAte && s.ratio_sp <= faixa)
+        .sort((a, b) => b.pct - a.pct);
+      if (!ops.length) continue;
+      const pares = h2hByRace[k(row.corrida, row.hora)] || null;
+      const lista = ops.map(s => {
+        totalOp++;
+        let abriu = false, razaoMercado = null, marketPct = null;
+        const par = pares ? pares.find(x => _mesmoPar(x, s.pick_trap, s.outro_trap)) : null;
+        if (par && par.marketPct != null) {
+          abriu = true; abriramOp++;
+          const mp = (Number(par.aTrap) === s.pick_trap ? par.marketPct : 100 - par.marketPct) / 100;
+          marketPct = +(mp * 100).toFixed(1);
+          const hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
+          razaoMercado = lo > 0 ? +(hi / lo).toFixed(3) : null;
+        }
+        return { par: 'T' + s.pick_trap + 'xT' + s.outro_trap, pct: s.pct, tier_qualidade: s.tier, sp_ratio: s.ratio_sp, abriu_bw: abriu, market_pct: marketPct, razao_mercado: razaoMercado };
+      });
+      corridas.push({ hora: row.hora, corrida: row.corrida, oportunidades: lista });
+    }
+    res.json({
+      date, faixa,
+      resumo: {
+        corridas_com_oportunidade: corridas.length,
+        total_oportunidades: totalOp,
+        oportunidades_que_abriram_bw: abriramOp,
+        media_op_por_corrida: corridas.length ? +(totalOp / corridas.length).toFixed(1) : 0
+      },
+      corridas,
+      legenda: 'OPORTUNIDADE = confronto que passa nos filtros de qualidade (tier != null) + pct > ' + parelhoAte
+        + ' + SP colada <= faixa (' + faixa + '). Pode haver varias por corrida. abriu_bw = a BW abriu esse par; '
+        + 'razao_mercado = colagem real no mercado (1.0=empate, maior=desigual). TOP/HIGH/GOOD (a definir) sairao '
+        + 'daqui + do mercado. So-leitura, nao muda producao.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // CONFIG VALENDO EM PRODUÇÃO (admin — Bruno ago/2026): so-leitura. Mostra o que ESTA no
 // analysis_config AGORA (o que o motor unico usa), separado por regua + globais. Serve pra
 // conferir depois de um APLICAR. Nao roda funil, nao recalcula nada — so le as colunas.
