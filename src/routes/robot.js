@@ -3413,6 +3413,66 @@ router.get('/diag/cobertura-bw', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// COLAGEM NA ODD DA BW (admin — Bruno set/2026): valida o passo 3 do fluxo. Pega os picks TOP do
+// motor e, pra cada um, mede a colagem na ODD INDIVIDUAL da BW (mercado Vencedor, odds_vencedor):
+// razao entre a odd do pick e a do outro. colada = razao <= teto (default 1.5). Assim a gente ve,
+// em dado real, quantos dos picks estao REALMENTE colados no mercado de hoje (vs a SP do PDF). So-leitura.
+//   GET /diag/colagem-bw?date=YYYY-MM-DD&teto=1.5
+// OBS: odds_vencedor so tem dados a partir do deploy da captura — rode com o dia ja rodado.
+router.get('/diag/colagem-bw', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const teto = (parseFloat(req.query.teto) > 0) ? parseFloat(req.query.teto) : 1.5;
+    const _c = c => String(c || '').trim().toLowerCase();
+    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
+    const k = (co, ho) => _c(co) + '|' + _h(ho);
+    // odds individuais da BW por corrida -> mapa corrida|hora -> {trap: odd}
+    const winRows = db.prepare('SELECT corrida, hora, odds_json FROM odds_vencedor WHERE data=?').all(date);
+    const winByRace = {};
+    for (const w of winRows) {
+      let arr = []; try { arr = JSON.parse(w.odds_json) || []; } catch (e) {}
+      const m = {}; for (const d of arr) if (d && d.trap != null && d.odd != null) m[Number(d.trap)] = Number(d.odd);
+      winByRace[k(w.corrida, w.hora)] = m;
+    }
+    // picks TOP do motor (o principal de cada corrida)
+    let recs = []; try { recs = mm.paraPersistir(db, { date }); } catch (e) {}
+    const itens = recs.map(r => {
+      const p = r.principal;
+      const odds = winByRace[k(r.corrida, r.hora)] || null;
+      const oddPick = odds ? odds[p.pick_trap] : null;
+      const oddOutro = odds ? odds[p.outro_trap] : null;
+      let razao = null, colada = null;
+      if (oddPick > 0 && oddOutro > 0) {
+        razao = +(Math.max(oddPick, oddOutro) / Math.min(oddPick, oddOutro)).toFixed(3);
+        colada = razao <= teto;
+      }
+      return {
+        hora: r.hora, corrida: r.corrida, par: 'T' + p.pick_trap + 'xT' + p.outro_trap,
+        tem_odds_bw: !!odds, odd_pick: oddPick != null ? oddPick : null, odd_outro: oddOutro != null ? oddOutro : null,
+        razao_bw: razao, colada_bw: colada
+      };
+    });
+    const comOdds = itens.filter(i => i.tem_odds_bw && i.razao_bw != null);
+    const coladas = comOdds.filter(i => i.colada_bw);
+    res.json({
+      date, teto,
+      resumo: {
+        picks_top: recs.length,
+        com_odds_bw: comOdds.length,
+        coladas_bw: coladas.length,
+        fora_das_odds: comOdds.length - coladas.length,
+        taxa_colada: comOdds.length ? +(100 * coladas.length / comOdds.length).toFixed(1) : null
+      },
+      itens,
+      legenda: 'Por pick TOP: odd_pick/odd_outro = odd INDIVIDUAL de cada galgo na BW (mercado Vencedor). '
+        + 'razao_bw = maior/menor. colada_bw = razao <= teto (' + teto + '). taxa_colada = % dos picks (com odd na BW) '
+        + 'que estao realmente colados no mercado. tem_odds_bw=false = a BW nao abriu mercado dessa corrida (ou ainda nao capturou).'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // CONFIG VALENDO EM PRODUÇÃO (admin — Bruno ago/2026): so-leitura. Mostra o que ESTA no
 // analysis_config AGORA (o que o motor unico usa), separado por regua + globais. Serve pra
 // conferir depois de um APLICAR. Nao roda funil, nao recalcula nada — so le as colunas.
