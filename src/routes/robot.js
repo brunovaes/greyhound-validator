@@ -3428,7 +3428,7 @@ router.get('/diag/colagem-bw', requireAdmin, (req, res) => {
     const _c = c => String(c || '').trim().toLowerCase();
     const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
     const k = (co, ho) => _c(co) + '|' + _h(ho);
-    // odds individuais da BW por corrida -> mapa corrida|hora -> {trap: odd}
+    // FONTE 1 — odds individuais da BW (mercado Vencedor, odds_vencedor) -> {trap: odd}
     const winRows = db.prepare('SELECT corrida, hora, odds_json FROM odds_vencedor WHERE data=?').all(date);
     const winByRace = {};
     for (const w of winRows) {
@@ -3436,39 +3436,62 @@ router.get('/diag/colagem-bw', requireAdmin, (req, res) => {
       const m = {}; for (const d of arr) if (d && d.trap != null && d.odd != null) m[Number(d.trap)] = Number(d.odd);
       winByRace[k(w.corrida, w.hora)] = m;
     }
+    // FONTE 2 (fallback) — frente-a-frente (avb_abertos): a odd do par ja embute a colagem. O
+    // marketPct = P(A vence B) sem margem; dele a gente deriva a MESMA razao de odds individuais
+    // (razao = max(p,1-p)/min(p,1-p)). Assim da pra medir a colagem HOJE, com o que ja capturamos.
+    const h2hRows = db.prepare('SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?').all(date);
+    const h2hByRace = {};
+    for (const p of h2hRows) { let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {} h2hByRace[k(p.corrida, p.hora)] = arr; }
+    const _mesmoPar = (x, t1, t2) => (Number(x.aTrap) === t1 && Number(x.bTrap) === t2) || (Number(x.aTrap) === t2 && Number(x.bTrap) === t1);
     // picks TOP do motor (o principal de cada corrida)
     let recs = []; try { recs = mm.paraPersistir(db, { date }); } catch (e) {}
     const itens = recs.map(r => {
       const p = r.principal;
-      const odds = winByRace[k(r.corrida, r.hora)] || null;
-      const oddPick = odds ? odds[p.pick_trap] : null;
-      const oddOutro = odds ? odds[p.outro_trap] : null;
-      let razao = null, colada = null;
-      if (oddPick > 0 && oddOutro > 0) {
+      const key = k(r.corrida, r.hora);
+      let razao = null, colada = null, fonte = null, oddPick = null, oddOutro = null, marketPct = null;
+      // 1) odd individual (fonte preferida)
+      const odds = winByRace[key] || null;
+      if (odds && odds[p.pick_trap] > 0 && odds[p.outro_trap] > 0) {
+        oddPick = odds[p.pick_trap]; oddOutro = odds[p.outro_trap];
         razao = +(Math.max(oddPick, oddOutro) / Math.min(oddPick, oddOutro)).toFixed(3);
-        colada = razao <= teto;
+        colada = razao <= teto; fonte = 'individual';
+      } else {
+        // 2) frente-a-frente (fallback) — deriva a razao do marketPct do par
+        const pares = h2hByRace[key];
+        const par = pares ? pares.find(x => _mesmoPar(x, p.pick_trap, p.outro_trap)) : null;
+        if (par && par.marketPct != null) {
+          const mp = (Number(par.aTrap) === p.pick_trap ? par.marketPct : 100 - par.marketPct) / 100;
+          marketPct = +(mp * 100).toFixed(1);
+          const hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
+          razao = lo > 0 ? +(hi / lo).toFixed(3) : null;
+          colada = razao != null ? razao <= teto : null; fonte = 'h2h';
+        }
       }
       return {
         hora: r.hora, corrida: r.corrida, par: 'T' + p.pick_trap + 'xT' + p.outro_trap,
-        tem_odds_bw: !!odds, odd_pick: oddPick != null ? oddPick : null, odd_outro: oddOutro != null ? oddOutro : null,
+        fonte, odd_pick: oddPick, odd_outro: oddOutro, market_pct: marketPct,
         razao_bw: razao, colada_bw: colada
       };
     });
-    const comOdds = itens.filter(i => i.tem_odds_bw && i.razao_bw != null);
-    const coladas = comOdds.filter(i => i.colada_bw);
+    const comDados = itens.filter(i => i.razao_bw != null);
+    const coladas = comDados.filter(i => i.colada_bw);
     res.json({
       date, teto,
       resumo: {
         picks_top: recs.length,
-        com_odds_bw: comOdds.length,
+        com_dados_bw: comDados.length,
+        via_individual: comDados.filter(i => i.fonte === 'individual').length,
+        via_h2h: comDados.filter(i => i.fonte === 'h2h').length,
         coladas_bw: coladas.length,
-        fora_das_odds: comOdds.length - coladas.length,
-        taxa_colada: comOdds.length ? +(100 * coladas.length / comOdds.length).toFixed(1) : null
+        fora_das_odds: comDados.length - coladas.length,
+        taxa_colada: comDados.length ? +(100 * coladas.length / comDados.length).toFixed(1) : null
       },
       itens,
-      legenda: 'Por pick TOP: odd_pick/odd_outro = odd INDIVIDUAL de cada galgo na BW (mercado Vencedor). '
-        + 'razao_bw = maior/menor. colada_bw = razao <= teto (' + teto + '). taxa_colada = % dos picks (com odd na BW) '
-        + 'que estao realmente colados no mercado. tem_odds_bw=false = a BW nao abriu mercado dessa corrida (ou ainda nao capturou).'
+      legenda: 'Colagem no MERCADO da BW por pick TOP. fonte=individual: razao das odds individuais (mercado '
+        + 'Vencedor). fonte=h2h: derivada do marketPct do frente-a-frente (mesmo sinal, dado que ja capturamos '
+        + 'hoje). razao_bw = quao distantes estao (1.0=empate; maior=mais desigual). colada_bw = razao <= teto ('
+        + teto + '). taxa_colada = % dos picks (com dado na BW) realmente colados. fonte=null = a BW nao abriu '
+        + 'mercado nem par dessa corrida (ou nao capturou).'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
