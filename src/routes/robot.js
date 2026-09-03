@@ -2703,6 +2703,76 @@ router.post('/results/run', requireAdmin, express.json(), async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Recalculo do 'bateu' de um dia pela fonte unica ──────────────────────────
+// A correcao de 03/09/2026 so vale para escrita nova; linha gravada antes dela
+// pode ter veredito chutado. Esta rota regrava um dia inteiro pela mesma regra
+// que o robo usa hoje, e cobre o que o resultsRobot nao visita (corrida com
+// nivel='skip', que ele filtra, e corrida cujo link nao casou de horario).
+//
+// SIMULACAO E O PADRAO. So grava com {"aplicar": true} EXATO — booleano, no
+// corpo, escrito de proposito. Corpo vazio, ausente, JSON quebrado, aplicar:
+// "true" (string), 1, "sim": tudo isso simula e nao escreve. A rota que regrava
+// coluna de resultado em producao nao pode gravar por acidente de digitacao.
+//
+// Devolve a LISTA das linhas que mudam, com o motivo de cada uma, na simulacao
+// e na aplicacao. So-leitura ate a chamada de aplicar().
+//
+//   POST /greyhound/robot/bateu/recalc  {"date":"2026-09-03"}
+//   POST /greyhound/robot/bateu/recalc  {"date":"2026-09-03","aplicar":true}
+router.post('/bateu/recalc', requireAdmin,
+  // JSON quebrado nao pode virar 500 nem, muito menos, escapar do padrao:
+  // engole o erro do parser e segue com corpo vazio, que simula.
+  (req, res, next) => express.json()(req, res, () => next()),
+  (req, res) => {
+    try {
+      const { db } = require('../db/database');
+      const { planejar, aplicar, contar } = require('../utils/recalcBateuDia');
+
+      const corpo = (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) ? req.body : {};
+      const date = String(corpo.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'date obrigatorio no formato YYYY-MM-DD' });
+      }
+      // === true e o ponto: qualquer outra coisa (string, numero, null, ausente)
+      // cai em false. Nao usar truthiness aqui.
+      const querAplicar = (corpo.aplicar === true);
+
+      const plano = planejar(db, date);
+      const resposta = {
+        ok: true, date, aplicado: false,
+        antes: plano.antes,
+        total_corridas: plano.total,
+        sem_resultado: plano.sem_resultado,
+        ja_corretas: plano.ja_corretas,
+        mudam: plano.linhas.length,
+        resumo: {
+          chute_desfeito:   plano.linhas.filter(l => l.tipo === 'chute_desfeito').length,
+          resolvida:        plano.linhas.filter(l => l.tipo === 'resolvida').length,
+          veredito_trocado: plano.linhas.filter(l => l.tipo === 'veredito_trocado').length
+        },
+        linhas: plano.linhas
+      };
+
+      if (!querAplicar) {
+        resposta.simulacao = true;
+        resposta.aviso = 'Nada foi gravado. Repita com {"aplicar": true} para aplicar.';
+        return res.json(resposta);
+      }
+
+      const n = aplicar(db, plano.linhas);
+      resposta.aplicado = true;
+      resposta.simulacao = false;
+      resposta.gravadas = n;
+      resposta.depois = contar(db, date);
+      console.log('[RECALC-BATEU] ' + date + ' — ' + n + ' linha(s) regravada(s) por ' + (req.user && req.user.email ? req.user.email : 'admin'));
+      return res.json(resposta);
+    } catch (e) {
+      console.error('[RECALC-BATEU]', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+);
+
 router.get('/results/status', requireAdmin, (req, res) => {
   res.json(getResultsStatus());
 });
@@ -4735,32 +4805,11 @@ router.get('/audit/list', requireAdmin, (req, res) => {
 // (fav bateu = chegou antes do und) com o AvB atualizado. So mexe em
 // corrida que ja tem resultado (resultado_1 preenchido); corrida que ainda
 // nao rodou fica de fora, sem bateu, do jeito que ja estava.
-function recalcularBateu(resultado_1, resultado_2, resultado_3, novoTrapFav, novoTrapUnd, finishingOrderJson) {
-  if (!resultado_1) return null;
-  const posicoes = {};
-
-  // Prefere a chegada COMPLETA (1o-6o) quando disponivel — corridas
-  // raspadas antes de 14/07/2026 nao tem isso, cai pro fallback so-top3.
-  // Achado real do Bruno: quando os dois traps do AvB ficam fora do top3,
-  // o fallback antigo nao tinha como saber quem bateu e chutava 'nao'.
-  let completa = null;
-  if (finishingOrderJson) {
-    try { completa = JSON.parse(finishingOrderJson); } catch(e) {}
-  }
-  if (completa && completa.length) {
-    completa.forEach(function(f) { posicoes[String(f.trap)] = f.pos; });
-  } else {
-    if (resultado_1) posicoes[String(resultado_1)] = 1;
-    if (resultado_2) posicoes[String(resultado_2)] = 2;
-    if (resultado_3) posicoes[String(resultado_3)] = 3;
-  }
-
-  const posFav = posicoes[String(novoTrapFav)] || 99;
-  const posUnd = posicoes[String(novoTrapUnd)] || 99;
-  if (posFav < 99 && posUnd < 99) return posFav < posUnd ? 'sim' : 'nao';
-  if (posFav < 99) return posFav <= 3 ? 'sim' : 'nao'; // und fora do top3, mesma heuristica do resultsRobot
-  return 'nao';
-}
+// A funcao em si mudou de casa em 03/09/2026: foi para o avbResultado.js, junto
+// do bateuPar. Ela ganhou um terceiro consumidor (a rota /bateu/recalc, alem
+// deste reprocessamento e do tools/recalc-bateu.js) e regra de "bateu" espalhada
+// em copias e exatamente o que este repo ja pagou caro uma vez.
+const { recalcularBateu } = require('../utils/avbResultado');
 
 async function reprocessarDiaInteiro(DATE) {
   const { db } = require('../db/database');
@@ -4818,10 +4867,12 @@ async function reprocessarDiaInteiro(DATE) {
       // acima. 'bateu' e a UNICA excecao: recalculado quando ja tem
       // resultado salvo (COALESCE mantem o valor antigo se a corrida ainda
       // nao tiver resultado_1, ou seja, novoBateu=null).
+      // '' tambem conta como recalculo: limpar um veredito que nao vale mais
+      // para o AvB novo e trabalho feito, nao "nao mexeu".
       if (novoBateu !== null) bateuRecalculado++;
 
       refeitas++;
-      log.push(row.hora + ' ' + row.corrida + ' — refeita: T' + (novo.trapFav||0) + ' vs T' + (novo.trapUnd||0) + ' (' + (novo.pct||0) + '% ' + (novo.nivel||'skip') + ')' + (novoBateu!==null?' | bateu recalculado: '+novoBateu.toUpperCase():''));
+      log.push(row.hora + ' ' + row.corrida + ' — refeita: T' + (novo.trapFav||0) + ' vs T' + (novo.trapUnd||0) + ' (' + (novo.pct||0) + '% ' + (novo.nivel||'skip') + ')' + (novoBateu!==null?' | bateu recalculado: '+(novoBateu===''?'INDEFINIDO':novoBateu.toUpperCase()):''));
     } catch(e) {
       erros++;
       log.push(row.hora + ' ' + row.corrida + ' — erro: ' + e.message);

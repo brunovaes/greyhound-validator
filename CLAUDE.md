@@ -72,11 +72,18 @@ teste_save_preserva.js    save nao apaga campo fora da tela
 teste_cascata*.js         funil, pistas, filtros, aviso de nao aplicado
 teste_alarme_top.js       4 campos + disparo, data e fire-once
 teste_so_top.js           origens TOP/SECUNDARIA/SURPRESA
+teste_bateu_fonte_unica.js  bateu gravado x bateuPar, proibe chute (ver 9.4-i)
 ```
 
 **Ao mexer no Historico, o `teste_render_hist.js` e a rede minima.**
 Todo teste novo roda contra o codigo real (extrai a funcao do arquivo e executa),
 nunca contra suposicao.
+
+**ATENCAO (03/09/2026):** dos testes acima, so o `teste_bateu_fonte_unica.js`
+existe no disco hoje. Os outros nunca foram commitados (eram untracked na raiz) e
+sumiram. A lista fica aqui como registro do que ja teve rede e precisa voltar a
+ter, mas **nao conte com eles**: rodar `node teste_painel_dia.js` hoje da "arquivo
+nao encontrado", nao "passou".
 
 ---
 
@@ -141,12 +148,16 @@ src/utils/designTokens.js       tokens visuais
 src/utils/icons.js              icones
 src/utils/auditLog.js           log de auditoria
 src/utils/exportDerrotas.js     exportacao de derrotas
+src/utils/avbResultado.js       FONTE UNICA do "bateu" (bateuPar, vereditoAvB,
+                                recalcularBateu, motivoDoRecalculo)
+src/utils/recalcBateuDia.js     recalculo do bateu de um dia (planejar/aplicar)
 public/js/painelDia.js          camada compartilhada (polling + alarme)
 public/js/boardDia.js           board do dia (Historico)
 public/js/analisarPainel.js     Analisar: standby + tiles
 public/js/cascata.js            painel admin "Cascata de Cortes"
 tools/valida.js                 validador de script embutido
 tools/valida-templates.js       validador de funcao em template
+tools/recalc-bateu.js           regrava o bateu de um dia (shell, --aplicar)
 ```
 
 Historicamente o repo era dividido entre dois chats (UI e MOTOR) com donos por
@@ -324,17 +335,120 @@ ENTREI**: a aposta nao pode sumir do Historico.
 **Divergencia com o contrato:** o backend marca HIGH e GOOD com
 `no_board_top: false`. O Bruno quer **todos** na lista. Ajustar a leitura.
 
-### 9.3 Perguntas em aberto (agora respondiveis lendo o codigo)
+### 9.3 Respondido lendo o codigo (03/09/2026)
 
-1. O `/api/painel-dia` responde para **data passada** com os confrontos daquele
-   dia? Se nao, os confrontos ficam gravados onde? Sem isso, sessao antiga nao
-   tem de onde tirar TOP/HIGH/GOOD e o Historico fica com dois comportamentos.
-2. O `bateu` do confronto e preenchido por backfill ou so ao vivo? Se for so ao
-   vivo, a coluna das linhas HIGH/GOOD nasce vazia e nunca resolve. Alternativa:
-   derivar com `bateuPar(finishing_order_json, pick_trap, outro_trap)` no
-   servidor. **As duas fontes nao podem discordar.**
+**1. O `/api/painel-dia` responde para data passada? SIM.** E os confrontos **nao
+ficam gravados em lugar nenhum**: sao recalculados a cada chamada.
 
-### 9.4 Menores
+- `api.js:1600` aceita `?date=YYYY-MM-DD`; hoje e so o default.
+- As duas fontes sao filtradas por essa data e ambas persistem: `races` via
+  `date(s.created_at,'-3 hours')=?` e `avb_abertos WHERE data=?`
+  (`api.js:1625-1628`). O overlay pessoal sai de `race_user_data`.
+- **Nao existe purge** de `avb_abertos` (nenhum DELETE no repo) nem de
+  `races` / `race_sessions`. Os unicos deletes sao manuais, por sessao:
+  `api.js:1583` e `main.js:1911`.
+
+Logo, a camada de cada AvB e **derivada na hora**, de `races.hist_full/hist_all/
+race_card` (motor) cruzado com `avb_abertos.pares_json` (mercado). Sessao antiga
+tem de onde tirar TOP/HIGH/GOOD: o Historico nao precisa de dois comportamentos.
+
+**2. O `bateu` do confronto e derivado no servidor a cada leitura.** Nao e
+backfill nem ao vivo: nao existe coluna de `bateu` por confronto. `api.js:1660`
+chama `bateuPar(row.finishing_order_json, pick_trap, outro_trap)`. A alternativa
+que estava proposta aqui **ja e a implementacao atual**.
+
+Consequencia boa: HIGH e GOOD **nao** nascem com a coluna vazia para sempre.
+Quando o resultsRobot gravar o `finishing_order_json` da corrida, todas as linhas
+AvB daquela corrida resolvem juntas, inclusive de dias passados. Quem preenche o
+`finishing_order_json` e so o resultsRobot (`resultsRobot.js:194`, UPDATE unico),
+por cron em janela BRT (`robot.js:260-280`) ou manual via
+`POST /robot/results/run` com `date` no body (`robot.js:2700`) - o backfill por
+data arbitraria existe e funciona.
+
+**Ponto de atencao (nao verificado em producao):** corrida com `nivel='skip'`
+nunca recebe resultado, porque o resultsRobot filtra
+`(r.nivel!='skip' OR r.card_suspect=1)` (`resultsRobot.js:185-189`), enquanto o
+painel-dia so exige `hist_full IS NOT NULL` (`api.js:1623-1626`). Um GOOD numa
+corrida skip ficaria `bateu: null` para sempre, virando "aguarda" eterno.
+Conferir no Railway antes de implantar a tabela por AvB:
+
+```sql
+SELECT nivel, COUNT(*) n, SUM(hist_full IS NOT NULL) comhist FROM races GROUP BY nivel;
+```
+
+Se `comhist` for maior que zero na linha `skip`, e bug garantido no Historico
+novo. Outro ponto: o `finishing_order_json` pode ser **parcial** e falha em
+silencio - o loop de 1 a 6 (`resultsRobot.js:361-370`) so empurra a posicao
+quando consegue mapear nome para trap, e trap nao mapeado some da lista.
+
+### 9.4 Divergencias e armadilhas do modelo derivado
+
+**(i) `races.bateu` heuristico x `bateuPar` - CORRIGIDO em 03/09/2026.** O
+resultsRobot decidia o `bateu` por **nome** e chutava quando nao achava o
+underdog na chegada: `bateu = posFav <= 3 ? 'sim' : 'nao'`
+(`resultsRobot.js`), com `'nao'` como valor inicial quando nao achava nenhum dos
+dois. O `recalcularBateu` do `robot.js` repetia o mesmo chute. No mesmo caso o
+`bateuPar` devolve `null` (indefinido), entao existia linha em que a coluna do
+banco dizia "sim" e a tela dizia "aguarda" - a tela do Historico ja
+sobrescrevia com `bateuPar` (`main.js:2226-2243`), mas os KPIs globais
+(`main.js:514` e `main.js:1845`) liam a coluna crua.
+
+Hoje os dois escritores derivam de `bateuPar` sobre a chegada, caem para
+comparacao por nome **so quando os dois galgos foram achados**, e gravam `''`
+(indefinido) em vez de chutar. Rede: `teste_bateu_fonte_unica.js`. **Nao
+reintroduzir chute:** um `'nao'` inventado vira derrota no placar.
+
+O `recalcularBateu` saiu do `robot.js` e mora no `avbResultado.js`, junto do
+`bateuPar`: sao tres consumidores (o reprocessamento do dia, o
+`tools/recalc-bateu.js` e a rota abaixo) e copia divergente da regra de "bateu" e
+o erro que esta secao inteira existe pra impedir.
+
+**A correcao so vale para escrita nova.** As linhas gravadas antes de 03/09/2026
+seguem com o veredito chutado ate serem regravadas. Duas formas, mesmo modulo
+(`src/utils/recalcBateuDia.js`), mesma resposta:
+
+```
+POST /greyhound/robot/bateu/recalc  {"date":"2026-09-03"}                 simula
+POST /greyhound/robot/bateu/recalc  {"date":"2026-09-03","aplicar":true}  grava
+node tools/recalc-bateu.js --date=2026-09-03 [--aplicar] [--db=/data/greyhound.db]
+```
+
+**Simulacao e o padrao, e e mais que uma conveniencia:** a rota so grava com
+`aplicar === true` booleano. Corpo vazio, ausente, JSON quebrado, `"true"` como
+string, `1`, `"sim"` - tudo isso simula. Rota que regrava coluna de resultado em
+producao nao pode gravar por acidente de digitacao. Os dois caminhos devolvem a
+**lista das linhas com o motivo de cada uma**, nao so a contagem: quem manda
+regravar precisa poder auditar antes de aplicar. Nenhum dos dois apaga nada; a
+unica escrita e `UPDATE races SET bateu=? WHERE id=?`.
+
+**Os numeros da secao 8 foram medidos com a coluna envenenada dentro.** Depois de
+regravar, o "preenchido" CAI (chute vira indefinido) e as taxas se movem.
+Remedir antes de decidir qualquer coisa em cima deles.
+
+**(ii) A camada e recalculada com a regua de HOJE.** `_aplicaConfigMotor` le
+`analysis_config WHERE user_id=1` corrente, sem snapshot por data
+(`motorManha.js:237-239`). Recalibrar a cascata **reescreve retroativamente** a
+camada dos dias passados: um TOP de 03/09 pode virar GOOD amanha. Hoje so a linha
+em que o Bruno entrou tem camada congelada (o `origem` dentro do
+`avb_escolhido`). **Decidir antes da 9.2:** ou aceita "camada e sempre a leitura
+de agora", ou grava snapshot da camada por AvB. Se o Historico e registro, o
+registro nao pode se mover sozinho.
+
+**(iii) A chave do dia e o `created_at` da SESSAO, nao a data da corrida.**
+`date(race_sessions.created_at,'-3 hours')`, nao `races.data_card`. Sessao
+reimportada em outro dia cai no dia errado, e a mesma armadilha ja mordeu o robo
+de resultados (nota de fuso em `resultsRobot.js:181-186`).
+
+**(iv) O painel-dia ignora o filtro de pistas.** `_aplicaConfigMotor` preenche
+`opts.pistasInc/pistasExc`, mas quem aplica e o `_pistaPassa`, chamado no
+`motorManha.js:329` e **nao** no handler do painel. Com o filtro ligado, painel e
+diags mostram conjuntos diferentes.
+
+**(v) `odd_bw` e `razao_mercado` sao a ultima foto, nao a da promocao.** O upsert
+de `avb_abertos` so grava quando aparecem mais pares (`robot.js:521`), entao num
+dia fechado o `pares_json` e o estado final do mercado.
+
+### 9.5 Menores
 
 - **Board do dia continua?** Recomendacao: manter **reduzido a uma faixa fina**
   com as promocoes recentes e o contador. A tabela e registro, o board e radar

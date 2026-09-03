@@ -4,6 +4,8 @@ const router  = express.Router();
 const { requireAdmin } = require('../middleware/auth');
 const { db, saveRobotLog, loadRobotLog } = require('../db/database');
 const { logChanges } = require('../utils/auditLog');
+// Fonte unica da regra de "bateu" — a mesma que o Historico e os KPIs usam.
+const { vereditoAvB } = require('../utils/avbResultado');
 
 require('dns').setDefaultResultOrder('ipv4first');
 
@@ -290,16 +292,9 @@ async function runResultsRobot(targetDate) {
           if (undFirst && (nmFirst === undFirst || nm.includes(undFirst) || undFirst.includes(nmFirst))) posUnd = f.pos;
         });
 
-        // AvB: fav bateu = chegou na frente do und (posição menor = melhor)
-        let bateu = 'nao';
-        if (posFav < 99 && posUnd < 99) {
-          bateu = posFav < posUnd ? 'sim' : 'nao';
-        } else if (posFav < 99) {
-          bateu = posFav <= 3 ? 'sim' : 'nao'; // und não encontrado, heurística
-        }
-
-        addLog('info', 'Fav:"'+favName+'"=pos'+posFav+' Und:"'+undName+'"=pos'+posUnd+' → '+bateu.toUpperCase());
-
+        // O veredito do AvB nao sai daqui: ele depende da chegada COMPLETA por
+        // trap (finishingOrderCompleto), que so fica pronta mais abaixo. Estas
+        // posicoes por NOME viram apenas o desempate de ultimo recurso.
         const winner = finishing.find(f => f.pos === 1);
         const p2     = finishing.find(f => f.pos === 2);
         const p3     = finishing.find(f => f.pos === 3);
@@ -369,6 +364,15 @@ async function runResultsRobot(targetDate) {
           }
         }
 
+        // AvB: fav bateu = chegou na frente do und (posicao menor = melhor).
+        // Deriva da MESMA funcao que a tela do Historico e os KPIs usam
+        // (bateuPar sobre a chegada), com as posicoes por nome so como
+        // desempate quando os DOIS galgos foram achados. Antes daqui saia um
+        // chute ('nao' por default; 'sim' se o fav ficou no top3 e o und nao
+        // foi achado) e a coluna do banco discordava da tela na mesma linha.
+        const bateu = vereditoAvB(finishingOrderCompleto, dbRace.trap_fav, dbRace.trap_und, posFav, posUnd);
+        addLog('info', 'Fav:"'+favName+'"=pos'+posFav+' Und:"'+undName+'"=pos'+posUnd+' → '+(bateu === '' ? 'INDEFINIDO' : bateu.toUpperCase()));
+
         logChanges(
           dbRace.id, 'results_robot', dbRace,
           { bateu: bateu, resultado_1: r1, resultado_2: r2, resultado_3: r3 },
@@ -386,7 +390,7 @@ async function runResultsRobot(targetDate) {
         }
 
         addLog(bateu === 'sim' ? 'ok' : 'info',
-          (bateu === 'sim' ? 'BATEU' : 'NAO') + ' ' + dbRace.corrida + ' ' + link.rTime +
+          (bateu === 'sim' ? 'BATEU' : bateu === 'nao' ? 'NAO' : 'INDEFINIDO') + ' ' + dbRace.corrida + ' ' + link.rTime +
           ' | 1o:"'+(r1||'?')+'" Fav:pos'+posFav+' Und:pos'+posUnd
         );
 
