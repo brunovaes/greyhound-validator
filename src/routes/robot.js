@@ -997,6 +997,7 @@ ${navBar(req.user, 'robot')}
   <div class="mgrp-itens">
     <button class="robot-menu-item active" id="mb-pdfs" onclick="showPanel('pdfs')"><span class="icon">${icon('download',{size:16})}</span> Coletor de PDFs</button>
     <button class="robot-menu-item" id="mb-results" onclick="showPanel('results')"><span class="icon">${icon('flag',{size:16})}</span> Resultados</button>
+    <button class="robot-menu-item" id="mb-placar" onclick="showPanel('placar')"><span class="icon">${icon('alertTriangle',{size:16})}</span> Placar Camadas</button>
     <button class="robot-menu-item" id="mb-monitor" onclick="showPanel('monitor')"><span class="icon">${icon('search',{size:16})}</span> Monitoramento</button>
     <button class="robot-menu-item" id="mb-odds" onclick="showPanel('odds')"><span class="icon">${icon('alertTriangle',{size:16})}</span> Odds ao Vivo (BW)</button>
     <button class="robot-menu-item" id="mb-audit" onclick="showPanel('audit')"><span class="icon">${icon('scroll',{size:16})}</span> Auditoria</button>
@@ -1215,6 +1216,41 @@ ${navBar(req.user, 'robot')}
     <div style="font-size:11px;color:#64748b;margin-top:4px">Download + overhead por requisição <b>+27,5% de upload</b> (como a Decodo cobra), cruzado com as corridas/AvBs capturados. Conta a partir do marco zero configurado; dias antes não entram. Ainda é estimativa (handshake/TLS variam), mas bate ~1% com o painel deles.</div>
   </div>
 </div><!-- fim panel-odds -->
+
+<div class="robot-panel" id="panel-placar">
+  <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('alertTriangle',{size:20})} Placar das Camadas — TOP · HIGH · GOOD</h1>
+  <p class="sub">Pares que a BW abriu colados, classificados e cruzados com a chegada real. Só-leitura — o retrato do modelo "mercado forma o par". A odd é a decimal do pick vencer o outro; a taxa/ROI ignoram quem ainda não correu.</p>
+  <div class="card">
+    <div class="form-row" style="align-items:flex-end;gap:12px">
+      <div class="field"><label>Data</label><input type="date" id="placar-date" value="${today}"></div>
+      <div class="field"><label>Teto colagem</label><input type="number" step="0.05" id="placar-teto" value="1.5" style="width:90px"></div>
+      <button class="btn" onclick="loadPlacar()">Carregar</button>
+      <span id="placar-msg" style="color:#94a3b8;font-size:12px"></span>
+    </div>
+  </div>
+  <div id="placar-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px"></div>
+  <div class="card">
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">${icon('list',{size:14})} Confrontos</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="text-align:left;color:#666;text-transform:uppercase;font-size:10px;letter-spacing:.5px;border-bottom:1px solid #333">
+            <th style="padding:8px 6px">Camada</th>
+            <th style="padding:8px 6px">Hora</th>
+            <th style="padding:8px 6px">Corrida</th>
+            <th style="padding:8px 6px">Par</th>
+            <th style="padding:8px 6px;text-align:right">pct</th>
+            <th style="padding:8px 6px;text-align:right">Odd BW</th>
+            <th style="padding:8px 6px;text-align:right">Razão</th>
+            <th style="padding:8px 6px;text-align:right">SP PDF</th>
+            <th style="padding:8px 6px">Resultado</th>
+          </tr>
+        </thead>
+        <tbody id="placar-tbody"><tr><td colspan="9" style="padding:16px;color:#555;text-align:center">Escolha a data e clique Carregar.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- fim panel-placar -->
 
 <div class="robot-panel" id="panel-audit">
   <h1 style="font-size:20px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px">${icon('scroll',{size:20})} Trilha de Auditoria</h1>
@@ -1678,12 +1714,75 @@ function toggleGrupo(btn){
   (g || document.querySelector('.mgrp')).classList.add('aberto');
 })();
 
+// ── Placar das Camadas (TOP/HIGH/GOOD) ───────────────────────────────────────
+var PLACAR_COR = { TOP: '#22e08a', HIGH: '#ff8c1a', GOOD: '#4aa8ff' };
+async function loadPlacar() {
+  var msg = document.getElementById('placar-msg');
+  if (msg) { msg.style.color = '#94a3b8'; msg.textContent = 'Carregando…'; }
+  var date = document.getElementById('placar-date').value;
+  var teto = document.getElementById('placar-teto').value || '1.5';
+  try {
+    var r = await fetch(BASE + '/robot/diag/oportunidades-bw-resultado?date=' + encodeURIComponent(date) + '&teto=' + encodeURIComponent(teto) + '&faixa=1.8');
+    var d = await r.json();
+    if (d.erro) { if (msg) { msg.style.color = '#ff5d6c'; msg.textContent = d.erro; } return; }
+    renderPlacar(d);
+    if (msg) msg.textContent = '';
+  } catch (e) { if (msg) { msg.style.color = '#ff5d6c'; msg.textContent = 'Falhou: ' + e.message; } }
+}
+function _placarRoi(linhas) {
+  var s = linhas.filter(function (x) { return x.bateu !== null; });
+  var stake = s.length, ret = s.reduce(function (a, x) { return a + (x.bateu ? (x.odd_bw || 0) : 0); }, 0);
+  var w = s.filter(function (x) { return x.bateu; }).length;
+  return { roi: stake ? (100 * (ret - stake) / stake) : null };
+}
+function renderPlacar(d) {
+  var linhas = d.linhas || [];
+  var cards = document.getElementById('placar-cards'); cards.innerHTML = '';
+  ['TOP', 'HIGH', 'GOOD'].forEach(function (t) {
+    var R = (d.resumo && d.resumo[t]) || { n: 0, bateu: 0, errou: 0, taxa_acerto: null };
+    var roi = _placarRoi(linhas.filter(function (x) { return x.tier === t; })).roi;
+    var cor = PLACAR_COR[t];
+    var hit = (R.taxa_acerto != null ? R.taxa_acerto + '%' : '—');
+    var roiTxt = (roi != null ? (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%' : '—');
+    var roiCor = (roi == null ? '#94a3b8' : (roi >= 0 ? '#22e08a' : '#ff5d6c'));
+    var el = document.createElement('div'); el.className = 'card'; el.style.borderLeft = '4px solid ' + cor; el.style.margin = '0';
+    el.innerHTML = '<div style="color:' + cor + ';font-weight:700;font-size:12px;letter-spacing:.1em">' + t + '</div>'
+      + '<div style="font-size:30px;font-weight:700;margin-top:6px">' + hit + '<span style="font-size:12px;color:#94a3b8;font-weight:400"> acerto</span></div>'
+      + '<div style="display:flex;gap:16px;margin-top:8px;font-size:12px">'
+      + '<span style="color:' + roiCor + ';font-weight:700">ROI ' + roiTxt + '</span>'
+      + '<span style="color:#94a3b8">' + R.bateu + '/' + (R.bateu + R.errou) + ' • n ' + R.n + '</span></div>';
+    cards.appendChild(el);
+  });
+  var ord = { TOP: 0, HIGH: 1, GOOD: 2 };
+  linhas.sort(function (a, b) { return (ord[a.tier] - ord[b.tier]) || String(a.hora).localeCompare(String(b.hora)); });
+  var tb = document.getElementById('placar-tbody');
+  if (!linhas.length) { tb.innerHTML = '<tr><td colspan="9" style="padding:16px;color:#555;text-align:center">Nada colado na BW nessa data.</td></tr>'; return; }
+  tb.innerHTML = linhas.map(function (x) {
+    var cor = PLACAR_COR[x.tier] || '#888';
+    var res = x.bateu === true ? '<span style="color:#22e08a;font-weight:700">bateu</span>'
+      : (x.bateu === false ? '<span style="color:#ff5d6c;font-weight:700">não</span>' : '<span style="color:#6b7688">aguarda</span>');
+    var spCor = x.sp_ratio > 1.8 ? '#ff8c1a' : '#7a869a';
+    return '<tr style="border-bottom:1px solid #222">'
+      + '<td style="padding:7px 6px"><span style="color:' + cor + ';font-weight:700">●</span> ' + x.tier + '</td>'
+      + '<td style="padding:7px 6px">' + x.hora + '</td>'
+      + '<td style="padding:7px 6px;font-weight:600">' + x.corrida + '</td>'
+      + '<td style="padding:7px 6px;color:#94a3b8">' + x.par + '</td>'
+      + '<td style="padding:7px 6px;text-align:right">' + x.pct + '</td>'
+      + '<td style="padding:7px 6px;text-align:right;font-weight:600">' + (x.odd_bw != null ? x.odd_bw.toFixed(2) : '—') + '</td>'
+      + '<td style="padding:7px 6px;text-align:right;color:#7a869a">' + (x.razao_mercado != null ? x.razao_mercado.toFixed(3) : '—') + '</td>'
+      + '<td style="padding:7px 6px;text-align:right;color:' + spCor + '">' + (x.sp_ratio != null ? x.sp_ratio.toFixed(2) : '—') + '</td>'
+      + '<td style="padding:7px 6px">' + res + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
 function showPanel(id) {
   document.querySelectorAll('.robot-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.robot-menu-item').forEach(b => b.classList.remove('active'));
   var panel = document.getElementById('panel-' + id);
   panel.classList.add('active');
   document.getElementById('mb-' + id).classList.add('active');
+  if (id === 'placar' && !panel.dataset.carregou) { panel.dataset.carregou = '1'; loadPlacar(); }
   // Carrega o iframe (Usuários/Acessos) só na 1a vez que a aba abre.
   var fr = panel.querySelector('iframe.admin-embed');
   if (fr && !fr.getAttribute('src') && fr.dataset.src) fr.setAttribute('src', fr.dataset.src);
