@@ -1586,6 +1586,143 @@ router.delete('/session/:id', (req, res) => {
   } catch(err) { res.status(500).json({ error:err.message }); }
 });
 
+// ── PAINEL DO DIA (producao — Bruno set/2026) ────────────────────────────────
+// Serve as duas visoes do modelo "mercado forma o par": o board dos TOP (tela Historico) e os
+// tiles da Analisar. Calculado em cima das tabelas que JA existem (races + avb_abertos +
+// race_user_data): nao cria tabela, nao toca no robo ao vivo. A "promocao" (OPORTUNIDADE ->
+// TOP/HIGH/GOOD) sai de reler avb_abertos a cada poll — conforme os pares abrem, o endpoint reflete.
+// Mesma logica do /robot/diag/oportunidades-bw-resultado (numeros batem com o placar aprovado).
+// Contrato: CONTRATO_PAINEL_DO_DIA. So-leitura; a entrada segue pelo PUT /api/race/:id de sempre.
+let _painelDiaCache = { date: null, ts: 0, corridas: null };
+router.get('/painel-dia', (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+    const mm = require('../utils/motorManha');
+    const { bateuPar } = require('../utils/avbResultado');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+      ? req.query.date
+      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const TETO = 1.5, FAIXA = 1.8;
+    const _c = c => String(c || '').trim().toLowerCase();
+    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
+    const _k = (co, ho) => _c(co) + '|' + _h(ho);
+    const _idc = (co, ho, t1, t2) => _k(co, ho) + '|' + Math.min(t1, t2) + 'x' + Math.max(t1, t2);
+    const _mesmoPar = (t1a, t1b, t2a, t2b) => (t1a === t2a && t1b === t2b) || (t1a === t2b && t1b === t2a);
+    const _pista = c => String(c || '').trim().split(/\s+/)[0] || '?';
+    const _horaBr = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); if (!m) return String(h || ''); let hr = parseInt(m[1]); if (hr >= 1 && hr <= 9) hr += 12; hr = hr - 4; if (hr < 0) hr += 24; return hr + ':' + m[2]; };
+
+    // BASE PESADA (nao-pessoal): recalcula o motor de todas as corridas + cruza com a BW.
+    // Cache curto por data (12s) pra aguentar polling de 15-20s sem repesar o servidor.
+    let corridasBase;
+    if (_painelDiaCache.date === date && (Date.now() - _painelDiaCache.ts) < 12000 && _painelDiaCache.corridas) {
+      corridasBase = _painelDiaCache.corridas;
+    } else {
+      const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+      const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+      const rows = db.prepare(
+        "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json "
+        + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
+        + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+      ).all(date, CANONICO);
+      const h2hRows = db.prepare('SELECT corrida, hora, pares_json, capturado_em FROM avb_abertos WHERE data=?').all(date);
+      const h2hByRace = {};
+      for (const p of h2hRows) { let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {} h2hByRace[_k(p.corrida, p.hora)] = { pares: arr, em: p.capturado_em || null }; }
+
+      corridasBase = [];
+      for (const row of rows) {
+        let hf = null, ha = null, rc = null;
+        try { hf = JSON.parse(row.hist_full); } catch (e) { continue; }
+        try { ha = JSON.parse(row.hist_all); } catch (e) {}
+        try { rc = JSON.parse(row.race_card); } catch (e) {}
+        if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) continue;
+        const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
+        let pc; try { pc = mm.precalcDaCorrida(hf, ha, rc, ctxBase, opts); } catch (e) { continue; }
+        const todos = Array.isArray(pc.todos) ? pc.todos : [];
+        const bw = h2hByRace[_k(row.corrida, row.hora)] || null;
+        const pares = bw ? bw.pares : [];
+        const abertoEm = bw ? bw.em : null;
+        // dados de mercado (colagem na odd individual) de um confronto
+        const mercadoDe = (s) => {
+          if (!pares.length) return null;
+          const par = pares.find(x => _mesmoPar(Number(x.aTrap), Number(x.bTrap), Number(s.pick_trap), Number(s.outro_trap)));
+          if (!par || par.marketPct == null) return null;
+          const mp = (Number(par.aTrap) === Number(s.pick_trap) ? par.marketPct : 100 - par.marketPct) / 100;
+          const hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
+          const razao = lo > 0 ? +(hi / lo).toFixed(3) : null;
+          const oddPick = (Number(par.aTrap) === Number(s.pick_trap)) ? par.oddAvenceB : par.oddBvenceA;
+          return { colada: razao != null && razao <= TETO, razao, market_pct: +(mp * 100).toFixed(1), odd: (oddPick != null ? +Number(oddPick).toFixed(2) : null) };
+        };
+        const mkConf = (s, camada, noBoard, mk) => ({
+          id: _idc(row.corrida, row.hora, s.pick_trap, s.outro_trap),
+          par: 'T' + s.pick_trap + 'xT' + s.outro_trap,
+          pick_trap: s.pick_trap, pick_nome: s.pick_nome || null,
+          outro_trap: s.outro_trap, outro_nome: s.outro_nome || null,
+          pct: s.pct, sp_ratio: s.ratio_sp,
+          camada, no_board_top: !!noBoard,
+          odd_bw: mk ? mk.odd : null, razao_mercado: mk ? mk.razao : null, market_pct: mk ? mk.market_pct : null,
+          promovido_em: (camada !== 'OPORTUNIDADE' && abertoEm) ? abertoEm : null,
+          bateu: bateuPar(row.finishing_order_json, Number(s.pick_trap), Number(s.outro_trap))
+        });
+        // manha (board TOP): qualidade (tier != null) + pct + SP colada <= faixa
+        const manha = todos.filter(s => s.tier != null && s.pct > parelhoAte && s.ratio_sp <= FAIXA);
+        const confrontos = []; const jaAdd = new Set();
+        // 1) board TOPs — sempre entram; OPORTUNIDADE ate abrir colada na BW, ai vira TOP
+        for (const s of manha) {
+          const key = Math.min(s.pick_trap, s.outro_trap) + 'x' + Math.max(s.pick_trap, s.outro_trap);
+          const mk = mercadoDe(s);
+          confrontos.push(mkConf(s, (mk && mk.colada) ? 'TOP' : 'OPORTUNIDADE', true, mk));
+          jaAdd.add(key);
+        }
+        // 2) HIGH/GOOD — pares que a BW abriu colados, com opiniao do motor, fora da manha
+        for (const par of pares) {
+          if (par.marketPct == null) continue;
+          const ta = Number(par.aTrap), tb = Number(par.bTrap);
+          const key = Math.min(ta, tb) + 'x' + Math.max(ta, tb);
+          if (jaAdd.has(key)) continue;
+          const mp = par.marketPct / 100, hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
+          const razao = lo > 0 ? (hi / lo) : null;
+          if (!(razao != null && razao <= TETO)) continue;      // exige colada na BW
+          const conf = todos.find(s => _mesmoPar(Number(s.pick_trap), Number(s.outro_trap), ta, tb));
+          if (!conf || conf.pct <= parelhoAte) continue;        // sem opiniao/conviccao
+          confrontos.push(mkConf(conf, conf.tier != null ? 'HIGH' : 'GOOD', false, mercadoDe(conf)));
+          jaAdd.add(key);
+        }
+        if (!confrontos.length) continue;
+        corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, confrontos });
+      }
+      _painelDiaCache = { date, ts: Date.now(), corridas: corridasBase };
+    }
+
+    // OVERLAY PESSOAL (por usuario, sem cache): entrada/escolhido/aguardando_entrada.
+    const overlay = corridasBase.map(c => ({ id: c.race_id }));
+    aplicarPessoais(db, overlay, req.user.id);
+    const povoDe = {}; overlay.forEach(o => { povoDe[o.id] = o; });
+
+    const corridas = corridasBase.map(c => {
+      const p = povoDe[c.race_id] || {};
+      let esc = null; try { esc = p.avb_escolhido ? JSON.parse(p.avb_escolhido) : null; } catch (e) {}
+      let entrada = null, escId = null;
+      if (esc && esc.aTrap != null && esc.bTrap != null && p.odd != null && String(p.odd) !== '') {
+        escId = _idc(c.corrida, c.hora, Number(esc.aTrap), Number(esc.bTrap));
+        entrada = { odd: Number(p.odd), stake: (p.bet_unidades != null ? Number(p.bet_unidades) : null), em: esc.ts || null, id_confronto: escId };
+      }
+      return {
+        race_id: c.race_id, hora: c.hora, hora_br: c.hora_br, corrida: c.corrida, pista: c.pista, dist: c.dist,
+        entrada,
+        confrontos: c.confrontos.map(cf => Object.assign({}, cf, {
+          escolhido: (escId != null && cf.id === escId),
+          aguardando_entrada: (cf.camada !== 'OPORTUNIDADE' && entrada == null)
+        }))
+      };
+    });
+
+    res.json({ date, atualizado_em: new Date().toISOString(), corridas });
+  } catch (e) {
+    console.error('[painel-dia]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
 // Exportados a mais pra reaproveitar no robo de monitoramento de card (reanalise
 // parcial de uma corrida so, sem duplicar a engine de pontuacao)
