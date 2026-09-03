@@ -1607,6 +1607,60 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .casc-desc{font-size:10px;color:var(--mut2);margin-top:1px}
 /* Cabecalho da lista de corridas: as MESMAS larguras das linhas, senao os
    filtros nao apontam pra coluna que filtram. */
+/* ── Analisar: standby + tiles ────────────────────────────────────────────
+   A mesma grade dos AvBs: 1 ocupa tudo, 2 lado a lado, 3 com o ultimo
+   centralizado, 4 em quadrado. Reusa .fp-grid pra nao existirem duas grades
+   parecidas que divergem na primeira mudanca. */
+.ap-grid{display:grid;gap:10px;flex:1 1 auto;min-height:0;grid-auto-rows:minmax(0,1fr)}
+.ap-g1{grid-template-columns:1fr}
+.ap-g2,.ap-g3,.ap-g4{grid-template-columns:1fr 1fr}
+.ap-g3 > :nth-child(3){grid-column:1 / -1;justify-self:center;width:calc(50% - 5px)}
+@media(max-width:1100px){
+  .ap-grid,.ap-g2,.ap-g3,.ap-g4{grid-template-columns:1fr}
+  .ap-g3 > :nth-child(3){grid-column:auto;justify-self:stretch;width:auto}
+}
+
+/* A cor da camada vem em --ap-cor, posta na propria tile pelo JS: TOP, HIGH e
+   GOOD usam o MESMO CSS. */
+.ap-tile{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
+  background:#0D1117;border:2px solid var(--ap-cor,#333);border-radius:10px;padding:6px 8px}
+.ap-tile-hd{display:flex;align-items:center;gap:8px;font-size:11px;flex:0 0 auto;margin-bottom:4px}
+.ap-cam{font-size:9px;font-weight:800;letter-spacing:.5px;color:#04140a;border-radius:8px;padding:2px 8px}
+.ap-hora{font-weight:800;color:#21AB58}
+.ap-corrida{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-pct{margin-left:auto;font-weight:700;color:#cbd5e1}
+.ap-mut{color:var(--mut)}
+.ap-sem-card{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.ap-par{font-size:20px;font-weight:800}
+.ap-odd{font-size:12px;color:#cbd5e1}
+.ap-entrada{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-top:6px;flex-wrap:wrap}
+.ap-entrada label{font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px}
+.ap-entrada input{width:66px;background:#0d0d0d;border:1px solid #333;border-radius:5px;
+  color:#e9edf2;padding:3px 5px;font-size:12px;text-align:center}
+.ap-entrei{margin-left:auto;background:transparent;border:1px solid #21AB58;color:#21AB58;
+  border-radius:6px;padding:4px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.ap-entrei.ok{background:#21AB58;color:#04140a}
+.ap-entrei:disabled{opacity:.6;cursor:default}
+.ap-aviso{font-size:11px;color:#ef4444;margin-top:4px}
+
+/* Promocao: a MOLDURA pisca na cor da camada, junto com a linha no board. */
+@keyframes apPisca{
+  0%,100%{ box-shadow:none;                        border-color:var(--ap-cor) }
+  50%    { box-shadow:0 0 0 3px var(--ap-cor), 0 0 18px var(--ap-cor);
+           border-color:var(--ap-cor) }
+}
+.ap-pisca{animation:apPisca 1s ease-in-out 8}
+
+/* Standby: a ampola girando diz "estou vivo e olhando". Tela parada e tela
+   quebrada sao indistinguiveis sem ela. */
+.ap-standby{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;color:var(--mut)}
+.ap-spin{width:44px;height:44px;border-radius:50%;border:3px solid rgba(255,255,255,.10);
+  border-top-color:#21AB58;animation:apGira 1s linear infinite}
+@keyframes apGira{ to{ transform:rotate(360deg) } }
+.ap-standby-txt{font-size:15px;font-weight:800;letter-spacing:2px;color:#8a94a6}
+.ap-standby-sub{font-size:11px;color:var(--mut2)}
+
 /* ── Board do dia (Histórico) ─────────────────────────────────────────────
    Uma linha por confronto. A cor vem da camada, via --bd-cor, posta na
    propria linha pelo JS: assim TOP, HIGH e GOOD usam o MESMO CSS e a cor nao
