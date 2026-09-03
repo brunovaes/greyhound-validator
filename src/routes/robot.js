@@ -3569,6 +3569,101 @@ router.get('/diag/oportunidades', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// OPORTUNIDADES PELO LADO DA BW (admin — Bruno set/2026): o inverso do /diag/oportunidades.
+// Aqui NAO partimos do PDF: partimos dos pares que a BW REALMENTE ABRIU (avb_abertos). Para cada
+// par aberto, achamos o confronto correspondente no precalc do motor (por trap, qualquer ordem) e
+// medimos: (a) o motor tem opiniao? (b) passa nos filtros de qualidade (tier != null + pct > corte)?
+// (c) esta colada NO MERCADO (razao das odds individuais <= teto)? A razao vem do marketPct do par,
+// que ja e' a odd de cada galgo sem margem — exatamente a "OD exclusiva do galgo" que o Bruno pediu.
+// Esse e' o verdadeiro rendimento do modelo "o mercado forma o par". So-leitura, nao grava nada.
+//   GET /diag/oportunidades-bw?date=YYYY-MM-DD&teto=1.5
+router.get('/diag/oportunidades-bw', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+    const teto = (parseFloat(req.query.teto) > 0) ? parseFloat(req.query.teto) : 1.5; // teto da colagem NO MERCADO (razao das odds)
+    const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+    const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+    const _c = c => String(c || '').trim().toLowerCase();
+    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
+    const k = (co, ho) => _c(co) + '|' + _h(ho);
+    const _mesmoPar = (x, t1, t2) => (Number(x.pick_trap) === t1 && Number(x.outro_trap) === t2) || (Number(x.pick_trap) === t2 && Number(x.outro_trap) === t1);
+    const _pista = c => String(c || '').trim().split(/\s+/)[0] || '?';
+    // pares que a BW abriu, por corrida
+    const h2hRows = db.prepare('SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?').all(date);
+    const h2hByRace = {}; for (const p of h2hRows) { let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {} h2hByRace[k(p.corrida, p.hora)] = arr; }
+    // precalc por corrida (motor), indexado por hora|corrida
+    const rows = db.prepare(
+      "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+    ).all(date);
+    const pcByRace = {};
+    for (const row of rows) {
+      let hf = null, ha = null, rc = null;
+      try { hf = JSON.parse(row.hist_full); } catch (e) { continue; }
+      try { ha = JSON.parse(row.hist_all); } catch (e) {}
+      try { rc = JSON.parse(row.race_card); } catch (e) {}
+      if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) continue;
+      const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
+      try { pcByRace[k(row.corrida, row.hora)] = mm.precalcDaCorrida(hf, ha, rc, ctxBase, opts); } catch (e) {}
+    }
+    let totPares = 0, comConfronto = 0, passamQual = 0, coladasMercado = 0, passamTudo = 0;
+    const corridas = [];
+    for (const p of h2hRows) {
+      const pares = h2hByRace[k(p.corrida, p.hora)] || [];
+      if (!pares.length) continue;
+      const pc = pcByRace[k(p.corrida, p.hora)] || null;
+      const todos = (pc && Array.isArray(pc.todos)) ? pc.todos : [];
+      const lista = [];
+      for (const par of pares) {
+        if (par.marketPct == null) continue;
+        totPares++;
+        const mp = par.marketPct / 100;
+        const hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
+        const razaoMercado = lo > 0 ? +(hi / lo).toFixed(3) : null;
+        const coladaMercado = razaoMercado != null && razaoMercado <= teto;
+        if (coladaMercado) coladasMercado++;
+        // acha o confronto no motor (qualquer orientacao)
+        const conf = todos.find(s => _mesmoPar(s, Number(par.aTrap), Number(par.bTrap)));
+        let motor = null;
+        if (conf) {
+          comConfronto++;
+          const qualifica = conf.tier != null && conf.pct > parelhoAte;
+          if (qualifica) passamQual++;
+          if (qualifica && coladaMercado) passamTudo++;
+          motor = { pick: 'T' + conf.pick_trap + 'xT' + conf.outro_trap, pct: conf.pct, tier_qualidade: conf.tier, sp_ratio: conf.ratio_sp, passa_qualidade: qualifica };
+        }
+        lista.push({
+          par_bw: 'T' + par.aTrap + 'xT' + par.bTrap,
+          market_pct: +(mp * 100).toFixed(1),
+          razao_mercado: razaoMercado,
+          colada_mercado: coladaMercado,
+          motor
+        });
+      }
+      if (lista.length) corridas.push({ hora: p.hora, corrida: p.corrida, pares: lista });
+    }
+    res.json({
+      date, teto,
+      resumo: {
+        corridas_com_par_bw: corridas.length,
+        total_pares_bw: totPares,
+        com_confronto_no_motor: comConfronto,
+        passam_qualidade: passamQual,
+        colados_no_mercado: coladasMercado,
+        passam_qualidade_e_colados: passamTudo
+      },
+      corridas,
+      legenda: 'Parte dos pares que a BW ABRIU (avb_abertos), nao do PDF. Para cada par: razao_mercado = '
+        + 'colagem real (odds individuais sem margem; 1.0=empate, maior=desigual), colada_mercado = razao <= teto ('
+        + teto + '). motor.passa_qualidade = o confronto passa nos filtros (tier != null + pct > ' + parelhoAte + '). '
+        + 'passam_qualidade_e_colados = o rendimento do modelo "mercado forma o par": pares que a BW abriu colados E que o '
+        + 'motor aprova na qualidade. Dessa base saem TOP/HIGH/GOOD. So-leitura, nao muda producao.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // CONFIG VALENDO EM PRODUÇÃO (admin — Bruno ago/2026): so-leitura. Mostra o que ESTA no
 // analysis_config AGORA (o que o motor unico usa), separado por regua + globais. Serve pra
 // conferir depois de um APLICAR. Nao roda funil, nao recalcula nada — so le as colunas.
