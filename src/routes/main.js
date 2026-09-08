@@ -2440,29 +2440,18 @@ ${navBar(user, 'historico')}
   </div>
 </div>
 </div>
-<!-- Board do dia: os TOP do dia, ao vivo. Fica ACIMA da tabela de sempre, e
-     nao no lugar dela: o Historico continua sendo o arquivo, com Bateu, Odd,
-     Observacoes e as origens. Trocar uma coisa pela outra tiraria do Bruno a
-     tela que ele usa pra fechar o dia. -->
-<div class="section" id="hist-board-wrap">
-  <div class="sec-title" style="display:flex;align-items:center;gap:10px">
-    Board do dia
-    <span id="hist-board-st" style="font-size:10px;font-weight:400;color:var(--mut);text-transform:none;letter-spacing:normal"></span>
-  </div>
-  <div id="hist-board"><div class="bd-vazio">carregando…</div></div>
-</div>
 
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:92px">Origem<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="top">TOP</option><option value="secundario">Secundária</option><option value="surpresa">Surpresa</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:328px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:92px">Origem<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="top">TOP</option><option value="secundario">Secundária</option><option value="surpresa">Surpresa</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
   var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
   var horaBr=r.hora_br||r.hora||'-';
   var horaUk=r.hora||'';
   var _brh=(function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
   var turnoBR=_brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}" data-motor="${_motorDoAvb(r)}">
+  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}" data-motor="${_motorDoAvb(r)}" data-entrei="${(r.odd!=null&&String(r.odd).trim()!=="")?"sim":"nao"}">
 <td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
 <td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
-${_celulaAvb(r)}${_celulaMotor(r)}
+${_celulaAvb(r)}<td style="text-align:center"><span style="font-weight:700;font-size:12px;color:${r.pct>=90?"#22c55e":r.pct>=75?"#eab308":"#888"}">${r.pct?r.pct+"%":"-"}</span></td>${_celulaMotor(r)}<td style="text-align:center">${(r.odd!=null&&String(r.odd).trim()!=="")?'<span style="font-size:10px;font-weight:800;letter-spacing:.4px;color:#04140a;background:#21AB58;border-radius:4px;padding:2px 6px">ENTREI</span>':'<span style="color:#444">&mdash;</span>'}</td>
 <td style="text-align:center" title="${(r._bateuConta||'').replace(/"/g,'&quot;')}"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
 <option value="" ${!r.bateu?'selected':''}>-</option>
 <option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
@@ -2475,7 +2464,7 @@ ${_celulaObs(r)}
 ${_celulaAberto(r)}
 <td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
 </tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
+${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="13" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
 </tbody></table></div>
 
 <style>
@@ -2536,22 +2525,6 @@ ${cssCardGalgo()}
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script src="${BASE}/static/js/cardGalgo.js"></script>
-<script src="${BASE}/static/js/painelDia.js"></script>
-<script src="${BASE}/static/js/boardDia.js"></script>
-<script>
-(function(){
-  var st = document.getElementById('hist-board-st');
-  window.PainelDia.assinar(function(dados, erro){
-    window.BoardDia.render('hist-board', dados, erro);
-    if (st && dados) {
-      var n = window.PainelDia.doBoard(dados).length;
-      st.textContent = n + (n === 1 ? ' oportunidade' : ' oportunidades')
-        + (dados.atualizado_em ? ' · atualizado ' + String(dados.atualizado_em).slice(11,16) : '');
-    }
-  });
-  window.PainelDia.iniciar({});
-})();
-</script>
 <script>
 
 // "leia mais" das Observacoes: um listener so pra tabela inteira, em vez de
@@ -2725,7 +2698,9 @@ function aplicarFiltroHist(){
   var et=document.getElementById('fh-turno'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
   var ea=document.getElementById('fh-aberto');
   var em=document.getElementById('fh-motor');
+  var ee=document.getElementById('fh-entrei');
   var ft=et?et.value:'', fc=ec?ec.value:'', fb=eb?eb.value:'', fa=ea?ea.value:'', fm=em?em.value:'';
+  var fe=ee?ee.value:'';
   document.querySelectorAll('tr[data-race]').forEach(function(tr){
     var t=tr.getAttribute('data-turno')||'';
     var p=tr.getAttribute('data-pista')||'';
@@ -2742,9 +2717,13 @@ function aplicarFiltroHist(){
       : fa==='manual' ? na
       : true;
     var mo=tr.getAttribute('data-motor')||'';
+    // ENTREI: 'sim' = tem odd registrada nesta corrida. E' o que separa o que
+    // conta como aposta feita do que foi so' indicacao do motor.
+    var en=tr.getAttribute('data-entrei')||'';
+    var casaEntrei = !fe ? true : (en === fe);
     // 'fora' = a corrida nao passou em nenhuma das duas reguas (tier vazio).
     var casaMotor = !fm ? true : (mo === fm);
-    var ok=casaAberto&&casaMotor&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
+    var ok=casaAberto&&casaMotor&&casaEntrei&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
     tr.style.display=ok?'':'none';
   });
   recalcKpisHist();
