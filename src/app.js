@@ -755,6 +755,20 @@ window.pintarPromocaoNaLista = function (novas) {
   });
 };
 
+// VOLTAR AO PAINEL DO DIA (Bruno set/2026). Abrir uma corrida pela lista faz o
+// app.js sobrescrever a coluna de foco, e o painel de tiles some junto — por
+// desenho, pra nao puxar a tela debaixo de voce no meio da analise. O efeito
+// colateral era ficar cego: o alarme tocava e nao havia como ver o confronto
+// sem adivinhar que era preciso fechar a corrida. Esta funcao devolve a coluna
+// pro painel e forca uma leitura, pros tiles aparecerem na hora.
+window.voltarAoPainelDia = function () {
+  var fc = document.getElementById('focus-col');
+  if (!fc) return;
+  focusRaceIdx = -1;
+  fc.innerHTML = '<div id="ap-painel" class="ap-grid ap-g1"></div>';
+  try { if (window.PainelDia && window.PainelDia.buscar) window.PainelDia.buscar(); } catch (e) {}
+};
+
 function showDayEndMsg() {
   var focusCol = document.getElementById('focus-col');
   if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px;margin-left:-85px"><div style="font-size:64px">&#127937;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Ciclo do dia encerrado</div><div style="font-size:13px">As corridas de hoje se encerraram e voltaremos amanhã</div></div>';

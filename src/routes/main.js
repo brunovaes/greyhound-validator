@@ -667,6 +667,23 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 /* overflow HIDDEN, nao auto: a grade dos AvBs se ajusta a altura disponivel,
    entao nao ha o que rolar aqui — e com auto ela ganharia altura infinita e o
    grid-auto-rows:1fr deixaria de dividir. */
+/* AVISO DE CONFRONTO AGUARDANDO (Bruno set/2026). Fixo na tela, aparece SO quando
+   ha confronto pra entrar E o painel de tiles esta escondido porque voce abriu uma
+   corrida pela lista. Antes disso o alarme tocava e nao havia nada pra ver: a
+   coluna de foco estava ocupada e nao havia pista de que existia algo esperando. */
+#ap-aviso{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:8000;display:none;
+  align-items:center;gap:12px;background:#12172a;border:1px solid var(--ap-avc,#22e08a);
+  border-radius:10px;padding:9px 14px;box-shadow:0 10px 34px rgba(0,0,0,.55);
+  font-size:12px;color:#e7ecf5;max-width:92vw}
+#ap-aviso.on{display:flex}
+#ap-aviso .apa-pt{width:8px;height:8px;border-radius:50%;background:var(--ap-avc,#22e08a);flex:0 0 auto;
+  animation:apaPulse 1s ease-in-out infinite}
+@keyframes apaPulse{0%,100%{opacity:1}50%{opacity:.25}}
+#ap-aviso .apa-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ap-aviso .apa-cam{font-weight:800;letter-spacing:.3px}
+#ap-aviso button{background:var(--ap-avc,#22e08a);color:#04140a;border:none;border-radius:7px;
+  padding:5px 12px;font-weight:800;font-size:11px;cursor:pointer;flex:0 0 auto}
+#ap-aviso button:hover{opacity:.88}
 .focus-col{display:none;flex-direction:column;overflow:hidden;background:var(--bg);flex:1;min-height:0;padding:8px 10px}
 /* Só a GRADE se estica. Cabecalho, notas de alerta e a barra de Odd/Stake ficam
    com o tamanho que precisam e NUNCA saem da tela. */
@@ -954,6 +971,7 @@ ${navBar(user, 'analisar')}
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
+  <div id="ap-aviso"></div>
   <div class="focus-col" id="focus-col">
     <!-- Standby e tiles do Painel do Dia. Fica dentro da coluna de foco, que
          ja tem a altura certa; o app.js sobrescreve este conteudo quando o
@@ -1040,8 +1058,35 @@ ${navBar(user, 'analisar')}
     var c = document.getElementById('focus-col');
     return !!(c && c.querySelector('#ap-painel'));
   }
+  // Com a coluna de foco livre, os tiles desenham. Ocupada, o painel nao desenha
+  // (decisao acima) — mas voce precisa saber que ha algo esperando, senao o alarme
+  // toca no vazio. Ai entra o aviso fixo, com a cor da camada mais forte.
+  var CORES_AV = { TOP: '#22e08a', HIGH: '#ff8c1a', GOOD: '#4aa8ff' };
+  function mostrarAviso(itens) {
+    var el = document.getElementById('ap-aviso');
+    if (!el) return;
+    if (!itens || !itens.length) { el.className = ''; el.innerHTML = ''; return; }
+    var ordem = ['TOP', 'HIGH', 'GOOD'];
+    var lista = itens.slice().sort(function (a, b) {
+      return ordem.indexOf(String(a.camada).toUpperCase()) - ordem.indexOf(String(b.camada).toUpperCase());
+    });
+    var forte = lista[0];
+    var cam = String(forte.camada || '').toUpperCase();
+    var cor = CORES_AV[cam] || '#22e08a';
+    el.style.setProperty('--ap-avc', cor);
+    var resumo = lista.slice(0, 2).map(function (x) {
+      return '<span class="apa-cam" style="color:' + (CORES_AV[String(x.camada).toUpperCase()] || '#888') + '">'
+        + String(x.camada || '').toUpperCase() + '</span> ' + (x.corrida || '') + ' ' + (x.par || '');
+    }).join('  ·  ');
+    var extra = lista.length > 2 ? '  +' + (lista.length - 2) : '';
+    el.innerHTML = '<span class="apa-pt"></span>'
+      + '<span class="apa-txt">' + lista.length + ' aguardando entrada  ·  ' + resumo + extra + '</span>'
+      + '<button type="button" onclick="voltarAoPainelDia()">Ver</button>';
+    el.className = 'on';
+  }
   window.PainelDia.assinar(function(dados){
-    if (telaLivre()) window.AnalisarPainel.render('ap-painel', dados);
+    if (telaLivre()) { window.AnalisarPainel.render('ap-painel', dados); mostrarAviso(null); }
+    else mostrarAviso(window.PainelDia.paraEntrar(dados));
   });
   window.PainelDia.iniciar({});
 })();
