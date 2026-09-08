@@ -188,6 +188,15 @@
       else if (typeof glob.playSom === 'function') glob.playSom(som);
     } catch (e) {}
 
+    // PISCA A LINHA NA LISTA junto com o som. A cor diz DE ONDE veio o AvB:
+    // verde pro que o motor da manha levantou e a BW abriu, azul pra pescada
+    // (a BW abriu sem estar na lista da manha). Quem pinta e' a tela que tem a
+    // lista, porque este modulo nao conhece o DOM dela — onde a funcao nao
+    // existir, o alarme toca e nada pisca, sem erro.
+    try {
+      if (typeof glob.pintarPromocaoNaLista === 'function') glob.pintarPromocaoNaLista(novas);
+    } catch (e) {}
+
     // Avisa as telas quais confrontos foram promovidos AGORA: e' com isso que
     // a moldura na Analisar e a linha na lista piscam ao mesmo tempo.
     st.promovidosAgora = novas.map(function (x) { return x.id; });

@@ -91,6 +91,13 @@ function injectStyles(){
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
     '.rc-alert-custom{animation:rcAlertBlinkCustom 1s ease-in-out infinite;border-left:3px solid var(--alert-col,#3b82f6);}',
     '@keyframes rcAlertBlinkCustom{0%,100%{background:transparent;}50%{background:var(--alert-col,#3b82f6);}}',
+    // AVISO DE PROXIMIDADE, MUDO: cinza discreto, so pra localizar na lista a
+    // corrida que esta chegando. Verde e azul ficaram reservados pro alarme de camada.
+    '.rc-perto{animation:rcPertoBlink 1.6s ease-in-out infinite;border-left:3px solid rgba(255,255,255,.28);}',
+    '@keyframes rcPertoBlink{0%,100%{background:transparent;}50%{background:rgba(255,255,255,.07);}}',
+    // PROMOCAO DE CAMADA: a cor diz DE ONDE veio o AvB (verde = manha+BW, azul = pescada).
+    '.rc-camada{animation:rcCamadaBlink 1s ease-in-out infinite;border-left:3px solid var(--cam-col,#1B9D40);}',
+    '@keyframes rcCamadaBlink{0%,100%{background:transparent;}50%{background:var(--cam-col,#1B9D40);}}',
     '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
     '.rc-reanalise-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:8px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-bottom:3px}',
     '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
@@ -691,27 +698,62 @@ function checkRaceAlerts() {
     if (isNaN(idx) || !results[idx]) return;
     var r = results[idx];
     el.classList.toggle('rc-old', isOldRaceCard(r));
-    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom'); return; } // corrida antiga nunca pisca/soa
+    if (isOldRaceCard(r)) { el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom'); el.classList.remove('rc-perto'); return; } // corrida antiga nunca pisca/soa
     var mins = minutesToRace(r);
     var shouldAlert = mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     if (shouldAlert) {
       var custom = matchAlarmeFiltro(r);
       if (custom) {
-        el.classList.remove('rc-alert'); el.classList.add('rc-alert-custom');
+        el.classList.remove('rc-alert'); el.classList.remove('rc-perto'); el.classList.add('rc-alert-custom');
         el.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6');
+        var key = raceAlertKey(r);
+        if (!alertedRaces[key]) { alertedRaces[key] = true; avisarCorrida(r, true); }
       } else {
-        el.classList.remove('rc-alert-custom'); el.classList.add('rc-alert');
-      }
-      var key = raceAlertKey(r);
-      if (!alertedRaces[key]) {
-        alertedRaces[key] = true;
-        avisarCorrida(r, custom);
+        // AVISO DE PROXIMIDADE AGORA E' MUDO (Bruno set/2026). Este ramo pintava
+        // de VERDE e TOCAVA em toda corrida da lista 3 min antes, sem nenhum
+        // liga/desliga: os toggles das Configuracoes so controlavam o ramo custom
+        // acima. O som passou a ser exclusividade do alarme de camada (quem avisa
+        // que a BW confirmou um AvB), e o verde foi liberado pra ele. Aqui sobra
+        // so a marca cinza de 'esta perto'.
+        el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom');
+        el.classList.add('rc-perto');
       }
     } else {
-      el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom');
+      el.classList.remove('rc-alert'); el.classList.remove('rc-alert-custom'); el.classList.remove('rc-perto');
     }
   });
 }
+
+// PISCAR A LINHA POR PROMOCAO DE CAMADA (Bruno set/2026).
+// Chamado pelo painelDia.js no MESMO instante do som, com os confrontos que a
+// BW acabou de confirmar. A cor diz DE ONDE veio o AvB, nao qual e' a camada:
+//   VERDE = o motor da manha levantou e a BW abriu   (da_manha true)
+//   AZUL  = a BW abriu sem estar na lista da manha    (a pescada)
+// Fica 12s, o mesmo tempo que o painelDia guarda a promocao. Publicado no
+// window porque quem chama e' o painelDia, que nao conhece o DOM desta tela —
+// onde esta funcao nao existir, o alarme toca e nada pisca, sem erro.
+function _horaChave(h) {
+  var m = String(h || '').match(/(\d{1,2}):(\d{2})/);
+  return m ? (String(parseInt(m[1], 10)) + ':' + m[2]) : String(h || '').trim();
+}
+window.pintarPromocaoNaLista = function (novas) {
+  if (!Array.isArray(novas) || !novas.length) return;
+  document.querySelectorAll('.rc').forEach(function (el) {
+    var idx = parseInt(el.getAttribute('data-idx'), 10);
+    if (isNaN(idx) || !results[idx]) return;
+    var r = results[idx];
+    var achou = null;
+    for (var i = 0; i < novas.length; i++) {
+      var x = novas[i];
+      if (String(x.corrida || '').trim().toLowerCase() === String(r.corrida || '').trim().toLowerCase()
+          && _horaChave(x.hora) === _horaChave(r.hora)) { achou = x; break; }
+    }
+    if (!achou) return;
+    el.style.setProperty('--cam-col', achou.da_manha ? '#1B9D40' : '#3b82f6');
+    el.classList.add('rc-camada');
+    setTimeout(function () { el.classList.remove('rc-camada'); }, 12000);
+  });
+};
 
 function showDayEndMsg() {
   var focusCol = document.getElementById('focus-col');
@@ -2372,14 +2414,13 @@ function renderRaceListPanel(avbs) {
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     var alertCustom = isAlerting && matchAlarmeFiltro(r);
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-alert') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
+    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-perto') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
     if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
-    if (isAlerting) {
+    // So o alarme de FILTRO avisa daqui, e ele tem liga/desliga proprio nas
+    // Configuracoes. O aviso de proximidade virou mudo — ver checkRaceAlerts.
+    if (isAlerting && alertCustom) {
       var key = raceAlertKey(r);
-      if (!alertedRaces[key]) {
-        alertedRaces[key] = true;
-        avisarCorrida(r, alertCustom);
-      }
+      if (!alertedRaces[key]) { alertedRaces[key] = true; avisarCorrida(r, true); }
     }
     div.setAttribute('data-idx', rIdx);
     div.style.display = 'flex';
