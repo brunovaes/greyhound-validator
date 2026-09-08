@@ -1611,14 +1611,15 @@ router.get('/painel-dia', (req, res) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
       ? req.query.date
       : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
-    const TETO = 1.5, FAIXA = 1.8;
-    const _c = c => String(c || '').trim().toLowerCase();
-    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
-    const _k = (co, ho) => _c(co) + '|' + _h(ho);
-    const _idc = (co, ho, t1, t2) => _k(co, ho) + '|' + Math.min(t1, t2) + 'x' + Math.max(t1, t2);
-    const _mesmoPar = (t1a, t1b, t2a, t2b) => (t1a === t2a && t1b === t2b) || (t1a === t2b && t1b === t2a);
-    const _pista = c => String(c || '').trim().split(/\s+/)[0] || '?';
-    const _horaBr = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); if (!m) return String(h || ''); let hr = parseInt(m[1]); if (hr >= 1 && hr <= 9) hr += 12; hr = hr - 4; if (hr < 0) hr += 24; return hr + ':' + m[2]; };
+    // A regra de camadas (OPORTUNIDADE/TOP/HIGH/GOOD) mora no camadasDoDia.js.
+    // Estava inteira aqui dentro ate set/2026; saiu porque o Historico passou a
+    // precisar da MESMA classificacao, e duas copias da regua divergem em silencio
+    // no dia em que alguem afina um corte. Mesmo motivo do avbResultado.js.
+    const cd = require('../utils/camadasDoDia');
+    const _k = cd.chaveCorrida;
+    const _idc = cd.idConfronto;
+    const _pista = cd.pista;
+    const _horaBr = cd.horaBr;
 
     // BASE PESADA (nao-pessoal): recalcula o motor de todas as corridas + cruza com a BW.
     // Cache curto por data (12s) pra aguentar polling de 15-20s sem repesar o servidor.
@@ -1650,52 +1651,14 @@ router.get('/painel-dia', (req, res) => {
         const bw = h2hByRace[_k(row.corrida, row.hora)] || null;
         const pares = bw ? bw.pares : [];
         const abertoEm = bw ? bw.em : null;
-        // dados de mercado (colagem na odd individual) de um confronto
-        const mercadoDe = (s) => {
-          if (!pares.length) return null;
-          const par = pares.find(x => _mesmoPar(Number(x.aTrap), Number(x.bTrap), Number(s.pick_trap), Number(s.outro_trap)));
-          if (!par || par.marketPct == null) return null;
-          const mp = (Number(par.aTrap) === Number(s.pick_trap) ? par.marketPct : 100 - par.marketPct) / 100;
-          const hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
-          const razao = lo > 0 ? +(hi / lo).toFixed(3) : null;
-          const oddPick = (Number(par.aTrap) === Number(s.pick_trap)) ? par.oddAvenceB : par.oddBvenceA;
-          return { colada: razao != null && razao <= TETO, razao, market_pct: +(mp * 100).toFixed(1), odd: (oddPick != null ? +Number(oddPick).toFixed(2) : null) };
-        };
-        const mkConf = (s, camada, noBoard, mk) => ({
-          id: _idc(row.corrida, row.hora, s.pick_trap, s.outro_trap),
-          par: 'T' + s.pick_trap + 'xT' + s.outro_trap,
-          pick_trap: s.pick_trap, pick_nome: s.pick_nome || null,
-          outro_trap: s.outro_trap, outro_nome: s.outro_nome || null,
-          pct: s.pct, sp_ratio: s.ratio_sp,
-          camada, no_board_top: !!noBoard,
-          odd_bw: mk ? mk.odd : null, razao_mercado: mk ? mk.razao : null, market_pct: mk ? mk.market_pct : null,
-          promovido_em: (camada !== 'OPORTUNIDADE' && abertoEm) ? abertoEm : null,
-          bateu: bateuPar(row.finishing_order_json, Number(s.pick_trap), Number(s.outro_trap))
+        // Classificacao das camadas: uma chamada, uma fonte. O bateuPar entra por
+        // parametro pra continuar existindo UMA implementacao do 'bateu' no sistema.
+        const confrontos = cd.confrontosDaCorrida({
+          todos, pares, abertoEm,
+          corrida: row.corrida, hora: row.hora,
+          finishingOrderJson: row.finishing_order_json,
+          parelhoAte, bateuPar
         });
-        // manha (board TOP): qualidade (tier != null) + pct + SP colada <= faixa
-        const manha = todos.filter(s => s.tier != null && s.pct > parelhoAte && s.ratio_sp <= FAIXA);
-        const confrontos = []; const jaAdd = new Set();
-        // 1) board TOPs — sempre entram; OPORTUNIDADE ate abrir colada na BW, ai vira TOP
-        for (const s of manha) {
-          const key = Math.min(s.pick_trap, s.outro_trap) + 'x' + Math.max(s.pick_trap, s.outro_trap);
-          const mk = mercadoDe(s);
-          confrontos.push(mkConf(s, (mk && mk.colada) ? 'TOP' : 'OPORTUNIDADE', true, mk));
-          jaAdd.add(key);
-        }
-        // 2) HIGH/GOOD — pares que a BW abriu colados, com opiniao do motor, fora da manha
-        for (const par of pares) {
-          if (par.marketPct == null) continue;
-          const ta = Number(par.aTrap), tb = Number(par.bTrap);
-          const key = Math.min(ta, tb) + 'x' + Math.max(ta, tb);
-          if (jaAdd.has(key)) continue;
-          const mp = par.marketPct / 100, hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
-          const razao = lo > 0 ? (hi / lo) : null;
-          if (!(razao != null && razao <= TETO)) continue;      // exige colada na BW
-          const conf = todos.find(s => _mesmoPar(Number(s.pick_trap), Number(s.outro_trap), ta, tb));
-          if (!conf || conf.pct <= parelhoAte) continue;        // sem opiniao/conviccao
-          confrontos.push(mkConf(conf, conf.tier != null ? 'HIGH' : 'GOOD', false, mercadoDe(conf)));
-          jaAdd.add(key);
-        }
         if (!confrontos.length) continue;
         corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, confrontos });
       }
