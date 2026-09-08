@@ -422,6 +422,12 @@ const migrations = [
   //   avb_faixa_sp = colagem da SP do PDF (ultima corrida valida de cada galgo). Forma o pool da manha.
   "ALTER TABLE analysis_config ADD COLUMN avb_teto_bw REAL DEFAULT 1.5",
   "ALTER TABLE analysis_config ADD COLUMN avb_faixa_sp REAL DEFAULT 1.5",
+  // set/2026 (Bruno): "a ODD so vale no motor da manha". O pool passou a ser medido
+  // pela DIFERENCA absoluta entre as odds decimais dos dois galgos na ultima corrida
+  // valida (7/2 x 4/1 = 4,50 e 5,00 -> dista 0,50), e nao mais pela razao. O
+  // avb_faixa_sp acima virou legado: ficou porque apagar coluna em producao nao
+  // compensa, mas nada le mais ele.
+  "ALTER TABLE analysis_config ADD COLUMN avb_sp_dif_max REAL DEFAULT 1.0",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

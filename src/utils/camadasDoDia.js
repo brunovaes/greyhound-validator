@@ -18,49 +18,56 @@
 //
 // ── O MODELO (Bruno, set/2026) ──────────────────────────────────────────────
 //
-// MOTOR DA MANHA — le os PDFs e monta o POOL de candidatos:
-//   um par entra no pool se tem conviccao (pct > parelhoAte) E as SPs dos dois
-//   galgos estao coladas (razao <= faixa, medida na ULTIMA corrida valida de
-//   cada um). O pool e' a resposta pra "quais AvBs tem chance de a BW abrir".
-//   Enquanto a BW nao confirma, o par e' uma OPORTUNIDADE.
+// A ODD TEM UM PAPEL SO, E E' NA MANHA. Ela responde "quais AvBs a BW tem chance
+// de abrir?", porque a casa so abre frente-a-frente entre galgos de preco
+// parecido. Nada alem disso. Depois que a BW abre, a odd sai da decisao.
 //
-// MOTOR BW — perto da largada, para cada par que a BW abre COLADO
-// (razao de mercado <= teto), a REGUA DE QUALIDADE decide a camada:
-//   tier 'TOP'     -> TOP    (categoria + CalTm >= 0,20 + ganha split + ganha podio)
-//   tier 'REGULAR' -> HIGH   (regua mais frouxa: CalTm >= 0,10, aceita empate)
-//   tier  null     -> GOOD   (nao passa em nenhuma; so conviccao + colagem)
-//   Um par que NAO estava no pool da manha entra do mesmo jeito (a "pescada"):
-//   quem confirma e' o mercado, nao o PDF.
+// MOTOR DA MANHA — POOL de candidatos:
+//   um par entra se tem conviccao (pct > parelhoAte) E as SPs dos dois galgos
+//   estao proximas: DIFERENCA absoluta entre as odds decimais da ULTIMA corrida
+//   valida de cada um, <= difSpMax (1,0 por padrao).
+//   E' DIFERENCA, nao razao: 7/2 x 4/1 (4,50 e 5,00) dista 0,50 e entra; dois
+//   azaroes em 7,00 e 9,00 distam 2,00 e ficam de fora, ainda que a razao entre
+//   eles seja pequena. Enquanto a BW nao confirma, o par e' uma OPORTUNIDADE.
+//
+// MOTOR BW — CLASSIFICACAO, sem olhar preco:
+//   todo par que a BW abriu e' avaliado pela REGUA DE QUALIDADE do motor:
+//     tier 'TOP'     -> TOP    (categoria + CalTm >= 0,20 + ganha split + ganha podio)
+//     tier 'REGULAR' -> HIGH   (regua mais frouxa: CalTm >= 0,10, aceita empate)
+//     tier  null     -> GOOD   (nao passa em nenhuma; so conviccao)
+//   NAO ha teto de colagem de mercado aqui (decisao do Bruno set/2026: "no motor
+//   BW e' irrelevante ver odd"). A razao de mercado continua sendo CALCULADA e
+//   exposta no payload — serve pra voce ler quanto o mercado equilibrou o par
+//   na hora de entrar —, mas nao barra mais nada.
+//   Par que NAO estava no pool da manha entra do mesmo jeito (a "pescada").
 //
 // LIMITES: no maximo 1 de cada camada por corrida e no maximo 3 linhas. Havendo
 //   mais de um candidato pra mesma camada, ganha o de melhor SPLIT; empatou,
 //   melhor TEMPO (CalTm); empatou de novo, maior pct.
 //
-// SAIDA DE CENA: a OPORTUNIDADE que a BW nao confirmou (nao abriu, ou abriu
-//   larga) some DEPOIS que a corrida larga. Antes disso ela fica visivel, pra
-//   dar pra acompanhar o funil. Corrida sem nenhuma das tres no fim sai inteira
-//   (o chamador descarta corrida com lista vazia).
+// SAIDA DE CENA: a OPORTUNIDADE que a BW nao abriu some DEPOIS que a corrida
+//   larga. Antes disso ela fica visivel, pra dar pra acompanhar o funil. Corrida
+//   sem nenhuma das tres no fim sai inteira (o chamador descarta lista vazia).
 //
 // USO TIPICO
 //   const cd = require('../utils/camadasDoDia');
+//   const pc = mm.precalcDaCorrida(...);
 //   const confrontos = cd.confrontosDaCorrida({
-//     todos,                       // pc.todos do motorManha.precalcDaCorrida
-//     pares,                       // avb_abertos.pares_json ja parseado
-//     abertoEm,                    // avb_abertos.capturado_em
-//     corrida, hora,               // pra montar o id estavel
-//     finishingOrderJson,          // races.finishing_order_json
-//     parelhoAte, teto, faixa,     // cortes vindos da config
-//     bateuPar                     // a funcao do avbResultado.js
+//     todos: pc.todos, lastSp: pc.lastSp,   // lastSp: odd decimal por trap
+//     pares, abertoEm,                       // avb_abertos
+//     corrida, hora, finishingOrderJson,
+//     parelhoAte, difSpMax, tetoInfo,
+//     bateuPar
 //   });
 
-// ── constantes da regua (defaults; a config manda quando existe) ─────────────
-// TETO  = colagem no MERCADO (odds individuais da BW, sem margem). 1,0 = 50/50.
-//         E' o filtro de verdade: e' ele que confirma um par.
-// FAIXA = colagem da SP do PDF (ultima corrida valida de cada galgo). Forma o
-//         POOL da manha. Bruno set/2026: os dois passaram a valer 1,5 — antes a
-//         FAIXA era 1,8 aqui e 1,15 no motor, dois numeros pra mesma pergunta.
-const TETO = 1.5;
-const FAIXA = 1.5;
+// ── constantes (defaults; a config manda quando existe) ──────────────────────
+// DIF_SP_MAX = distancia maxima entre as odds decimais dos dois galgos na
+//   ultima corrida valida. Forma o POOL da manha. E' o UNICO lugar onde a odd
+//   decide alguma coisa.
+// TETO_INFO  = referencia de "colada" no mercado. Nao filtra mais nada; so
+//   alimenta o campo `colada` que a tela usa pra sinalizar equilibrio.
+const DIF_SP_MAX = 1.0;
+const TETO_INFO = 1.5;
 
 // ── normalizadores (o id de um confronto tem que ser ESTAVEL entre polls) ────
 const _c = c => String(c || '').trim().toLowerCase();
@@ -69,12 +76,10 @@ const _h = h => {
   return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim();
 };
 
-// Chave da CORRIDA: casa a linha de races com a de avb_abertos.
 function chaveCorrida(corrida, hora) { return _c(corrida) + '|' + _h(hora); }
 
-// Chave do CONFRONTO. min/max de proposito: o par 2x3 e o 3x2 sao o MESMO
-// confronto, entao inverter o AvB na tela nao pode quebrar o casamento com o
-// ENTREI nem re-disparar o alarme.
+// min/max de proposito: o par 2x3 e o 3x2 sao o MESMO confronto, entao inverter
+// o AvB na tela nao pode quebrar o casamento com o ENTREI nem re-disparar alarme.
 function idConfronto(corrida, hora, t1, t2) {
   return chaveCorrida(corrida, hora) + '|' + Math.min(t1, t2) + 'x' + Math.max(t1, t2);
 }
@@ -83,12 +88,10 @@ function mesmoPar(t1a, t1b, t2a, t2b) {
   return (t1a === t2a && t1b === t2b) || (t1a === t2b && t1b === t2a);
 }
 
-// Pista = primeira palavra do nome da corrida ("Sheff A2" -> "Sheff").
 function pista(corrida) { return String(corrida || '').trim().split(/\s+/)[0] || '?'; }
 
 // UK -> Brasilia. A hora do PDF vem sem AM/PM: 1..9 e' tarde (soma 12), o resto
-// ja e' 24h. Depois -4h (BST). Mesma conta usada na gravacao de races.hora_br,
-// pra tela e banco nunca discordarem.
+// ja e' 24h. Depois -4h (BST). Mesma conta da gravacao de races.hora_br.
 function horaBr(hora) {
   const m = String(hora || '').match(/(\d{1,2}):(\d{2})/);
   if (!m) return String(hora || '');
@@ -99,15 +102,26 @@ function horaBr(hora) {
   return hr + ':' + m[2];
 }
 
-// A corrida ja largou? E' o gatilho pra tirar de cena a OPORTUNIDADE que nao
-// virou nada. Usa a chegada gravada porque e' o unico sinal confiavel que o
-// payload tem — se o robo de resultados ainda nao passou, a linha fica mais um
-// pouco na tela e some sozinha na leitura seguinte. Errar pro lado de mostrar
-// demais e' melhor do que sumir com uma linha que ainda vale.
+// A corrida ja largou? Gatilho pra tirar de cena a OPORTUNIDADE que nao virou
+// nada. Usa a chegada gravada porque e' o unico sinal confiavel do payload — se
+// o robo de resultados ainda nao passou, a linha fica mais um pouco e some na
+// leitura seguinte. Errar mostrando demais e' melhor do que sumir com o que vale.
 function jaCorreu(finishingOrderJson) {
   let o = finishingOrderJson;
   try { o = (typeof o === 'string') ? JSON.parse(o) : o; } catch (e) { return false; }
   return Array.isArray(o) && o.length > 0;
+}
+
+// DISTANCIA DE SP entre os dois galgos de um confronto, em odd decimal.
+// null quando falta a SP de algum dos dois (galgo sem corrida valida recente):
+// sem os dois lados nao da pra medir, e chutar colocaria no pool um par que
+// ninguem conferiu. Fora do pool ele ainda pode entrar pela BW, se ela abrir.
+function distanciaSp(lastSp, trapA, trapB) {
+  if (!lastSp) return null;
+  const a = Number(lastSp[Number(trapA)]);
+  const b = Number(lastSp[Number(trapB)]);
+  if (!(a > 0) || !(b > 0)) return null;
+  return +Math.abs(a - b).toFixed(3);
 }
 
 // ── desempate: SPLIT, depois TEMPO, depois pct (maior ganha em todos) ────────
@@ -130,13 +144,13 @@ function camadaPorRegua(tier) {
   return 'GOOD';
 }
 
-// ── mercado ──────────────────────────────────────────────────────────────────
-// Le a colagem REAL de um confronto nos pares que a BW abriu.
+// ── mercado (INFORMATIVO) ────────────────────────────────────────────────────
+// Le a colagem de um confronto nos pares que a BW abriu.
 //   razao = maior_prob / menor_prob, sem a margem da casa. 1,0 = 50/50.
-//   colada = razao <= teto.
-// Devolve null quando a BW ainda nao abriu aquele par (nao e' erro: e' "aguarda").
-function mercadoDe(pares, s, teto) {
-  const t = (teto > 0) ? teto : TETO;
+// `colada` e' so um rotulo de leitura: desde set/2026 ele NAO decide se o par
+// entra. Quem decide e' a regua. Devolve null quando a BW nao abriu o par.
+function mercadoDe(pares, s, tetoInfo) {
+  const t = (tetoInfo > 0) ? tetoInfo : TETO_INFO;
   if (!pares || !pares.length) return null;
   const par = pares.find(x => mesmoPar(Number(x.aTrap), Number(x.bTrap), Number(s.pick_trap), Number(s.outro_trap)));
   if (!par || par.marketPct == null) return null;
@@ -158,7 +172,7 @@ function mercadoDe(pares, s, teto) {
 // `bateuPar` entra por parametro em vez de require aqui em cima porque este
 // modulo e' puro de proposito; o chamador passa a MESMA funcao que o resto do
 // sistema usa, entao continua existindo uma implementacao so do "bateu".
-function montaConfronto(ctx, s, camada, daManha, mk) {
+function montaConfronto(ctx, s, camada, daManha, mk, spDif) {
   return {
     id: idConfronto(ctx.corrida, ctx.hora, s.pick_trap, s.outro_trap),
     par: 'T' + s.pick_trap + 'xT' + s.outro_trap,
@@ -174,14 +188,14 @@ function montaConfronto(ctx, s, camada, daManha, mk) {
     // deduplicar alarme — o gatilho e' a transicao de camada entre polls.
     promovido_em: (camada !== 'OPORTUNIDADE' && ctx.abertoEm) ? ctx.abertoEm : null,
     bateu: ctx.bateuPar(ctx.finishingOrderJson, Number(s.pick_trap), Number(s.outro_trap)),
-    // ADITIVOS (set/2026): as medidas que decidiram o desempate e a regua crua.
-    // Existem pra a tela poder mostrar por que este par ficou e o outro saiu, e
-    // pra auditar a classificacao sem abrir o banco. Nenhum consumidor antigo
-    // le estes campos — sao puro acrescimo ao contrato.
+    // ADITIVOS: as medidas que decidiram, pra auditar sem abrir o banco.
+    // sp_dif e' a medida que forma o pool; colada_mercado virou informativo.
     da_manha: !!daManha,
     tier_motor: s.tier || null,
     split_dif: (s.split_dif != null ? s.split_dif : null),
-    caltm_dif: (s.caltm_dif != null ? s.caltm_dif : null)
+    caltm_dif: (s.caltm_dif != null ? s.caltm_dif : null),
+    sp_dif: (spDif != null ? spDif : null),
+    colada_mercado: mk ? !!mk.colada : null
   };
 }
 
@@ -190,8 +204,9 @@ function confrontosDaCorrida(opts) {
   const o = opts || {};
   const todos = Array.isArray(o.todos) ? o.todos : [];
   const pares = Array.isArray(o.pares) ? o.pares : [];
-  const teto = (o.teto > 0) ? o.teto : TETO;
-  const faixa = (o.faixa > 0) ? o.faixa : FAIXA;
+  const lastSp = o.lastSp || null;
+  const difSpMax = (o.difSpMax > 0) ? o.difSpMax : DIF_SP_MAX;
+  const tetoInfo = (o.tetoInfo > 0) ? o.tetoInfo : TETO_INFO;
   const parelhoAte = (o.parelhoAte > 0) ? o.parelhoAte : 0;
   const ctx = {
     corrida: o.corrida, hora: o.hora,
@@ -201,36 +216,40 @@ function confrontosDaCorrida(opts) {
   };
   const chaveDe = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
 
+  // distancia de SP por confronto, calculada uma vez so
+  const difDe = {};
+  for (const s of todos) {
+    difDe[chaveDe(s.pick_trap, s.outro_trap)] = distanciaSp(lastSp, s.pick_trap, s.outro_trap);
+  }
+
   // ── 1) POOL DA MANHA ──────────────────────────────────────────────────────
-  // Conviccao + SPs coladas. NAO exige regua de qualidade: um par de regua
+  // Conviccao + SPs proximas. NAO exige regua de qualidade: um par de regua
   // frouxa tambem pode abrir na BW e virar GOOD, entao ele tem que caber no
-  // pool. Quem separa TOP/HIGH/GOOD e' a regua, la embaixo, e so depois que o
-  // mercado confirma.
+  // pool. Quem separa TOP/HIGH/GOOD e' a regua, la embaixo.
   const daManha = new Set();
   for (const s of todos) {
     if (!(s.pct > parelhoAte)) continue;
-    if (!(s.ratio_sp <= faixa)) continue;
-    daManha.add(chaveDe(s.pick_trap, s.outro_trap));
+    const k = chaveDe(s.pick_trap, s.outro_trap);
+    const d = difDe[k];
+    if (d == null || d > difSpMax) continue;
+    daManha.add(k);
   }
 
-  // ── 2) CONFIRMADOS PELA BW ────────────────────────────────────────────────
-  // Um slot por camada. Disputa resolvida por split -> tempo -> pct.
+  // ── 2) O QUE A BW ABRIU ───────────────────────────────────────────────────
+  // Sem teto de mercado: todo par aberto entra na avaliacao. A REGUA decide a
+  // camada; o pct decide se ha conviccao suficiente pra valer a tela.
+  // Um slot por camada, disputa por split -> tempo -> pct.
   const slots = { TOP: null, HIGH: null, GOOD: null };
-  // `confirmados` guarda TODO par que a BW validou (colado + com opiniao do
-  // motor), inclusive quem PERDEU a disputa do slot. Eles nao podem voltar como
-  // OPORTUNIDADE la embaixo: o mercado ja se pronunciou sobre eles, entao nao
-  // estao aguardando nada. Sem esta lista, o perdedor da disputa reaparecia
-  // como linha cinza na mesma corrida — errado e confuso de ler.
-  const confirmados = new Set();
+  // `avaliados` guarda TODO par que a BW abriu e o motor aprovou, inclusive quem
+  // PERDEU a disputa do slot. Eles nao voltam como OPORTUNIDADE la embaixo: o
+  // mercado ja abriu pra eles, entao nao estao aguardando nada.
+  const avaliados = new Set();
   for (const par of pares) {
     if (par.marketPct == null) continue;
     const ta = Number(par.aTrap), tb = Number(par.bTrap);
-    const mp = par.marketPct / 100, hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
-    const razao = lo > 0 ? (hi / lo) : null;
-    if (!(razao != null && razao <= teto)) continue;      // exige COLADA na BW
     const s = todos.find(x => mesmoPar(Number(x.pick_trap), Number(x.outro_trap), ta, tb));
-    if (!s || !(s.pct > parelhoAte)) continue;            // sem opiniao/conviccao
-    confirmados.add(chaveDe(ta, tb));
+    if (!s || !(s.pct > parelhoAte)) continue;        // sem opiniao/conviccao do motor
+    avaliados.add(chaveDe(ta, tb));
     const camada = camadaPorRegua(s.tier);
     if (slots[camada] == null || melhorQue(s, slots[camada])) slots[camada] = s;
   }
@@ -240,31 +259,33 @@ function confrontosDaCorrida(opts) {
     const s = slots[camada];
     if (!s) continue;
     const k = chaveDe(s.pick_trap, s.outro_trap);
-    confrontos.push(montaConfronto(ctx, s, camada, daManha.has(k), mercadoDe(pares, s, teto)));
+    confrontos.push(montaConfronto(ctx, s, camada, daManha.has(k), mercadoDe(pares, s, tetoInfo), difDe[k]));
   }
 
   // ── 3) OPORTUNIDADE ───────────────────────────────────────────────────────
-  // Enquanto a corrida nao largou, mostra UM achado da manha ainda nao
-  // confirmado — e' o que da pra acompanhar o funil durante o dia. Depois da
-  // largada ela some: o registro do dia so guarda o que o mercado confirmou.
-  // So entra se sobrou vaga dentro do teto de 3 (corrida com as tres camadas
-  // cheias ja tem o que mostrar; a linha cinza ali so ocuparia espaco).
+  // Enquanto a corrida nao largou, mostra UM achado da manha que a BW ainda nao
+  // abriu — e' o que da pra acompanhar o funil durante o dia. Depois da largada
+  // ela some: o registro do dia so guarda o que o mercado abriu. So entra se
+  // sobrou vaga dentro do teto de 3.
   if (!jaCorreu(ctx.finishingOrderJson) && confrontos.length < 3) {
     let melhor = null;
     for (const s of todos) {
       const k = chaveDe(s.pick_trap, s.outro_trap);
-      if (!daManha.has(k) || confirmados.has(k)) continue;
+      if (!daManha.has(k) || avaliados.has(k)) continue;
       if (melhor == null || melhorQue(s, melhor)) melhor = s;
     }
-    if (melhor) confrontos.push(montaConfronto(ctx, melhor, 'OPORTUNIDADE', true, mercadoDe(pares, melhor, teto)));
+    if (melhor) {
+      const k = chaveDe(melhor.pick_trap, melhor.outro_trap);
+      confrontos.push(montaConfronto(ctx, melhor, 'OPORTUNIDADE', true, mercadoDe(pares, melhor, tetoInfo), difDe[k]));
+    }
   }
 
   return confrontos;
 }
 
 module.exports = {
-  TETO, FAIXA,
+  DIF_SP_MAX, TETO_INFO,
   chaveCorrida, idConfronto, mesmoPar, pista, horaBr,
-  jaCorreu, melhorQue, camadaPorRegua,
+  jaCorreu, melhorQue, camadaPorRegua, distanciaSp,
   mercadoDe, montaConfronto, confrontosDaCorrida
 };

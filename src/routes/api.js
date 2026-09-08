@@ -1629,16 +1629,19 @@ router.get('/painel-dia', (req, res) => {
     } else {
       const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
       const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
-      // TETO (colagem no mercado) e FAIXA (colagem da SP do PDF) saiam do hard-code
-      // e passam a vir da config, junto do avb_parelho_pct: sao os cortes que o Bruno
-      // vai querer afinar sem depender de deploy. Banco antigo (coluna ainda nao
-      // criada) ou valor zerado caem no default do camadasDoDia — nunca quebra.
-      let tetoCfg = 0, faixaCfg = 0;
+      // Cortes do modelo de camadas, vindos da config pra o Bruno afinar sem deploy.
+      // Banco antigo (coluna ainda nao criada) ou valor zerado caem no default do
+      // camadasDoDia — nunca quebra.
+      // A ODD SO DECIDE NA MANHA (Bruno set/2026). difSp = distancia maxima entre as
+      // odds decimais dos dois galgos na ultima corrida valida; e' o que forma o pool.
+      // O teto de mercado virou INFORMATIVO: alimenta o campo `colada_mercado` da tela,
+      // mas nao barra mais nenhum par no motor BW.
+      let difSpCfg = 0, tetoInfoCfg = 0;
       try {
-        const cCortes = db.prepare('SELECT avb_teto_bw, avb_faixa_sp FROM analysis_config WHERE user_id=?').get(CANONICO);
+        const cCortes = db.prepare('SELECT avb_sp_dif_max, avb_teto_bw FROM analysis_config WHERE user_id=?').get(CANONICO);
         if (cCortes) {
-          if (cCortes.avb_teto_bw > 0) tetoCfg = cCortes.avb_teto_bw;
-          if (cCortes.avb_faixa_sp > 0) faixaCfg = cCortes.avb_faixa_sp;
+          if (cCortes.avb_sp_dif_max > 0) difSpCfg = cCortes.avb_sp_dif_max;
+          if (cCortes.avb_teto_bw > 0) tetoInfoCfg = cCortes.avb_teto_bw;
         }
       } catch (e) { /* coluna ainda nao existe neste banco */ }
       const rows = db.prepare(
@@ -1666,10 +1669,10 @@ router.get('/painel-dia', (req, res) => {
         // Classificacao das camadas: uma chamada, uma fonte. O bateuPar entra por
         // parametro pra continuar existindo UMA implementacao do 'bateu' no sistema.
         const confrontos = cd.confrontosDaCorrida({
-          todos, pares, abertoEm,
+          todos, lastSp: pc.lastSp, pares, abertoEm,
           corrida: row.corrida, hora: row.hora,
           finishingOrderJson: row.finishing_order_json,
-          parelhoAte, teto: tetoCfg, faixa: faixaCfg, bateuPar
+          parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar
         });
         if (!confrontos.length) continue;
         corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, confrontos });
