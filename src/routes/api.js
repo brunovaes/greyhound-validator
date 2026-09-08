@@ -1249,7 +1249,16 @@ router.put('/race/:id', express.json(), (req, res) => {
   // Update PARCIAL: so mexe nos campos que vieram no body, pra nao apagar
   // resultado_1/2/3/bateu (escritos pelo robo de resultados) quando o front
   // manda so odd/valor/avb_nao_aberto, ou vice-versa.
-  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada'];
+  // 'avb_escolhido' e' campo PESSOAL (esta em CAMPOS no compartilhado.js) e cai
+  // no salvarPessoal la embaixo. Ele PRECISA estar nesta lista: o loop so itera
+  // 'allowed', entao sem ele o snapshot do par chegava no body e era descartado
+  // em SILENCIO: a odd gravava, a escolha nao. Isso quebrava a entrada inteira,
+  // porque o /api/painel-dia so monta `entrada` quando ha escolha + odd. Sem ela
+  // o ENTREI nunca aparecia no board, o tile da Analisar nunca dormia
+  // (aguardando_entrada ficava true pra sempre) e o alarme seguia apitando numa
+  // corrida ja apostada. Vale pros DOIS produtores: analisarPainel.js (tiles) e
+  // app.js/_persistirEscolha (Analisar antiga). A coluna nasce no garantirColunas.
+  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada', 'avb_escolhido'];
   const body = { ...req.body };
   // Se a Odd esta sendo preenchida (nao vazia) e nao veio bet_unidades junto,
   // usa o valor padrao configurado — Odd preenchida ja conta como aposta
