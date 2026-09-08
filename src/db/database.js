@@ -415,6 +415,13 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN alarme_top_som TEXT DEFAULT 'alarme'",
   "ALTER TABLE analysis_config ADD COLUMN alarme_top_cor TEXT DEFAULT 'roxo'",
   "ALTER TABLE analysis_config ADD COLUMN alarme_top_min_antes INTEGER DEFAULT 5",
+  // CORTES DO MODELO DE CAMADAS (Bruno set/2026). Estavam cravados no codigo do
+  // /api/painel-dia (teto 1.5, faixa 1.8) enquanto o motor usava sp_ratio_max 1.15 —
+  // tres numeros pra duas perguntas. Agora sao um so cada, e configuraveis:
+  //   avb_teto_bw  = colagem no MERCADO (odds individuais da BW, sem margem). Confirma o par.
+  //   avb_faixa_sp = colagem da SP do PDF (ultima corrida valida de cada galgo). Forma o pool da manha.
+  "ALTER TABLE analysis_config ADD COLUMN avb_teto_bw REAL DEFAULT 1.5",
+  "ALTER TABLE analysis_config ADD COLUMN avb_faixa_sp REAL DEFAULT 1.5",
 ];
 for (const sql of migrations) {
   try { db.prepare(sql).run(); } catch(e) { /* coluna ja existe */ }

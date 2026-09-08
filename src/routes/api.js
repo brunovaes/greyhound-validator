@@ -1629,6 +1629,18 @@ router.get('/painel-dia', (req, res) => {
     } else {
       const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
       const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+      // TETO (colagem no mercado) e FAIXA (colagem da SP do PDF) saiam do hard-code
+      // e passam a vir da config, junto do avb_parelho_pct: sao os cortes que o Bruno
+      // vai querer afinar sem depender de deploy. Banco antigo (coluna ainda nao
+      // criada) ou valor zerado caem no default do camadasDoDia — nunca quebra.
+      let tetoCfg = 0, faixaCfg = 0;
+      try {
+        const cCortes = db.prepare('SELECT avb_teto_bw, avb_faixa_sp FROM analysis_config WHERE user_id=?').get(CANONICO);
+        if (cCortes) {
+          if (cCortes.avb_teto_bw > 0) tetoCfg = cCortes.avb_teto_bw;
+          if (cCortes.avb_faixa_sp > 0) faixaCfg = cCortes.avb_faixa_sp;
+        }
+      } catch (e) { /* coluna ainda nao existe neste banco */ }
       const rows = db.prepare(
         "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json "
         + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
@@ -1657,7 +1669,7 @@ router.get('/painel-dia', (req, res) => {
           todos, pares, abertoEm,
           corrida: row.corrida, hora: row.hora,
           finishingOrderJson: row.finishing_order_json,
-          parelhoAte, bateuPar
+          parelhoAte, teto: tetoCfg, faixa: faixaCfg, bateuPar
         });
         if (!confrontos.length) continue;
         corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, confrontos });
