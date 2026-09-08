@@ -1675,7 +1675,7 @@ router.get('/painel-dia', (req, res) => {
           parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar
         });
         if (!confrontos.length) continue;
-        corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, confrontos });
+        corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, ja_correu: cd.jaCorreu(row.finishing_order_json), confrontos });
       }
       _painelDiaCache = { date, ts: Date.now(), corridas: corridasBase };
     }
@@ -1698,7 +1698,11 @@ router.get('/painel-dia', (req, res) => {
         entrada,
         confrontos: c.confrontos.map(cf => Object.assign({}, cf, {
           escolhido: (escId != null && cf.id === escId),
-          aguardando_entrada: (cf.camada !== 'OPORTUNIDADE' && entrada == null)
+          // AGUARDANDO ENTRADA tem que olhar a LARGADA (Bruno set/2026). Sem o
+          // !c.ja_correu, confronto de corrida encerrada continuava 'aguardando' pra
+          // sempre: os tiles da Analisar enchiam de corrida que ja acabou horas antes
+          // e empurravam pra fora da janela de 4 o que ainda dava pra apostar.
+          aguardando_entrada: (cf.camada !== 'OPORTUNIDADE' && entrada == null && !c.ja_correu)
         }))
       };
     });

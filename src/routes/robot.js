@@ -1223,7 +1223,7 @@ ${navBar(req.user, 'robot')}
   <div class="card">
     <div class="form-row" style="align-items:flex-end;gap:12px">
       <div class="field"><label>Data</label><input type="date" id="placar-date" value="${today}"></div>
-      <div class="field"><label>Teto colagem</label><input type="number" step="0.05" id="placar-teto" value="1.5" style="width:90px"></div>
+      <div class="field"><label title="Distancia maxima entre as SPs dos dois galgos na ultima corrida valida. E o unico corte de odd que ainda decide alguma coisa: forma o pool da manha.">Dif. SP manha</label><input type="number" step="0.1" id="placar-dif" value="1.0" style="width:90px"></div>
       <button class="btn" onclick="loadPlacar()">Carregar</button>
       <span id="placar-msg" style="color:#94a3b8;font-size:12px"></span>
     </div>
@@ -1720,9 +1720,9 @@ async function loadPlacar() {
   var msg = document.getElementById('placar-msg');
   if (msg) { msg.style.color = '#94a3b8'; msg.textContent = 'Carregando…'; }
   var date = document.getElementById('placar-date').value;
-  var teto = document.getElementById('placar-teto').value || '1.5';
+  var dif = document.getElementById('placar-dif').value || '1.0';
   try {
-    var r = await fetch(BASE + '/robot/diag/oportunidades-bw-resultado?date=' + encodeURIComponent(date) + '&teto=' + encodeURIComponent(teto) + '&faixa=1.8');
+    var r = await fetch(BASE + '/robot/diag/oportunidades-bw-resultado?date=' + encodeURIComponent(date) + '&dif=' + encodeURIComponent(dif));
     var d = await r.json();
     if (d.erro) { if (msg) { msg.style.color = '#ff5d6c'; msg.textContent = d.erro; } return; }
     renderPlacar(d);
@@ -1756,12 +1756,12 @@ function renderPlacar(d) {
   var ord = { TOP: 0, HIGH: 1, GOOD: 2 };
   linhas.sort(function (a, b) { return (ord[a.tier] - ord[b.tier]) || String(a.hora).localeCompare(String(b.hora)); });
   var tb = document.getElementById('placar-tbody');
-  if (!linhas.length) { tb.innerHTML = '<tr><td colspan="9" style="padding:16px;color:#555;text-align:center">Nada colado na BW nessa data.</td></tr>'; return; }
+  if (!linhas.length) { tb.innerHTML = '<tr><td colspan="9" style="padding:16px;color:#555;text-align:center">Nada classificado nessa data.</td></tr>'; return; }
   tb.innerHTML = linhas.map(function (x) {
     var cor = PLACAR_COR[x.tier] || '#888';
     var res = x.bateu === true ? '<span style="color:#22e08a;font-weight:700">bateu</span>'
       : (x.bateu === false ? '<span style="color:#ff5d6c;font-weight:700">não</span>' : '<span style="color:#6b7688">aguarda</span>');
-    var spCor = x.sp_ratio > 1.8 ? '#ff8c1a' : '#7a869a';
+    var spCor = (x.da_manha === false) ? '#ff8c1a' : '#7a869a';   // laranja = pescada (fora do pool da manha)
     return '<tr style="border-bottom:1px solid #222">'
       + '<td style="padding:7px 6px"><span style="color:' + cor + ';font-weight:700">●</span> ' + x.tier + '</td>'
       + '<td style="padding:7px 6px">' + x.hora + '</td>'
@@ -3847,21 +3847,34 @@ router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
   try {
     const { db } = require('../db/database');
     const mm = require('../utils/motorManha');
+    const cd = require('../utils/camadasDoDia');
     const { bateuPar } = require('../utils/avbResultado');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
-    const teto = (parseFloat(req.query.teto) > 0) ? parseFloat(req.query.teto) : 1.5;   // colagem no mercado
-    const faixa = (parseFloat(req.query.faixa) > 0) ? parseFloat(req.query.faixa) : 1.8; // SP da manha (define "era da manha")
+    // CLASSIFICACAO VEM DO camadasDoDia (Bruno set/2026). Este handler tinha copia
+    // propria da regua, e ela ficou VELHA: classificava por procedencia (era da
+    // manha -> TOP) e ainda exigia colada no mercado. O Placar passou a mostrar
+    // camada diferente da tela pro mesmo par — exatamente a divergencia silenciosa
+    // que aquele modulo existe pra impedir. Agora ha um lugar so.
     const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
     const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
-    const _c = c => String(c || '').trim().toLowerCase();
-    const _h = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? (m[1].padStart(2, '0') + ':' + m[2]) : String(h || '').trim(); };
-    const k = (co, ho) => _c(co) + '|' + _h(ho);
-    const _mesmoPar = (t1a, t1b, t2a, t2b) => (t1a === t2a && t1b === t2b) || (t1a === t2b && t1b === t2a);
+    // Cortes: da config por padrao, sobrescritiveis por query pra simular sem deploy.
+    let difSpCfg = 0, tetoInfoCfg = 0;
+    try {
+      const c = db.prepare('SELECT avb_sp_dif_max, avb_teto_bw FROM analysis_config WHERE user_id=1').get();
+      if (c) {
+        if (c.avb_sp_dif_max > 0) difSpCfg = c.avb_sp_dif_max;
+        if (c.avb_teto_bw > 0) tetoInfoCfg = c.avb_teto_bw;
+      }
+    } catch (e) {}
+    const difSp = (parseFloat(req.query.dif) > 0) ? parseFloat(req.query.dif) : difSpCfg;
+    const teto = (parseFloat(req.query.teto) > 0) ? parseFloat(req.query.teto) : tetoInfoCfg;
     const _pista = c => String(c || '').trim().split(/\s+/)[0] || '?';
-    // pares que a BW abriu, por corrida (com odds decimais)
-    const h2hRows = db.prepare('SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?').all(date);
-    const h2hByRace = {}; for (const p of h2hRows) { let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {} h2hByRace[k(p.corrida, p.hora)] = arr; }
-    // corridas do dia (precalc + chegada)
+    const h2hRows = db.prepare('SELECT corrida, hora, pares_json, capturado_em FROM avb_abertos WHERE data=?').all(date);
+    const h2hByRace = {};
+    for (const p of h2hRows) {
+      let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {}
+      h2hByRace[cd.chaveCorrida(p.corrida, p.hora)] = { pares: arr, em: p.capturado_em || null };
+    }
     const rows = db.prepare(
       "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id "
       + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
@@ -3870,8 +3883,8 @@ router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
     const resumo = { TOP: vazio(), HIGH: vazio(), GOOD: vazio() };
     const linhas = [];
     for (const row of rows) {
-      const pares = h2hByRace[k(row.corrida, row.hora)] || [];
-      if (!pares.length) continue;
+      const bw = h2hByRace[cd.chaveCorrida(row.corrida, row.hora)] || null;
+      if (!bw || !bw.pares.length) continue;
       let hf = null, ha = null, rc = null;
       try { hf = JSON.parse(row.hist_full); } catch (e) { continue; }
       try { ha = JSON.parse(row.hist_all); } catch (e) {}
@@ -3879,39 +3892,30 @@ router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
       if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) continue;
       const ctxBase = { dataCorrida: row.data_card || date, trackCorrida: _pista(row.corrida), distCorrida: row.dist || null };
       let pc; try { pc = mm.precalcDaCorrida(hf, ha, rc, ctxBase, opts); } catch (e) { continue; }
-      const todos = Array.isArray(pc.todos) ? pc.todos : [];
-      // "era da manha" = conjunto de OPORTUNIDADES do PDF (mesma regra do /oportunidades)
-      const manhaKeys = new Set(todos
-        .filter(s => s.tier != null && s.pct > parelhoAte && s.ratio_sp <= faixa)
-        .map(s => Math.min(s.pick_trap, s.outro_trap) + 'x' + Math.max(s.pick_trap, s.outro_trap)));
-      for (const par of pares) {
-        if (par.marketPct == null) continue;
-        const ta = Number(par.aTrap), tb = Number(par.bTrap);
-        const mp = par.marketPct / 100;
-        const hi = Math.max(mp, 1 - mp), lo = Math.min(mp, 1 - mp);
-        const razao = lo > 0 ? +(hi / lo).toFixed(3) : null;
-        const colada = razao != null && razao <= teto;
-        if (!colada) continue;                                   // TOP/HIGH/GOOD todos exigem colada na BW
-        const conf = todos.find(s => _mesmoPar(Number(s.pick_trap), Number(s.outro_trap), ta, tb));
-        if (!conf || conf.pct <= parelhoAte) continue;           // sem opiniao/conviccao -> nao classifica
-        const eraManha = manhaKeys.has(Math.min(ta, tb) + 'x' + Math.max(ta, tb));
-        let tier;
-        if (conf.tier != null) tier = eraManha ? 'TOP' : 'HIGH';
-        else tier = 'GOOD';
-        // odd decimal do PICK (conf.pick_trap) vencer o outro
-        const oddPick = (Number(par.aTrap) === Number(conf.pick_trap)) ? par.oddAvenceB : par.oddBvenceA;
-        // resultado real: pick chegou na frente do outro?
-        const b = bateuPar(row.finishing_order_json, Number(conf.pick_trap), Number(conf.outro_trap));
-        const R = resumo[tier];
+      const confrontos = cd.confrontosDaCorrida({
+        todos: Array.isArray(pc.todos) ? pc.todos : [], lastSp: pc.lastSp,
+        pares: bw.pares, abertoEm: bw.em,
+        corrida: row.corrida, hora: row.hora,
+        finishingOrderJson: row.finishing_order_json,
+        parelhoAte, difSpMax: difSp, tetoInfo: teto, bateuPar
+      });
+      for (const cf of confrontos) {
+        // O Placar mede o que o MERCADO abriu. OPORTUNIDADE ainda nao e' nada: entra
+        // na tela pra acompanhar o funil, nao na estatistica.
+        if (cf.camada === 'OPORTUNIDADE') continue;
+        const R = resumo[cf.camada];
+        if (!R) continue;
         R.n++;
-        if (b === true) R.bateu++; else if (b === false) R.errou++; else R.sem_resultado++;
+        if (cf.bateu === true) R.bateu++; else if (cf.bateu === false) R.errou++; else R.sem_resultado++;
         linhas.push({
-          hora: row.hora, corrida: row.corrida, tier,
-          par: 'T' + conf.pick_trap + 'xT' + conf.outro_trap,
-          pct: conf.pct, sp_ratio: conf.ratio_sp,
-          odd_bw: (oddPick != null ? +Number(oddPick).toFixed(2) : null),
-          market_pct: +(mp * 100).toFixed(1), razao_mercado: razao,
-          bateu: b
+          hora: row.hora, corrida: row.corrida, tier: cf.camada,
+          par: cf.par, pct: cf.pct,
+          sp_ratio: cf.sp_ratio, sp_dif: cf.sp_dif,
+          tier_motor: cf.tier_motor, da_manha: cf.da_manha,
+          split_dif: cf.split_dif, caltm_dif: cf.caltm_dif,
+          odd_bw: cf.odd_bw, market_pct: cf.market_pct,
+          razao_mercado: cf.razao_mercado, colada_mercado: cf.colada_mercado,
+          bateu: cf.bateu
         });
       }
     }
@@ -3919,18 +3923,18 @@ router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
     const ordemTier = { TOP: 0, HIGH: 1, GOOD: 2 };
     linhas.sort((a, b) => (ordemTier[a.tier] - ordemTier[b.tier]) || String(a.hora).localeCompare(String(b.hora)));
     res.json({
-      date, teto, faixa,
+      date, dif_sp: difSp || cd.DIF_SP_MAX, teto_info: teto || cd.TETO_INFO,
       resumo: {
         TOP: Object.assign({}, resumo.TOP, { taxa_acerto: taxa(resumo.TOP) }),
         HIGH: Object.assign({}, resumo.HIGH, { taxa_acerto: taxa(resumo.HIGH) }),
         GOOD: Object.assign({}, resumo.GOOD, { taxa_acerto: taxa(resumo.GOOD) })
       },
       linhas,
-      legenda: 'Pares que a BW ABRIU colados (razao <= ' + teto + '), classificados e cruzados com a chegada. '
-        + 'TOP = qualidade (tier != null + pct > ' + parelhoAte + ') + era da manha (OPORTUNIDADE do PDF, SP <= ' + faixa + '). '
-        + 'HIGH = mesma qualidade, mas pescada na hora (nao era da manha). GOOD = colada + pct, regua afrouxada (tier null). '
-        + 'odd_bw = odd decimal do pick vencer o outro. bateu = pick chegou na frente (true/false; null = sem chegada ainda). '
-        + 'taxa_acerto = bateu / (bateu+errou), ignora quem ainda nao correu. So-leitura, nao muda producao.'
+      legenda: 'Classificado pelo src/utils/camadasDoDia.js — a MESMA regra da tela, entao os numeros batem. '
+        + 'A odd so decide na manha: o pool sai da DIFERENCA entre as SPs dos dois galgos (<= ' + (difSp || cd.DIF_SP_MAX) + '). '
+        + 'No lado BW quem manda e a regua: tier TOP -> TOP, tier REGULAR -> HIGH, tier null -> GOOD, com pct > ' + parelhoAte + '. '
+        + 'razao_mercado e colada_mercado sao INFORMATIVOS, nao filtram mais. Maximo 1 de cada camada por corrida (disputa por split, tempo, pct). '
+        + 'bateu = pick chegou na frente (true/false; null = sem chegada). taxa_acerto ignora quem ainda nao correu. So-leitura.'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
