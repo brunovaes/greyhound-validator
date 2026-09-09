@@ -324,6 +324,37 @@ ok(vigente.every(x => x.corrida === 'Monmr A10'),
 ok(PainelDia.paraEntrar({ corridas: [] }).length === 0, 'sem nada esperando, a tela fica em standby');
 
 // ═════════════════════════════════════════════════════════════════════════════
+// UM DONO POR CONTAINER. Este e' o defeito que mais custou tempo em set/2026, e
+// apareceu tres vezes com caras diferentes: os cards das alternativas piscando e
+// sumindo, o card do AvB da BW aparecendo por um segundo, a tela de disputa
+// trocando sozinha. Todas as tres eram a mesma coisa — duas funcoes escrevendo
+// no mesmo pedaco do DOM, em ritmos diferentes, e a de intervalo mais curto
+// ganhando.
+//
+// O caso do fp-alts: o renderOddsLive roda a cada 5 SEGUNDOS e, quando o robo de
+// odds nao achava a corrida, limpava o container que o _mmPintarBw acabara de
+// preencher. O comentario que ja existia no arquivo avisava do risco e a escrita
+// tinha sido removida na epoca — mas a LIMPEZA ficou, e continuou apagando.
+console.log('\n[3d] UM DONO POR CONTAINER: so o _mmPintarBw mexe no fp-alts\n');
+
+// Todo lugar que escreve ou apaga o fp-alts, contado no arquivo real.
+const _linhasAlts = src.split(/\r?\n/)
+  .map((l, i) => ({ n: i + 1, t: l }))
+  .filter(x => x.t.indexOf('fp-alts') !== -1 && x.t.trim().indexOf('//') !== 0);
+console.log('    referencias a fp-alts no app.js: ' + _linhasAlts.length);
+for (const l of _linhasAlts) console.log('      linha ' + l.n + ': ' + l.t.trim().slice(0, 84));
+
+// A prova: nenhuma linha que pega o fp-alts pode zerar o innerHTML FORA do
+// _mmPintarBw. O _ajustaGradeAvb tambem o consulta, mas so pra CONTAR os cards.
+const _corpoPintar = (src.match(/^function _mmPintarBw[\s\S]*?^\}/m) || [''])[0];
+const _foraDoPintar = src.replace(_corpoPintar, '');
+ok(_corpoPintar.length > 0, 'o _mmPintarBw existe e foi localizado no arquivo');
+ok(!/fp-alts[\s\S]{0,160}?innerHTML\s*=\s*''/.test(_foraDoPintar),
+   'NENHUMA outra funcao zera o fp-alts — era o renderOddsLive, a cada 5 segundos');
+ok(_corpoPintar.indexOf("box.innerHTML = ''") !== -1,
+   'e o proprio _mmPintarBw continua podendo limpar, quando nao ha o que mostrar');
+
+// ═════════════════════════════════════════════════════════════════════════════
 console.log('\n[4] O HOOK ESTA LIGADO nas duas pontas\n');
 
 const pd = fs.readFileSync(PD, 'utf8');

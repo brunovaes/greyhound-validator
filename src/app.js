@@ -2048,7 +2048,20 @@ function _pintaOddsLive(r, d){
           + '<span style="color:#f59e0b;font-weight:800;text-transform:uppercase;letter-spacing:.5px">&#9889; AvBs ao vivo — betwinner</span>'
           + '<span>aguardando esta corrida abrir (ou pista ainda não mapeada)</span></div>';
         var hb0 = document.getElementById('fp-odds-hdr'); if(hb0) hb0.innerHTML='';
-        var ba0 = document.getElementById('fp-alts'); if(ba0){ ba0.innerHTML=''; _ajustaGradeAvb(); }
+        // NAO limpa o fp-alts (corrigido em 09/09/2026).
+        //
+        // Esta funcao roda a cada 5 SEGUNDOS. Os cards das alternativas sao
+        // escritos pelo _mmPintarBw, que le os tipos do painel do dia — e quando
+        // o robo de odds ao vivo nao acha a corrida (pista nao mapeada, mercado
+        // ainda fechado), este ramo apagava tudo. Os cards apareciam e sumiam
+        // sozinhos em menos de um segundo.
+        //
+        // O comentario logo abaixo, de quem mexeu aqui antes, ja avisava do
+        // risco: "se os dois escrevessem ali, o de 5s sobrescrevia o de 75s e os
+        // cards do motor apareciam e sumiam sozinhos". A ESCRITA foi removida na
+        // epoca; a LIMPEZA ficou pra tras e continuou fazendo o mesmo estrago.
+        //
+        // Quem escreve no fp-alts e' o _mmPintarBw, e so ele apaga.
         return;
       }
       var avbs = snap.avbs||[], sug = snap.sugeridos||[];
