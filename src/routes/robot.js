@@ -1715,7 +1715,10 @@ function toggleGrupo(btn){
 })();
 
 // ── Placar das Camadas (TOP/HIGH/GOOD) ───────────────────────────────────────
-var PLACAR_COR = { TOP: '#22e08a', HIGH: '#ff8c1a', GOOD: '#4aa8ff' };
+// Mesmas cores do CAMADAS do painelDia.js (set/2026): TOP azul, HIGH laranja,
+// GOOD roxo. O Placar e a tela tem que pintar a mesma camada da mesma cor —
+// duas paletas fariam voce ler o Placar com a cabeca da tela e vice-versa.
+var PLACAR_COR = { TOP: '#3b82f6', HIGH: '#f97316', GOOD: '#8b5cf6' };
 async function loadPlacar() {
   var msg = document.getElementById('placar-msg');
   if (msg) { msg.style.color = '#94a3b8'; msg.textContent = 'Carregando…'; }

@@ -59,21 +59,37 @@
         + '</div>';
     }
 
+    // CABECALHO: o MESMO da corrida carregada pelo motor da manha — titulo
+    // grande (fp-race-title) e a linha de metadados embaixo (fp-race-meta).
+    // Antes eram tres <span> soltos numa linha propria, com outra tipografia:
+    // a mesma corrida tinha duas caras dependendo de como voce chegou nela.
+    var titulo = (x.hora_br || x.hora || '') + ' - ' + (x.corrida || '');
+    if (x.dist) titulo += ' - ' + x.dist + 'm';
+    var meta = [];
+    if (x.dist) meta.push(esc(x.dist) + 'm');
+    if (x.hora_br || x.hora) meta.push(esc(x.hora_br || x.hora) + ' BR');
+    if (x.pct != null) meta.push(esc(x.pct) + '%');
+
     return '<div class="ap-tile' + (piscando ? ' ap-pisca' : '') + '"'
       + ' data-id="' + esc(x.id) + '" data-race="' + esc(x.race_id) + '"'
       + ' style="--ap-cor:' + cam.cor + '">'
       + '<div class="ap-tile-hd">'
+      +   '<div class="ap-hd-txt">'
+      +     '<div class="fp-race-title">' + esc(titulo) + '</div>'
+      +     '<div class="fp-race-meta">' + meta.join(' &middot; ') + '</div>'
+      +   '</div>'
       +   '<span class="ap-cam" style="background:' + cam.cor + '">' + esc(cam.rotulo) + '</span>'
-      +   '<span class="ap-hora">' + esc(x.hora_br || x.hora || '') + '</span>'
-      +   '<span class="ap-corrida">' + esc(x.corrida || '') + '</span>'
-      +   (x.pct != null ? '<span class="ap-pct">' + esc(x.pct) + '%</span>' : '')
       + '</div>'
       + miolo
-      + '<div class="ap-entrada">'
-      +   '<label>Odd <input type="number" step="0.01" class="ap-odd-inp" value="'
-      +     (x.odd_bw != null ? esc(x.odd_bw) : '') + '"></label>'
-      +   '<label>Stake <input type="number" step="0.5" class="ap-stake-inp" value="'
-      +     esc(glob.STAKE_PADRAO != null ? glob.STAKE_PADRAO : 2.5) + '"></label>'
+      // BARRA DE ENTRADA: mesma linha da tela de sempre (fp-inputs-row), com os
+      // mesmos rotulos e o mesmo botao. Os inputs eram type=number sem classe
+      // nenhuma, entao vinham com as setinhas e o visual padrao do navegador —
+      // a unica parte do sistema que nao parecia o sistema.
+      + '<div class="ap-entrada fp-inputs-row">'
+      +   '<span class="ap-lb">Odd <input type="text" class="ap-odd-inp" placeholder="-" value="'
+      +     (x.odd_bw != null ? esc(x.odd_bw) : '') + '"></span>'
+      +   '<span class="ap-lb">Stake <input type="text" class="ap-stake-inp" placeholder="-" value="'
+      +     esc(glob.STAKE_PADRAO != null ? glob.STAKE_PADRAO : 2.5) + '"></span>'
       +   '<button type="button" class="ap-entrei" onclick="AnalisarPainel.entrar(\'' + esc(x.id) + '\')">Entrei !</button>'
       + '</div>'
       + '</div>';

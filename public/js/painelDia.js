@@ -18,12 +18,26 @@
   // ── camadas ───────────────────────────────────────────────────────────────
   // Cor, som e rotulo de cada uma. OPORTUNIDADE nao apita: e' a lista de
   // espera, e apitar nela seria alarme o dia inteiro.
+  // As cores sao as MESMAS do CORES_ALARME do app.js, de proposito: o sistema ja
+  // tinha uma paleta e inventar outra deixaria dois azuis quase iguais na mesma
+  // tela. TOP azul, HIGH laranja, GOOD roxo (Bruno, set/2026). Antes TOP era
+  // verde — mas o verde passou a significar OUTRA coisa na lista de corridas:
+  // "o motor da manha previu esta". Camada e procedencia sao perguntas
+  // diferentes e nao podem dividir a mesma cor.
   var CAMADAS = {
     OPORTUNIDADE: { cor: '#8a94a6', rotulo: 'OPORTUNIDADE', som: null,     apita: false },
-    TOP:          { cor: '#22e08a', rotulo: 'TOP',          som: 'alarme', apita: true  },
-    HIGH:         { cor: '#ff8c1a', rotulo: 'HIGH',         som: 'sino',   apita: true  },
-    GOOD:         { cor: '#4aa8ff', rotulo: 'GOOD',         som: 'beep',   apita: true  }
+    TOP:          { cor: '#3b82f6', rotulo: 'TOP',          som: 'alarme', apita: true  },
+    HIGH:         { cor: '#f97316', rotulo: 'HIGH',         som: 'sino',   apita: true  },
+    GOOD:         { cor: '#8b5cf6', rotulo: 'GOOD',         som: 'beep',   apita: true  }
   };
+  // Ordem de forca das camadas. Decide qual corrida ocupa a tela de disputa e
+  // qual som toca quando varias promovem na mesma volta. Vivia copiada em tres
+  // lugares; agora e' uma so, exportada.
+  var ORDEM = ['TOP', 'HIGH', 'GOOD'];
+  function forcaDe(c) {
+    var i = ORDEM.indexOf(String((c && c.camada) || '').trim().toUpperCase());
+    return i < 0 ? 99 : i;
+  }
 
   function camadaDe(c) {
     var k = String((c && c.camada) || '').trim().toUpperCase();
@@ -97,19 +111,45 @@
     return confrontos(d).filter(function (x) { return x.no_board_top === true; });
   }
 
-  // Tiles da Analisar: promovidos e ainda sem aposta, os mais NOVOS primeiro,
-  // no maximo 4 — e' o limite que o contrato fixa e o que a tela comporta.
-  function paraEntrar(d) {
+  // Chave de corrida. Hora e nome, normalizados: o payload traz "1:47" e a
+  // lista pode ter "01:47", e sem normalizar as duas nunca casam.
+  function chaveCorrida(x) {
+    var h = String((x && x.hora) || '').match(/(\d{1,2}):(\d{2})/);
+    return String((x && x.corrida) || '').trim().toLowerCase()
+      + '|' + (h ? (String(parseInt(h[1], 10)) + ':' + h[2]) : '');
+  }
+
+  // TODOS os confrontos aguardando entrada, de todas as corridas, ordenados por
+  // CAMADA e depois por largada. A lista de corridas usa esta lista inteira pra
+  // destacar cada corrida que tem AvB esperando — mais de uma ao mesmo tempo,
+  // se for o caso.
+  //
+  // A ordenacao deixou de ser por promovido_em (set/2026). Aquele campo e'
+  // aproximado — vem do capturado_em do avb_abertos e se move enquanto o
+  // mercado ainda enche — entao ele decidia qual corrida ocupava a tela por um
+  // criterio que muda sozinho. Agora manda a camada, que e' o que voce usa pra
+  // decidir, e a largada desempata.
+  function aguardando(d) {
     return confrontos(d)
       .filter(function (x) { return x.aguardando_entrada === true; })
-      // Ordena pelo promovido_em, que e' APROXIMADO — e aqui tudo bem: ele so
-      // decide qual tile fica mais a esquerda. Pra disparar alarme ele nao
-      // serve (o motor avisou que o valor se move), e por isso o alarme usa
-      // transicao de camada.
       .sort(function (a, b) {
-        return String(b.promovido_em || '').localeCompare(String(a.promovido_em || ''));
-      })
-      .slice(0, 4);
+        var f = forcaDe(a) - forcaDe(b);
+        if (f !== 0) return f;
+        return String(a.hora || '').localeCompare(String(b.hora || ''));
+      });
+  }
+
+  // Tiles da Analisar: SO os AvBs da corrida VIGENTE — a de camada mais alta.
+  //
+  // Antes devolvia ate 4 confrontos de corridas DIFERENTES, e a tela mostrava
+  // um AvB das 9:12 ao lado de um das 8:59. Dois relogios na mesma tela e' o
+  // que faz voce entrar no AvB errado. Uma corrida por vez; as outras seguem
+  // sinalizadas na lista e entram quando chegar a vez delas.
+  function paraEntrar(d) {
+    var todos = aguardando(d);
+    if (!todos.length) return [];
+    var k = chaveCorrida(todos[0]);
+    return todos.filter(function (x) { return chaveCorrida(x) === k; }).slice(0, 4);
   }
 
   // ── alarme ────────────────────────────────────────────────────────────────
@@ -178,10 +218,7 @@
     // Toca UMA vez, mesmo com varias promocoes na mesma volta: quatro sons
     // sobrepostos viram ruido e ninguem distingue as camadas. A prioridade e'
     // TOP > HIGH > GOOD — a camada mais forte e' a que merece ser ouvida.
-    var ordem = ['TOP', 'HIGH', 'GOOD'];
-    novas.sort(function (a, b) {
-      return ordem.indexOf(String(a.camada).toUpperCase()) - ordem.indexOf(String(b.camada).toUpperCase());
-    });
+    novas.sort(function (a, b) { return forcaDe(a) - forcaDe(b); });
     var som = camadaDe(novas[0]).som;
     try {
       if (typeof glob.tocarSomAlertaGlobal === 'function') glob.tocarSomAlertaGlobal(som);
@@ -238,6 +275,9 @@
     assinar: assinar,
     confrontos: confrontos,
     doBoard: doBoard,
+    aguardando: aguardando,
+    forcaDe: forcaDe,
+    chaveCorrida: chaveCorrida,
     paraEntrar: paraEntrar,
     promovidosAgora: function () { return st.promovidosAgora || []; },
     erro: function () { return st.erro; }

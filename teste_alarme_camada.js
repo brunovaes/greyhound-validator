@@ -125,47 +125,199 @@ ok(linhas[0].classList.contains('rc-alert-custom') && linhas[0]._estilo['--alert
    'e pinta na cor configurada, sem usar verde nem azul');
 
 // ═════════════════════════════════════════════════════════════════════════════
-console.log('\n[3] PROMOCAO DE CAMADA — verde pra manha+BW, azul pra pescada\n');
+// A LINHA DA CORRIDA COM AvB ESPERANDO.
+//
+// Mudou em set/2026: deixou de ser um flash de 12 segundos disparado pela
+// promocao e virou ESTADO — a linha fica marcada enquanto o AvB espera entrada
+// e sai 1 minuto depois da largada. Quem pinta agora e' o renderRaceListPanel,
+// que roda a cada redesenho da lista; o pintarPromocaoNaLista so forca o
+// redesenho na hora do alarme.
+//
+// Duas informacoes convivem na mesma linha, em canais separados:
+//   COR DO PISCA = procedencia  -> verde: a manha previu / azul: pescada
+//   COR DO SELO  = camada       -> TOP azul / HIGH laranja / GOOD roxo
+// Este teste EXECUTA o renderRaceListPanel contra um DOM de mentira e le o que
+// saiu em cada canal. Se alguem juntar os dois de novo numa cor so, cai aqui.
+console.log('\n[3] A LINHA DA CORRIDA COM AvB ESPERANDO\n');
 
-function rodarPintor(linhas, corridas, novas) {
-  const corpo = extrair(['_horaChave']);
-  const m = src.match(/window\.pintarPromocaoNaLista = function \(novas\) \{[\s\S]*?\n\};/);
-  if (!m) { console.error('ERRO: pintarPromocaoNaLista sumiu do app.js'); process.exit(1); }
+// minutesToRace e convertHora ficam de FORA de proposito: as versoes reais leem
+// o relogio da maquina, e um teste que depende da hora em que roda passa de
+// manha e falha a tarde. Aqui elas entram como stub, pelo ctx, e cada cenario
+// diz quantos minutos faltam.
+const AUX = ['_horaChave', '_chaveCorridaRc', '_corDaCamada', '_forcaCamada',
+             '_avbExpirou', '_avbDaCorrida'];
+
+// DOM de mentira com o suficiente pro renderRaceListPanel: ele cria <div>,
+// escreve innerHTML, poe atributo e empilha no container.
+function novoNo() {
+  const cls = new Set(), estilo = {}, filhos = [];
+  const no = {
+    _cls: cls, _estilo: estilo, _filhos: filhos, innerHTML: '', style: {},
+    classList: {
+      add: c => cls.add(c), remove: c => cls.delete(c), contains: c => cls.has(c),
+      toggle: (c, on) => { if (on) cls.add(c); else cls.delete(c); }
+    },
+    setAttribute: (k, v) => { no['_attr_' + k] = String(v); },
+    getAttribute: k => (no['_attr_' + k] != null ? no['_attr_' + k] : null),
+    addEventListener: () => {},
+    appendChild: f => filhos.push(f)
+  };
+  // className e classList apontam pro MESMO conjunto. O renderRaceListPanel
+  // monta a linha atribuindo className de uma vez ("rc rc-camada rc-old"), e um
+  // DOM de mentira em que os dois vivem separados daria classList vazio e o
+  // teste passaria/falharia por motivo errado.
+  Object.defineProperty(no, 'className', {
+    get: () => Array.from(cls).join(' '),
+    set: v => { cls.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach(c => cls.add(c)); }
+  });
+  no.style.setProperty = (k, v) => { estilo[k] = v; };
+  return no;
+}
+
+// Roda o renderRaceListPanel de verdade. `aguardando` e' o que o painel do dia
+// traz; `minutos` diz, por corrida, quanto falta pra largada (negativo = ja
+// largou), pro teste nao depender do relogio da maquina.
+function rodarLista(corridas, aguardando, minutos) {
+  // As duas variaveis de modulo saem do PROPRIO app.js, nao redeclaradas aqui:
+  // o CORES_CAMADA e' a tabela de cor das camadas, e o teste tem que quebrar se
+  // ela mudar sem ninguem avisar — nao acompanhar a mudanca em silencio.
+  let vars = '';
+  for (const re of [/^var AVB_AGUARDANDO = \{\};/m, /^var CORES_CAMADA = \{[^}]*\};/m]) {
+    const m = src.match(re);
+    if (!m) { console.error('ERRO: ' + re + ' sumiu do app.js'); process.exit(1); }
+    vars += m[0] + '\n';
+  }
+  const corpo = vars + extrair(AUX.filter(n => new RegExp('^function\\s+' + n + '\\s*\\(', 'm').test(src)));
+  const mRender = src.match(/^function renderRaceListPanel\s*\([^)]*\)\s*\{[\s\S]*?^\}/m);
+  const mAplica = src.match(/window\.aplicarAguardandoNaLista = function[\s\S]*?\n\};/);
+  if (!mRender) { console.error('ERRO: renderRaceListPanel sumiu do app.js'); process.exit(1); }
+  if (!mAplica) { console.error('ERRO: aplicarAguardandoNaLista sumiu do app.js'); process.exit(1); }
+
+  const col = novoNo();
   const ctx = {
     results: corridas,
-    document: { querySelectorAll: () => linhas },
-    setTimeout: () => 0,
+    document: {
+      getElementById: id => (id === 'race-list-col' ? col : null),
+      createElement: () => novoNo(),
+      querySelectorAll: () => []
+    },
+    // minutesToRace do cenario: a corrida carrega o proprio _min.
+    minutesToRace: r => (r && r._min != null ? r._min : (minutos && minutos[r.corrida] != null ? minutos[r.corrida] : 30)),
+    isOldRaceCard: () => false,
+    matchAlarmeFiltro: () => false,
+    raceAlertKey: r => (r.hora || '') + '|' + (r.corrida || ''),
+    alertedRaces: {},
+    avisarCorrida: () => {},
+    ALERTA_MIN_ANTES: 3,
+    ALARME_FILTRO: { ativo: 0, cor: 'azul' },
+    CORES_ALARME: { azul: '#3b82f6' },
+    convertHora: h => h,
+    corridaDisplay: r => r.corrida,
+    _parEmFoco: () => ({ a: 1, b: 2 }),
+    renderFocusPanel: () => {},
+    refreshFocusMode: () => {},
+    atualizarProximas: () => {},
     window: {}
   };
   const nomes = Object.keys(ctx);
-  new Function(...nomes, corpo + '\n' + m[0] + '\n; window.pintarPromocaoNaLista(' + JSON.stringify(novas) + ');')
+  new Function(...nomes,
+    corpo + '\n' + mAplica[0] + '\n' + mRender[0]
+    + '\n; window.aplicarAguardandoNaLista(' + JSON.stringify(aguardando) + ');'
+    + '\n; renderRaceListPanel(' + JSON.stringify(corridas) + ');')
     (...nomes.map(n => ctx[n]));
+  return col._filhos;
 }
 
-linhas = [novaLinha(0), novaLinha(1)];
-corridas = [{ corrida: 'Newc A7', hora: '11:43' }, { corrida: 'Newc A6', hora: '11:09' }];
-rodarPintor(linhas, corridas, [
-  { corrida: 'Newc A7', hora: '11:43', camada: 'HIGH', da_manha: true },
-  { corrida: 'Newc A6', hora: '11:09', camada: 'GOOD', da_manha: false }
-]);
+let L = rodarLista(
+  [{ corrida: 'Newc A7', hora: '11:43', _min: 5 }, { corrida: 'Newc A6', hora: '11:09', _min: 2 }],
+  [{ corrida: 'Newc A7', hora: '11:43', camada: 'HIGH', da_manha: true },
+   { corrida: 'Newc A6', hora: '11:09', camada: 'GOOD', da_manha: false }]
+);
 
-ok(linhas[0].classList.contains('rc-camada') && linhas[0]._estilo['--cam-col'] === '#1B9D40',
-   'AvB da manha que a BW abriu -> linha pisca VERDE  (' + linhas[0]._estilo['--cam-col'] + ')');
-ok(linhas[1].classList.contains('rc-camada') && linhas[1]._estilo['--cam-col'] === '#3b82f6',
-   'pescada (a BW abriu fora da lista da manha) -> linha pisca AZUL  (' + linhas[1]._estilo['--cam-col'] + ')');
+ok(L.length === 2, 'as duas corridas viraram linha  (saiu ' + L.length + ')');
+ok(L[0]._cls.has('rc-camada') && L[0]._estilo['--cam-col'] === '#1B9D40',
+   'AvB da manha que a BW abriu -> pisca VERDE  (' + L[0]._estilo['--cam-col'] + ')');
+ok(L[1]._cls.has('rc-camada') && L[1]._estilo['--cam-col'] === '#3b82f6',
+   'pescada (a BW abriu fora da lista da manha) -> pisca AZUL  (' + L[1]._estilo['--cam-col'] + ')');
+ok(L[0]._estilo['--cam-badge'] === '#f97316',
+   'e o SELO, no mesmo instante, diz a CAMADA: HIGH laranja  (' + L[0]._estilo['--cam-badge'] + ')');
+ok(L[1]._estilo['--cam-badge'] === '#8b5cf6',
+   'GOOD roxo  (' + L[1]._estilo['--cam-badge'] + ')');
+ok(L[0].innerHTML.indexOf('rc-avb-badge') !== -1 && L[0].innerHTML.indexOf('>HIGH<') !== -1,
+   'o selo escrito na linha traz o nome da camada');
+ok(L[0].innerHTML.indexOf('PRÓXIMA') === -1,
+   'e OCUPA o lugar do selo PRÓXIMA — os dois nao disputam a mesma linha');
 
-// hora em formatos diferentes tem que casar: o payload traz "1:47", a lista pode
-// ter "01:47". Sem normalizar, a linha certa nunca era encontrada.
-linhas = [novaLinha(0)];
-corridas = [{ corrida: 'Trlee A7', hora: '01:47' }];
-rodarPintor(linhas, corridas, [{ corrida: 'trlee a7', hora: '1:47', da_manha: true }]);
-ok(linhas[0].classList.contains('rc-camada'),
-   'casa a linha com hora "01:47" x "1:47" e corrida em caixa diferente');
+// AS DUAS AO MESMO TEMPO: e' o desenho que o Bruno escolheu. Uma corrida
+// destacada por vez faria a segunda passar batida.
+ok(L[0]._cls.has('rc-camada') && L[1]._cls.has('rc-camada'),
+   'DUAS corridas destacadas ao mesmo tempo, cada uma na cor da sua procedencia');
 
-linhas = [novaLinha(0)];
-corridas = [{ corrida: 'Sheff A2', hora: '1:31' }];
-rodarPintor(linhas, corridas, [{ corrida: 'Outra A9', hora: '9:99', da_manha: true }]);
-ok(!linhas[0].classList.contains('rc-camada'), 'corrida que nao foi promovida nao pisca');
+// hora em formatos diferentes tem que casar: o payload traz "1:47", a lista
+// pode ter "01:47". Sem normalizar, a linha certa nunca e' encontrada.
+L = rodarLista(
+  [{ corrida: 'Trlee A7', hora: '01:47', _min: 4 }],
+  [{ corrida: 'trlee a7', hora: '1:47', camada: 'TOP', da_manha: true }]
+);
+ok(L[0]._cls.has('rc-camada'), 'casa a linha com hora "01:47" x "1:47" e corrida em caixa diferente');
+ok(L[0]._estilo['--cam-badge'] === '#3b82f6', 'TOP e' + String.fromCharCode(39) + ' azul  (' + L[0]._estilo['--cam-badge'] + ')');
+
+L = rodarLista([{ corrida: 'Sheff A2', hora: '1:31', _min: 20 }], []);
+ok(!L[0]._cls.has('rc-camada'), 'corrida sem AvB esperando nao pisca');
+ok(L[0].innerHTML.indexOf('PRÓXIMA') !== -1, 'e volta a exibir o selo PRÓXIMA normal');
+
+// ── o corte de 1 minuto ─────────────────────────────────────────────────────
+// O aguardando_entrada do backend so cai quando a chegada chega, e isso pode
+// demorar. Quem tira a corrida da sua frente na hora certa e' o relogio da tela.
+console.log('\n[3b] O AvB SAI 1 MINUTO DEPOIS DA LARGADA\n');
+const CASOS = [
+  [5, true, 'faltando 5 min -> destacada'],
+  [0, true, 'na hora da largada -> ainda destacada'],
+  [-1, true, 'um minuto depois -> ainda destacada (da pra entrar)'],
+  [-2, false, 'dois minutos depois -> sai do destaque'],
+  [-30, false, 'meia hora depois -> fora']
+];
+for (const [min, esperado, msg] of CASOS) {
+  const r = rodarLista(
+    [{ corrida: 'Sheff A2', hora: '1:31', _min: min }],
+    [{ corrida: 'Sheff A2', hora: '1:31', camada: 'TOP', da_manha: true }]
+  );
+  ok(r[0]._cls.has('rc-camada') === esperado, msg);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A ordem e a escolha da corrida vigente saem do painelDia, nao da tela.
+console.log('\n[3c] ORDEM: TOP na frente, e a tela de disputa pega UMA corrida\n');
+
+const PD_MOD = require(path.join(__dirname, 'public', 'js', 'painelDia.js'));
+const PainelDia = (function () {
+  const g = {};
+  new Function('window', fs.readFileSync(PD, 'utf8'))(g);
+  return g.PainelDia;
+})();
+
+const PAYLOAD = { corridas: [
+  { hora: '9:12', hora_br: '5:12', corrida: 'Kilky A4', race_id: 1,
+    confrontos: [{ id: 'a', camada: 'GOOD', aguardando_entrada: true }] },
+  { hora: '8:59', hora_br: '4:59', corrida: 'Monmr A10', race_id: 2,
+    confrontos: [{ id: 'b', camada: 'TOP', aguardando_entrada: true },
+                 { id: 'c', camada: 'HIGH', aguardando_entrada: true }] },
+  { hora: '9:30', hora_br: '5:30', corrida: 'Hove A9', race_id: 3,
+    confrontos: [{ id: 'd', camada: 'OPORTUNIDADE', aguardando_entrada: false }] }
+] };
+
+const esperando = PainelDia.aguardando(PAYLOAD);
+ok(esperando.length === 3, 'aguardando devolve os 3 confrontos que esperam entrada  (' + esperando.length + ')');
+ok(String(esperando[0].camada) === 'TOP', 'o TOP vem primeiro, mesmo sendo de corrida mais tardia na lista');
+ok(esperando.map(x => x.camada).join(',') === 'TOP,HIGH,GOOD',
+   'ordem por camada: ' + esperando.map(x => x.camada).join(','));
+
+const vigente = PainelDia.paraEntrar(PAYLOAD);
+ok(vigente.length === 2, 'a tela de disputa recebe SO a corrida vigente  (' + vigente.length + ' confrontos)');
+ok(vigente.every(x => x.corrida === 'Monmr A10'),
+   'e todos sao da MESMA corrida — dois relogios na mesma tela e o que faz voce entrar no AvB errado');
+
+ok(PainelDia.paraEntrar({ corridas: [] }).length === 0, 'sem nada esperando, a tela fica em standby');
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n[4] O HOOK ESTA LIGADO nas duas pontas\n');
@@ -177,10 +329,41 @@ ok(pd.indexOf('typeof glob.pintarPromocaoNaLista === \'function\'') !== -1,
    'e chama protegido: tela sem lista nao quebra');
 ok(src.indexOf('window.pintarPromocaoNaLista = function') !== -1,
    'app.js publica a funcao no window');
-ok(src.indexOf(".rc-camada{") !== -1 && src.indexOf(".rc-perto{") !== -1,
-   'o CSS das duas classes novas existe');
+ok(src.indexOf('window.aplicarAguardandoNaLista = function') !== -1,
+   'app.js publica o aplicarAguardandoNaLista, que e quem carrega o estado');
+ok(src.indexOf(".rc-camada{") !== -1 && src.indexOf(".rc-perto{") !== -1
+   && src.indexOf(".rc-avb-badge{") !== -1,
+   'o CSS das tres classes existe (.rc-camada, .rc-perto, .rc-avb-badge)');
+
+// O aviso fixo saiu de vez: sobra de CSS ou de div deixaria um balao morto
+// escutando no topo da tela.
+console.log('\n[5] O AVISO FIXO NO TOPO SAIU DE VEZ\n');
+const MAIN = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'main.js'), 'utf8');
+for (const s of ['#ap-aviso', 'apa-txt', 'apa-cam', 'mostrarAviso']) {
+  ok(MAIN.indexOf(s) === -1, 'nenhum resto de ' + s + ' no main.js');
+}
+
+// O CSS dos tiles tem que estar na rota que os desenha. Ele viveu meses dentro
+// da /cascata, que nao usa nenhuma classe .ap-*, e a Analisar ficava sem.
+console.log('\n[6] O CSS DOS TILES ESTA NA ROTA QUE OS USA\n');
+const rotas = [];
+const reR = /^router\.get\('([^']+)'/gm;
+let mR;
+while ((mR = reR.exec(MAIN)) !== null) rotas.push([mR.index, mR[1]]);
+function rotaDe(marca) {
+  const i = MAIN.indexOf(marca);
+  if (i < 0) return null;
+  let alvo = null;
+  for (const [p, r] of rotas) { if (p < i) alvo = r; }
+  return alvo;
+}
+for (const marca of ['.ap-tile{', '.ap-grid{display:grid', '.ap-entrada{', '.ap-standby{']) {
+  const r = rotaDe(marca);
+  ok(r === '/', 'o "' + marca + '" esta na rota "/" (Analisar)  — achei em: ' + r);
+}
+ok(MAIN.indexOf('id="ap-painel"') !== -1, 'e o container #ap-painel esta na mesma rota');
 
 console.log('\n' + (falhas === 0
-  ? 'TUDO OK — som so no alarme de camada; verde = manha+BW, azul = pescada, cinza = perto da largada.'
+  ? 'TUDO OK — som so no alarme de camada; pisca verde/azul por procedencia, selo por camada, e o CSS na rota certa.'
   : falhas + ' FALHA(S) — nao subir.'));
 process.exit(falhas === 0 ? 0 : 1);

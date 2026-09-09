@@ -667,24 +667,76 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 /* overflow HIDDEN, nao auto: a grade dos AvBs se ajusta a altura disponivel,
    entao nao ha o que rolar aqui — e com auto ela ganharia altura infinita e o
    grid-auto-rows:1fr deixaria de dividir. */
-/* AVISO DE CONFRONTO AGUARDANDO (Bruno set/2026). Fixo na tela, aparece SO quando
-   ha confronto pra entrar E o painel de tiles esta escondido porque voce abriu uma
-   corrida pela lista. Antes disso o alarme tocava e nao havia nada pra ver: a
-   coluna de foco estava ocupada e nao havia pista de que existia algo esperando. */
-#ap-aviso{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:8000;display:none;
-  align-items:center;gap:12px;background:#12172a;border:1px solid var(--ap-avc,#22e08a);
-  border-radius:10px;padding:9px 14px;box-shadow:0 10px 34px rgba(0,0,0,.55);
-  font-size:12px;color:#e7ecf5;max-width:92vw}
-#ap-aviso.on{display:flex}
-#ap-aviso .apa-pt{width:8px;height:8px;border-radius:50%;background:var(--ap-avc,#22e08a);flex:0 0 auto;
-  animation:apaPulse 1s ease-in-out infinite}
-@keyframes apaPulse{0%,100%{opacity:1}50%{opacity:.25}}
-#ap-aviso .apa-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#ap-aviso .apa-cam{font-weight:800;letter-spacing:.3px}
-#ap-aviso button{background:var(--ap-avc,#22e08a);color:#04140a;border:none;border-radius:7px;
-  padding:5px 12px;font-weight:800;font-size:11px;cursor:pointer;flex:0 0 auto}
-#ap-aviso button:hover{opacity:.88}
+/* O AVISO FIXO no topo da tela SAIU (Bruno, set/2026). Ele ficava colado na
+   logomarca e voce nao identificava a corrida ali. O lugar de avisar passou a
+   ser a propria lista de corridas: a corrida com AvB esperando sobe pro topo,
+   ganha o selo da camada e pisca. Ver renderRaceListPanel no app.js. */
 .focus-col{display:none;flex-direction:column;overflow:hidden;background:var(--bg);flex:1;min-height:0;padding:8px 10px}
+/* ── Analisar: standby + tiles ────────────────────────────────────────────
+   A mesma grade dos AvBs: 1 ocupa tudo, 2 lado a lado, 3 com o ultimo
+   centralizado, 4 em quadrado. Reusa .fp-grid pra nao existirem duas grades
+   parecidas que divergem na primeira mudanca. */
+.ap-grid{display:grid;gap:10px;flex:1 1 auto;min-height:0;grid-auto-rows:minmax(0,1fr)}
+.ap-g1{grid-template-columns:1fr}
+.ap-g2,.ap-g3,.ap-g4{grid-template-columns:1fr 1fr}
+.ap-g3 > :nth-child(3){grid-column:1 / -1;justify-self:center;width:calc(50% - 5px)}
+@media(max-width:1100px){
+  .ap-grid,.ap-g2,.ap-g3,.ap-g4{grid-template-columns:1fr}
+  .ap-g3 > :nth-child(3){grid-column:auto;justify-self:stretch;width:auto}
+}
+
+/* A cor da camada vem em --ap-cor, posta na propria tile pelo JS: TOP, HIGH e
+   GOOD usam o MESMO CSS. */
+.ap-tile{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
+  background:#0D1117;border:2px solid var(--ap-cor,#333);border-radius:10px;padding:6px 8px}
+.ap-tile-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex:0 0 auto;margin-bottom:6px}
+.ap-hd-txt{min-width:0}
+/* O titulo e a linha de metadados usam .fp-race-title / .fp-race-meta, as
+   MESMAS classes do cabecalho da corrida carregada pelo motor da manha. So o
+   corte por largura e' local: a tile e' mais estreita que a coluna de foco. */
+.ap-tile-hd .fp-race-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-cam{font-size:9px;font-weight:800;letter-spacing:.5px;color:#fff;border-radius:8px;padding:2px 8px;flex:0 0 auto}
+.ap-hora{font-weight:800;color:#21AB58}
+.ap-corrida{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-pct{margin-left:auto;font-weight:700;color:#cbd5e1}
+.ap-mut{color:var(--mut)}
+.ap-sem-card{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.ap-par{font-size:20px;font-weight:800}
+.ap-odd{font-size:12px;color:#cbd5e1}
+/* Barra de entrada: mesmo desenho da .fp-inputs-row da tela de sempre. A tile
+   ja tem borda e fundo proprios, entao aqui o padding lateral e o fundo da
+   barra sao zerados — o resto (altura, gap, tipografia dos campos e do botao)
+   e' identico, e e' isso que faz as duas telas parecerem o mesmo sistema. */
+.ap-entrada{display:flex;align-items:center;gap:12px;flex:0 0 auto;margin-top:6px;flex-wrap:wrap}
+.ap-tile .ap-entrada.fp-inputs-row{padding:8px 0 0;background:transparent;border-top:1px solid var(--bdr2)}
+.ap-lb{font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px}
+.ap-entrada input{width:52px;padding:4px 8px;background:var(--sur2);border:1px solid var(--bdr2);
+  border-radius:4px;color:var(--txt);font-size:12px;font-weight:600;text-align:center}
+.ap-entrada input:focus{outline:none;border-color:var(--grn)}
+.ap-entrei{margin-left:auto;background:transparent;border:1px solid #22c55e;color:#22c55e;
+  border-radius:5px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.ap-entrei.ok{background:#22c55e;color:#000}
+.ap-entrei:disabled{opacity:.6;cursor:default}
+.ap-aviso{font-size:11px;color:#ef4444;margin-top:4px}
+
+/* Promocao: a MOLDURA pisca na cor da camada, junto com a linha no board. */
+@keyframes apPisca{
+  0%,100%{ box-shadow:none;                        border-color:var(--ap-cor) }
+  50%    { box-shadow:0 0 0 3px var(--ap-cor), 0 0 18px var(--ap-cor);
+           border-color:var(--ap-cor) }
+}
+.ap-pisca{animation:apPisca 1s ease-in-out 8}
+
+/* Standby: a ampola girando diz "estou vivo e olhando". Tela parada e tela
+   quebrada sao indistinguiveis sem ela. */
+.ap-standby{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;color:var(--mut)}
+.ap-spin{width:44px;height:44px;border-radius:50%;border:3px solid rgba(255,255,255,.10);
+  border-top-color:#21AB58;animation:apGira 1s linear infinite}
+@keyframes apGira{ to{ transform:rotate(360deg) } }
+.ap-standby-txt{font-size:15px;font-weight:800;letter-spacing:2px;color:#8a94a6}
+.ap-standby-sub{font-size:11px;color:var(--mut2)}
+
 /* Só a GRADE se estica. Cabecalho, notas de alerta e a barra de Odd/Stake ficam
    com o tamanho que precisam e NUNCA saem da tela. */
 .focus-col > *{flex:0 0 auto}
@@ -971,7 +1023,6 @@ ${navBar(user, 'analisar')}
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
-  <div id="ap-aviso"></div>
   <div class="focus-col" id="focus-col">
     <!-- Standby e tiles do Painel do Dia. Fica dentro da coluna de foco, que
          ja tem a altura certa; o app.js sobrescreve este conteudo quando o
@@ -1058,35 +1109,49 @@ ${navBar(user, 'analisar')}
     var c = document.getElementById('focus-col');
     return !!(c && c.querySelector('#ap-painel'));
   }
-  // Com a coluna de foco livre, os tiles desenham. Ocupada, o painel nao desenha
-  // (decisao acima) — mas voce precisa saber que ha algo esperando, senao o alarme
-  // toca no vazio. Ai entra o aviso fixo, com a cor da camada mais forte.
-  var CORES_AV = { TOP: '#22e08a', HIGH: '#ff8c1a', GOOD: '#4aa8ff' };
-  function mostrarAviso(itens) {
-    var el = document.getElementById('ap-aviso');
-    if (!el) return;
-    if (!itens || !itens.length) { el.className = ''; el.innerHTML = ''; return; }
-    var ordem = ['TOP', 'HIGH', 'GOOD'];
-    var lista = itens.slice().sort(function (a, b) {
-      return ordem.indexOf(String(a.camada).toUpperCase()) - ordem.indexOf(String(b.camada).toUpperCase());
-    });
-    var forte = lista[0];
-    var cam = String(forte.camada || '').toUpperCase();
-    var cor = CORES_AV[cam] || '#22e08a';
-    el.style.setProperty('--ap-avc', cor);
-    var resumo = lista.slice(0, 2).map(function (x) {
-      return '<span class="apa-cam" style="color:' + (CORES_AV[String(x.camada).toUpperCase()] || '#888') + '">'
-        + String(x.camada || '').toUpperCase() + '</span> ' + (x.corrida || '') + ' ' + (x.par || '');
-    }).join('  ·  ');
-    var extra = lista.length > 2 ? '  +' + (lista.length - 2) : '';
-    el.innerHTML = '<span class="apa-pt"></span>'
-      + '<span class="apa-txt">' + lista.length + ' aguardando entrada  ·  ' + resumo + extra + '</span>'
-      + '<button type="button" onclick="voltarAoPainelDia()">Ver</button>';
-    el.className = 'on';
-  }
-  window.PainelDia.assinar(function(dados){
-    if (telaLivre()) { window.AnalisarPainel.render('ap-painel', dados); mostrarAviso(null); }
-    else mostrarAviso(window.PainelDia.paraEntrar(dados));
+  // Chave corrida+hora do que esta na tela de disputa AGORA. Trocar de corrida
+  // sozinho e' aceitavel; redesenhar a MESMA corrida a cada 18s nao e' — isso
+  // apagaria a odd que voce acabou de digitar, a cada volta do polling.
+  var abertaAgora = null;
+
+  window.PainelDia.assinar(function (dados) {
+    var esperando = window.PainelDia.aguardando(dados);
+
+    // 1) A LISTA sempre sabe de tudo, mesmo com a coluna de foco ocupada. Ela
+    //    e' o aviso agora: corrida com AvB sobe pro topo, ganha o selo da
+    //    camada e pisca (verde = a manha previu, azul = pescada).
+    try {
+      if (typeof window.aplicarAguardandoNaLista === 'function') {
+        window.aplicarAguardandoNaLista(esperando);
+      }
+    } catch (e) {}
+
+    if (!esperando.length) { abertaAgora = null; }
+
+    // 2) A TELA DE DISPUTA vai pra corrida vigente — a de camada mais alta.
+    //    Decisao do Bruno (set/2026): abre SEMPRE, mesmo por cima de uma
+    //    corrida que voce tenha aberto pela lista. A regra anterior era o
+    //    contrario (nao mexer na tela enquanto voce analisava), e o preco dela
+    //    era voce perder o AvB por estar olhando outra coisa. O preco desta e'
+    //    o oposto: se voce estiver com odd digitada quando outro AvB abrir, a
+    //    tela troca e o que estava digitado se perde.
+    var vigente = window.PainelDia.paraEntrar(dados);
+    if (vigente.length) {
+      var k = window.PainelDia.chaveCorrida(vigente[0]);
+      if (k !== abertaAgora) {
+        abertaAgora = k;
+        // Devolve a coluna de foco ao painel de tiles antes de desenhar: se
+        // uma corrida estava aberta pela lista, o container #ap-painel nem
+        // existe mais no DOM.
+        if (!telaLivre() && typeof window.voltarAoPainelDia === 'function') {
+          window.voltarAoPainelDia(true);   // true = nao rebuscar, ja temos os dados
+        }
+      }
+      window.AnalisarPainel.render('ap-painel', dados);
+    } else if (telaLivre()) {
+      // Nada esperando e a coluna livre: standby.
+      window.AnalisarPainel.render('ap-painel', dados);
+    }
   });
   window.PainelDia.iniciar({});
 })();
@@ -1676,60 +1741,12 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 .casc-desc{font-size:10px;color:var(--mut2);margin-top:1px}
 /* Cabecalho da lista de corridas: as MESMAS larguras das linhas, senao os
    filtros nao apontam pra coluna que filtram. */
-/* ── Analisar: standby + tiles ────────────────────────────────────────────
-   A mesma grade dos AvBs: 1 ocupa tudo, 2 lado a lado, 3 com o ultimo
-   centralizado, 4 em quadrado. Reusa .fp-grid pra nao existirem duas grades
-   parecidas que divergem na primeira mudanca. */
-.ap-grid{display:grid;gap:10px;flex:1 1 auto;min-height:0;grid-auto-rows:minmax(0,1fr)}
-.ap-g1{grid-template-columns:1fr}
-.ap-g2,.ap-g3,.ap-g4{grid-template-columns:1fr 1fr}
-.ap-g3 > :nth-child(3){grid-column:1 / -1;justify-self:center;width:calc(50% - 5px)}
-@media(max-width:1100px){
-  .ap-grid,.ap-g2,.ap-g3,.ap-g4{grid-template-columns:1fr}
-  .ap-g3 > :nth-child(3){grid-column:auto;justify-self:stretch;width:auto}
-}
-
-/* A cor da camada vem em --ap-cor, posta na propria tile pelo JS: TOP, HIGH e
-   GOOD usam o MESMO CSS. */
-.ap-tile{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
-  background:#0D1117;border:2px solid var(--ap-cor,#333);border-radius:10px;padding:6px 8px}
-.ap-tile-hd{display:flex;align-items:center;gap:8px;font-size:11px;flex:0 0 auto;margin-bottom:4px}
-.ap-cam{font-size:9px;font-weight:800;letter-spacing:.5px;color:#04140a;border-radius:8px;padding:2px 8px}
-.ap-hora{font-weight:800;color:#21AB58}
-.ap-corrida{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ap-pct{margin-left:auto;font-weight:700;color:#cbd5e1}
-.ap-mut{color:var(--mut)}
-.ap-sem-card{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-.ap-par{font-size:20px;font-weight:800}
-.ap-odd{font-size:12px;color:#cbd5e1}
-.ap-entrada{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-top:6px;flex-wrap:wrap}
-.ap-entrada label{font-size:10px;color:var(--mut);display:flex;align-items:center;gap:4px}
-.ap-entrada input{width:66px;background:#0d0d0d;border:1px solid #333;border-radius:5px;
-  color:#e9edf2;padding:3px 5px;font-size:12px;text-align:center}
-.ap-entrei{margin-left:auto;background:transparent;border:1px solid #21AB58;color:#21AB58;
-  border-radius:6px;padding:4px 14px;font-size:12px;font-weight:700;cursor:pointer}
-.ap-entrei.ok{background:#21AB58;color:#04140a}
-.ap-entrei:disabled{opacity:.6;cursor:default}
-.ap-aviso{font-size:11px;color:#ef4444;margin-top:4px}
-
-/* Promocao: a MOLDURA pisca na cor da camada, junto com a linha no board. */
-@keyframes apPisca{
-  0%,100%{ box-shadow:none;                        border-color:var(--ap-cor) }
-  50%    { box-shadow:0 0 0 3px var(--ap-cor), 0 0 18px var(--ap-cor);
-           border-color:var(--ap-cor) }
-}
-.ap-pisca{animation:apPisca 1s ease-in-out 8}
-
-/* Standby: a ampola girando diz "estou vivo e olhando". Tela parada e tela
-   quebrada sao indistinguiveis sem ela. */
-.ap-standby{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:14px;color:var(--mut)}
-.ap-spin{width:44px;height:44px;border-radius:50%;border:3px solid rgba(255,255,255,.10);
-  border-top-color:#21AB58;animation:apGira 1s linear infinite}
-@keyframes apGira{ to{ transform:rotate(360deg) } }
-.ap-standby-txt{font-size:15px;font-weight:800;letter-spacing:2px;color:#8a94a6}
-.ap-standby-sub{font-size:11px;color:var(--mut2)}
-
+/* O CSS dos tiles da Analisar (.ap-*) SAIU DAQUI (Bruno, set/2026). Ele estava
+   dentro da rota /cascata, que nao usa nenhuma dessas classes — enquanto a
+   Analisar, que usa todas, ficava sem elas. O sintoma era a tela de disputa
+   crua: tiles empilhados em vez da grade, cabecalho colado e os campos Odd,
+   Stake e "Entrei !" no visual padrao do navegador. Agora o bloco vive na rota
+   que o usa, logo abaixo do .focus-col. */
 /* ── Board do dia (Histórico) ─────────────────────────────────────────────
    Uma linha por confronto. A cor vem da camada, via --bd-cor, posta na
    propria linha pelo JS: assim TOP, HIGH e GOOD usam o MESMO CSS e a cor nao
@@ -2096,6 +2113,87 @@ function _motorDoAvb(r){
   return '';
 }
 
+
+// ── CELULAS DA LINHA POR AvB (Bruno set/2026) ────────────────────────────────
+// As antigas recebiam a CORRIDA e tiravam o par dela. Agora a linha e' de um
+// CONFRONTO, entao o par vem de fora. As antigas seguem existindo porque a tela
+// de sessao antiga (a lista de sessoes) ainda as usa.
+
+// O par do confronto, com os dois galgos.
+function _celulaAvbConf(r, cf, escolhido){
+  var lado = function(trap, nome){
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
+      + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
+      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
+      + '</div>';
+  };
+  return '<td style="text-align:center;vertical-align:middle">'
+    + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
+    +   lado(cf.pick_trap, cf.pick_nome)
+    +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
+    +   lado(cf.outro_trap, cf.outro_nome)
+    + '</div>'
+    // De onde o AvB veio. "manha" = o motor levantou no PDF e a BW confirmou;
+    // "BW" = a pescada, o mercado achou o que o PDF nao tinha proposto.
+    + '<div style="font-size:8px;color:#555;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">'
+    +   (cf.fora_da_lista ? '<span style="color:#60a5fa">fora da lista</span>' : (cf.da_manha ? 'manhã' : 'BW'))
+    + '</div>'
+    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ')">&#128269; ver historico</a>'
+    + '</td>';
+}
+
+// A camada, que substituiu as origens VIP/Secundaria/Surpresa.
+function _celulaCamada(cf){
+  var mapa = {
+    // Mesmas cores do CAMADAS do painelDia.js: TOP azul, HIGH laranja, GOOD
+    // roxo. Uma camada nao pode ter uma cor no Historico e outra na Analisar.
+    TOP:  ['#3b82f6', 'TOP',  'passou na regua firme: categoria, CalTm, split e podio'],
+    HIGH: ['#f97316', 'HIGH', 'passou na regua mais frouxa (CalTm menor, aceita empate em split e podio)'],
+    GOOD: ['#8b5cf6', 'GOOD', 'so conviccao: nao passou em nenhuma das duas reguas']
+  };
+  var v = mapa[cf.camada];
+  if (!v) {
+    // Camada desconhecida = aposta em par fora da lista, ou linha antiga com
+    // origem velha (VIP/Secundaria/Surpresa). Mostra o que esta gravado em vez
+    // de virar traco: e' historico, nao erro.
+    var cru = String(cf.camada || '').trim();
+    if (!cru) return '<td style="text-align:center;vertical-align:middle;color:#333;font-size:11px">&mdash;</td>';
+    return '<td style="text-align:center;vertical-align:middle"><span style="display:inline-block;font-size:9px;font-weight:700;'
+      + 'letter-spacing:.3px;padding:2px 7px;border-radius:10px;border:1px solid #55555555;color:#888;white-space:nowrap">'
+      + cru + '</span></td>';
+  }
+  var extra = (cf.tier_motor ? ' &middot; tier ' + cf.tier_motor : '');
+  return '<td style="text-align:center;vertical-align:middle" title="' + v[2] + extra.replace(/&middot;/g, '·') + '">'
+    + '<span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 7px;'
+    + 'border-radius:10px;border:1px solid ' + v[0] + '55;color:' + v[0] + ';white-space:nowrap">' + v[1] + '</span></td>';
+}
+
+// Marca a linha em que a aposta foi feita. No maximo uma por corrida.
+function _celulaEntreiConf(escolhido){
+  if (!escolhido) return '<td style="text-align:center;color:#444">&mdash;</td>';
+  return '<td style="text-align:center"><span style="font-size:10px;font-weight:800;letter-spacing:.4px;'
+    + 'color:#04140a;background:#21AB58;border-radius:4px;padding:2px 6px">ENTREI</span></td>';
+}
+
+// O "bateu" do CONFRONTO, derivado da chegada pelo bateuPar — a mesma funcao do
+// resto do sistema. Antes esta coluna era da corrida; com uma linha por AvB ela
+// passa a dizer o que cada par fez.
+function _celulaBateuConf(cf){
+  var v = cf.bateu;
+  var txt = v === true ? '<span style="color:#22c55e;font-weight:700">✓ Sim</span>'
+    : (v === false ? '<span style="color:#ef4444;font-weight:700">✗ Não</span>'
+    : '<span style="color:#666">aguarda</span>');
+  return '<td style="text-align:center;font-size:11px">' + txt + '</td>';
+}
+
+// Odd registrada — so faz sentido na linha em que voce entrou.
+function _celulaOddConf(r, escolhido){
+  if (!escolhido) return '<td style="text-align:center;color:#333">&mdash;</td>';
+  return '<td style="text-align:center"><input type="text" class="hist-inp" value="' + (r.odd || '') + '" placeholder="-" '
+    + 'data-id="' + r.id + '" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" '
+    + 'onkeydown="if(event.key===\'Enter\')this.blur();"></td>';
+}
+
 function _celulaMotor(r){
   var m = _motorDoAvb(r);
   var mapa = {
@@ -2316,6 +2414,117 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       // dela: referencia do mercado, nao registro de aposta.
     }
   }
+  // ── UMA LINHA POR AvB (Bruno set/2026) ───────────────────────────────────
+  // O Historico deixa de ser uma linha por CORRIDA e passa a ser uma por AvB que
+  // a BW confirmou. A classificacao NAO e' refeita aqui: vem do camadasDoDia, o
+  // mesmo modulo que o painel-dia e o Placar usam. Reescrever a regua num
+  // terceiro lugar seria a terceira chance de os numeros divergirem em silencio.
+  //
+  // OPORTUNIDADE fica de fora: o Historico e' registro do que o mercado
+  // confirmou. No painel ela aparece ate a largada, pra dar pra acompanhar o
+  // funil; aqui nao, senao o registro do dia vira lista de espera.
+  const linhasAvb = (function () {
+    const cd = require('../utils/camadasDoDia');
+    const mm = require('../utils/motorManha');
+    const { bateuPar } = require('../utils/avbResultado');
+    const out = [];
+    let dataSess = null;
+    try {
+      const dr = db.prepare("SELECT date(created_at,'-3 hours') AS d FROM race_sessions WHERE id=?").get(sess.id);
+      dataSess = dr ? dr.d : null;
+    } catch (e) {}
+    if (!dataSess) return out;
+    let opts = { date: dataSess };
+    try { opts = mm._aplicaConfigMotor(db, { date: dataSess }); } catch (e) {}
+    const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+    let difSp = 0, tetoInfo = 0;
+    try {
+      const c = db.prepare('SELECT avb_sp_dif_max, avb_teto_bw FROM analysis_config WHERE user_id=?').get(CANONICO);
+      if (c) {
+        if (c.avb_sp_dif_max > 0) difSp = c.avb_sp_dif_max;
+        if (c.avb_teto_bw > 0) tetoInfo = c.avb_teto_bw;
+      }
+    } catch (e) {}
+    const h2h = {};
+    try {
+      for (const p of db.prepare('SELECT corrida, hora, pares_json, capturado_em FROM avb_abertos WHERE data=?').all(dataSess)) {
+        let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {}
+        h2h[cd.chaveCorrida(p.corrida, p.hora)] = { pares: arr, em: p.capturado_em || null };
+      }
+    } catch (e) {}
+    for (const r of races) {
+      if (r.nivel === 'skip') continue;
+      let confs = [];
+      try {
+        const hf = JSON.parse(r.hist_full || 'null');
+        let ha = null, rc = null;
+        try { ha = JSON.parse(r.hist_all); } catch (e) {}
+        try { rc = JSON.parse(r.race_card); } catch (e) {}
+        if (Array.isArray(hf) && hf.length >= 2 && Array.isArray(ha)) {
+          const bw = h2h[cd.chaveCorrida(r.corrida, r.hora)] || null;
+          const ctxBase = {
+            dataCorrida: r.data_card || dataSess,
+            trackCorrida: String(r.corrida || '').trim().split(/\s+/)[0] || '?',
+            distCorrida: r.dist || null
+          };
+          const pc = mm.precalcDaCorrida(hf, ha, rc, ctxBase, opts);
+          confs = cd.confrontosDaCorrida({
+            todos: Array.isArray(pc.todos) ? pc.todos : [], lastSp: pc.lastSp,
+            pares: bw ? bw.pares : [], abertoEm: bw ? bw.em : null,
+            corrida: r.corrida, hora: r.hora,
+            finishingOrderJson: r.finishing_order_json,
+            parelhoAte, difSpMax: difSp, tetoInfo, bateuPar
+          });
+        }
+      } catch (e) { confs = []; }
+      confs = confs.filter(function (c) { return c.camada !== 'OPORTUNIDADE'; });
+
+      // A SUA APOSTA NUNCA SOME DO REGISTRO. Se voce entrou num par que nao esta
+      // entre os confrontos — inverteu o AvB, ou o painel nao listou aquele par —
+      // ele entra como linha propria. Sumir com uma aposta feita seria bem pior
+      // do que mostrar uma linha a mais.
+      const esc = _jsonOuNull(r.avb_escolhido);
+      let escId = null;
+      if (esc && esc.aTrap != null && esc.bTrap != null) {
+        escId = cd.idConfronto(r.corrida, r.hora, Number(esc.aTrap), Number(esc.bTrap));
+        const achou = confs.some(function (c) { return c.id === escId; });
+        if (!achou) {
+          confs.push({
+            id: escId, par: 'T' + esc.aTrap + 'xT' + esc.bTrap,
+            pick_trap: Number(esc.aTrap), pick_nome: esc.aNome || null,
+            outro_trap: Number(esc.bTrap), outro_nome: esc.bNome || null,
+            pct: (esc.pct != null ? esc.pct : null),
+            camada: String(esc.origem || esc.origem_pick || 'FORA').toUpperCase(),
+            odd_bw: (esc.odd != null ? esc.odd : null),
+            razao_mercado: (esc.razao_mercado != null ? esc.razao_mercado : null),
+            bateu: bateuPar(r.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap)),
+            da_manha: false, tier_motor: null, fora_da_lista: true
+          });
+        }
+      }
+      confs.forEach(function (c, i) {
+        out.push({ r: r, cf: c, primeira: (i === 0), escolhido: (escId != null && c.id === escId) });
+      });
+    }
+    return out;
+  })();
+
+  // CONTABILIZACAO (regra do Bruno): o denominador e' TODO TOP, tenha havido
+  // aposta ou nao, MAIS os AvBs de outra camada em que ele entrou. TOP sem
+  // aposta conta de proposito — se so o apostado contasse, entrar em 2 de 5 TOP
+  // e acertar os dois daria 100%, que e' a inflacao que ele quer evitar.
+  const _kpiDe = function (lista) {
+    let ok = 0, tot = 0;
+    for (const L of lista) {
+      if (L.cf.bateu === true) { ok++; tot++; }
+      else if (L.cf.bateu === false) { tot++; }
+    }
+    return { ok: ok, tot: tot, pct: tot ? Math.round(100 * ok / tot) : null };
+  };
+  const kpiTop = _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === 'TOP'; }));
+  const kpiMinhas = _kpiDe(linhasAvb.filter(function (L) { return L.escolhido && L.cf.camada !== 'TOP'; }));
+  const kpiTotal = _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === 'TOP' || L.escolhido; }));
+
   const racesValidas = races.filter(r=>r.nivel!=='skip');
   const skipCount = races.length - racesValidas.length;
   const resolvidas = racesValidas.filter(r=>r.bateu).length;
@@ -2452,13 +2661,14 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 ${navBar(user, 'historico')}
 <div class="content">
 <div class="kpis">
-<div class="kpi"><div class="kpi-label">Corridas</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${racesValidas.length}</div>${skipCount>0?`<div style="font-size:9px;color:#666;margin-top:2px">${skipCount} skip</div>`:''}</div>
-<div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${ac}</div></div>
+<div class="kpi"><div class="kpi-label">AvBs contabilizados</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${kpiTotal.tot + linhasAvb.filter(function(L2){return (L2.cf.camada==='TOP'||L2.escolhido) && L2.cf.bateu===null;}).length}</div><div style="font-size:9px;color:#666;margin-top:2px">todo TOP + o que voce entrou</div></div>
+<div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${kpiTotal.ok}</div></div>
 <div class="kpi" title="o AvB que valeu em cada corrida: a sua escolha quando você entrou, o do motor quando não entrou">
   <div class="kpi-label">Taxa de acerto</div>
-  <div class="kpi-val" id="kpi-taxa" style="color:${_tx.geral.pct==null?'#666':(_tx.geral.pct>=50?'#22C65E':'#ef4444')}">${_tx.geral.pct==null?'—':_tx.geral.pct+'%'}</div>
-  <div id="kpi-taxa-cnt" style="font-size:9px;color:#666;margin-top:2px">${_tx.geral.tot?`${_tx.geral.ok}/${_tx.geral.tot}`:''}</div>
+  <div class="kpi-val" id="kpi-taxa" style="color:${kpiTotal.pct==null?'#666':(kpiTotal.pct>=50?'#22C65E':'#ef4444')}">${kpiTotal.pct==null?'—':kpiTotal.pct+'%'}</div>
+  <div id="kpi-taxa-cnt" style="font-size:9px;color:#666;margin-top:2px">${kpiTotal.tot?`${kpiTotal.ok}/${kpiTotal.tot}`:''}</div>
 </div>
+<div class="kpi" style="min-width:186px"><div class="kpi-label">Motor x Minhas</div><div style="display:flex;gap:14px;align-items:baseline;margin-top:2px"><div><div style="font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.4px">Motor (TOP)</div><div style="font-size:17px;font-weight:700;color:${kpiTop.pct==null?'#666':(kpiTop.pct>=50?'#22C65E':'#ef4444')}">${kpiTop.pct==null?'—':kpiTop.pct+'%'}</div><div style="font-size:9px;color:#666">${kpiTop.tot?`${kpiTop.ok}/${kpiTop.tot}`:'sem dado'}</div></div><div><div style="font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.4px">Minhas fora do TOP</div><div style="font-size:17px;font-weight:700;color:${kpiMinhas.pct==null?'#666':(kpiMinhas.pct>=50?'#22C65E':'#ef4444')}">${kpiMinhas.pct==null?'—':kpiMinhas.pct+'%'}</div><div style="font-size:9px;color:#666">${kpiMinhas.tot?`${kpiMinhas.ok}/${kpiMinhas.tot}`:'sem entrada'}</div></div></div></div>
 <div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
 <div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
 <div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
@@ -2486,30 +2696,50 @@ ${navBar(user, 'historico')}
 </div>
 </div>
 
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:92px">Origem<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="top">TOP</option><option value="secundario">Secundária</option><option value="surpresa">Surpresa</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
-${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{
-  var bc=r.nivel==='alta'?'ba':r.nivel==='media'?'bm':'bb';
-  var horaBr=r.hora_br||r.hora||'-';
-  var horaUk=r.hora||'';
-  var _brh=(function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
-  var turnoBR=_brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  return`<tr${r.flag_atrasada?' class="row-atrasada"':''} data-race data-turno="${turnoBR}" data-pista="${(r.corrida||'').split(' ')[0]}" data-bateu="${r.bateu||''}" data-odd="${r.odd||''}" data-naoaberto="${r.avb_nao_aberto?'1':''}" data-abriu="${r.abriu==null?'':String(r.abriu)}" data-motor="${_motorDoAvb(r)}" data-entrei="${(r.odd!=null&&String(r.odd).trim()!=="")?"sim":"nao"}">
-<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">${horaUk||'-'}</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">${(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)}</div></td>
-<td style="text-align:center"><div style="font-weight:700;font-size:12px">${nomeCorridaCompleto(r.corrida)||'-'}</div><div style="font-size:10px;color:#666">${r.dist||''}</div>${r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':''}</td>
-${_celulaAvb(r)}<td style="text-align:center"><span style="font-weight:700;font-size:12px;color:${r.pct>=90?"#22c55e":r.pct>=75?"#eab308":"#888"}">${r.pct?r.pct+"%":"-"}</span></td>${_celulaMotor(r)}<td style="text-align:center">${(r.odd!=null&&String(r.odd).trim()!=="")?'<span style="font-size:10px;font-weight:800;letter-spacing:.4px;color:#04140a;background:#21AB58;border-radius:4px;padding:2px 6px">ENTREI</span>':'<span style="color:#444">&mdash;</span>'}</td>
-<td style="text-align:center" title="${(r._bateuConta||'').replace(/"/g,'&quot;')}"><select class="hist-inp" data-id="${r.id}" data-f="bateu" disabled style="border-radius:4px;padding:3px;font-size:11px;cursor:pointer;font-weight:700;color:${r.bateu==='sim'?'#22c55e':r.bateu==='nao'?'#ef4444':'#888'}">
-<option value="" ${!r.bateu?'selected':''}>-</option>
-<option value="sim" style="color:#22c55e" ${r.bateu==='sim'?'selected':''}>✓ Sim</option>
-<option value="nao" style="color:#ef4444" ${r.bateu==='nao'?'selected':''}>✗ Não</option>
-</select></td>
-${_celulaResultado(r)}
-<td style="text-align:center">${!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':'')}</td>
-${_celulaObs(r)}
-<td style="text-align:center"><input type="text" class="hist-inp" value="${r.odd||''}" placeholder="-" data-id="${r.id}" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" onkeydown="if(event.key==='Enter')this.blur();"></td>
-${_celulaAberto(r)}
-<td style="text-align:center"><span class="edit-pencil" data-row="${r.id}" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>
-</tr>`;}).join('')}
-${!races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).length?'<tr><td colspan="13" style="text-align:center;color:#666;padding:20px">Nenhum AvB nesta sessao</td></tr>':''}
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Camada<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="conta" selected>Contabilizável</option><option value="">Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+${linhasAvb.map(function(Lx){
+  var r = Lx.r, cf = Lx.cf, pri = Lx.primeira, esc = Lx.escolhido;
+  var horaUk = r.hora || '';
+  var _brh = (function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
+  var turnoBR = _brh==null?'':(_brh>=13?'Tarde':'Manhã');
+  // CONTABILIZAVEL = entra no denominador: todo TOP, mais o que voce apostou em
+  // outra camada. E' o que os KPIs contam e o que o filtro padrao mostra.
+  var conta = (cf.camada === 'TOP' || esc) ? '1' : '';
+  // Celulas da CORRIDA (Resultado, bandeira, Observacoes, AvB na BW, lapis) so
+  // aparecem na PRIMEIRA linha dela: repetir a chegada em tres linhas nao
+  // acrescenta nada e tira a leitura de qual AvB e' qual.
+  var vazia = '<td></td>';
+  return '<tr' + (r.flag_atrasada && pri ? ' class="row-atrasada"' : '') + ' data-race'
+    + ' data-turno="' + turnoBR + '"'
+    + ' data-pista="' + (r.corrida||'').split(' ')[0] + '"'
+    + ' data-bateu="' + (cf.bateu === true ? 'sim' : (cf.bateu === false ? 'nao' : '')) + '"'
+    + ' data-odd="' + (esc ? (r.odd||'') : '') + '"'
+    + ' data-naoaberto="' + (r.avb_nao_aberto?'1':'') + '"'
+    + ' data-abriu="' + (r.abriu==null?'':String(r.abriu)) + '"'
+    + ' data-camada="' + (cf.camada||'') + '"'
+    + ' data-entrei="' + (esc ? 'sim' : 'nao') + '"'
+    + ' data-conta="' + conta + '"'
+    + ' data-primeira="' + (pri ? '1' : '') + '">'
+    + (pri
+        ? '<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">'+(horaUk||'-')+'</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">'+(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)+'</div></td>'
+        : '<td style="text-align:center;color:#2a2a2a;font-size:11px">&#8942;</td>')
+    + (pri
+        ? '<td style="text-align:center"><div style="font-weight:700;font-size:12px">'+(nomeCorridaCompleto(r.corrida)||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div>'+(r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':'')+'</td>'
+        : vazia)
+    + _celulaAvbConf(r, cf, esc)
+    + '<td style="text-align:center"><span style="font-weight:700;font-size:12px;color:'+(cf.pct>=90?'#22c55e':cf.pct>=75?'#eab308':'#888')+'">'+(cf.pct?cf.pct+'%':'-')+'</span></td>'
+    + _celulaCamada(cf)
+    + _celulaEntreiConf(esc)
+    + _celulaBateuConf(cf)
+    + (pri ? _celulaResultado(r) : vazia)
+    + (pri ? '<td style="text-align:center">'+(!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':''))+'</td>' : vazia)
+    + (pri ? _celulaObs(r) : vazia)
+    + _celulaOddConf(r, esc)
+    + (pri ? _celulaAberto(r) : vazia)
+    + (pri ? '<td style="text-align:center"><span class="edit-pencil" data-row="'+r.id+'" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>' : vazia)
+    + '</tr>';
+}).join('')}
+${!linhasAvb.length?'<tr><td colspan="13" style="text-align:center;color:#666;padding:20px">Nenhum AvB confirmado pela BW nesta sessao</td></tr>':''}
 </tbody></table></div>
 
 <style>
@@ -2718,26 +2948,35 @@ function redesenhaTurnos(vis){
 }
 
 function recalcKpisHist(){
-  var vis=Array.prototype.filter.call(document.querySelectorAll('tr[data-race]'),function(tr){return tr.style.display!=='none';});
-  var resolv=vis.filter(function(tr){return tr.getAttribute('data-bateu');});
-  var ac=vis.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
-  var apost=vis.filter(function(tr){return (tr.getAttribute('data-odd')||'')!=='';});
-  var green=apost.filter(function(tr){return tr.getAttribute('data-bateu')==='sim';}).length;
-  _histSet('kpi-corridas',vis.length);
-  _histSet('kpi-acertos',ac);
-  // A taxa e o contador saem das MESMAS linhas visiveis. Antes o "33/64"
-  // embaixo do numero era fixo do servidor: filtrar mudava a porcentagem e
-  // deixava a fracao antiga, dizendo uma coisa diferente logo abaixo.
-  var pctTaxa = resolv.length ? Math.round(ac/resolv.length*100) : null;
+  // CONTABILIZACAO (regra do Bruno): o denominador e' TODO TOP, tenha havido
+  // aposta ou nao, MAIS os AvBs de outra camada em que ele entrou. TOP sem
+  // aposta conta de proposito — se so o apostado contasse, entrar em 2 de 5 TOP
+  // e acertar os dois daria 100%, a inflacao que ele quer evitar.
+  //
+  // E o KPI IGNORA O FILTRO de propósito (decisao dele): o placar do dia mudar
+  // ao filtrar por pista daria dois numeros pra mesma coisa. Quem manda e o
+  // data-conta, gravado no servidor, nao o que esta visivel.
+  var todas = Array.prototype.slice.call(document.querySelectorAll('tr[data-race]'));
+  var conta = todas.filter(function(tr){ return tr.getAttribute('data-conta') === '1'; });
+  var resolvidas = conta.filter(function(tr){ return (tr.getAttribute('data-bateu')||'') !== ''; });
+  var ac = conta.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; }).length;
+  _histSet('kpi-corridas', conta.length);
+  _histSet('kpi-acertos', ac);
+  var pctTaxa = resolvidas.length ? Math.round(ac/resolvidas.length*100) : null;
   _histSet('kpi-taxa', pctTaxa==null ? '—' : pctTaxa+'%');
   var elTaxa = document.getElementById('kpi-taxa');
   if(elTaxa) elTaxa.style.color = pctTaxa==null ? '#666' : (pctTaxa>=50 ? '#22C65E' : '#ef4444');
   var elCnt = document.getElementById('kpi-taxa-cnt');
-  if(elCnt) elCnt.textContent = resolv.length ? (ac+'/'+resolv.length) : '';
-  redesenhaTurnos(vis);
-  _histSet('kpi-apostas',apost.length);
-  _histSet('kpi-green',green);
-  _histSet('kpi-pctgreen',(apost.length?Math.round(green/apost.length*100):0)+'%');
+  if(elCnt) elCnt.textContent = resolvidas.length ? (ac+'/'+resolvidas.length) : '';
+  // Entradas / Green: so as linhas em que voce realmente entrou.
+  var apost = todas.filter(function(tr){ return tr.getAttribute('data-entrei') === 'sim'; });
+  var green = apost.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; }).length;
+  _histSet('kpi-apostas', apost.length);
+  _histSet('kpi-green', green);
+  _histSet('kpi-pctgreen', (apost.length?Math.round(green/apost.length*100):0)+'%');
+  // O grafico por turno segue as linhas VISIVEIS: ele e' leitura da tabela, nao
+  // placar do dia. Os dois papeis sao diferentes e nao devem se misturar.
+  redesenhaTurnos(todas.filter(function(tr){ return tr.style.display !== 'none'; }));
 }
 function aplicarFiltroHist(){
   var et=document.getElementById('fh-turno'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
@@ -2761,9 +3000,13 @@ function aplicarFiltroHist(){
       : fa==='semdado' ? ab===''
       : fa==='manual' ? na
       : true;
-    var mo=tr.getAttribute('data-motor')||'';
-    // ENTREI: 'sim' = tem odd registrada nesta corrida. E' o que separa o que
-    // conta como aposta feita do que foi so' indicacao do motor.
+    // CAMADA: 'conta' = o conjunto contabilizavel (todo TOP + o que voce entrou),
+    // que e' como a tela ABRE. As demais camadas ficam a um clique. O filtro nao
+    // e' lembrado entre visitas: recarregar volta ao padrao.
+    var cam = tr.getAttribute('data-camada')||'';
+    var casaMotor = !fm ? true : (fm === 'conta' ? tr.getAttribute('data-conta') === '1' : cam === fm);
+    // ENTREI: 'sim' = a aposta foi registrada NESTA linha. No maximo uma por
+    // corrida, porque a regra e' uma aposta por corrida.
     var en=tr.getAttribute('data-entrei')||'';
     var casaEntrei = !fe ? true : (en === fe);
     // 'fora' = a corrida nao passou em nenhuma das duas reguas (tier vazio).
@@ -2781,7 +3024,11 @@ function aplicarFiltroHist(){
 // contam de um jeito, a Taxa de outro. Enquanto ninguem filtrava, os dois
 // numeros conviviam discordando na mesma tela.
 // Recalculando na abertura, todo mundo passa a sair das MESMAS linhas.
-document.addEventListener('DOMContentLoaded', recalcKpisHist);
+// A tela ABRE no conjunto contabilizavel (o seletor Camada ja nasce em
+// 'Contabilizável'), entao o primeiro calculo tem que passar pelo filtro — e nao
+// so pelos KPIs. Chamando o aplicarFiltroHist, as linhas somem e os cards saem
+// da MESMA regra desde o primeiro instante.
+document.addEventListener('DOMContentLoaded', aplicarFiltroHist);
 </script>
 </div></body></html>`);
 });

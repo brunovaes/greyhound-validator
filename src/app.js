@@ -95,9 +95,23 @@ function injectStyles(){
     // corrida que esta chegando. Verde e azul ficaram reservados pro alarme de camada.
     '.rc-perto{animation:rcPertoBlink 1.6s ease-in-out infinite;border-left:3px solid rgba(255,255,255,.28);}',
     '@keyframes rcPertoBlink{0%,100%{background:transparent;}50%{background:rgba(255,255,255,.07);}}',
-    // PROMOCAO DE CAMADA: a cor diz DE ONDE veio o AvB (verde = manha+BW, azul = pescada).
+    // AvB AGUARDANDO ENTRADA. Duas informacoes na mesma linha, em canais
+    // separados de proposito (Bruno, set/2026):
+    //   COR do pisca  = DE ONDE veio  -> verde: o motor da manha previu esta
+    //                                    azul:  pescada, a BW abriu do nada
+    //   SELO no topo  = QUAO BOM e'   -> TOP azul / HIGH laranja / GOOD roxo
+    // Uma cor so nao consegue responder as duas perguntas, e responder so uma
+    // era perder a outra.
+    //
+    // Isto deixou de ser um flash de 12s e virou ESTADO: a linha fica marcada
+    // enquanto o AvB espera entrada, e sai 1 minuto depois da largada. O flash
+    // antigo passava enquanto voce estava em outra aba e voce nunca sabia.
     '.rc-camada{animation:rcCamadaBlink 1s ease-in-out infinite;border-left:3px solid var(--cam-col,#1B9D40);}',
     '@keyframes rcCamadaBlink{0%,100%{background:transparent;}50%{background:var(--cam-col,#1B9D40);}}',
+    // Selo da camada. Ocupa o lugar do "PRÓXIMA" verde na primeira linha: as
+    // duas coisas nunca precisam aparecer juntas, porque a corrida com AvB
+    // esperando E' a que voce tem que olhar agora.
+    '.rc-avb-badge{display:block;font-size:8px;color:#fff;border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px;margin-bottom:4px;text-align:center;background:var(--cam-badge,#3b82f6);}',
     '.rc-atrasada{animation:rcAtrasadaBlink 1s ease-in-out infinite;border-left:3px solid #eab308;}',
     '.rc-reanalise-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:8px;font-weight:800;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-bottom:3px}',
     '@keyframes rcAtrasadaBlink{0%,100%{background:transparent;}50%{background:rgba(234,179,8,.35);}}',
@@ -526,6 +540,11 @@ function shouldShowRace(r) {
   // sendo skip. So os de MARGEM chegam aqui: skip por falta de historico nao
   // passa no filtro VIP (o backend consulta hist_all IS NOT NULL).
   if (_vipSkipLiberado(r)) return true;
+  // Corrida com AvB esperando entrada FICA na tela ate 1 minuto depois da
+  // largada (o corte esta no _avbDaCorrida). Sem isto ela sumia no minuto
+  // seguinte ao horario — que e' justamente quando a BW ainda aceita a
+  // entrada e voce ainda esta decidindo.
+  if (_avbDaCorrida(r)) return true;
   return isOldRaceCard(r) || isUpcoming(r);
 }
 
@@ -736,23 +755,81 @@ function _horaChave(h) {
   var m = String(h || '').match(/(\d{1,2}):(\d{2})/);
   return m ? (String(parseInt(m[1], 10)) + ':' + m[2]) : String(h || '').trim();
 }
+// AvBs AGUARDANDO ENTRADA, por corrida. Preenchido a cada volta do painel do
+// dia (18s) e lido pelo renderRaceListPanel. Fica num mapa, e nao no DOM,
+// porque a lista e' redesenhada por varios caminhos (atualizar, sync do
+// servidor, troca de filtro) e um destaque escrito so no DOM sumia no primeiro
+// redesenho — que e' exatamente o que acontecia com o flash de 12 segundos.
+var AVB_AGUARDANDO = {};
+
+// Cor do SELO = camada. Espelha o CAMADAS do painelDia.js; a copia existe
+// porque o app.js carrega ANTES dele e a lista pode desenhar no primeiro
+// quadro, sem o painelDia ainda no ar. Se ele estiver carregado, ele manda.
+var CORES_CAMADA = { TOP: '#3b82f6', HIGH: '#f97316', GOOD: '#8b5cf6' };
+function _corDaCamada(cam) {
+  var k = String(cam || '').trim().toUpperCase();
+  try {
+    if (window.PainelDia && window.PainelDia.CAMADAS && window.PainelDia.CAMADAS[k]) {
+      return window.PainelDia.CAMADAS[k].cor;
+    }
+  } catch (e) {}
+  return CORES_CAMADA[k] || '#8a94a6';
+}
+
+// A corrida ja largou ha mais de 1 minuto? Depois disso o AvB sai do destaque
+// mesmo que o backend ainda nao tenha visto a chegada: o aguardando_entrada
+// so cai quando o finishing_order chega, e isso pode demorar. O relogio da
+// tela e' quem tira a corrida da sua frente na hora certa.
+function _avbExpirou(r) {
+  var m = minutesToRace(r);
+  return m !== null && m < -1;
+}
+
+// O AvB (se houver) que esta esperando entrada nesta corrida.
+function _avbDaCorrida(r) {
+  if (!r) return null;
+  var x = AVB_AGUARDANDO[_chaveCorridaRc(r)];
+  if (!x) return null;
+  return _avbExpirou(r) ? null : x;
+}
+
+function _chaveCorridaRc(r) {
+  return String((r && r.corrida) || '').trim().toLowerCase() + '|' + _horaChave(r && r.hora);
+}
+
+// Chamada a cada volta do painel do dia. Guarda o mapa e redesenha a lista —
+// a ordem e o destaque saem daqui.
+window.aplicarAguardandoNaLista = function (itens) {
+  var mapa = {};
+  (Array.isArray(itens) ? itens : []).forEach(function (x) {
+    var k = String(x.corrida || '').trim().toLowerCase() + '|' + _horaChave(x.hora);
+    // Mais de um AvB na mesma corrida: fica o de camada mais forte. A linha e'
+    // uma so e tem que dizer o melhor que aquela corrida tem.
+    var atual = mapa[k];
+    if (!atual || _forcaCamada(x) < _forcaCamada(atual)) mapa[k] = x;
+  });
+  AVB_AGUARDANDO = mapa;
+  // refreshFocusMode, e NAO atualizarProximas: aquela, quando a sessao so tem
+  // corrida antiga, limpa o results e dispara uma re-analise. Chamada a cada
+  // 18s pelo painel, ela reanalisaria o dia em loop.
+  try { refreshFocusMode(); } catch (e) {}
+};
+
+function _forcaCamada(x) {
+  try {
+    if (window.PainelDia && window.PainelDia.forcaDe) return window.PainelDia.forcaDe(x);
+  } catch (e) {}
+  var i = ['TOP', 'HIGH', 'GOOD'].indexOf(String((x && x.camada) || '').trim().toUpperCase());
+  return i < 0 ? 99 : i;
+}
+
+// Mantida com o nome antigo porque o painelDia.js chama esta funcao junto com o
+// som. Ela nao pinta mais por conta propria: o destaque e' estado agora, e quem
+// desenha e' o renderRaceListPanel. O que ela faz e' garantir que a lista
+// redesenhe NA HORA da promocao, sem esperar a proxima volta.
 window.pintarPromocaoNaLista = function (novas) {
   if (!Array.isArray(novas) || !novas.length) return;
-  document.querySelectorAll('.rc').forEach(function (el) {
-    var idx = parseInt(el.getAttribute('data-idx'), 10);
-    if (isNaN(idx) || !results[idx]) return;
-    var r = results[idx];
-    var achou = null;
-    for (var i = 0; i < novas.length; i++) {
-      var x = novas[i];
-      if (String(x.corrida || '').trim().toLowerCase() === String(r.corrida || '').trim().toLowerCase()
-          && _horaChave(x.hora) === _horaChave(r.hora)) { achou = x; break; }
-    }
-    if (!achou) return;
-    el.style.setProperty('--cam-col', achou.da_manha ? '#1B9D40' : '#3b82f6');
-    el.classList.add('rc-camada');
-    setTimeout(function () { el.classList.remove('rc-camada'); }, 12000);
-  });
+  try { refreshFocusMode(); } catch (e) {}
 };
 
 // VOLTAR AO PAINEL DO DIA (Bruno set/2026). Abrir uma corrida pela lista faz o
@@ -761,11 +838,15 @@ window.pintarPromocaoNaLista = function (novas) {
 // colateral era ficar cego: o alarme tocava e nao havia como ver o confronto
 // sem adivinhar que era preciso fechar a corrida. Esta funcao devolve a coluna
 // pro painel e forca uma leitura, pros tiles aparecerem na hora.
-window.voltarAoPainelDia = function () {
+// semBuscar=true devolve a coluna SEM disparar uma nova leitura. E' o caso de
+// quem ja esta dentro de uma volta do painel e tem os dados na mao: buscar de
+// novo ali dispararia uma requisicao extra a cada troca de corrida vigente.
+window.voltarAoPainelDia = function (semBuscar) {
   var fc = document.getElementById('focus-col');
   if (!fc) return;
   focusRaceIdx = -1;
   fc.innerHTML = '<div id="ap-painel" class="ap-grid ap-g1"></div>';
+  if (semBuscar === true) return;
   try { if (window.PainelDia && window.PainelDia.buscar) window.PainelDia.buscar(); } catch (e) {}
 };
 
@@ -810,7 +891,25 @@ function refreshFocusMode() {
   // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
   var _naJanela = avbs.filter(shouldShowRace);
   var _classificada = _sessaoTemRegua(_naJanela);
-  var toShow = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); }).slice(0, RACAS_EM_TELA);
+  var _passou = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); });
+
+  // AS CORRIDAS COM AvB ESPERANDO VAO PRA FRENTE (Bruno, set/2026), ordenadas
+  // por camada (TOP > HIGH > GOOD) e depois por largada. Duas podem aparecer
+  // destacadas ao mesmo tempo; a PRIMEIRA e' a corrida vigente, a que abre a
+  // tela de disputa.
+  //
+  // O corte por RACAS_EM_TELA vem DEPOIS de trazer estas pra frente. Ao
+  // contrario, uma corrida promovida que estivesse em decimo lugar na ordem do
+  // relogio era cortada antes de chegar aqui — o alarme tocava e a lista nao
+  // mostrava nada.
+  var _comAvb = [], _resto = [];
+  _passou.forEach(function(x){ (_avbDaCorrida(x) ? _comAvb : _resto).push(x); });
+  _comAvb.sort(function(x, y){
+    var f = _forcaCamada(_avbDaCorrida(x)) - _forcaCamada(_avbDaCorrida(y));
+    if (f !== 0) return f;
+    return ukHoraParaOrdem(x.hora) - ukHoraParaOrdem(y.hora);
+  });
+  var toShow = _comAvb.concat(_resto).slice(0, RACAS_EM_TELA);
 
   renderRaceListPanel(toShow);
 
@@ -2428,8 +2527,25 @@ function renderRaceListPanel(avbs) {
     var mins = minutesToRace(r);
     var isAlerting = !isOld && mins !== null && mins >= 0 && mins <= ALERTA_MIN_ANTES;
     var alertCustom = isAlerting && matchAlarmeFiltro(r);
-    div.className = 'rc' + (first ? ' rc-active' : '') + (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-perto') : '') + (isOld ? ' rc-old' : '') + (r.flagAtrasada ? ' rc-atrasada' : '');
-    if (alertCustom) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
+    // AvB esperando entrada nesta corrida. Quando ha, ele manda no visual da
+    // linha: o pisca de camada tem prioridade sobre o aviso cinza de
+    // proximidade, porque "tem AvB pra entrar" e' informacao mais forte que
+    // "esta chegando".
+    var avb = _avbDaCorrida(r);
+    div.className = 'rc'
+      + (first ? ' rc-active' : '')
+      + (avb ? ' rc-camada' : (isAlerting ? (alertCustom ? ' rc-alert-custom' : ' rc-perto') : ''))
+      + (isOld ? ' rc-old' : '')
+      + (r.flagAtrasada ? ' rc-atrasada' : '');
+    if (alertCustom && !avb) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
+    if (avb) {
+      // COR DO PISCA = procedencia. Verde: o motor da manha previu que esta
+      // corrida abriria. Azul: pescada — a BW abriu sem estar na lista da
+      // manha. E' a mesma convencao de set/2026, so que agora persistente.
+      div.style.setProperty('--cam-col', avb.da_manha ? '#1B9D40' : '#3b82f6');
+      // COR DO SELO = camada. Pergunta diferente, canal diferente.
+      div.style.setProperty('--cam-badge', _corDaCamada(avb.camada));
+    }
     // So o alarme de FILTRO avisa daqui, e ele tem liga/desliga proprio nas
     // Configuracoes. O aviso de proximidade virou mudo — ver checkRaceAlerts.
     if (isAlerting && alertCustom) {
@@ -2443,7 +2559,11 @@ function renderRaceListPanel(avbs) {
     var top3Val = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(function(x){return x>0;}).join('-') : r.top3) : '';
     var top3Html = top3Val ? '<div style="text-align:center;margin-top:3px"><span class="top3-tag" style="font-size:9px;padding:1px 5px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2A4 4 0 0 1 17 9"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2A4 4 0 0 0 7 9"/></svg> '+top3Val+'</span></div>' : '';
     div.innerHTML += '<div style="flex:1;min-width:0">'
-      + (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : '')
+      // O selo da camada OCUPA o lugar do "PRÓXIMA": a corrida com AvB
+      // esperando e' a que voce tem que olhar agora, entao os dois selos nunca
+      // precisam disputar espaco na mesma linha.
+      + (avb ? '<div class="rc-avb-badge">' + String(avb.camada || '').toUpperCase() + '</div>'
+             : (first ? '<div class="rc-next-badge">PRÓXIMA</div>' : ''))
       + (isOld ? '<div class="rc-old-badge">CORRIDA ANTIGA</div>' : '')
       + (r.cardSuspect ? '<div class="rc-suspect-badge">⚠ PISTA PODE TER CANCELADO</div>' : '')
       + (r._reanaliseFlag && r._reanaliseFlag.type==='reanalise' && (Date.now()-r._reanaliseFlag.at)<300000 ? '<div class="rc-reanalise-badge">REANALISADA</div>' : '')
