@@ -253,11 +253,24 @@ console.log('\n[5b] COM A TELA VAZIA, O SIMULADOR SEMEIA AS CORRIDAS\n');
   ok(casam === 5,
      'as 5 linhas da lista casam com as 5 corridas do painel  (' + casam + ')');
 
-  // Semear DE NOVO nao pode acontecer. O painel bate a cada 18s; re-semear
-  // reconstruiria a lista debaixo do cursor e fecharia sozinha a corrida que
-  // voce acabou de abrir — o mesmo defeito que a tela de disputa tinha.
-  ok(sim.semearResults() === false, 'chamado de novo, NAO semeia outra vez');
+  // Com as corridas JA na tela, nao refaz. O painel bate a cada 18s; reconstruir
+  // a lista a cada volta fecharia sozinha a corrida que voce acabou de abrir — o
+  // mesmo defeito que a tela de disputa tinha.
+  ok(sim.semearResults() === false, 'com as corridas ja na tela, NAO semeia de novo');
   ok(win.results.length === 5, 'e a lista continua com 5, sem duplicar');
+
+  // MAS se alguem apagar, tem que repor. O carregamento normal do app termina
+  // DEPOIS do simulador arrancar, nao acha corrida do dia e zera o results — foi
+  // o que deixou a tela em "corridas encerradas" mesmo com o simulador ligado.
+  win.results = [];
+  ok(sim.semearResults() === true, 'e se a tela for LIMPA, semeia de novo');
+  ok(win.results.length === 5, 'repondo as 5  (' + win.results.length + ')');
+
+  // O caso que trava tudo se estiver errado: com corrida real presente, apagar as
+  // simuladas nao pode fazer o simulador invadir a tela.
+  win.results = [{ tipo: 'avb', nivel: 'alta', hora: '3:00', corrida: 'Real A1', trapFav: 1, trapUnd: 2 }];
+  ok(sim.semearResults() === false,
+     'com corrida REAL na tela, nao semeia nem depois de limpo');
 })();
 
 (function () {
@@ -311,6 +324,66 @@ console.log('\n[5c] REINICIAR TRAZ O CENARIO DE VOLTA, SEM F5\n');
   sim.reiniciar();
   ok(sim.ancora !== antes || sim.ancora.ms != null,
      'depois de reiniciar, a ancora lida e a NOVA — o export e um getter');
+})();
+
+// ── 5d) O GUARDA ───────────────────────────────────────────────────────────
+//
+// O app zera o `results` por varios caminhos — o carregamento do dia, o "ciclo
+// encerrado", a troca de sessao. Mapear todos pra interceptar um por um daria
+// uma lista que envelhece mal. O guarda checa o EFEITO: se a tela ficou sem
+// corrida nenhuma, repoe.
+console.log('\n[5d] O GUARDA REPOE O QUE O APP APAGA\n');
+
+(function () {
+  const D = Date;
+  const base = new D(2026, 8, 9, 15, 0, 0).getTime();
+  global.Date = class extends D {
+    constructor(...a) { if (!a.length) super(base); else super(...a); }
+    static now() { return base; }
+  };
+  let tick = null;
+  const win = {
+    results: [],
+    location: { search: '?simpainel=1', pathname: '/greyhound/' },
+    document: { readyState: 'complete', getElementById: () => null,
+                createElement: () => ({ style: {}, appendChild() {} }),
+                body: { appendChild() {} }, addEventListener() {} },
+    fetch: function () { return Promise.resolve('REAL'); },
+    // captura o callback do guarda em vez de esperar 2 segundos de verdade
+    setInterval: function (fn) { tick = fn; return 1; },
+    setTimeout: setTimeout
+  };
+  global.URLSearchParams = URLSearchParams;
+  global.Response = class { constructor(b) { this.body = b; this.status = 200; } };
+  global.location = win.location; global.document = win.document;
+  global.setInterval = win.setInterval;
+  const log = console.log; console.log = () => {};
+  new Function('window', SRC)(win);
+  console.log = log;
+  global.setInterval = D === Date ? global.setInterval : global.setInterval;
+  global.Date = D;
+
+  ok(typeof tick === 'function', 'o guarda foi ligado no arranque');
+  ok(win.results.length === 5, 'e a tela ja nasce com as 5 corridas');
+
+  // O app apaga tudo (e' o que acontece quando o dia acabou).
+  win.results = [];
+  tick();
+  ok(win.results.length === 5,
+     'apagou tudo -> o guarda repoe na proxima batida  (' + win.results.length + ')');
+
+  // Com as corridas la, a batida seguinte nao faz nada — senao a lista se
+  // reconstruiria de 2 em 2 segundos, debaixo do cursor.
+  const idsAntes = win.results.map(r => r.corrida).join(',');
+  tick();
+  ok(win.results.map(r => r.corrida).join(',') === idsAntes,
+     'com a tela cheia, a batida seguinte NAO reconstroi nada');
+
+  // E corrida real presente tira o simulador de cena.
+  win.results = [{ tipo: 'avb', nivel: 'alta', hora: '3:00', corrida: 'Real A1', trapFav: 1, trapUnd: 2 }];
+  tick();
+  ok(win.results.length === 1 && win.results[0].corrida === 'Real A1',
+     'e com corrida REAL carregada, o guarda sai de cena');
 })();
 
 // ── 6) desligado, o arquivo nao existe pra ninguem ──────────────────────────

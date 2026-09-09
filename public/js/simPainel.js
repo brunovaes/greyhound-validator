@@ -257,19 +257,47 @@
   // voce tem corridas de verdade carregadas, elas mandam — misturar as duas
   // deixaria voce sem saber qual linha e' real.
   //
-  // Semeia UMA vez. O painel bate de 18 em 18 segundos, e re-semear a cada volta
-  // reconstruiria a lista inteira debaixo do cursor: a corrida que voce acabou
-  // de abrir fecharia sozinha, do mesmo jeito que a tela de disputa fazia antes.
-  var _semeado = false;
+  // Semeia quando NAO ha corrida na tela — nem real, nem simulada. As duas
+  // condicoes importam:
+  //
+  //   ha corrida REAL      -> nao mexe. Elas mandam; misturar deixaria voce sem
+  //                           saber qual linha e' de verdade.
+  //   as MINHAS ja estao la -> nao refaz. Reconstruir a lista a cada volta de 18s
+  //                           fecharia sozinha a corrida que voce acabou de
+  //                           abrir, que e' o defeito que a tela de disputa tinha.
+  //
+  // Antes isto era um `_semeado = true` que travava pra sempre. Nao servia: o
+  // carregamento normal do app termina DEPOIS do simulador arrancar, nao acha
+  // corrida do dia e zera o results — e o simulador, travado, nunca repunha.
   function semearResults() {
-    if (_semeado) return false;
-    var reais = (glob.results || []).filter(function (r) {
+    var lista = glob.results || [];
+    var reais = lista.filter(function (r) {
       return r && !r._simulado && r.nivel !== 'skip' && r.trapFav > 0;
     });
     if (reais.length) return false;
+    if (lista.filter(function (r) { return r && r._simulado; }).length) return false;
     glob.results = payload().corridas.map(corridaDaLista);
-    _semeado = true;
     return true;
+  }
+
+  // GUARDA. O app tem varios caminhos que zeram o `results` — o carregamento do
+  // dia, o "ciclo encerrado", a troca de sessao — e mapear todos pra interceptar
+  // um por um daria uma lista que envelhece mal: basta alguem criar o proximo
+  // caminho pra tela apagar de novo.
+  //
+  // Entao a checagem e' pelo EFEITO, nao pela causa: de 2 em 2 segundos, se nao
+  // ha corrida nenhuma na tela, semeia de novo. Barato, e cobre inclusive os
+  // caminhos que eu nao conheco.
+  var _guarda = null;
+  function guardar() {
+    if (_guarda) return;
+    _guarda = setInterval(function () {
+      try {
+        if (!semearResults()) return;
+        if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode();
+        console.log('[simpainel] a tela tinha sido limpa; cenario reposto');
+      } catch (e) { /* uma falha aqui nao pode derrubar a pagina */ }
+    }, 2000);
   }
 
   // ── REINICIAR ──────────────────────────────────────────────────────────────
@@ -283,7 +311,6 @@
   // pagina: as mesmas 5 corridas, com horarios frescos.
   function reiniciar() {
     _ancora = calcularAncora();
-    _semeado = false;
     // Tira as corridas simuladas antigas antes de semear as novas. Sem isso o
     // semearResults ve a lista cheia e nao faz nada.
     glob.results = (glob.results || []).filter(function (r) { return r && !r._simulado; });
@@ -403,13 +430,15 @@
     // A coluna da lista so aparece com o layout em `focus-mode`, e quem liga
     // isso normalmente e' o carregamento de um PDF. Com a tela vazia ninguem
     // liga, entao a lista existiria no DOM e ficaria invisivel.
-    if (semearResults()) {
-      try {
-        var main = document.getElementById('main-layout');
-        if (main && !main.classList.contains('focus-mode')) main.classList.add('focus-mode');
-        if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode();
-      } catch (e) { console.error('[simpainel] nao consegui montar a tela:', e.message); }
-    }
+    semearResults();
+    try {
+      var main = document.getElementById('main-layout');
+      if (main && !main.classList.contains('focus-mode')) main.classList.add('focus-mode');
+      if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode();
+    } catch (e) { console.error('[simpainel] nao consegui montar a tela:', e.message); }
+    // O carregamento normal do app roda DEPOIS disto e apaga o que acabamos de
+    // semear. O guarda repoe.
+    guardar();
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', arrancar);
@@ -417,7 +446,7 @@
 
   glob._SIM_PAINEL = { payload: payload, corrida: corrida, ukDeBr: ukDeBr,
                        corridaDaLista: corridaDaLista, semearResults: semearResults,
-                       reiniciar: reiniciar,
+                       reiniciar: reiniciar, guardar: guardar,
                        // getter, e nao o objeto: depois de reiniciar, o _ancora
                        // e' OUTRO objeto, e quem tivesse guardado o antigo leria
                        // o estado velho pra sempre.
