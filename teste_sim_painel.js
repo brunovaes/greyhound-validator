@@ -36,6 +36,19 @@ const norm = s => {
   return m ? (parseInt(m[1], 10) + ':' + m[2]) : String(s);
 };
 
+// Roda `fn` com o relogio congelado. Precisa existir porque o `reiniciar`
+// RECALCULA a hora — chamado com o relogio real da maquina de teste, ele acharia
+// que esta fora da janela e nao montaria nada, falhando por motivo errado.
+function comRelogio(h, m, fn) {
+  const D = Date;
+  const base = new D(2026, 8, 9, h, m || 0, 0).getTime();
+  global.Date = class extends D {
+    constructor(...a) { if (!a.length) super(base); else super(...a); }
+    static now() { return base; }
+  };
+  try { return fn(); } finally { global.Date = D; }
+}
+
 // Carrega o simulador com o relogio congelado numa hora escolhida. E' o proprio
 // arquivo que vai pro ar, lido do disco — nao uma copia da logica aqui.
 function carregar(h, m) {
@@ -58,6 +71,9 @@ function carregar(h, m) {
     fetch: function () { return Promise.resolve('REAL'); },
     setTimeout: setTimeout
   };
+  // Guarda a referencia ORIGINAL: e' com ela que o teste confere se o simulador
+  // interceptou ou nao o fetch.
+  win._fetchOriginal = win.fetch;
   global.URLSearchParams = URLSearchParams;
   global.Response = class { constructor(b, o) { this.body = b; this.opts = o; this.status = 200; } };
   global.location = win.location;
@@ -79,7 +95,7 @@ for (let h = 0; h < 24; h++) {
   for (const m of [0, 1, 15, 30, 45, 58, 59]) {
     const { sim, erros } = carregar(h, m);
     if (erros.length) comErro++;
-    if (sim.ancora.deslocado) ancoradas++;
+    if (sim.ancora.foraDaJanela) ancoradas++;
     for (const c of sim.payload().corridas) {
       geradas++;
       // A prova: passar a hora UK do payload pelo horaBr REAL do sistema tem que
@@ -100,7 +116,60 @@ ok(incoerentes === 0,
 ok(comErro === 0,
    'o guarda interno nunca disparou — nenhum horario caiu fora da janela  (' + comErro + ' disparos)');
 ok(ancoradas > 0 && ancoradas < 168,
-   'a ancoragem acontece so PARTE do dia, como esperado  (' + ancoradas + ' de 168 horarios)');
+   'o simulador se recusa a montar cenario em PARTE do dia  (' + ancoradas + ' de 168 horarios)');
+
+// ── 1b) FORA DA JANELA, NAO FINGE ──────────────────────────────────────────
+//
+// Este bloco existe por causa de uma hora perdida em 09/09/2026. A versao
+// anterior, fora da janela, ancorava o cenario as 15:00 — e as corridas nasciam
+// com horario de 15h enquanto o relogio marcava 21h. O app decide pelo
+// isUpcoming, comparando com o relogio DE VERDADE, e rejeitava as cinco por ja
+// terem passado: "corridas encerradas", com o guarda repondo em loop e a tela
+// piscando.
+//
+// A regra agora: fora da janela o simulador nao monta nada e diz por que.
+console.log('\n[1b] FORA DA JANELA O SIMULADOR NAO FINGE\n');
+
+// O fetch que o simulador recebeu ao carregar. Se ele nao interceptou, a
+// funcao no window continua sendo exatamente esta.
+const _FETCH_ORIG = function () { return Promise.resolve('REAL'); };
+function fetchOriginal(win) { return win._fetchOriginal || win.fetch; }
+
+// A MESMA conta do app.js que decide se a corrida entra na tela.
+function convertHora(h) {
+  if (!h) return '';
+  const p = h.split(':');
+  let hr = parseInt(p[0]);
+  if (hr >= 1 && hr <= 9) hr += 12;
+  hr = hr - 4;
+  if (hr < 0) hr += 24;
+  return hr + ':' + p[1];
+}
+function aceitaNaTela(hora, nowMin) {
+  const p = convertHora(hora).split(':');
+  return (parseInt(p[0]) * 60 + parseInt(p[1])) >= nowMin;
+}
+
+for (const h of [12, 18, 20]) {
+  const { sim } = carregar(h, 30);
+  const P = sim.payload();
+  const aceitas = P.corridas.filter(c => aceitaNaTela(c.hora, h * 60 + 30)).length;
+  ok(sim.ancora.foraDaJanela === false, 'as ' + h + ':30 o simulador monta o cenario');
+  ok(aceitas >= 3,
+     'e o app aceita ' + aceitas + ' das 5 corridas na tela — nao e dia encerrado');
+}
+
+for (const h of [21, 23, 3]) {
+  const { sim, win } = carregar(h, 30);
+  ok(sim.ancora.foraDaJanela === true, 'as ' + h + ':30 ele se recusa a montar');
+  ok(win.results.length === 0, 'e nao poe corrida nenhuma na tela  (' + win.results.length + ')');
+  ok(sim.semearResults() === false, 'nem quando o semeador e chamado na mao');
+  // E o principal: NAO INTERCEPTA. O app se comporta como se o simulador nao
+  // existisse, em vez de receber um cenario que ele vai descartar inteiro. E' a
+  // diferenca entre uma tela normal com um aviso e uma tela que pisca.
+  ok(win.fetch === fetchOriginal(win),
+     'e nao troca o fetch — o app roda normal, sem simulador no caminho');
+}
 
 // ── 2) dentro da janela, os minutos batem com o relogio ─────────────────────
 // E' isso que permite ver a linha sumir sozinha 1 min depois da largada. Se o
@@ -109,7 +178,7 @@ ok(ancoradas > 0 && ancoradas < 168,
 console.log('\n[2] DENTRO DA JANELA, O CENARIO SEGUE O SEU RELOGIO\n');
 
 const meio = carregar(15, 0);
-ok(meio.sim.ancora.deslocado === false, 'as 15:00 o cenario NAO e ancorado');
+ok(meio.sim.ancora.foraDaJanela === false, 'as 15:00 o cenario e montado');
 const P = meio.sim.payload();
 ok(P.corridas.length === 5, 'o cenario tem 5 corridas  (' + P.corridas.length + ')');
 
@@ -227,13 +296,18 @@ carregar(15, 0).win.fetch('/greyhound/api/outra-coisa').then(v => { passouDireto
 console.log('\n[5b] COM A TELA VAZIA, O SIMULADOR SEMEIA AS CORRIDAS\n');
 
 (function () {
-  // O `carregar` roda o arquivo inteiro, e o arranque dele ja semeia — que e'
-  // justamente o comportamento que faltava. Entao a lista chega aqui cheia.
+  // O arranque NAO semeia mais. Quem monta a tela e' o proprio app, carregando
+  // pelas rotas que o simulador responde (bloco [5e]). O semearResults ficou
+  // como cinto de seguranca, pros caminhos que zeram o results depois — o "ciclo
+  // encerrado", a troca de sessao.
   const { sim, win } = carregar(15, 0);
-  ok(win.results.length === 5,
-     'ao carregar com a tela vazia, o simulador JA semeou as 5 corridas  (' + win.results.length + ')');
+  ok(win.results.length === 0,
+     'o arranque NAO semeia — quem carrega e o app, pelo caminho dele  (' + win.results.length + ')');
+
+  ok(sim.semearResults() === true, 'mas o semeador funciona quando chamado');
+  ok(win.results.length === 5, 'e poe as 5 corridas  (' + win.results.length + ')');
   ok(win.results.every(r => r._simulado === true),
-     'e todas vem marcadas como simuladas');
+     'todas marcadas como simuladas');
 
   // Os campos que o renderRaceListPanel e o shouldShowRace LEEM. Faltando
   // qualquer um deles a linha nao desenha, ou desenha sem o par.
@@ -292,26 +366,35 @@ console.log('\n[5c] REINICIAR TRAZ O CENARIO DE VOLTA, SEM F5\n');
 
 (function () {
   const { sim, win } = carregar(15, 0);
+  comRelogio(15, 0, () => sim.semearResults());
   const antes = win.results.map(r => r.hora_br).join(',');
   ok(win.results.length === 5, 'cenario montado  (' + antes + ')');
 
   // Simula o tempo passando: as corridas largaram e a lista esvaziou.
   win.results = [];
-  sim.reiniciar();
+  comRelogio(15, 5, () => sim.reiniciar());
   ok(win.results.length === 5,
      'depois de reiniciar, as 5 corridas voltam  (' + win.results.length + ')');
   ok(win.results.every(r => r._simulado === true), 'e todas marcadas como simuladas');
+  ok(win.results.map(r => r.hora_br).join(',') !== antes,
+     'e com horarios NOVOS, a partir do relogio de agora');
 
   // Reiniciar DE NOVO nao pode duplicar: o filtro tem que tirar as antigas.
-  sim.reiniciar();
+  comRelogio(15, 6, () => sim.reiniciar());
   ok(win.results.length === 5,
      'reiniciando duas vezes seguidas continua com 5, sem empilhar  (' + win.results.length + ')');
 
   // E nao pode apagar corrida de verdade que voce tenha carregado.
   win.results = [{ tipo: 'avb', nivel: 'alta', hora: '3:00', corrida: 'Real A1', trapFav: 1, trapUnd: 2 }];
-  sim.reiniciar();
+  comRelogio(15, 7, () => sim.reiniciar());
   ok(win.results.length === 1 && win.results[0].corrida === 'Real A1',
      'e com corrida REAL carregada, reiniciar nao mexe nela');
+
+  // E fora da janela, reiniciar tambem nao monta nada.
+  win.results = [];
+  comRelogio(22, 0, () => sim.reiniciar());
+  ok(win.results.length === 0,
+     'reiniciar as 22h nao monta cenario — a janela vale aqui tambem');
 })();
 
 // A ancora tem que ser lida SEMPRE fresca. Ela e' trocada por outro objeto a
@@ -319,10 +402,10 @@ console.log('\n[5c] REINICIAR TRAZ O CENARIO DE VOLTA, SEM F5\n');
 // referencia lendo o estado velho pra sempre.
 (function () {
   const { sim } = carregar(15, 0);
-  ok(sim.ancora.deslocado === false, 'as 15:00, nao ancorado');
+  ok(sim.ancora.foraDaJanela === false, 'as 15:00, dentro da janela');
   const antes = sim.ancora;
-  sim.reiniciar();
-  ok(sim.ancora !== antes || sim.ancora.ms != null,
+  comRelogio(16, 0, () => sim.reiniciar());
+  ok(sim.ancora !== antes && sim.ancora.foraDaJanela === false,
      'depois de reiniciar, a ancora lida e a NOVA — o export e um getter');
 })();
 
@@ -364,9 +447,10 @@ console.log('\n[5d] O GUARDA REPOE O QUE O APP APAGA\n');
   global.Date = D;
 
   ok(typeof tick === 'function', 'o guarda foi ligado no arranque');
-  ok(win.results.length === 5, 'e a tela ja nasce com as 5 corridas');
+  ok(win.results.length === 0,
+     'e a tela nasce vazia — quem carrega e o app, nao o guarda');
 
-  // O app apaga tudo (e' o que acontece quando o dia acabou).
+  // O app apaga tudo (e' o que acontece quando o "ciclo encerrado" dispara).
   win.results = [];
   tick();
   ok(win.results.length === 5,
@@ -384,6 +468,82 @@ console.log('\n[5d] O GUARDA REPOE O QUE O APP APAGA\n');
   tick();
   ok(win.results.length === 1 && win.results[0].corrida === 'Real A1',
      'e com corrida REAL carregada, o guarda sai de cena');
+})();
+
+// ── 5e) O CAMINHO QUE O APP PERCORRE DE VERDADE ────────────────────────────
+//
+// Este bloco existe por causa de tres tentativas fracassadas seguidas. Nas tres
+// eu semeei o `results` por fora e torci pra dar certo, e nas tres a tela piscou
+// e voltou pra "corridas encerradas".
+//
+// A razao esta na PRIMEIRA linha do autoCheckAndAnalyze:
+//     if (results.length) return;
+// Semear por fora vira uma corrida contra o carregamento do app. Ganhando, o app
+// nem carrega. Perdendo, ele carrega vazio e apaga o cenario. Cara ou coroa.
+//
+// O jeito certo e' o simulador RESPONDER pelas rotas que o app chama, e deixar o
+// app carregar sozinho, pelo caminho de sempre. Este teste percorre esse caminho
+// exatamente como o autoCheckAndAnalyze percorre.
+console.log('\n[5e] O APP CARREGA O CENARIO SOZINHO, PELAS ROTAS DE SEMPRE\n');
+
+(function () {
+  const { win } = carregar(15, 0);
+  const BASE = '/greyhound';
+  let sessoes = null, corridas = null;
+
+  // Passo 1 do autoCheckAndAnalyze: procurar a sessao de HOJE, pelo nome exato.
+  win.fetch(BASE + '/api/sessions').then(r => { sessoes = JSON.parse(r.body); });
+
+  setTimeout(function () {
+    ok(Array.isArray(sessoes) && sessoes.length === 1,
+       '/api/sessions devolve uma sessao  (' + (sessoes && sessoes.length) + ')');
+
+    // O nome tem que casar LETRA POR LETRA com o que o app monta, senao ele nao
+    // acha a sessao e cai no caminho dos PDFs.
+    const n = new Date();
+    const esperado = 'Races ' + String(n.getDate()).padStart(2, '0') + '/'
+      + String(n.getMonth() + 1).padStart(2, '0') + '/' + n.getFullYear();
+    ok(sessoes && sessoes[0].name === esperado,
+       'e o nome dela e o de hoje, no formato que o app procura  (' + (sessoes && sessoes[0].name) + ')');
+
+    // Passo 2: carregar as corridas dessa sessao.
+    win.fetch(BASE + '/api/session/' + sessoes[0].id + '/races')
+      .then(r => { corridas = JSON.parse(r.body); });
+
+    setTimeout(function () {
+      ok(corridas && Array.isArray(corridas.races) && corridas.races.length === 5,
+         'e /api/session/<id>/races devolve as 5 corridas  (' + (corridas && corridas.races && corridas.races.length) + ')');
+
+      const r0 = corridas.races[0];
+      // Os campos que o app LE do payload do servidor. Estao em snake_case, e
+      // faltando qualquer um a corrida entra na lista sem par ou sem horario.
+      for (const campo of ['id', 'nivel', 'hora', 'hora_br', 'corrida', 'dist',
+                           'trap_fav', 'name_fav', 'trap_und', 'name_und']) {
+        ok(r0[campo] !== undefined && r0[campo] !== '',
+           'a corrida vem com ' + campo + '  (' + r0[campo] + ')');
+      }
+
+      // Os campos de historico sao STRING JSON no servidor, e o app faz
+      // JSON.parse neles. Mandar array aqui estoura no parse e derruba o
+      // carregamento inteiro, em silencio, dentro do try/catch do app.
+      for (const campo of ['hist_all', 'hist_full', 'eliminados', 'hist_fav', 'hist_und']) {
+        ok(typeof r0[campo] === 'string', campo + ' vem como STRING JSON, nao array');
+        let parseou = true;
+        try { JSON.parse(r0[campo]); } catch (e) { parseou = false; }
+        ok(parseou, 'e o JSON.parse dele funciona — senao o carregamento morre calado');
+      }
+
+      // O filtro que decide se a corrida entra na lista.
+      const valem = corridas.races.filter(r => r.nivel !== 'skip' && r.trap_fav > 0);
+      ok(valem.length === 5,
+         'as 5 passam no filtro nivel != skip e trap_fav > 0  (' + valem.length + ')');
+
+      console.log('\n' + (falhas === 0
+        ? 'TUDO OK — o simulador mostra o mesmo horario que o motor avalia, e nao grava nada.'
+        : falhas + ' FALHA(S) — nao confiar na simulacao.'));
+      process.exit(falhas === 0 ? 0 : 1);
+    }, 10);
+  }, 10);
 })();
 
 // ── 6) desligado, o arquivo nao existe pra ninguem ──────────────────────────
@@ -413,9 +573,4 @@ setTimeout(function () {
   ok(respostaPut && respostaPut.status === 200,
      'o PUT bloqueado responde 200 — a tela nao mostra erro pra uma aposta que ela nao devia ter feito');
   ok(passouDireto, 'e o resto das chamadas passa direto pro fetch de verdade');
-
-  console.log('\n' + (falhas === 0
-    ? 'TUDO OK — o simulador mostra o mesmo horario que o motor avalia, e nao grava nada.'
-    : falhas + ' FALHA(S) — nao confiar na simulacao.'));
-  process.exit(falhas === 0 ? 0 : 1);
-}, 30);
+}, 5);

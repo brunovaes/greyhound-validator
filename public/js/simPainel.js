@@ -67,23 +67,31 @@
   // 5:58, que nao existe em hora UK nenhuma.
   var FOLGA_ATRAS = -2, FOLGA_FRENTE = 9;
 
-  // ANCORA do cenario. Normalmente e' o relogio de agora — e' o que permite
-  // testar o corte de 1 minuto ao vivo, vendo a linha sumir sozinha. Quando as
-  // pontas nao cabem, ancora as 15:00 e marca `deslocado`: os minutos relativos
-  // deixam de bater com o seu relogio, entao o corte de 1 minuto nao pode ser
-  // conferido ao vivo, e o banner diz isso em vez de fingir.
+  // ANCORA do cenario. E' sempre o relogio de agora — e' o que permite testar o
+  // corte de 1 minuto ao vivo, vendo a linha sumir sozinha.
+  //
+  // FORA DA JANELA O SIMULADOR NAO MONTA NADA, e diz por que.
+  //
+  // A versao anterior ancorava as 15:00 nesse caso. Foi um erro caro: as
+  // corridas nasciam com horario de 15h enquanto o relogio marcava 21h, e o app
+  // — que decide pelo isUpcoming, comparando com o relogio de verdade —
+  // rejeitava as cinco por ja terem passado. Resultado: "corridas encerradas",
+  // com o guarda repondo em loop e a tela piscando. Uma hora perdida ali.
+  //
+  // Nao da pra contornar: nao existe hora UK que resulte em 21h no Brasil, entao
+  // uma corrida nesse horario nao pode existir na tela, nem simulada nem real.
+  // Fingir que existe produz uma tela que o app descarta inteira. Dizer que nao
+  // da e' a unica saida util.
   function calcularAncora() {
     var agora = Date.now();
     var cabe = function (ms, off) {
       var h = new Date(ms + off * 60000).getHours();
       return h >= JANELA_INI && h <= JANELA_FIM;
     };
-    if (cabe(agora, FOLGA_ATRAS) && cabe(agora, FOLGA_FRENTE)) {
-      return { ms: agora, deslocado: false };
-    }
-    var d = new Date();
-    d.setHours(15, 0, 0, 0);
-    return { ms: d.getTime(), deslocado: true };
+    return {
+      ms: agora,
+      foraDaJanela: !(cabe(agora, FOLGA_ATRAS) && cabe(agora, FOLGA_FRENTE))
+    };
   }
   var _ancora = calcularAncora();
 
@@ -189,6 +197,12 @@
   // ── O CENARIO ──────────────────────────────────────────────────────────────
   function payload() {
     seq = 0;
+    // Fora da janela nao ha cenario NENHUM. Gerar corridas aqui produziria
+    // horarios que nao existem — o horaUkDaqui cairia no guarda e inventaria uma
+    // hora qualquer, e a tela mostraria um horario que o motor le como outro.
+    if (_ancora.foraDaJanela) {
+      return { date: new Date().toISOString().slice(0, 10), simulado: true, corridas: [] };
+    }
     return {
       date: new Date().toISOString().slice(0, 10),
       atualizado_em: new Date().toISOString(),
@@ -253,6 +267,44 @@
     };
   }
 
+  // A MESMA corrida, mas no formato que o SERVIDOR devolve (snake_case). E' o
+  // que o autoCheckAndAnalyze le em /api/session/<id>/races.
+  //
+  // Responder por essa rota e' o jeito certo de o cenario entrar na tela: o app
+  // carrega por conta propria, pelo caminho de sempre, e nao ha o que brigar.
+  // Semear o `results` por fora — o que eu fazia antes — dependia de ganhar uma
+  // corrida contra o carregamento do app, e ela era perdida na metade das vezes.
+  function corridaDaApi(c) {
+    var c0 = c.confrontos[0] || {};
+    return {
+      id: c.race_id, nivel: 'alta',
+      hora: c.hora, hora_br: c.hora_br,
+      corrida: c.corrida, dist: c.dist,
+      trap_fav: c0.pick_trap || 1, name_fav: c0.pick_nome || '',
+      trap_und: c0.outro_trap || 2, name_und: c0.outro_nome || '',
+      pct: c0.pct || 0, tier: 'top',
+      obs: '', odd: '', valor: '', top3: '',
+      avb_nao_aberto: 0, bet_entrou: 0, flag_atrasada: 0, card_suspect: 0,
+      // Os campos de historico vem como STRING JSON, porque e' assim que saem do
+      // banco e o app faz JSON.parse neles. Mandar array aqui estouraria no
+      // parse e derrubaria o carregamento inteiro.
+      hist_all: '[]', hist_full: '[]', eliminados: '[]',
+      hist_fav: '[]', hist_und: '[]',
+      post_pick: '', data_card: null, track_full: null, scores: null,
+      _simulado: true
+    };
+  }
+
+  // Nome da sessao de hoje, no formato exato que o autoCheckAndAnalyze procura:
+  // 'Races DD/MM/AAAA'. Sem casar esse nome, ele nao acha a sessao e segue pro
+  // caminho dos PDFs.
+  function nomeSessaoHoje() {
+    var n = new Date();
+    return 'Races ' + String(n.getDate()).padStart(2, '0') + '/'
+         + String(n.getMonth() + 1).padStart(2, '0') + '/' + n.getFullYear();
+  }
+  var SESSAO_ID = 999999;
+
   // Enche o `results` com as corridas do cenario. So quando ele esta VAZIO: se
   // voce tem corridas de verdade carregadas, elas mandam — misturar as duas
   // deixaria voce sem saber qual linha e' real.
@@ -270,6 +322,7 @@
   // carregamento normal do app termina DEPOIS do simulador arrancar, nao acha
   // corrida do dia e zera o results — e o simulador, travado, nunca repunha.
   function semearResults() {
+    if (_ancora.foraDaJanela) return false;
     var lista = glob.results || [];
     var reais = lista.filter(function (r) {
       return r && !r._simulado && r.nivel !== 'skip' && r.trapFav > 0;
@@ -291,6 +344,7 @@
   var _guarda = null;
   function guardar() {
     if (_guarda) return;
+    if (_ancora.foraDaJanela) return;   // nada pra guardar
     _guarda = setInterval(function () {
       try {
         if (!semearResults()) return;
@@ -330,8 +384,30 @@
   // voltas, dispara alarme, avisa os assinantes. Se algo quebrar no simulado,
   // quebra em producao tambem.
   var fetchReal = glob.fetch;
-  glob.fetch = function (url, opts) {
+  // FORA DA JANELA o fetch nem e' trocado. O app roda exatamente como rodaria
+  // sem o simulador; a unica coisa que aparece e' a tarja explicando por que.
+  if (!_ancora.foraDaJanela) glob.fetch = function (url, opts) {
     var u = String((url && url.url) || url || '');
+
+    // A SESSAO DO DIA. O autoCheckAndAnalyze procura uma sessao chamada
+    // 'Races DD/MM/AAAA'; devolvendo uma, ele carrega as corridas dela e monta a
+    // tela sozinho — inclusive o enterFocusMode, que e' o que faz a coluna da
+    // lista aparecer.
+    if (/\/api\/sessions(\?|$)/.test(u)) {
+      return Promise.resolve(new Response(
+        JSON.stringify([{ id: SESSAO_ID, name: nomeSessaoHoje(), created_at: new Date().toISOString() }]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      ));
+    }
+
+    // As corridas dessa sessao.
+    if (u.indexOf('/api/session/' + SESSAO_ID + '/races') !== -1) {
+      var races = payload().corridas.map(corridaDaApi);
+      return Promise.resolve(new Response(
+        JSON.stringify({ races: races }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      ));
+    }
 
     if (u.indexOf('/api/painel-dia') !== -1) {
       // Semeia ANTES de responder: o assinante do painel redesenha a lista assim
@@ -375,11 +451,14 @@
   function atualizarBanner() {
     var el = document.getElementById('sim-estado');
     if (!el) return;
-    el.textContent = _ancora.deslocado
-      ? 'horários ancorados às 15:00 — fora da janela 6h-20h não dá pra testar o corte de 1 minuto ao vivo'
+    var h = new Date().getHours();
+    el.textContent = _ancora.foraDaJanela
+      ? 'FORA DO HORÁRIO (' + h + 'h): a simulação só funciona entre '
+        + JANELA_INI + 'h e ' + JANELA_FIM + 'h. Não existe hora inglesa que dê este horário aqui, '
+        + 'então uma corrida agora não pode aparecer na tela — nem simulada, nem de verdade.'
       : 'horários a partir de agora';
-    el.style.background = _ancora.deslocado ? '#000' : 'transparent';
-    el.style.padding = _ancora.deslocado ? '3px 10px' : '0';
+    el.style.background = _ancora.foraDaJanela ? '#000' : 'transparent';
+    el.style.padding = _ancora.foraDaJanela ? '3px 10px' : '0';
   }
 
   function banner() {
@@ -412,6 +491,14 @@
   }
 
   function roteiro() {
+    if (_ancora.foraDaJanela) {
+      console.log('%c[simpainel] FORA DO HORARIO', 'background:#991b1b;color:#fff;padding:2px 8px');
+      console.log('A simulacao so funciona entre ' + JANELA_INI + 'h e ' + JANELA_FIM + 'h.');
+      console.log('A hora do PDF e inglesa e vira BR somando 12 (quando e 1..9) e tirando 4.');
+      console.log('Essa conta so alcanca de 6h as 20h — nao ha hora UK que resulte em 21h aqui.');
+      console.log('Entao uma corrida neste horario nao pode existir na tela, nem simulada.');
+      return;
+    }
     console.log('%c[simpainel] SIMULACAO LIGADA', 'background:#991b1b;color:#fff;padding:2px 8px');
     console.log('O que conferir na tela:');
     console.log('  1. a corrida de +4 min tem QUATRO AvBs, DOIS deles TOP (azuis)');
@@ -430,14 +517,17 @@
     // A coluna da lista so aparece com o layout em `focus-mode`, e quem liga
     // isso normalmente e' o carregamento de um PDF. Com a tela vazia ninguem
     // liga, entao a lista existiria no DOM e ficaria invisivel.
-    semearResults();
-    try {
-      var main = document.getElementById('main-layout');
-      if (main && !main.classList.contains('focus-mode')) main.classList.add('focus-mode');
-      if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode();
-    } catch (e) { console.error('[simpainel] nao consegui montar a tela:', e.message); }
-    // O carregamento normal do app roda DEPOIS disto e apaga o que acabamos de
-    // semear. O guarda repoe.
+    // NAO semeia aqui. Quem monta a tela agora e' o proprio app: ele busca
+    // /api/sessions, acha a sessao de hoje que o simulador devolve, carrega as
+    // corridas e chama o enterFocusMode — o caminho normal, inteiro.
+    //
+    // Semear aqui era uma corrida contra esse carregamento, e o `if
+    // (results.length) return` do autoCheckAndAnalyze fazia dela um cara-ou-coroa:
+    // ganhando, o app nem carregava; perdendo, ele carregava vazio e apagava o
+    // cenario. Nos dois casos a tela piscava.
+    //
+    // O guarda fica como cinto de seguranca, pros caminhos que zeram o results
+    // depois (o "ciclo encerrado", a troca de sessao).
     guardar();
   }
   if (document.readyState === 'loading') {
