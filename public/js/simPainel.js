@@ -222,6 +222,55 @@
     };
   }
 
+  // ── AS CORRIDAS NA LISTA ───────────────────────────────────────────────────
+  //
+  // Isto NAO estava na primeira versao, e foi o erro que fez o simulador nao
+  // mostrar nada com a tela vazia. A lista de corridas nao vem do painel do dia:
+  // vem do `results`, que e' o que os PDFs carregaram. Com nenhum PDF na tela,
+  // `results` esta vazio, nao ha linha nenhuma pra destacar — e o app ainda
+  // mostra "ciclo do dia encerrado" e limpa a coluna.
+  //
+  // Injetar as corridas em `results` e' o que faz a tela viver. Sao os campos
+  // MINIMOS que o renderRaceListPanel e o shouldShowRace leem; nao e' uma corrida
+  // completa (nao tem historico de galgo, entao a arena fica sem gauges) — e' o
+  // suficiente pra lista existir, piscar e responder ao clique.
+  function corridaDaLista(c) {
+    return {
+      tipo: 'avb', nivel: 'alta',
+      hora: c.hora, hora_br: c.hora_br,
+      corrida: c.corrida, dist: c.dist,
+      trapFav: c.confrontos[0] ? c.confrontos[0].pick_trap : 1,
+      nameFav: c.confrontos[0] ? c.confrontos[0].pick_nome : '',
+      trapUnd: c.confrontos[0] ? c.confrontos[0].outro_trap : 2,
+      nameUnd: c.confrontos[0] ? c.confrontos[0].outro_nome : '',
+      pct: c.confrontos[0] ? c.confrontos[0].pct : 0,
+      obs: '', odd: '', valor: '', top3: '',
+      avbNaoAberto: false, tier: 'top',
+      histAll: [], histFull: [], eliminados: [],
+      raceId: c.race_id, id: c.race_id,
+      _simulado: true
+    };
+  }
+
+  // Enche o `results` com as corridas do cenario. So quando ele esta VAZIO: se
+  // voce tem corridas de verdade carregadas, elas mandam — misturar as duas
+  // deixaria voce sem saber qual linha e' real.
+  //
+  // Semeia UMA vez. O painel bate de 18 em 18 segundos, e re-semear a cada volta
+  // reconstruiria a lista inteira debaixo do cursor: a corrida que voce acabou
+  // de abrir fecharia sozinha, do mesmo jeito que a tela de disputa fazia antes.
+  var _semeado = false;
+  function semearResults() {
+    if (_semeado) return false;
+    var reais = (glob.results || []).filter(function (r) {
+      return r && !r._simulado && r.nivel !== 'skip' && r.trapFav > 0;
+    });
+    if (reais.length) return false;
+    glob.results = payload().corridas.map(corridaDaLista);
+    _semeado = true;
+    return true;
+  }
+
   // ── a interceptacao ────────────────────────────────────────────────────────
   // Trocar o fetch, e nao o PainelDia, e' de proposito: o painelDia.js segue
   // rodando byte a byte igual ao de producao — busca, compara camadas entre
@@ -232,6 +281,11 @@
     var u = String((url && url.url) || url || '');
 
     if (u.indexOf('/api/painel-dia') !== -1) {
+      // Semeia ANTES de responder: o assinante do painel redesenha a lista assim
+      // que recebe, e a lista precisa ter de onde tirar as corridas.
+      if (semearResults()) {
+        try { if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode(); } catch (e) {}
+      }
       var corpo = JSON.stringify(payload());
       return Promise.resolve(new Response(corpo, {
         status: 200, headers: { 'Content-Type': 'application/json' }
@@ -300,10 +354,25 @@
     console.log('Clicar em "Entrei !" e seguro: o PUT e bloqueado.');
   }
 
+  function arrancar() {
+    banner();
+    roteiro();
+    // A coluna da lista so aparece com o layout em `focus-mode`, e quem liga
+    // isso normalmente e' o carregamento de um PDF. Com a tela vazia ninguem
+    // liga, entao a lista existiria no DOM e ficaria invisivel.
+    if (semearResults()) {
+      try {
+        var main = document.getElementById('main-layout');
+        if (main && !main.classList.contains('focus-mode')) main.classList.add('focus-mode');
+        if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode();
+      } catch (e) { console.error('[simpainel] nao consegui montar a tela:', e.message); }
+    }
+  }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { banner(); roteiro(); });
-  } else { banner(); roteiro(); }
+    document.addEventListener('DOMContentLoaded', arrancar);
+  } else { arrancar(); }
 
-  glob._SIM_PAINEL = { payload: payload, corrida: corrida, ukDeBr: ukDeBr, ancora: _ancora };
+  glob._SIM_PAINEL = { payload: payload, corrida: corrida, ukDeBr: ukDeBr, ancora: _ancora,
+                       corridaDaLista: corridaDaLista, semearResults: semearResults };
 
 })(typeof window !== 'undefined' ? window : this);

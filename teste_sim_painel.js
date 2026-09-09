@@ -215,6 +215,60 @@ ok(SRC.indexOf('PUT bloqueado') !== -1, 'e o bloqueio deixa rastro no console');
 let passouDireto = false;
 carregar(15, 0).win.fetch('/greyhound/api/outra-coisa').then(v => { passouDireto = (v === 'REAL'); });
 
+// ── 5b) A TELA COM O DIA ENCERRADO ─────────────────────────────────────────
+//
+// O ERRO da primeira versao: eu testei o payload e dei o simulador por pronto.
+// Mas a lista de corridas nao vem do painel do dia — vem do `results`, que os
+// PDFs carregam. Com a tela vazia, o payload chegava certinho e nao havia UMA
+// LINHA pra destacar. O Bruno abriu e viu tela preta.
+//
+// Este bloco testa o que faltava: com `results` vazio, o simulador tem que
+// semear as corridas ele mesmo.
+console.log('\n[5b] COM A TELA VAZIA, O SIMULADOR SEMEIA AS CORRIDAS\n');
+
+(function () {
+  // O `carregar` roda o arquivo inteiro, e o arranque dele ja semeia — que e'
+  // justamente o comportamento que faltava. Entao a lista chega aqui cheia.
+  const { sim, win } = carregar(15, 0);
+  ok(win.results.length === 5,
+     'ao carregar com a tela vazia, o simulador JA semeou as 5 corridas  (' + win.results.length + ')');
+  ok(win.results.every(r => r._simulado === true),
+     'e todas vem marcadas como simuladas');
+
+  // Os campos que o renderRaceListPanel e o shouldShowRace LEEM. Faltando
+  // qualquer um deles a linha nao desenha, ou desenha sem o par.
+  const r0 = win.results[0];
+  for (const campo of ['tipo', 'nivel', 'hora', 'hora_br', 'corrida', 'dist', 'trapFav', 'trapUnd']) {
+    ok(r0[campo] !== undefined && r0[campo] !== '',
+       'a corrida semeada tem ' + campo + '  (' + r0[campo] + ')');
+  }
+  ok(r0.nivel !== 'skip' && r0.trapFav > 0,
+     'e passa no filtro da lista (nivel != skip, trapFav > 0) — senao nunca apareceria');
+
+  // A chave que casa a linha da lista com o AvB do painel. Se o hora/corrida
+  // divergirem entre os dois, a linha existe mas nunca pisca.
+  const P = sim.payload();
+  const chave = x => String(x.corrida).trim().toLowerCase() + '|' + String(x.hora);
+  const casam = P.corridas.filter(c => win.results.some(r => chave(r) === chave(c))).length;
+  ok(casam === 5,
+     'as 5 linhas da lista casam com as 5 corridas do painel  (' + casam + ')');
+
+  // Semear DE NOVO nao pode acontecer. O painel bate a cada 18s; re-semear
+  // reconstruiria a lista debaixo do cursor e fecharia sozinha a corrida que
+  // voce acabou de abrir — o mesmo defeito que a tela de disputa tinha.
+  ok(sim.semearResults() === false, 'chamado de novo, NAO semeia outra vez');
+  ok(win.results.length === 5, 'e a lista continua com 5, sem duplicar');
+})();
+
+(function () {
+  const { sim, win } = carregar(15, 0);
+  win.results = [{ tipo: 'avb', nivel: 'alta', hora: '3:00', corrida: 'Real A1', trapFav: 1, trapUnd: 2 }];
+  ok(sim.semearResults() === false,
+     'com corrida DE VERDADE carregada, o simulador nao mexe no results');
+  ok(win.results.length === 1 && win.results[0].corrida === 'Real A1',
+     'as suas corridas mandam — misturar deixaria voce sem saber qual linha e real');
+})();
+
 // ── 6) desligado, o arquivo nao existe pra ninguem ──────────────────────────
 console.log('\n[6] SEM ?simpainel=1 O ARQUIVO NAO FAZ NADA\n');
 
