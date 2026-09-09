@@ -3,20 +3,19 @@
 //
 // Por que existe: mexer nas colunas do Historico ja quebrou a tela duas vezes
 // neste projeto, e das duas o `node --check` passou limpo. Cabecalho com uma
-// coluna a mais que a linha nao e' erro de sintaxe: a tabela so' desalinha, ou
-// a ultima celula some, e ninguem ve ate abrir a tela. O handoff do front
-// chamava isso de "rede minima" e citava um teste_render_hist.js que nao existe
-// mais na raiz — este arquivo o substitui.
+// coluna a mais que a linha nao e' erro de sintaxe: a tabela so desalinha, ou a
+// ultima celula some, e ninguem ve ate abrir a tela.
 //
 //   node teste_historico_colunas.js
 //
-// COMO ELE CONTA, e por que assim: as celulas nao estao todas escritas no
-// template. Cinco vem de funcoes (_celulaAvb, _celulaMotor, _celulaResultado,
-// _celulaObs, _celulaAberto), e cada uma tem ramo de cheio e de vazio. Contar
-// "<td" no texto do arquivo daria numero errado. Entao o teste EXTRAI essas
-// funcoes do main.js e as EXECUTA, com uma corrida cheia e uma vazia, contando
-// o que elas devolvem de verdade — e ainda confere que os dois ramos devolvem
-// a mesma quantidade (ramo que devolve td a menos e' o bug classico aqui).
+// O QUE MUDOU EM set/2026: a tabela deixou de ser uma linha por CORRIDA e passou
+// a ser uma por AvB confirmado pela BW. Isso trouxe um segundo jeito de a linha
+// desalinhar: as celulas da corrida (Resultado, bandeira, Observacoes, AvB na
+// BW, lapis) so aparecem na PRIMEIRA linha de cada corrida, e as demais recebem
+// uma celula vazia no lugar. Se um dos dois ramos esquecer uma celula, a tabela
+// entorta so nas corridas com mais de um AvB — o caso menos frequente e mais
+// dificil de notar. Por isso o teste EXECUTA o construtor da linha nos DOIS
+// ramos e compara.
 
 const fs = require('fs');
 const path = require('path');
@@ -30,23 +29,32 @@ function ok(cond, msg) {
   if (!cond) falhas++;
 }
 
-// ── 1) o cabecalho da tabela do Historico ────────────────────────────────────
+// ── 1) cabecalho ─────────────────────────────────────────────────────────────
 const linhaCab = src.split(/\r?\n/).find(l => l.indexOf('<th style="width:60px">AvB</th>') !== -1);
 if (!linhaCab) { console.error('ERRO: nao achei o cabecalho da tabela do Historico.'); process.exit(1); }
 const nTh = (linhaCab.match(/<th[\s>]/g) || []).length;
 
 console.log('\n[1] CABECALHO\n');
 console.log('    colunas declaradas: ' + nTh);
-for (const nome of ['AvB', '%', 'Origem', 'Entrei', 'Bateu', 'Resultado', 'Observações', 'Odd', 'AvB na BW']) {
+for (const nome of ['AvB', '%', 'Camada', 'Entrei', 'Bateu', 'Resultado', 'Observações', 'Odd', 'AvB na BW']) {
   ok(linhaCab.indexOf('>' + nome) !== -1, 'coluna "' + nome + '" presente');
 }
+ok(linhaCab.indexOf('Origem') === -1,
+   'a coluna Origem (VIP/Secundaria/Surpresa) saiu de vez');
+ok(/<option value="conta" selected>/.test(linhaCab),
+   'o seletor de Camada abre em "Contabilizável" — a tela nasce filtrada');
+for (const c of ['TOP', 'HIGH', 'GOOD']) {
+  ok(linhaCab.indexOf('<option value="' + c + '">') !== -1, 'o filtro oferece ' + c);
+}
 
-// ── 2) as celulas que vem de funcao — extraidas e EXECUTADAS ─────────────────
+// ── 2) as celulas de funcao, extraidas e EXECUTADAS ─────────────────────────
 console.log('\n[2] CELULAS QUE VEM DE FUNCAO (extraidas do main.js e executadas)\n');
 
 const DEPS = ['_jsonOuNull', '_mesmoPar', '_parBW', '_blocoAvb', '_avbDoHistorico',
               '_celulaObs', '_celulaAvb', '_motorDoAvb', '_celulaMotor',
-              '_celulaResultado', '_celulaAberto', '_celulaBW'];
+              '_celulaResultado', '_celulaAberto', '_celulaBW',
+              '_celulaAvbConf', '_celulaCamada', '_celulaEntreiConf',
+              '_celulaBateuConf', '_celulaOddConf'];
 let corpo = '';
 for (const n of DEPS) {
   const re = new RegExp('^function\\s+' + n + '\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?^\\}', 'm');
@@ -54,88 +62,125 @@ for (const n of DEPS) {
   if (!m) { console.error('ERRO: funcao ' + n + ' sumiu do main.js.'); process.exit(1); }
   corpo += m[0] + '\n';
 }
-// Stubs do que essas funcoes chamam por fora. Se alguma passar a depender de
-// algo novo, o new Function abaixo estoura e o teste avisa em vez de mentir.
 const STUBS = 'var BASE="/greyhound";'
   + 'function nomeCorridaCompleto(c){return c||"";}'
   + 'function cardGalgoHTML(){return "";}'
   + 'function icon(){return "";}';
 let H;
 try {
-  H = new Function(STUBS + corpo + ';return {_celulaAvb,_celulaMotor,_celulaResultado,_celulaObs,_celulaAberto,_motorDoAvb};')();
+  H = new Function(STUBS + corpo + ';return {_celulaAvbConf,_celulaCamada,_celulaEntreiConf,_celulaBateuConf,_celulaOddConf,_celulaResultado,_celulaObs,_celulaAberto};')();
 } catch (e) {
   console.error('ERRO ao montar as funcoes do main.js: ' + e.message);
   process.exit(1);
 }
 
-const CHEIA = {
-  id: 1, hora: '1:31', hora_br: '9:31', corrida: 'Sheff A2', dist: '500', pct: 73,
-  nivel: 'alta', trap_fav: 1, name_fav: 'A', trap_und: 6, name_und: 'B',
+const CORRIDA = {
+  id: 1, hora: '1:31', hora_br: '9:31', corrida: 'Sheff A2', dist: '500',
   bateu: 'sim', odd: 1.7, obs: 'observacao de teste', top3: '1-2-5',
   resultado_1: 1, resultado_2: 2, resultado_3: 5,
   finishing_order_json: '[{"trap":1,"pos":1},{"trap":6,"pos":2}]',
-  tier: 'TOP', abriu: 1, avb_nao_aberto: 0, hist_all: '[]'
+  abriu: 1, avb_nao_aberto: 0
 };
-const VAZIA = { id: 2, corrida: 'X A1', hora: '2:00' };
+const CF = {
+  id: 'sheff a2|01:31|1x6', par: 'T1xT6',
+  pick_trap: 1, pick_nome: 'Braemar Millie', outro_trap: 6, outro_nome: 'Romeo On Point',
+  pct: 73, camada: 'TOP', bateu: true, da_manha: true, tier_motor: 'TOP'
+};
 
-const CELULAS = ['_celulaAvb', '_celulaMotor', '_celulaResultado', '_celulaObs', '_celulaAberto'];
-let tdDeFuncao = 0;
-for (const k of CELULAS) {
-  const cheio = (String(H[k](CHEIA)).match(/<td[\s>]/g) || []).length;
-  const vazio = (String(H[k](VAZIA)).match(/<td[\s>]/g) || []).length;
-  ok(cheio === 1 && vazio === 1,
-     k + ' devolve exatamente 1 celula nos dois ramos  (cheio ' + cheio + ', vazio ' + vazio + ')');
-  tdDeFuncao += cheio;
+const UMA = [
+  ['_celulaAvbConf', () => H._celulaAvbConf(CORRIDA, CF, true)],
+  ['_celulaCamada', () => H._celulaCamada(CF)],
+  ['_celulaEntreiConf', () => H._celulaEntreiConf(true)],
+  ['_celulaBateuConf', () => H._celulaBateuConf(CF)],
+  ['_celulaOddConf', () => H._celulaOddConf(CORRIDA, true)],
+  ['_celulaResultado', () => H._celulaResultado(CORRIDA)],
+  ['_celulaObs', () => H._celulaObs(CORRIDA)],
+  ['_celulaAberto', () => H._celulaAberto(CORRIDA)]
+];
+for (const [nome, fn] of UMA) {
+  const n = (String(fn()).match(/<td[\s>]/g) || []).length;
+  ok(n === 1, nome + ' devolve exatamente 1 celula  (devolveu ' + n + ')');
+}
+// Os ramos "vazios" contam tanto quanto os cheios: e' onde a coluna some.
+ok((String(H._celulaEntreiConf(false)).match(/<td[\s>]/g) || []).length === 1,
+   '_celulaEntreiConf devolve 1 celula tambem quando NAO houve entrada');
+ok((String(H._celulaOddConf(CORRIDA, false)).match(/<td[\s>]/g) || []).length === 1,
+   '_celulaOddConf devolve 1 celula tambem na linha sem aposta');
+ok((String(H._celulaCamada({ camada: 'VIP' })).match(/<td[\s>]/g) || []).length === 1,
+   '_celulaCamada devolve 1 celula com camada desconhecida (linha antiga do banco)');
+ok(String(H._celulaCamada({ camada: 'VIP' })).indexOf('VIP') !== -1,
+   'e mostra o valor cru em vez de virar traco — e historico, nao erro');
+
+// ── 3) a LINHA, executada nos dois ramos ────────────────────────────────────
+console.log('\n[3] A LINHA MONTADA, nos dois ramos\n');
+
+const iIni = src.indexOf('${linhasAvb.map(function(Lx){');
+const iFim = src.indexOf("}).join('')}", iIni);
+if (iIni < 0 || iFim < 0) { console.error('ERRO: nao achei o construtor da linha.'); process.exit(1); }
+const corpoLinha = src.slice(iIni + '${linhasAvb.map('.length, iFim + 1);
+
+let montarLinha;
+try {
+  montarLinha = new Function(STUBS + corpo
+    + ';return (' + corpoLinha + ');')();
+} catch (e) {
+  console.error('ERRO ao montar o construtor da linha: ' + e.message);
+  process.exit(1);
 }
 
-// ── 3) as celulas escritas direto no template ────────────────────────────────
-console.log('\n[3] CELULAS ESCRITAS NO TEMPLATE DA LINHA\n');
-const iIni = src.indexOf("${races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>{");
-const iFim = src.indexOf('</tr>`;}).join(\'\')}', iIni);
-if (iIni < 0 || iFim < 0) { console.error('ERRO: nao achei o template da linha.'); process.exit(1); }
-const tplLinha = src.slice(iIni, iFim);
-const tdInline = (tplLinha.match(/<td[\s>]/g) || []).length;
-console.log('    escritas no template: ' + tdInline);
-console.log('    vindas de funcao:     ' + tdDeFuncao);
+const primeira = montarLinha({ r: CORRIDA, cf: CF, primeira: true, escolhido: true });
+const seguinte = montarLinha({ r: CORRIDA, cf: CF, primeira: false, escolhido: false });
+const nP = (primeira.match(/<td[\s>]/g) || []).length;
+const nS = (seguinte.match(/<td[\s>]/g) || []).length;
 
-const totalTd = tdInline + tdDeFuncao;
-console.log('    TOTAL na linha:       ' + totalTd);
+console.log('    primeira linha da corrida : ' + nP + ' celulas');
+console.log('    linhas seguintes          : ' + nS + ' celulas');
+ok(nP === nTh, 'a PRIMEIRA linha tem o mesmo numero de colunas do cabecalho (' + nTh + ')');
+ok(nS === nTh, 'as linhas SEGUINTES tambem (' + nTh + ') — e onde a tabela entortaria');
+ok(nP === nS, 'os dois ramos batem entre si');
 
-// ── 4) o teste que importa ───────────────────────────────────────────────────
-console.log('\n[4] ALINHAMENTO\n');
-ok(nTh === totalTd,
-   'cabecalho (' + nTh + ') e linha (' + totalTd + ') tem o MESMO numero de colunas');
+ok(primeira.indexOf('Sheff A2') !== -1 && seguinte.indexOf('Sheff A2') === -1,
+   'o nome da corrida aparece so na primeira linha');
+ok(primeira.indexOf('ENTREI') !== -1 && seguinte.indexOf('ENTREI') === -1,
+   'a marca ENTREI so na linha em que a aposta foi feita');
+ok(seguinte.indexOf('Braemar') !== -1,
+   'mas os galgos do confronto aparecem em TODAS as linhas — e o que distingue uma da outra');
 
-const mColspan = src.match(/colspan="(\d+)"[^>]*>Nenhum AvB nesta sessao/);
-ok(!!mColspan, 'estado vazio da tabela existe');
-if (mColspan) {
-  ok(Number(mColspan[1]) === nTh,
-     'colspan do estado vazio (' + mColspan[1] + ') bate com o numero de colunas (' + nTh + ')');
+// ── 4) a regra de contabilizacao gravada na linha ───────────────────────────
+console.log('\n[4] CONTABILIZACAO: todo TOP + o que voce entrou\n');
+
+function conta(html) { const m = html.match(/data-conta="([^"]*)"/); return m ? m[1] : null; }
+const casos = [
+  ['TOP', false, '1', 'TOP sem aposta CONTA (senao entrar em 2 de 5 e acertar os 2 daria 100%)'],
+  ['TOP', true, '1', 'TOP apostado conta'],
+  ['HIGH', true, '1', 'HIGH apostado conta'],
+  ['GOOD', true, '1', 'GOOD apostado conta'],
+  ['HIGH', false, '', 'HIGH sem aposta NAO conta'],
+  ['GOOD', false, '', 'GOOD sem aposta NAO conta']
+];
+for (const [camada, esc, esperado, msg] of casos) {
+  const html = montarLinha({ r: CORRIDA, cf: Object.assign({}, CF, { camada: camada }), primeira: true, escolhido: esc });
+  ok(conta(html) === esperado, msg);
 }
 
-// ── 5) o filtro ENTREI ligado de ponta a ponta ───────────────────────────────
-// Tres pontas: o seletor no cabecalho, o atributo na linha e o uso no filtro.
-// Faltando qualquer uma, o filtro nao filtra e nao da erro nenhum.
-console.log('\n[5] FILTRO "ENTREI" LIGADO DE PONTA A PONTA\n');
-ok(src.indexOf('id="fh-entrei"') !== -1, 'seletor fh-entrei existe no cabecalho');
-ok(tplLinha.indexOf('data-entrei=') !== -1, 'a linha grava data-entrei');
-ok(src.indexOf("getElementById('fh-entrei')") !== -1, 'aplicarFiltroHist le o seletor');
-ok(src.indexOf("getAttribute('data-entrei')") !== -1, 'aplicarFiltroHist le o atributo da linha');
-ok(src.indexOf('casaEntrei&&') !== -1, 'casaEntrei entra na composicao do filtro');
+// ── 5) os atributos que o filtro e os KPIs leem ─────────────────────────────
+console.log('\n[5] ATRIBUTOS DA LINHA E O QUE OS LE\n');
+for (const attr of ['data-camada', 'data-entrei', 'data-conta', 'data-bateu', 'data-primeira']) {
+  ok(primeira.indexOf(attr + '=') !== -1, 'a linha grava ' + attr);
+}
+ok(src.indexOf("tr.getAttribute('data-conta') === '1'") !== -1,
+   'o filtro "Contabilizável" le o data-conta');
+ok(src.indexOf("conta.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; })") !== -1,
+   'os KPIs contam acertos dentro do conjunto contabilizavel');
+ok(src.indexOf("document.addEventListener('DOMContentLoaded', aplicarFiltroHist);") !== -1,
+   'a tela abre JA filtrada — senao os cards sairiam de um conjunto e a tabela de outro');
 
-// ── 6) o board saiu ──────────────────────────────────────────────────────────
-// A Analisar continua usando o painelDia.js; o que nao pode sobrar e' o board
-// DENTRO da tela Historico. Sobra de div sem script (ou o contrario) deixa
-// "carregando..." eterno na tela.
-console.log('\n[6] BOARD DO DIA REMOVIDO DA TELA HISTORICO\n');
-ok(src.indexOf('hist-board') === -1, 'nenhuma referencia a hist-board sobrou');
-ok(src.indexOf('boardDia.js') === -1, 'o script boardDia.js nao e mais carregado');
-ok(src.indexOf('BoardDia.render') === -1, 'nenhuma chamada a BoardDia.render sobrou');
-const nPainelDia = (src.match(/painelDia\.js/g) || []).length;
-ok(nPainelDia === 1,
-   'painelDia.js segue carregado UMA vez (a Analisar depende dele)  (achei ' + nPainelDia + ')');
+// ── 6) o board segue fora ───────────────────────────────────────────────────
+console.log('\n[6] BOARD DO DIA CONTINUA FORA\n');
+ok(src.indexOf('hist-board') === -1, 'nenhuma referencia a hist-board');
+ok(src.indexOf('boardDia.js') === -1, 'o boardDia.js nao e carregado');
 
 console.log('\n' + (falhas === 0
-  ? 'TUDO OK — cabecalho e linha alinhados, filtro ligado, board fora.'
+  ? 'TUDO OK — uma linha por AvB, colunas alinhadas nos dois ramos, contabilizacao na regra.'
   : falhas + ' FALHA(S) — nao subir.'));
 process.exit(falhas === 0 ? 0 : 1);
