@@ -1099,6 +1099,12 @@ ${navBar(user, 'analisar')}
 <!-- Depois do app.js de proposito: o tile reaproveita o _cardAvb e o
      _nomeDoTrap definidos la. -->
 <script src="${BASE}/static/js/painelDia.js"></script>
+<!-- SIMULADOR (?simpainel=1). Carregado sempre, mas a PRIMEIRA coisa que ele faz
+     e' checar o parametro na URL e sair — sem ele na URL, o arquivo nao define
+     nada nem toca em nada. Vem ANTES do analisarPainel e do PainelDia.iniciar
+     de proposito: ele troca o fetch, e a troca precisa estar no ar antes da
+     primeira busca do painel. -->
+<script src="${BASE}/static/js/simPainel.js"></script>
 <script src="${BASE}/static/js/analisarPainel.js"></script>
 <script>
 (function(){
