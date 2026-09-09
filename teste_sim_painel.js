@@ -269,6 +269,50 @@ console.log('\n[5b] COM A TELA VAZIA, O SIMULADOR SEMEIA AS CORRIDAS\n');
      'as suas corridas mandam — misturar deixaria voce sem saber qual linha e real');
 })();
 
+// ── 5c) REINICIAR ──────────────────────────────────────────────────────────
+//
+// O cenario e' congelado no carregamento porque os minutos precisam andar de
+// verdade — e' isso que permite ver a linha sumir sozinha 1 min depois da
+// largada. O preco: passados uns minutos, todas as corridas ja largaram e a tela
+// esvazia. Sem o botao, a saida era F5 na mao, toda vez.
+console.log('\n[5c] REINICIAR TRAZ O CENARIO DE VOLTA, SEM F5\n');
+
+(function () {
+  const { sim, win } = carregar(15, 0);
+  const antes = win.results.map(r => r.hora_br).join(',');
+  ok(win.results.length === 5, 'cenario montado  (' + antes + ')');
+
+  // Simula o tempo passando: as corridas largaram e a lista esvaziou.
+  win.results = [];
+  sim.reiniciar();
+  ok(win.results.length === 5,
+     'depois de reiniciar, as 5 corridas voltam  (' + win.results.length + ')');
+  ok(win.results.every(r => r._simulado === true), 'e todas marcadas como simuladas');
+
+  // Reiniciar DE NOVO nao pode duplicar: o filtro tem que tirar as antigas.
+  sim.reiniciar();
+  ok(win.results.length === 5,
+     'reiniciando duas vezes seguidas continua com 5, sem empilhar  (' + win.results.length + ')');
+
+  // E nao pode apagar corrida de verdade que voce tenha carregado.
+  win.results = [{ tipo: 'avb', nivel: 'alta', hora: '3:00', corrida: 'Real A1', trapFav: 1, trapUnd: 2 }];
+  sim.reiniciar();
+  ok(win.results.length === 1 && win.results[0].corrida === 'Real A1',
+     'e com corrida REAL carregada, reiniciar nao mexe nela');
+})();
+
+// A ancora tem que ser lida SEMPRE fresca. Ela e' trocada por outro objeto a
+// cada reinicio; exportar o objeto em vez de um getter deixaria quem guardasse a
+// referencia lendo o estado velho pra sempre.
+(function () {
+  const { sim } = carregar(15, 0);
+  ok(sim.ancora.deslocado === false, 'as 15:00, nao ancorado');
+  const antes = sim.ancora;
+  sim.reiniciar();
+  ok(sim.ancora !== antes || sim.ancora.ms != null,
+     'depois de reiniciar, a ancora lida e a NOVA — o export e um getter');
+})();
+
 // ── 6) desligado, o arquivo nao existe pra ninguem ──────────────────────────
 console.log('\n[6] SEM ?simpainel=1 O ARQUIVO NAO FAZ NADA\n');
 

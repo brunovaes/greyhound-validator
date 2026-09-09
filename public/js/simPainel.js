@@ -72,7 +72,7 @@
   // pontas nao cabem, ancora as 15:00 e marca `deslocado`: os minutos relativos
   // deixam de bater com o seu relogio, entao o corte de 1 minuto nao pode ser
   // conferido ao vivo, e o banner diz isso em vez de fingir.
-  var _ancora = (function () {
+  function calcularAncora() {
     var agora = Date.now();
     var cabe = function (ms, off) {
       var h = new Date(ms + off * 60000).getHours();
@@ -84,7 +84,8 @@
     var d = new Date();
     d.setHours(15, 0, 0, 0);
     return { ms: d.getTime(), deslocado: true };
-  })();
+  }
+  var _ancora = calcularAncora();
 
   function _instante(minutos) { return new Date(_ancora.ms + minutos * 60000); }
 
@@ -271,6 +272,31 @@
     return true;
   }
 
+  // ── REINICIAR ──────────────────────────────────────────────────────────────
+  //
+  // O cenario e' congelado no carregamento, de proposito: os minutos precisam
+  // andar de verdade pra dar pra ver a linha sumir sozinha 1 minuto depois da
+  // largada. O preco e' que, passados uns minutos, todas as corridas ja
+  // largaram e a tela esvazia — e ai era F5 na mao.
+  //
+  // Isto reancora no relogio de agora e reconstroi tudo, sem recarregar a
+  // pagina: as mesmas 5 corridas, com horarios frescos.
+  function reiniciar() {
+    _ancora = calcularAncora();
+    _semeado = false;
+    // Tira as corridas simuladas antigas antes de semear as novas. Sem isso o
+    // semearResults ve a lista cheia e nao faz nada.
+    glob.results = (glob.results || []).filter(function (r) { return r && !r._simulado; });
+    semearResults();
+    try {
+      if (typeof glob.refreshFocusMode === 'function') glob.refreshFocusMode();
+      if (glob.PainelDia && glob.PainelDia.buscar) glob.PainelDia.buscar();
+    } catch (e) { console.error('[simpainel] falha ao reiniciar:', e.message); }
+    atualizarBanner();
+    aviso('Cenário reiniciado — horários novos a partir de agora.');
+    console.log('%c[simpainel] cenario reiniciado', 'background:#991b1b;color:#fff;padding:2px 8px');
+  }
+
   // ── a interceptacao ────────────────────────────────────────────────────────
   // Trocar o fetch, e nao o PainelDia, e' de proposito: o painelDia.js segue
   // rodando byte a byte igual ao de producao — busca, compara camadas entre
@@ -317,6 +343,18 @@
     setTimeout(function () { el.style.opacity = '0'; }, 3500);
   }
 
+  // Reescreve so o texto do estado (ancorado ou nao), sem recriar a tarja — o
+  // botao tem listener e recriar a tarja o perderia.
+  function atualizarBanner() {
+    var el = document.getElementById('sim-estado');
+    if (!el) return;
+    el.textContent = _ancora.deslocado
+      ? 'horários ancorados às 15:00 — fora da janela 6h-20h não dá pra testar o corte de 1 minuto ao vivo'
+      : 'horários a partir de agora';
+    el.style.background = _ancora.deslocado ? '#000' : 'transparent';
+    el.style.padding = _ancora.deslocado ? '3px 10px' : '0';
+  }
+
   function banner() {
     if (document.getElementById('sim-banner')) return;
     var d = document.createElement('div');
@@ -331,14 +369,19 @@
       '<strong style="letter-spacing:1px">SIMULAÇÃO</strong>'
       + '<span>dados inventados &middot; nenhuma aposta é gravada</span>'
       + '<span style="opacity:.75">galgos: ' + (reais.length ? 'das corridas carregadas' : 'inventados (tela vazia)') + '</span>'
-      + (_ancora.deslocado
-          ? '<span style="background:#000;padding:3px 10px;border-radius:5px">horários ancorados às 15:00 — '
-            + 'fora da janela 6h-20h não dá pra testar o corte de 1 minuto ao vivo</span>'
-          : '')
+      + '<span id="sim-estado" style="border-radius:5px"></span>'
       + '<span id="sim-flash" style="margin-left:auto;opacity:0;transition:opacity .2s;'
       +   'background:#000;padding:3px 10px;border-radius:5px"></span>'
+      // O cenario vence em poucos minutos (as corridas largam). Sem este botao a
+      // saida era F5 na mao, toda vez.
+      + '<button type="button" id="sim-reiniciar" style="background:#fff;color:#7f1d1d;'
+      +   'border:none;border-radius:5px;padding:4px 12px;font-weight:700;font-size:12px;'
+      +   'cursor:pointer">&#8635; reiniciar cenário</button>'
       + '<a href="' + location.pathname + '" style="color:#fff;text-decoration:underline">sair da simulação</a>';
     document.body.appendChild(d);
+    var b = document.getElementById('sim-reiniciar');
+    if (b) b.addEventListener('click', reiniciar);
+    atualizarBanner();
   }
 
   function roteiro() {
@@ -372,7 +415,12 @@
     document.addEventListener('DOMContentLoaded', arrancar);
   } else { arrancar(); }
 
-  glob._SIM_PAINEL = { payload: payload, corrida: corrida, ukDeBr: ukDeBr, ancora: _ancora,
-                       corridaDaLista: corridaDaLista, semearResults: semearResults };
+  glob._SIM_PAINEL = { payload: payload, corrida: corrida, ukDeBr: ukDeBr,
+                       corridaDaLista: corridaDaLista, semearResults: semearResults,
+                       reiniciar: reiniciar,
+                       // getter, e nao o objeto: depois de reiniciar, o _ancora
+                       // e' OUTRO objeto, e quem tivesse guardado o antigo leria
+                       // o estado velho pra sempre.
+                       get ancora() { return _ancora; } };
 
 })(typeof window !== 'undefined' ? window : this);
