@@ -3900,7 +3900,10 @@ router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
         pares: bw.pares, abertoEm: bw.em,
         corrida: row.corrida, hora: row.hora,
         finishingOrderJson: row.finishing_order_json,
-        parelhoAte, difSpMax: difSp, tetoInfo: teto, bateuPar
+        parelhoAte, difSpMax: difSp, tetoInfo: teto, bateuPar,
+        // Mesmos parametros do painel-dia, de proposito: se o Placar classificar
+        // com entradas diferentes da tela, os dois divergem e ninguem percebe.
+        agora: Date.now()
       });
       for (const cf of confrontos) {
         // O Placar mede o que o MERCADO abriu. OPORTUNIDADE ainda nao e' nada: entra

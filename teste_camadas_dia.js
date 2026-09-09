@@ -16,9 +16,13 @@
 //   BW     TODO par aberto e' classificado pela REGUA, sem olhar preco:
 //          tier TOP -> TOP | tier REGULAR -> HIGH | tier null -> GOOD.
 //          Par fora do pool da manha entra igual (a "pescada").
-//   LIMITE 1 de cada camada por corrida, no maximo 3 linhas. Disputa por SPLIT,
-//          depois TEMPO (CalTm), depois pct.
-//   SAIDA  a OPORTUNIDADE que a BW nao abriu some DEPOIS que a corrida larga.
+//   TELA   ate 4 AvBs, e o TIPO PODE REPETIR (dois TOP na mesma corrida e'
+//          normal). Entram os 4 mais bem avaliados: tipo primeiro
+//          (TOP > HIGH > GOOD) e, dentro do tipo, SPLIT -> TEMPO (CalTm) -> pct.
+//   SAIDA  a OPORTUNIDADE so aparece enquanto a BW nao abriu NADA na corrida.
+//          Abriu qualquer coisa, ela sai. E some de vez 1 min depois da largada.
+//   HIST   UM registro por corrida: o AvB apostado; sem aposta, o mais bem
+//          avaliado. Nunca uma OPORTUNIDADE.
 //
 // A segunda parte compara, nos MESMOS cenarios, a regua nova contra a REGUA
 // ANTERIOR — que nao foi reescrita a mao: e' a funcao fatiada da versao do
@@ -60,6 +64,10 @@ function rodar(c) {
     finishingOrderJson: c.finishingOrderJson || null,
     parelhoAte: c.parelhoAte != null ? c.parelhoAte : 60,
     difSpMax: c.difSpMax || 0, tetoInfo: c.tetoInfo || 0,
+    // `agora` so quando o cenario pede: sem ele o modulo nao expira nada, que e'
+    // o que mantem os cenarios antigos independentes do relogio.
+    agora: (c.agora != null ? c.agora : null),
+    maxTela: c.maxTela || 0,
     bateuPar: bateuPar
   });
 }
@@ -142,7 +150,11 @@ ok(r.length === 1 && r[0].camada === 'GOOD' && r[0].da_manha === false,
    'pescada real do Newc A6: fora do pool (distancia 7,00) e a BW abriu -> GOOD');
 
 // ═════════════════════════════════════════════════════════════════════════════
-console.log('\n[3] UM POR CAMADA — disputa por SPLIT, depois TEMPO, depois pct\n');
+// MUDOU EM 09/09/2026. Ate entao havia UM slot por tipo e teto de 3 linhas: com
+// dois pares passando na regua TOP, um deles sumia da tela. O Bruno derrubou a
+// regra — a tela comporta 4 e o tipo pode repetir, porque esconder o segundo TOP
+// era decidir por ele qual dos dois valia olhar.
+console.log('\n[3] O TIPO PODE REPETIR — dois TOP na mesma corrida ficam os dois\n');
 
 const SP6 = { 1: 4.5, 2: 4.6, 3: 4.7, 4: 4.8, 5: 4.9, 6: 5.0 };
 r = rodar({
@@ -150,39 +162,67 @@ r = rodar({
   lastSp: SP6, pares: [par(1, 6, 52, 1.85, 1.92), par(2, 5, 51, 1.90, 1.95)],
   abertoEm: '2026-09-08 12:00:00'
 });
-ok(r.length === 1 && r[0].par === 'T2xT5',
-   'dois candidatos a TOP: ganha o de melhor SPLIT, mesmo com pct bem menor (95 x 70)');
+ok(r.length === 2, 'os DOIS TOP entram na tela  (saiu: ' + r.length + ')');
+ok(camadas(r) === 'TOP, TOP', 'e os dois seguem marcados como TOP');
+ok(r[0].par === 'T2xT5',
+   'na frente vem o de melhor SPLIT, mesmo com pct bem menor (95 x 70)');
+ok(r[0].melhor === true && r[1].melhor === false,
+   'so o primeiro leva a marca `melhor` — e' + String.fromCharCode(39) + ' ele que representa a corrida no Historico');
 
 r = rodar({
   todos: [conf(1, 6, 95, 'TOP', 1.20, 0.20, 0.11), conf(2, 5, 70, 'TOP', 1.30, 0.20, 0.33)],
   lastSp: SP6, pares: [par(1, 6, 52, 1.85, 1.92), par(2, 5, 51, 1.90, 1.95)],
   abertoEm: '2026-09-08 12:00:00'
 });
-ok(r.length === 1 && r[0].par === 'T2xT5', 'split empatado: desempata pelo TEMPO (CalTm)');
+ok(r[0].par === 'T2xT5', 'split empatado: desempata pelo TEMPO (CalTm)');
 
 r = rodar({
   todos: [conf(1, 6, 70, 'TOP', 1.20, 0.20, 0.30), conf(2, 5, 95, 'TOP', 1.30, 0.20, 0.30)],
   lastSp: SP6, pares: [par(1, 6, 52, 1.85, 1.92), par(2, 5, 51, 1.90, 1.95)],
   abertoEm: '2026-09-08 12:00:00'
 });
-ok(r.length === 1 && r[0].par === 'T2xT5', 'split e tempo empatados: desempata pelo pct');
+ok(r[0].par === 'T2xT5', 'split e tempo empatados: desempata pelo pct');
+
+// O exemplo que o Bruno escreveu: a manha levantou 1v2, e a BW abriu 5v2 (TOP),
+// 5v3 (HIGH) e 1v4 (GOOD). Os tres da BW entram; o 1v2, que a BW nao abriu, nao.
+console.log('\n[3b] O EXEMPLO DO BRUNO: manha 1v2, BW abre 5v2 TOP, 5v3 HIGH, 1v4 GOOD\n');
+r = rodar({
+  todos: [
+    conf(1, 2, 90, 'TOP', 1.05, 0.30, 0.40),      // a manha levantou; BW nao abriu
+    conf(5, 2, 88, 'TOP', 1.10, 0.28, 0.35),
+    conf(5, 3, 82, 'REGULAR', 1.15, 0.22, 0.18),
+    conf(1, 4, 76, null, 1.20, 0.15, 0.08)
+  ],
+  lastSp: SP6,
+  pares: [par(5, 2, 52, 1.85, 1.92), par(5, 3, 51, 1.90, 1.95), par(1, 4, 50, 1.98, 1.98)],
+  abertoEm: '2026-09-08 12:00:00'
+});
+ok(r.length === 3, 'entram os 3 que a BW abriu  (saiu: ' + r.length + ')');
+ok(camadas(r) === 'TOP, HIGH, GOOD', 'classificados pela regua, em ordem de merito');
+ok(!r.some(x => x.par === 'T1xT2'),
+   'o par da manha que a BW NAO abriu fica de fora — os que abriram assumem a tela');
+ok(!r.some(x => x.camada === 'OPORTUNIDADE'),
+   'e nao volta como OPORTUNIDADE: com a BW aberta, ela nao existe mais nesta corrida');
 
 // ═════════════════════════════════════════════════════════════════════════════
-console.log('\n[4] TETO DE 3 e a ordem das linhas\n');
+console.log('\n[4] TETO DE 4 e a ordem de merito\n');
 
 r = rodar({
   todos: [
     conf(1, 6, 90, 'TOP', 1.10, 0.30, 0.40), conf(2, 5, 85, 'REGULAR', 1.20, 0.25, 0.20),
-    conf(3, 4, 80, null, 1.30, 0.20, 0.10), conf(1, 5, 75, null, 1.40, 0.05, 0.05)
+    conf(3, 4, 80, null, 1.30, 0.20, 0.10), conf(1, 5, 75, null, 1.40, 0.05, 0.05),
+    conf(2, 4, 72, null, 1.45, 0.02, 0.02)
   ],
   lastSp: SP6,
   pares: [par(1, 6, 52, 1.85, 1.92), par(2, 5, 51, 1.90, 1.95),
-          par(3, 4, 50.5, 1.95, 1.97), par(1, 5, 50, 1.98, 1.98)],
-  abertoEm: '2026-09-08 12:00:00'
+          par(3, 4, 50.5, 1.95, 1.97), par(1, 5, 50, 1.98, 1.98),
+          par(2, 4, 49.5, 2.00, 2.00)]
+  , abertoEm: '2026-09-08 12:00:00'
 });
-ok(r.length === 3, 'no maximo 3 linhas por corrida  (saiu: ' + r.length + ')');
-ok(camadas(r) === 'TOP, HIGH, GOOD', 'ordem hierarquica TOP > HIGH > GOOD');
-ok(r.every(x => x.camada !== 'OPORTUNIDADE'), 'com as 3 cheias, nao sobra vaga pra linha cinza');
+ok(r.length === 4, 'cinco candidatos, quatro vagas: sai o pior  (saiu: ' + r.length + ')');
+ok(camadas(r) === 'TOP, HIGH, GOOD, GOOD', 'ordem por tipo, com GOOD repetindo: ' + camadas(r));
+ok(!r.some(x => x.par === 'T2xT4'), 'o de pior split e o que fica de fora');
+ok(r.every(x => x.camada !== 'OPORTUNIDADE'), 'com a BW aberta nao existe linha cinza');
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n[5] OPORTUNIDADE some DEPOIS da corrida\n');
@@ -201,6 +241,117 @@ r = rodar({
 });
 ok(r.length === 1 && r[0].camada === 'TOP',
    'depois da largada sobra so o que a BW abriu; o achado que nao abriu sai');
+
+// A regra que o Bruno escreveu em 09/09: assim que a BW abre QUALQUER COISA na
+// corrida, a OPORTUNIDADE sai — mesmo antes da largada, mesmo que o par dela
+// fosse melhor que o que abriu. "Os que abriram assumem a tela."
+r = rodar({
+  todos: [conf(1, 3, 95, 'TOP', 1.000, 0.40, 0.50),   // a manha levantou este
+          conf(2, 4, 70, null, 1.000, 0.05, 0.05)],   // e a BW abriu este
+  lastSp: { 1: 4.5, 3: 4.6, 2: 4.7, 4: 4.8 },
+  pares: [par(2, 4, 50, 1.98, 1.98)], abertoEm: '2026-09-08 12:00:00'
+});
+ok(r.length === 1 && r[0].camada === 'GOOD' && r[0].par === 'T2xT4',
+   'BW abriu um GOOD: a OPORTUNIDADE de melhor split some assim mesmo');
+ok(!r.some(x => x.camada === 'OPORTUNIDADE'),
+   'a tela nao mistura o que o mercado confirmou com o que ele nao abriu');
+
+// ═════════════════════════════════════════════════════════════════════════════
+// O corte de 1 MINUTO, pelo relogio. Ate 09/09 a OPORTUNIDADE so saia quando a
+// CHEGADA era gravada — e o robo de resultados costuma demorar bem mais que
+// isso. O relogio e' o sinal antecipado; a chegada continua sendo o definitivo.
+console.log('\n[5b] O CORTE DE 1 MINUTO, PELO RELOGIO\n');
+
+// Monta um instante REAL (ms) a partir de um horario de Brasilia. O servidor
+// roda em UTC, entao BR = UTC-3.
+function agoraBr(hhmm) {
+  const p = String(hhmm).split(':');
+  return Date.UTC(2026, 8, 9, parseInt(p[0], 10) + 3, parseInt(p[1], 10), 0);
+}
+// A hora do PDF vem sem AM/PM: 1..9 e' tarde (soma 12), depois -4h de fuso.
+// Entao "6:00" UK e' 18:00 la e 14:00 aqui.
+const HORA_UK = '6:00';                       // = 14:00 BR
+ok(cd.horaBr(HORA_UK) === '14:00', 'a hora UK 6:00 e' + String.fromCharCode(39) + ' 14:00 BR  (' + cd.horaBr(HORA_UK) + ')');
+
+const MIN = [
+  ['13:55', 5,  'faltando 5 min'],
+  ['14:00', 0,  'na hora da largada'],
+  ['14:01', -1, 'um minuto depois'],
+  ['14:05', -5, 'cinco minutos depois']
+];
+for (const [rel, esperado, msg] of MIN) {
+  ok(cd.minutosParaLargada(HORA_UK, agoraBr(rel)) === esperado,
+     msg + ' -> ' + esperado + ' min  (deu ' + cd.minutosParaLargada(HORA_UK, agoraBr(rel)) + ')');
+}
+
+ok(cd.expirou(HORA_UK, agoraBr('13:55')) === false, 'antes da largada NAO expirou');
+ok(cd.expirou(HORA_UK, agoraBr('14:00')) === false, 'na hora, ainda vale');
+ok(cd.expirou(HORA_UK, agoraBr('14:01')) === false, 'um minuto depois AINDA vale (a BW aceita entrada)');
+ok(cd.expirou(HORA_UK, agoraBr('14:02')) === true,  'dois minutos depois, expirou');
+ok(cd.expirou(HORA_UK, null) === false,
+   'sem relogio nao expira nada — mostrar demais e' + String.fromCharCode(39) + ' melhor que sumir com o que vale');
+
+// A VIRADA DO DIA nao pode inverter o sinal. A ultima corrida sai as 20:00 BR
+// (hora UK "0:00"); se voce deixa a tela aberta ate 00:05, a conta crua daria
+// +1195 min — a corrida de ontem apareceria como se faltassem 20 horas pra ela.
+// Com o ajuste da volta, da -245: ela largou ha 4 horas, e some.
+const VIRADA = cd.minutosParaLargada('0:00', Date.UTC(2026, 8, 10, 3, 5, 0));
+ok(cd.horaBr('0:00') === '20:00', 'a hora UK 0:00 e' + String.fromCharCode(39) + ' 20:00 BR  (' + cd.horaBr('0:00') + ')');
+ok(VIRADA === -245, 'virada do dia: largou as 20:00, sao 00:05 -> -245 min  (deu ' + VIRADA + ')');
+ok(cd.expirou('0:00', Date.UTC(2026, 8, 10, 3, 5, 0)) === true,
+   'e por isso ela expirou, em vez de voltar pra tela como corrida futura');
+
+// E o corte valendo dentro da regra: OPORTUNIDADE sem chegada gravada, mas com
+// o relogio ja passado, nao aparece.
+const SO_MANHA = { todos: [conf(1, 3, 84, 'TOP', 1.000, 0.20, 0.30)], lastSp: YARMOUTH, pares: [], hora: HORA_UK };
+r = rodar(Object.assign({}, SO_MANHA, { agora: agoraBr('13:55') }));
+ok(r.length === 1 && r[0].camada === 'OPORTUNIDADE', 'faltando 5 min, a OPORTUNIDADE esta na tela');
+r = rodar(Object.assign({}, SO_MANHA, { agora: agoraBr('14:01') }));
+ok(r.length === 1, 'um minuto depois ela ainda esta la');
+r = rodar(Object.assign({}, SO_MANHA, { agora: agoraBr('14:02') }));
+ok(r.length === 0, 'dois minutos depois some, mesmo sem a chegada ter sido gravada');
+
+// ═════════════════════════════════════════════════════════════════════════════
+// UM REGISTRO POR CORRIDA no Historico (Bruno, 09/09/2026). A aposta ganha do
+// merito: o Historico registra o que ACONTECEU, e trocar o AvB apostado pelo que
+// o motor preferia apagaria a decisao dele do proprio registro.
+console.log('\n[5c] O QUE VAI PRO HISTORICO: um por corrida\n');
+
+const QUATRO = rodar({
+  todos: [
+    conf(1, 6, 90, 'TOP', 1.10, 0.30, 0.40), conf(2, 5, 85, 'REGULAR', 1.20, 0.25, 0.20),
+    conf(3, 4, 80, null, 1.30, 0.20, 0.10), conf(1, 5, 75, null, 1.40, 0.05, 0.05)
+  ],
+  lastSp: SP6,
+  pares: [par(1, 6, 52, 1.85, 1.92), par(2, 5, 51, 1.90, 1.95),
+          par(3, 4, 50.5, 1.95, 1.97), par(1, 5, 50, 1.98, 1.98)],
+  abertoEm: '2026-09-08 12:00:00'
+});
+ok(QUATRO.length === 4, 'os quatro estao na tela');
+
+let reg = cd.registroDoHistorico(QUATRO, null);
+ok(reg && reg.camada === 'TOP' && reg.melhor === true,
+   'sem aposta: vai o mais bem avaliado  (' + (reg && reg.par) + ', ' + (reg && reg.camada) + ')');
+
+const idGood = QUATRO.filter(x => x.camada === 'GOOD')[0].id;
+reg = cd.registroDoHistorico(QUATRO, idGood);
+ok(reg && reg.camada === 'GOOD',
+   'apostou num GOOD: vai o GOOD, nao o TOP — o registro guarda a SUA decisao');
+
+reg = cd.registroDoHistorico(QUATRO, 'id-que-nao-existe');
+ok(reg && reg.camada === 'TOP',
+   'id de aposta que nao bate com nenhum (par trocado na mao): cai no mais bem avaliado');
+
+// OBS1 do Bruno: no fim do dia nao pode sobrar registro com tipo diferente de
+// TOP, HIGH ou GOOD.
+reg = cd.registroDoHistorico([montaOportunidade()], null);
+ok(reg === null, 'corrida que so teve OPORTUNIDADE nao entra no Historico');
+ok(cd.registroDoHistorico([], null) === null, 'corrida sem nada tambem nao');
+
+function montaOportunidade() {
+  const x = rodar({ todos: [conf(1, 3, 84, 'TOP', 1.000, 0.20, 0.30)], lastSp: YARMOUTH, pares: [] });
+  return x[0];
+}
 
 ok(cd.jaCorreu(CHEGADA) === true && cd.jaCorreu(null) === false && cd.jaCorreu('[]') === false,
    'jaCorreu trata vazio/nulo como "ainda nao correu"');

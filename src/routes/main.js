@@ -1109,49 +1109,30 @@ ${navBar(user, 'analisar')}
     var c = document.getElementById('focus-col');
     return !!(c && c.querySelector('#ap-painel'));
   }
-  // Chave corrida+hora do que esta na tela de disputa AGORA. Trocar de corrida
-  // sozinho e' aceitavel; redesenhar a MESMA corrida a cada 18s nao e' — isso
-  // apagaria a odd que voce acabou de digitar, a cada volta do polling.
-  var abertaAgora = null;
-
   window.PainelDia.assinar(function (dados) {
-    var esperando = window.PainelDia.aguardando(dados);
-
-    // 1) A LISTA sempre sabe de tudo, mesmo com a coluna de foco ocupada. Ela
-    //    e' o aviso agora: corrida com AvB sobe pro topo, ganha o selo da
-    //    camada e pisca (verde = a manha previu, azul = pescada).
+    // 1) A LISTA. Toda corrida com AvB esperando sobe pro topo, ganha o selo do
+    //    tipo e pisca na cor dele, ate 1 minuto depois da largada. E' o aviso —
+    //    e funciona com a coluna de foco livre ou ocupada, porque a lista e' uma
+    //    coluna propria e ninguem mais escreve nela.
     try {
       if (typeof window.aplicarAguardandoNaLista === 'function') {
-        window.aplicarAguardandoNaLista(esperando);
+        window.aplicarAguardandoNaLista(window.PainelDia.aguardando(dados));
       }
     } catch (e) {}
 
-    if (!esperando.length) { abertaAgora = null; }
-
-    // 2) A TELA DE DISPUTA vai pra corrida vigente — a de camada mais alta.
-    //    Decisao do Bruno (set/2026): abre SEMPRE, mesmo por cima de uma
-    //    corrida que voce tenha aberto pela lista. A regra anterior era o
-    //    contrario (nao mexer na tela enquanto voce analisava), e o preco dela
-    //    era voce perder o AvB por estar olhando outra coisa. O preco desta e'
-    //    o oposto: se voce estiver com odd digitada quando outro AvB abrir, a
-    //    tela troca e o que estava digitado se perde.
-    var vigente = window.PainelDia.paraEntrar(dados);
-    if (vigente.length) {
-      var k = window.PainelDia.chaveCorrida(vigente[0]);
-      if (k !== abertaAgora) {
-        abertaAgora = k;
-        // Devolve a coluna de foco ao painel de tiles antes de desenhar: se
-        // uma corrida estava aberta pela lista, o container #ap-painel nem
-        // existe mais no DOM.
-        if (!telaLivre() && typeof window.voltarAoPainelDia === 'function') {
-          window.voltarAoPainelDia(true);   // true = nao rebuscar, ja temos os dados
-        }
-      }
-      window.AnalisarPainel.render('ap-painel', dados);
-    } else if (telaLivre()) {
-      // Nada esperando e a coluna livre: standby.
-      window.AnalisarPainel.render('ap-painel', dados);
-    }
+    // 2) A COLUNA DE FOCO so e' desenhada quando esta LIVRE.
+    //
+    // Por um dia (08-09/09/2026) ela abria sozinha na corrida com AvB, por cima
+    // do que voce estivesse analisando. Nao funcionou, e nao era ajuste de
+    // parametro: duas partes do app escrevem nessa mesma coluna — este painel e
+    // o renderFocusPanel, que restaura a corrida aberta a cada sync — e a ultima
+    // a escrever ganhava. O tile aparecia e sumia segundos depois.
+    //
+    // A abertura automatica saiu porque deixou de ser necessaria: desde 09/09 os
+    // AvBs que a BW abriu aparecem DENTRO da tela da corrida, como cards com
+    // selo do tipo e botao de entrar. Voce chega neles clicando na linha que
+    // esta piscando, e nada mais puxa a tela debaixo de voce.
+    if (telaLivre()) window.AnalisarPainel.render('ap-painel', dados);
   });
   window.PainelDia.iniciar({});
 })();
@@ -2414,15 +2395,29 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       // dela: referencia do mercado, nao registro de aposta.
     }
   }
-  // ── UMA LINHA POR AvB (Bruno set/2026) ───────────────────────────────────
-  // O Historico deixa de ser uma linha por CORRIDA e passa a ser uma por AvB que
-  // a BW confirmou. A classificacao NAO e' refeita aqui: vem do camadasDoDia, o
-  // mesmo modulo que o painel-dia e o Placar usam. Reescrever a regua num
-  // terceiro lugar seria a terceira chance de os numeros divergirem em silencio.
+  // ── UM REGISTRO POR CORRIDA (Bruno, 09/09/2026) ──────────────────────────
+  // O Historico guarda UM AvB por corrida:
+  //   - entrou em algum   -> e' esse, sempre, mesmo que nao fosse o melhor
+  //   - nao entrou        -> o mais bem avaliado dos que a BW abriu
+  //   - so OPORTUNIDADE   -> a corrida nao entra
+  //
+  // Em 08/09 isto foi uma linha por AvB, ate 3 por corrida. Durou um dia. O
+  // problema pratico: a tela mostra ate 4 candidatos, mas o Bruno aposta UMA vez
+  // por corrida — tres linhas no registro davam tres previsoes onde houve uma
+  // decisao, e a taxa de acerto passava a medir o motor tres vezes por corrida
+  // enquanto a banca mexia uma.
+  //
+  // A APOSTA GANHA DO MERITO de proposito. O Historico registra o que ACONTECEU;
+  // trocar o AvB que ele apostou pelo que o motor preferia apagaria a decisao
+  // dele do proprio registro.
+  //
+  // A classificacao NAO e' refeita aqui: vem do camadasDoDia, o mesmo modulo que
+  // o painel-dia e o Placar usam. Reescrever a regua num terceiro lugar seria a
+  // terceira chance de os numeros divergirem em silencio.
   //
   // OPORTUNIDADE fica de fora: o Historico e' registro do que o mercado
-  // confirmou. No painel ela aparece ate a largada, pra dar pra acompanhar o
-  // funil; aqui nao, senao o registro do dia vira lista de espera.
+  // confirmou. "No final do dia nao poderemos ter nenhum registro no historico
+  // com o TIPO diferente de TOP, HIGH ou GOOD" (Bruno, 09/09).
   const linhasAvb = (function () {
     const cd = require('../utils/camadasDoDia');
     const mm = require('../utils/motorManha');
@@ -2473,7 +2468,12 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
             pares: bw ? bw.pares : [], abertoEm: bw ? bw.em : null,
             corrida: r.corrida, hora: r.hora,
             finishingOrderJson: r.finishing_order_json,
-            parelhoAte, difSpMax: difSp, tetoInfo, bateuPar
+            parelhoAte, difSpMax: difSp, tetoInfo, bateuPar,
+            // O Historico e' registro do passado: aqui NAO se passa `agora`. Com
+            // ele, uma OPORTUNIDADE de corrida antiga sairia por expirada — o que
+            // ja acontece de qualquer jeito pelo filtro abaixo, mas por um
+            // caminho que nao depende de quando voce abre a tela.
+            agora: null
           });
         }
       } catch (e) { confs = []; }
@@ -2502,17 +2502,29 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
           });
         }
       }
-      confs.forEach(function (c, i) {
-        out.push({ r: r, cf: c, primeira: (i === 0), escolhido: (escId != null && c.id === escId) });
-      });
+      // AQUI o funil fecha em UM. `registroDoHistorico` e' a mesma funcao que
+      // decide isso em qualquer lugar do sistema: a aposta, se houve; senao o
+      // mais bem avaliado.
+      const reg = cd.registroDoHistorico(confs, escId);
+      if (reg) {
+        // `primeira` continua true sempre: com uma linha por corrida, toda linha
+        // e' a primeira da sua corrida. O template usa isso pra decidir quais
+        // celulas da corrida desenhar, e mexer nele agora so pra tirar um campo
+        // que sempre vale true seria trocar codigo testado por codigo novo.
+        out.push({ r: r, cf: reg, primeira: true, escolhido: (escId != null && reg.id === escId) });
+      }
     }
     return out;
   })();
 
-  // CONTABILIZACAO (regra do Bruno): o denominador e' TODO TOP, tenha havido
-  // aposta ou nao, MAIS os AvBs de outra camada em que ele entrou. TOP sem
-  // aposta conta de proposito — se so o apostado contasse, entrar em 2 de 5 TOP
-  // e acertar os dois daria 100%, que e' a inflacao que ele quer evitar.
+  // CONTABILIZACAO. Com um registro por corrida a regra ficou simples: TODO
+  // registro conta. Nao ha mais o que escolher — a corrida ja entrou aqui com um
+  // AvB so, o que ele apostou ou o que o motor melhor avaliou.
+  //
+  // Isto substitui a regra de 08/09 ("todo TOP + o que voce entrou"), que existia
+  // pra impedir uma inflacao que so era possivel quando cabiam varias linhas por
+  // corrida: entrar em 2 de 5 TOP e acertar os dois daria 100%. Com uma linha por
+  // corrida esse caso nao existe.
   const _kpiDe = function (lista) {
     let ok = 0, tot = 0;
     for (const L of lista) {
@@ -2522,8 +2534,8 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
     return { ok: ok, tot: tot, pct: tot ? Math.round(100 * ok / tot) : null };
   };
   const kpiTop = _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === 'TOP'; }));
-  const kpiMinhas = _kpiDe(linhasAvb.filter(function (L) { return L.escolhido && L.cf.camada !== 'TOP'; }));
-  const kpiTotal = _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === 'TOP' || L.escolhido; }));
+  const kpiMinhas = _kpiDe(linhasAvb.filter(function (L) { return L.escolhido; }));
+  const kpiTotal = _kpiDe(linhasAvb);
 
   const racesValidas = races.filter(r=>r.nivel!=='skip');
   const skipCount = races.length - racesValidas.length;
@@ -2696,7 +2708,7 @@ ${navBar(user, 'historico')}
 </div>
 </div>
 
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Camada<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="conta" selected>Contabilizável</option><option value="">Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="conta" selected>Contabilizável</option><option value="">Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${linhasAvb.map(function(Lx){
   var r = Lx.r, cf = Lx.cf, pri = Lx.primeira, esc = Lx.escolhido;
   var horaUk = r.hora || '';

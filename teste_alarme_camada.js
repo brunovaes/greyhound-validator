@@ -235,14 +235,18 @@ let L = rodarLista(
 );
 
 ok(L.length === 2, 'as duas corridas viraram linha  (saiu ' + L.length + ')');
-ok(L[0]._cls.has('rc-camada') && L[0]._estilo['--cam-col'] === '#1B9D40',
-   'AvB da manha que a BW abriu -> pisca VERDE  (' + L[0]._estilo['--cam-col'] + ')');
-ok(L[1]._cls.has('rc-camada') && L[1]._estilo['--cam-col'] === '#3b82f6',
-   'pescada (a BW abriu fora da lista da manha) -> pisca AZUL  (' + L[1]._estilo['--cam-col'] + ')');
-ok(L[0]._estilo['--cam-badge'] === '#f97316',
-   'e o SELO, no mesmo instante, diz a CAMADA: HIGH laranja  (' + L[0]._estilo['--cam-badge'] + ')');
-ok(L[1]._estilo['--cam-badge'] === '#8b5cf6',
-   'GOOD roxo  (' + L[1]._estilo['--cam-badge'] + ')');
+// Pisca e selo na MESMA cor, a do TIPO (Bruno, 09/09/2026). Por um dia a cor da
+// linha disse a procedencia (verde = a manha previu, azul = pescada) e o selo
+// disse o tipo — duas leituras pra entender uma coisa. Agora e' uma so.
+ok(L[0]._cls.has('rc-camada') && L[0]._estilo['--cam-col'] === '#f97316',
+   'HIGH pisca LARANJA  (' + L[0]._estilo['--cam-col'] + ')');
+ok(L[1]._cls.has('rc-camada') && L[1]._estilo['--cam-col'] === '#8b5cf6',
+   'GOOD pisca ROXO  (' + L[1]._estilo['--cam-col'] + ')');
+ok(L[0]._estilo['--cam-badge'] === L[0]._estilo['--cam-col']
+   && L[1]._estilo['--cam-badge'] === L[1]._estilo['--cam-col'],
+   'o selo usa a MESMA cor do pisca — uma pergunta, uma resposta');
+ok(L[0]._estilo['--cam-col'] !== L[1]._estilo['--cam-col'],
+   'e tipos diferentes na mesma lista saem em cores diferentes');
 ok(L[0].innerHTML.indexOf('rc-avb-badge') !== -1 && L[0].innerHTML.indexOf('>HIGH<') !== -1,
    'o selo escrito na linha traz o nome da camada');
 ok(L[0].innerHTML.indexOf('PRÓXIMA') === -1,
@@ -251,7 +255,7 @@ ok(L[0].innerHTML.indexOf('PRÓXIMA') === -1,
 // AS DUAS AO MESMO TEMPO: e' o desenho que o Bruno escolheu. Uma corrida
 // destacada por vez faria a segunda passar batida.
 ok(L[0]._cls.has('rc-camada') && L[1]._cls.has('rc-camada'),
-   'DUAS corridas destacadas ao mesmo tempo, cada uma na cor da sua procedencia');
+   'DUAS corridas destacadas ao mesmo tempo, cada uma na cor do seu tipo');
 
 // hora em formatos diferentes tem que casar: o payload traz "1:47", a lista
 // pode ter "01:47". Sem normalizar, a linha certa nunca e' encontrada.
@@ -335,6 +339,19 @@ ok(src.indexOf(".rc-camada{") !== -1 && src.indexOf(".rc-perto{") !== -1
    && src.indexOf(".rc-avb-badge{") !== -1,
    'o CSS das tres classes existe (.rc-camada, .rc-perto, .rc-avb-badge)');
 
+// O VERDE VOLTOU pro aviso de proximidade (Bruno, 09/09/2026). Ele tinha virado
+// cinza em 08/09 porque o verde estava emprestado pro alarme de camada; agora
+// que a cor da linha diz o TIPO, o verde esta livre e volta pra funcao original.
+// Segue MUDO — o som so toca em promocao de tipo, e isso nao mudou.
+const _rcPerto = (src.match(/'\.rc-perto\{[^']*'/) || [''])[0];
+ok(_rcPerto.indexOf('#1B9D40') !== -1,
+   'o aviso de 3 minutos voltou a piscar VERDE  (' + (_rcPerto || '(nao achei a regra)') + ')');
+// A busca e' DENTRO da regra .rc-perto, nao no arquivo todo: aquele cinza
+// tambem e a cor do cabecalho da tabela de validacao, num lugar sem relacao
+// nenhuma com isto.
+ok(_rcPerto.indexOf('rgba(255,255,255,.28)') === -1,
+   'e a borda cinza que ele usou por um dia saiu da regra');
+
 // O aviso fixo saiu de vez: sobra de CSS ou de div deixaria um balao morto
 // escutando no topo da tela.
 console.log('\n[5] O AVISO FIXO NO TOPO SAIU DE VEZ\n');
@@ -364,6 +381,6 @@ for (const marca of ['.ap-tile{', '.ap-grid{display:grid', '.ap-entrada{', '.ap-
 ok(MAIN.indexOf('id="ap-painel"') !== -1, 'e o container #ap-painel esta na mesma rota');
 
 console.log('\n' + (falhas === 0
-  ? 'TUDO OK — som so no alarme de camada; pisca verde/azul por procedencia, selo por camada, e o CSS na rota certa.'
+  ? 'TUDO OK — pisca e selo na cor do TIPO, verde de volta no aviso de 3 min, e o CSS na rota certa.'
   : falhas + ' FALHA(S) — nao subir.'));
 process.exit(falhas === 0 ? 0 : 1);

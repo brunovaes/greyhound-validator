@@ -8,14 +8,13 @@
 //
 //   node teste_historico_colunas.js
 //
-// O QUE MUDOU EM set/2026: a tabela deixou de ser uma linha por CORRIDA e passou
-// a ser uma por AvB confirmado pela BW. Isso trouxe um segundo jeito de a linha
-// desalinhar: as celulas da corrida (Resultado, bandeira, Observacoes, AvB na
-// BW, lapis) so aparecem na PRIMEIRA linha de cada corrida, e as demais recebem
-// uma celula vazia no lugar. Se um dos dois ramos esquecer uma celula, a tabela
-// entorta so nas corridas com mais de um AvB — o caso menos frequente e mais
-// dificil de notar. Por isso o teste EXECUTA o construtor da linha nos DOIS
-// ramos e compara.
+// COMO A TABELA CHEGOU AQUI: em 08/09/2026 ela virou uma linha por AvB (ate 3
+// por corrida); em 09/09 voltou a ser UMA POR CORRIDA, com o AvB apostado — ou,
+// sem aposta, o mais bem avaliado. O construtor da linha continua com os dois
+// ramos (`primeira` true/false), porque tirar o ramo vazio agora seria mexer em
+// codigo testado pra remover um caso que hoje nao acontece e pode voltar a
+// acontecer. O teste segue exercitando os DOIS: se um deles esquecer uma celula,
+// a tabela entorta no dia em que ele for usado de novo.
 
 const fs = require('fs');
 const path = require('path');
@@ -36,13 +35,15 @@ const nTh = (linhaCab.match(/<th[\s>]/g) || []).length;
 
 console.log('\n[1] CABECALHO\n');
 console.log('    colunas declaradas: ' + nTh);
-for (const nome of ['AvB', '%', 'Camada', 'Entrei', 'Bateu', 'Resultado', 'Observações', 'Odd', 'AvB na BW']) {
+// "Camada" virou "Tipo" na tela em 09/09/2026 — mesma coluna, nome que o Bruno
+// usa. O valor dentro dela continua TOP/HIGH/GOOD.
+for (const nome of ['AvB', '%', 'Tipo', 'Entrei', 'Bateu', 'Resultado', 'Observações', 'Odd', 'AvB na BW']) {
   ok(linhaCab.indexOf('>' + nome) !== -1, 'coluna "' + nome + '" presente');
 }
 ok(linhaCab.indexOf('Origem') === -1,
    'a coluna Origem (VIP/Secundaria/Surpresa) saiu de vez');
 ok(/<option value="conta" selected>/.test(linhaCab),
-   'o seletor de Camada abre em "Contabilizável" — a tela nasce filtrada');
+   'o seletor de Tipo abre em "Contabilizável" — a tela nasce filtrada');
 for (const c of ['TOP', 'HIGH', 'GOOD']) {
   ok(linhaCab.indexOf('<option value="' + c + '">') !== -1, 'o filtro oferece ' + c);
 }
@@ -181,6 +182,6 @@ ok(src.indexOf('hist-board') === -1, 'nenhuma referencia a hist-board');
 ok(src.indexOf('boardDia.js') === -1, 'o boardDia.js nao e carregado');
 
 console.log('\n' + (falhas === 0
-  ? 'TUDO OK — uma linha por AvB, colunas alinhadas nos dois ramos, contabilizacao na regra.'
+  ? 'TUDO OK — um registro por corrida, colunas alinhadas nos dois ramos, contabilizacao na regra.'
   : falhas + ' FALHA(S) — nao subir.'));
 process.exit(falhas === 0 ? 0 : 1);

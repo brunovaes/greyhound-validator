@@ -139,6 +139,18 @@
       });
   }
 
+  // Os confrontos de UMA corrida, ja classificados e em ordem de merito.
+  //
+  // E' por aqui que a TELA DA CORRIDA (a dos galgos com gauges) pega os AvBs
+  // que a BW abriu. Ate 09/09/2026 ela montava os cards de uma fonte propria,
+  // com os baldes 'surpresas' e 'secundarios' — um modelo que o resto do
+  // sistema ja tinha aposentado. O resultado era a mesma corrida classificada
+  // de dois jeitos em duas telas.
+  function daCorrida(corrida, hora, d) {
+    const k = chaveCorrida({ corrida: corrida, hora: hora });
+    return confrontos(d).filter(function (x) { return chaveCorrida(x) === k; });
+  }
+
   // Tiles da Analisar: SO os AvBs da corrida VIGENTE — a de camada mais alta.
   //
   // Antes devolvia ate 4 confrontos de corridas DIFERENTES, e a tela mostrava
@@ -276,6 +288,8 @@
     confrontos: confrontos,
     doBoard: doBoard,
     aguardando: aguardando,
+    daCorrida: daCorrida,
+    dados: function () { return st.dados; },
     forcaDe: forcaDe,
     chaveCorrida: chaveCorrida,
     paraEntrar: paraEntrar,

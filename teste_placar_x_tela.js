@@ -63,7 +63,7 @@ function argsDaChamada(txt) {
   const fim = txt.indexOf('});', i);
   const bloco = txt.slice(i, fim);
   return ['todos', 'lastSp', 'pares', 'abertoEm', 'corrida', 'hora',
-          'finishingOrderJson', 'parelhoAte', 'difSpMax', 'tetoInfo', 'bateuPar']
+          'finishingOrderJson', 'parelhoAte', 'difSpMax', 'tetoInfo', 'bateuPar', 'agora']
     .filter(k => new RegExp('\\b' + k + '\\s*[:,]').test(bloco));
 }
 const aApi = argsDaChamada(API), aRob = argsDaChamada(ROBOT);
@@ -85,17 +85,25 @@ console.log('\n[4] AGUARDANDO_ENTRADA RESPEITA A LARGADA\n');
 
 ok(API.indexOf('ja_correu: cd.jaCorreu(row.finishing_order_json)') !== -1,
    'a corrida leva o marcador ja_correu no payload');
-ok(/aguardando_entrada:\s*\(cf\.camada !== 'OPORTUNIDADE' && entrada == null && !c\.ja_correu\)/.test(API),
-   'aguardando_entrada exige que a corrida NAO tenha largado');
+ok(API.indexOf('const expirado = cd.expirou(c.hora, Date.now());') !== -1,
+   'e o marcador expirado, que e o relogio: 1 min depois da largada');
+ok(/aguardando_entrada:\s*\(cf\.camada !== 'OPORTUNIDADE' && entrada == null\s*\n?\s*&& !c\.ja_correu && !expirado\)/.test(API),
+   'aguardando_entrada exige que a corrida NAO tenha largado NEM expirado');
 
 // A regra em si, executada: e' o que separa "da pra apostar" de "ja acabou".
-function aguardando(camada, entrada, jaCorreu) {
-  return (camada !== 'OPORTUNIDADE' && entrada == null && !jaCorreu);
+//
+// Sao DOIS sinais de largada, e os dois precisam estar aqui. `jaCorreu` vem da
+// chegada gravada: definitivo, mas so aparece quando o robo de resultados passa.
+// `expirou` vem do relogio: chega na hora, sempre. Em 09/09 o painel ficou com
+// so o primeiro e um AvB de corrida que largara ha 4 minutos tomou a tela.
+function aguardando(camada, entrada, jaCorreu, expirou) {
+  return (camada !== 'OPORTUNIDADE' && entrada == null && !jaCorreu && !expirou);
 }
-ok(aguardando('TOP', null, false) === true, 'TOP, sem aposta, corrida por vir -> aguardando');
-ok(aguardando('TOP', null, true) === false, 'TOP, sem aposta, corrida JA CORREU -> nao aguarda mais');
-ok(aguardando('TOP', { odd: 1.8 }, false) === false, 'TOP com aposta feita -> nao aguarda');
-ok(aguardando('OPORTUNIDADE', null, false) === false, 'OPORTUNIDADE nunca aguarda (nao da pra apostar no que a BW nao abriu)');
+ok(aguardando('TOP', null, false, false) === true, 'TOP, sem aposta, corrida por vir -> aguardando');
+ok(aguardando('TOP', null, true, false) === false, 'TOP, sem aposta, corrida JA CORREU -> nao aguarda mais');
+ok(aguardando('TOP', null, false, true) === false, 'TOP, chegada ainda nao gravada mas o RELOGIO passou -> nao aguarda');
+ok(aguardando('TOP', { odd: 1.8 }, false, false) === false, 'TOP com aposta feita -> nao aguarda');
+ok(aguardando('OPORTUNIDADE', null, false, false) === false, 'OPORTUNIDADE nunca aguarda (nao da pra apostar no que a BW nao abriu)');
 
 // ── 5) o caso real de hoje ──────────────────────────────────────────────────
 // Trlee A4 das 8:21 BR: TOP, bateu, corrida encerrada ha horas. Antes do fix ela

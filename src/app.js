@@ -91,21 +91,25 @@ function injectStyles(){
     '@keyframes rcAlertBlink{0%,100%{background:transparent;}50%{background:#1B9D40;}}',
     '.rc-alert-custom{animation:rcAlertBlinkCustom 1s ease-in-out infinite;border-left:3px solid var(--alert-col,#3b82f6);}',
     '@keyframes rcAlertBlinkCustom{0%,100%{background:transparent;}50%{background:var(--alert-col,#3b82f6);}}',
-    // AVISO DE PROXIMIDADE, MUDO: cinza discreto, so pra localizar na lista a
-    // corrida que esta chegando. Verde e azul ficaram reservados pro alarme de camada.
-    '.rc-perto{animation:rcPertoBlink 1.6s ease-in-out infinite;border-left:3px solid rgba(255,255,255,.28);}',
-    '@keyframes rcPertoBlink{0%,100%{background:transparent;}50%{background:rgba(255,255,255,.07);}}',
-    // AvB AGUARDANDO ENTRADA. Duas informacoes na mesma linha, em canais
-    // separados de proposito (Bruno, set/2026):
-    //   COR do pisca  = DE ONDE veio  -> verde: o motor da manha previu esta
-    //                                    azul:  pescada, a BW abriu do nada
-    //   SELO no topo  = QUAO BOM e'   -> TOP azul / HIGH laranja / GOOD roxo
-    // Uma cor so nao consegue responder as duas perguntas, e responder so uma
-    // era perder a outra.
+    // AVISO DE PROXIMIDADE: volta a piscar VERDE (Bruno, 09/09/2026). Ele tinha
+    // virado cinza em 08/09 porque o verde estava emprestado pro alarme de
+    // camada; agora que a cor da linha diz o TIPO (azul/laranja/roxo), o verde
+    // esta livre e volta pra funcao original — "esta chegando". Segue MUDO: o
+    // som so toca em promocao de tipo, decisao de 08/09 que nao mudou.
+    '.rc-perto{animation:rcPertoBlink 1.6s ease-in-out infinite;border-left:3px solid #1B9D40;}',
+    '@keyframes rcPertoBlink{0%,100%{background:transparent;}50%{background:rgba(27,157,64,.30);}}',
+    // AvB AGUARDANDO ENTRADA. Pisca e selo na COR DO TIPO (Bruno, 09/09/2026):
+    // TOP azul, HIGH laranja, GOOD roxo. Os dois canais dizem a mesma coisa de
+    // proposito — bater o olho na cor da linha ja responde a unica pergunta que
+    // importa na hora: quanto vale esse AvB.
     //
-    // Isto deixou de ser um flash de 12s e virou ESTADO: a linha fica marcada
-    // enquanto o AvB espera entrada, e sai 1 minuto depois da largada. O flash
-    // antigo passava enquanto voce estava em outra aba e voce nunca sabia.
+    // Por um dia a cor da linha disse a PROCEDENCIA (verde = a manha previu,
+    // azul = pescada) e o selo disse o tipo. Na tela isso obrigava a ler duas
+    // coisas pra entender uma. A procedencia continua no payload (da_manha), no
+    // Historico e no Placar; so nao disputa mais a cor da linha.
+    //
+    // Isto e' ESTADO, nao flash: a linha fica marcada enquanto o AvB espera
+    // entrada e sai 1 minuto depois da largada.
     '.rc-camada{animation:rcCamadaBlink 1s ease-in-out infinite;border-left:3px solid var(--cam-col,#1B9D40);}',
     '@keyframes rcCamadaBlink{0%,100%{background:transparent;}50%{background:var(--cam-col,#1B9D40);}}',
     // Selo da camada. Ocupa o lugar do "PRÓXIMA" verde na primeira linha: as
@@ -1283,32 +1287,35 @@ function _mmBw(r){
   return (c && c.dados && c.dados.encontrada && c.dados.bw) ? c.dados.bw : null;
 }
 
-// De qual balde veio o par: 'principal', 'secundario' ou 'surpresa'.
-// Vai gravado dentro do avb_escolhido, no "Entrei !", e e' o que o Historico
-// usa pra separar as tres categorias.
+// Os AvBs que a BW abriu NESTA corrida, ja classificados em TOP/HIGH/GOOD e em
+// ordem de merito. Vem do painel do dia, que e' quem chama o camadasDoDia.
 //
-// SURPRESA e' balde proprio de proposito: o motor nao previu aquele par de
-// manha, entao contar como VIP inflaria a estatistica de acerto DELE com algo
-// que quem viu foi voce.
-function _origemPickDoPar(r, ta, tb){
+// Devolve [] quando o painel ainda nao carregou ou a BW nao abriu nada — nos
+// dois casos a tela fica so com o card do motor da manha, que e' o que o Bruno
+// pediu em 09/09: "manter um unico AvB na tela se nao aparecer nenhuma das
+// opcoes pelo robo da BW".
+function _tiposDaCorrida(r){
+  try {
+    if (!window.PainelDia || !window.PainelDia.daCorrida) return [];
+    var lista = window.PainelDia.daCorrida(r && r.corrida, r && r.hora) || [];
+    // OPORTUNIDADE nao e' AvB da BW: e' o proprio par da manha voltando pela
+    // porta dos fundos, e ele ja esta na tela como card principal.
+    return lista.filter(function (x) { return x && x.camada !== 'OPORTUNIDADE'; });
+  } catch (e) { return []; }
+}
+
+// O tipo (TOP/HIGH/GOOD) de um par especifico nesta corrida, ou null.
+// Substitui o antigo _origemPickDoPar, que classificava em
+// 'principal'/'secundario'/'surpresa' — baldes de um modelo aposentado. O que
+// vai gravado no "Entrei !" agora e' o TIPO, a mesma palavra que o Historico,
+// o Placar e a lista usam.
+function _tipoDoPar(r, ta, tb){
   var iguais = function(x, y){ return String(x) === String(y); };
-  if (iguais(ta, r && r.trapFav) && iguais(tb, r && r.trapUnd)) return 'principal';
-  var bw = _mmBw(r);
-  if (bw) {
-    var acha = function(lista){
-      return (lista || []).filter(function(a){
-        return iguais(a.pick_trap, ta) && iguais(a.outro_trap, tb);
-      })[0];
-    };
-    var nasSurpresas = acha(bw.surpresas);
-    if (nasSurpresas) return 'surpresa';
-    var nosSecundarios = acha(bw.secundarios);
-    if (nosSecundarios) return nosSecundarios.nova ? 'surpresa' : 'secundario';
-  }
-  // Par que nao e' o principal e nao esta em lista nenhuma: inversao, ou par
-  // que ele montou na mao. Conta como secundario, nao como surpresa — surpresa
-  // e' especificamente o que a BW abriu e o motor nao tinha.
-  return 'secundario';
+  var achado = _tiposDaCorrida(r).filter(function(x){
+    return (iguais(x.pick_trap, ta) && iguais(x.outro_trap, tb))
+        || (iguais(x.pick_trap, tb) && iguais(x.outro_trap, ta));
+  })[0];
+  return achado ? String(achado.camada || '').toUpperCase() : null;
 }
 
 // Poe a classe da grade conforme quantos cards ha. Roda depois de qualquer
@@ -1324,53 +1331,54 @@ function _ajustaGradeAvb(){
   g.className = 'fp-grid g' + Math.min(n, 4);
 }
 
+// OS AvBs DA BW NA TELA DA CORRIDA (reescrito em 09/09/2026).
+//
+// Antes: dois baldes proprios, `surpresas` (vermelho/laranja) e `secundarios`
+// (cinza), vindos do monitor da BW, com regras de exibicao separadas — o
+// secundario so aparecia se o principal nao tivesse aberto, a surpresa aparecia
+// sempre, cada um com teto de 2. Era o ultimo pedaco do sistema ainda rodando
+// no modelo velho, enquanto lista, Historico e Placar ja falavam TOP/HIGH/GOOD.
+//
+// Agora: os cards vem do painel do dia, ja classificados pelo camadasDoDia, na
+// ordem de merito (tipo primeiro, depois split -> tempo -> pct). Ate 4, e o TIPO
+// PODE REPETIR: se a BW abriu dois pares que passam na regua TOP, os dois sao
+// TOP e os dois aparecem.
+//
+// Quando a BW nao abriu NADA, a tela fica so com o card do motor da manha —
+// "manter um unico AvB na tela se nao aparecer nenhuma das opcoes pelo robo da
+// BW" (Bruno, 09/09). E quando ela abriu, os que abriram ASSUMEM a tela: o
+// principal da manha sai, porque nao ha o que fazer com um par que o mercado
+// nao ofereceu.
 function _mmPintarBw(r){
   var box = document.getElementById('fp-alts');
-  var bw = _mmBw(r);
   if (!box) return;
 
   // Escolha feita: a tela fica so com ela. Nada de alternativa por baixo.
-  if (r.avbEscolhido || !bw) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
+  if (r.avbEscolhido) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
 
-  var card = function(a, rotulo, cor){
-    return _cardAvb(r, {
-      aTrap:a.pick_trap, bTrap:a.outro_trap,
-      aNome:a.pick_nome, bNome:a.outro_nome, odd:a.odd
-    }, { rotulo:rotulo, corRotulo:cor, escolhido:r.avbEscolhido });
-  };
-  var html = '';
+  var lista = _tiposDaCorrida(r);
+  if (!lista.length) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
 
-  // SURPRESAS primeiro: sao os pares que a BW abriu e a manha nao tinha, e e'
-  // a informacao que some quando a corrida larga. Precisam ser CARDS, nao so
-  // aviso — sem botao voce nao consegue entrar numa delas.
-  // O par do PRINCIPAL nao pode voltar como alternativa: apareciam dois cards
-  // do mesmo par, os dois marcados como escolhido.
+  // O par do PRINCIPAL nao volta como alternativa: apareciam dois cards do
+  // mesmo par, os dois marcados como escolhido.
   var ehPrincipal = function(x){
     return String(x.pick_trap) === String(r.trapFav) && String(x.outro_trap) === String(r.trapUnd);
   };
-  var sur = (bw.surpresas || []).filter(function(x){ return !ehPrincipal(x); }).slice(0, 2);
-  if (sur.length) {
-    // a etiqueta vai DENTRO do card: titulo separado viraria mais um filho da
+  // Uma vaga ja e' do card principal, entao sobram 3 aqui — a nao ser que o
+  // principal esteja na propria lista da BW, caso em que ele sai daqui e as 4
+  // vagas sao todas dela.
+  var alts = lista.filter(function(x){ return !ehPrincipal(x); }).slice(0, 3);
+  if (!alts.length) { box.innerHTML = ''; _ajustaGradeAvb(); return; }
+
+  box.innerHTML = alts.map(function(a){
+    var tipo = String(a.camada || '').toUpperCase();
+    return _cardAvb(r, {
+      aTrap:a.pick_trap, bTrap:a.outro_trap,
+      aNome:a.pick_nome, bNome:a.outro_nome, odd:a.odd_bw
+    // A etiqueta vai DENTRO do card: titulo separado viraria mais um filho da
     // grade e bagunçaria a contagem do arranjo.
-    html += sur.map(function(a){
-      return card(a, (bw.alerta_forte ? '\u26a1 ' : '') + 'SURPRESA', bw.alerta_forte ? '#ef4444' : '#f59e0b');
-    }).join('');
-  }
-
-  // Secundarios: so quando o principal NAO abriu (com ele aberto nao ha o que
-  // oferecer no lugar).
-  if (!bw.abriu && bw.secundarios && bw.secundarios.length) {
-    var sec = bw.secundarios.filter(function(a){
-      if (ehPrincipal(a)) return false;   // nem o principal
-      // o que ja saiu como surpresa nao se repete aqui
-      return !sur.some(function(x){ return String(x.pick_trap)===String(a.pick_trap) && String(x.outro_trap)===String(a.outro_trap); });
-    }).slice(0, 2);
-    if (sec.length) {
-      html += sec.map(function(a){ return card(a, 'SECUNDÁRIO', 'var(--mut)'); }).join('');
-    }
-  }
-
-  box.innerHTML = html;
+    }, { rotulo:tipo, corRotulo:_corDaCamada(tipo), escolhido:r.avbEscolhido });
+  }).join('');
   _ajustaGradeAvb();
 }
 
@@ -1451,21 +1459,12 @@ function _mmPintarNotas(r){
       'o rival tem espaço livre e pode furar pelo buraco: atenção'));
   }
 
-  // AvB NOVO, nao mapeado: par que a BW abriu e que a analise da manha nao
-  // tinha. E' a informacao mais perecivel da tela — some quando a corrida
-  // larga — entao vem ANTES das outras notas, nao depois.
-  var bwS = _mmBw(r);
-  if (bwS && bwS.tem_surpresa && bwS.surpresas && bwS.surpresas.length) {
-    var forte = bwS.alerta_forte;
-    var pares = bwS.surpresas.slice(0,3).map(function(x){
-      return 'T' + x.pick_trap + ' x T' + x.outro_trap
-        + (x.pct != null ? ' (' + x.pct + '%' + (x.odd != null ? ', ' + x.odd : '') + ')' : '');
-    }).join('  ·  ');
-    out.push(nota(forte ? '#ef4444' : '#f59e0b',
-      (forte ? '&#9889; ' : '') + 'AvB novo, não mapeado: ' + pares,
-      forte ? 'par forte (75% ou mais) que a BW abriu e a análise da manhã não tinha'
-            : 'a BW abriu um par que não estava na análise da manhã'));
-  }
+  // A nota "AvB novo, nao mapeado: T5 x T1 (95%, 1.63) · ..." SAIU em
+  // 09/09/2026. Ela existia porque a tela nao mostrava esses pares: era um
+  // aviso de que havia algo que voce nao estava vendo. Agora eles sao CARDS,
+  // com selo do tipo e botao de entrar, entao a nota repetia em texto o que
+  // esta desenhado logo abaixo — e repetia com o vocabulario velho
+  // ("surpresa"), que nao existe mais.
 
   // Estado da BW. "nao monitorada" e "nao abriu" sao coisas diferentes: a
   // primeira e' a casa nem ter olhado ainda, a segunda e' ter olhado e o par
@@ -2214,10 +2213,11 @@ function confirmarEntrada(){
   if (pe && pe.a && pe.b) {
     var snap = _snapshotDoPar(r, pe.a, pe.b, odd);
     snap.origem = r._avbOrigem || 'principal';
-    // De qual balde veio o par. O Historico separa VIP, secundario e SURPRESA
-    // por este campo — sem ele, uma surpresa entraria na conta do motor como
-    // se ele tivesse previsto.
-    snap.origem_pick = _origemPickDoPar(r, pe.a, pe.b);
+    // O TIPO do par (TOP/HIGH/GOOD), que e' o que o Historico registra desde
+    // 09/09/2026. Antes ia aqui o balde 'principal'/'secundario'/'surpresa', de
+    // um modelo que nao existe mais. null quando a BW nao tinha aberto o par —
+    // entrada manual num par que o mercado nao ofereceu.
+    snap.tipo = _tipoDoPar(r, pe.a, pe.b);
     _persistirEscolha(r, snap);
   }
 
@@ -2539,12 +2539,10 @@ function renderRaceListPanel(avbs) {
       + (r.flagAtrasada ? ' rc-atrasada' : '');
     if (alertCustom && !avb) { div.style.setProperty('--alert-col', CORES_ALARME[ALARME_FILTRO.cor] || '#3b82f6'); }
     if (avb) {
-      // COR DO PISCA = procedencia. Verde: o motor da manha previu que esta
-      // corrida abriria. Azul: pescada — a BW abriu sem estar na lista da
-      // manha. E' a mesma convencao de set/2026, so que agora persistente.
-      div.style.setProperty('--cam-col', avb.da_manha ? '#1B9D40' : '#3b82f6');
-      // COR DO SELO = camada. Pergunta diferente, canal diferente.
-      div.style.setProperty('--cam-badge', _corDaCamada(avb.camada));
+      // Pisca e selo na MESMA cor, a do tipo. Uma pergunta, uma resposta.
+      var _cor = _corDaCamada(avb.camada);
+      div.style.setProperty('--cam-col', _cor);
+      div.style.setProperty('--cam-badge', _cor);
     }
     // So o alarme de FILTRO avisa daqui, e ele tem liga/desliga proprio nas
     // Configuracoes. O aviso de proximidade virou mudo — ver checkRaceAlerts.

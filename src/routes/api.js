@@ -1672,7 +1672,11 @@ router.get('/painel-dia', (req, res) => {
           todos, lastSp: pc.lastSp, pares, abertoEm,
           corrida: row.corrida, hora: row.hora,
           finishingOrderJson: row.finishing_order_json,
-          parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar
+          parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar,
+          // AGORA entra por parametro (o modulo e' puro). E' o relogio que tira
+          // de cena a OPORTUNIDADE 1 min depois da largada, sem esperar o robo
+          // de resultados gravar a chegada — ele costuma demorar bem mais.
+          agora: Date.now()
         });
         if (!confrontos.length) continue;
         corridasBase.push({ race_id: row.id, hora: row.hora, hora_br: _horaBr(row.hora), corrida: row.corrida, pista: _pista(row.corrida), dist: row.dist || null, ja_correu: cd.jaCorreu(row.finishing_order_json), confrontos });
@@ -1693,16 +1697,26 @@ router.get('/painel-dia', (req, res) => {
         escId = _idc(c.corrida, c.hora, Number(esc.aTrap), Number(esc.bTrap));
         entrada = { odd: Number(p.odd), stake: (p.bet_unidades != null ? Number(p.bet_unidades) : null), em: esc.ts || null, id_confronto: escId };
       }
+      // EXPIRADO e' calculado NA SAIDA, nao no cache: o cache dura minutos e o
+      // relogio anda dentro dele. Calculado la, uma corrida entraria no cache
+      // como "ainda vale" e continuaria assim depois de ter largado.
+      const expirado = cd.expirou(c.hora, Date.now());
       return {
         race_id: c.race_id, hora: c.hora, hora_br: c.hora_br, corrida: c.corrida, pista: c.pista, dist: c.dist,
+        ja_correu: c.ja_correu, expirado,
         entrada,
         confrontos: c.confrontos.map(cf => Object.assign({}, cf, {
           escolhido: (escId != null && cf.id === escId),
-          // AGUARDANDO ENTRADA tem que olhar a LARGADA (Bruno set/2026). Sem o
-          // !c.ja_correu, confronto de corrida encerrada continuava 'aguardando' pra
-          // sempre: os tiles da Analisar enchiam de corrida que ja acabou horas antes
-          // e empurravam pra fora da janela de 4 o que ainda dava pra apostar.
-          aguardando_entrada: (cf.camada !== 'OPORTUNIDADE' && entrada == null && !c.ja_correu)
+          // AGUARDANDO ENTRADA olha a LARGADA por DOIS caminhos, e precisa dos
+          // dois. `ja_correu` e' a chegada gravada — definitivo, mas so chega
+          // quando o robo de resultados passa, o que pode demorar. `expirado` e'
+          // o relogio, 1 min depois do horario — antecipado e sempre disponivel.
+          // So com o primeiro, um AvB de corrida que largou ha 4 minutos seguia
+          // "aguardando" e tomava a tela de disputa: foi o Romfd A5 das 16:19 em
+          // 09/09. So com o segundo, uma corrida atrasada de verdade sumiria
+          // antes de acontecer.
+          aguardando_entrada: (cf.camada !== 'OPORTUNIDADE' && entrada == null
+                               && !c.ja_correu && !expirado)
         }))
       };
     });

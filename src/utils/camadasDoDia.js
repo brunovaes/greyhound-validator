@@ -1,53 +1,53 @@
 'use strict';
 // src/utils/camadasDoDia.js
 //
-// FONTE UNICA da regra de CAMADAS (OPORTUNIDADE / TOP / HIGH / GOOD).
+// FONTE UNICA da regra de TIPOS (OPORTUNIDADE / TOP / HIGH / GOOD).
 //
 // Por que existe: ate set/2026 essa regra vivia inteira dentro do handler do
-// GET /api/painel-dia. Quando o Historico passou a listar uma linha por AvB, ele
-// precisou da MESMA classificacao — e reescrever a regua num segundo lugar e' o
-// jeito conhecido de criar dois numeros pra mesma coisa que divergem em silencio
-// no dia em que alguem afina um corte. E' o mesmo motivo pelo qual o
-// avbResultado.js foi criado pro "bateu". Aqui e' o unico lugar onde a camada
-// de um confronto e' decidida; quem precisa da regra IMPORTA daqui.
+// GET /api/painel-dia. Quando o Historico passou a precisar da MESMA
+// classificacao, reescrever a regua num segundo lugar seria o jeito conhecido de
+// criar dois numeros pra mesma coisa que divergem em silencio no dia em que
+// alguem afina um corte. E' o mesmo motivo pelo qual o avbResultado.js foi
+// criado pro "bateu". Aqui e' o unico lugar onde o tipo de um confronto e'
+// decidido; quem precisa da regra IMPORTA daqui.
 //
 // Este modulo e' PURO: nao abre banco, nao le config, nao faz rede. Recebe o que
 // o chamador ja tem em maos (os confrontos do motor + os pares que a BW abriu) e
 // devolve os confrontos classificados. Isso e' de proposito — e' o que torna a
-// regra testavel sem subir servidor.
+// regra testavel sem subir servidor. Ate o relogio entra por parametro (`agora`),
+// pelo mesmo motivo: teste que depende da hora em que roda passa de manha e
+// falha a tarde.
 //
-// ── O MODELO (Bruno, set/2026) ──────────────────────────────────────────────
+// ── O DIA, COMO O BRUNO ESCREVEU (09/09/2026) ───────────────────────────────
+//
+// 1. MOTOR DA MANHA lista as oportunidades pela proximidade da coluna SP. Cada
+//    par que passa fica em tela e no Historico com o tipo OPORTUNIDADE.
+//
+// 2. Cerca de 5 min antes da corrida, MOTOR DA BW roda. Ele avalia TODAS as
+//    possibilidades cruzadas, priorizando o par que ja esta em tela:
+//      - o par da manha ABRIU  -> o tipo dele vira TOP, HIGH ou GOOD pela regua
+//      - o par da manha NAO abriu e outros abriram -> os que abriram ASSUMEM a
+//        tela, e o registro da manha fica off ate 1 min depois da corrida
+//    O motor da BW tem acesso livre: pode achar AvB ate em corrida que nao tinha
+//    nenhuma oportunidade de manha (a "pescada").
+//
+// 3. No fim do dia NAO pode sobrar registro com tipo diferente de TOP, HIGH ou
+//    GOOD. Uma OPORTUNIDADE que a BW nunca abriu simplesmente deixa de ser
+//    calculada 1 minuto depois da largada — ela nunca foi gravada em lugar
+//    nenhum, entao nao ha o que apagar.
+//
+// 4. A tela comporta 4 AvBs. Entram os 4 MAIS BEM AVALIADOS, e o tipo PODE se
+//    repetir (dois TOP na mesma corrida e' normal). O Historico, esse, guarda UM
+//    registro por corrida: o AvB em que ele entrou; se nao entrou em nenhum, o
+//    mais bem avaliado dos 4.
 //
 // A ODD TEM UM PAPEL SO, E E' NA MANHA. Ela responde "quais AvBs a BW tem chance
 // de abrir?", porque a casa so abre frente-a-frente entre galgos de preco
-// parecido. Nada alem disso. Depois que a BW abre, a odd sai da decisao.
+// parecido. Depois que a BW abre, a odd sai da decisao — quem classifica e' a
+// regua de qualidade do motor.
 //
-// MOTOR DA MANHA — POOL de candidatos:
-//   um par entra se tem conviccao (pct > parelhoAte) E as SPs dos dois galgos
-//   estao proximas: DIFERENCA absoluta entre as odds decimais da ULTIMA corrida
-//   valida de cada um, <= difSpMax (1,0 por padrao).
-//   E' DIFERENCA, nao razao: 7/2 x 4/1 (4,50 e 5,00) dista 0,50 e entra; dois
-//   azaroes em 7,00 e 9,00 distam 2,00 e ficam de fora, ainda que a razao entre
-//   eles seja pequena. Enquanto a BW nao confirma, o par e' uma OPORTUNIDADE.
-//
-// MOTOR BW — CLASSIFICACAO, sem olhar preco:
-//   todo par que a BW abriu e' avaliado pela REGUA DE QUALIDADE do motor:
-//     tier 'TOP'     -> TOP    (categoria + CalTm >= 0,20 + ganha split + ganha podio)
-//     tier 'REGULAR' -> HIGH   (regua mais frouxa: CalTm >= 0,10, aceita empate)
-//     tier  null     -> GOOD   (nao passa em nenhuma; so conviccao)
-//   NAO ha teto de colagem de mercado aqui (decisao do Bruno set/2026: "no motor
-//   BW e' irrelevante ver odd"). A razao de mercado continua sendo CALCULADA e
-//   exposta no payload — serve pra voce ler quanto o mercado equilibrou o par
-//   na hora de entrar —, mas nao barra mais nada.
-//   Par que NAO estava no pool da manha entra do mesmo jeito (a "pescada").
-//
-// LIMITES: no maximo 1 de cada camada por corrida e no maximo 3 linhas. Havendo
-//   mais de um candidato pra mesma camada, ganha o de melhor SPLIT; empatou,
-//   melhor TEMPO (CalTm); empatou de novo, maior pct.
-//
-// SAIDA DE CENA: a OPORTUNIDADE que a BW nao abriu some DEPOIS que a corrida
-//   larga. Antes disso ela fica visivel, pra dar pra acompanhar o funil. Corrida
-//   sem nenhuma das tres no fim sai inteira (o chamador descarta lista vazia).
+// NAO EXISTE tipo SURPRESA nem SECUNDARIO. Eram baldes de um modelo antigo, em
+// que o Bruno marcava na mao possiveis entradas novas. Foram aposentados.
 //
 // USO TIPICO
 //   const cd = require('../utils/camadasDoDia');
@@ -64,10 +64,17 @@
 // DIF_SP_MAX = distancia maxima entre as odds decimais dos dois galgos na
 //   ultima corrida valida. Forma o POOL da manha. E' o UNICO lugar onde a odd
 //   decide alguma coisa.
-// TETO_INFO  = referencia de "colada" no mercado. Nao filtra mais nada; so
-//   alimenta o campo `colada` que a tela usa pra sinalizar equilibrio.
+// TETO_INFO  = referencia de "colada" no mercado. Nao filtra nada; so alimenta
+//   o campo `colada`, que a tela usa pra sinalizar equilibrio.
+// MAX_TELA   = quantos cabem na tela de disputa. Quatro e' o limite fisico do
+//   arranjo em quadrado; o quinto nao teria onde aparecer.
+// GRACA_MIN  = minutos DEPOIS da largada em que o AvB continua valendo. A BW
+//   ainda aceita entrada nesse intervalo, e o robo de resultados costuma
+//   demorar mais que isso pra gravar a chegada.
 const DIF_SP_MAX = 1.0;
 const TETO_INFO = 1.5;
+const MAX_TELA = 4;
+const GRACA_MIN = 1;
 
 // ── normalizadores (o id de um confronto tem que ser ESTAVEL entre polls) ────
 const _c = c => String(c || '').trim().toLowerCase();
@@ -102,14 +109,46 @@ function horaBr(hora) {
   return hr + ':' + m[2];
 }
 
-// A corrida ja largou? Gatilho pra tirar de cena a OPORTUNIDADE que nao virou
-// nada. Usa a chegada gravada porque e' o unico sinal confiavel do payload — se
-// o robo de resultados ainda nao passou, a linha fica mais um pouco e some na
-// leitura seguinte. Errar mostrando demais e' melhor do que sumir com o que vale.
+// Minutos daqui ate a largada, positivo antes e negativo depois. `agora` entra
+// por parametro (ms) pra este modulo continuar puro e testavel.
+//
+// O servidor roda em UTC e o Bruno le em horario de Brasilia, entao a conta
+// converte a hora UK do PDF pra BR e compara com o relogio tambem em BR
+// (UTC-3). O mesmo -3 que o resto do sistema usa pra decidir a que dia uma
+// sessao pertence.
+function minutosParaLargada(hora, agora) {
+  const hb = horaBr(hora);
+  const m = String(hb).match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const largada = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  const d = (agora instanceof Date) ? agora : new Date(agora || Date.now());
+  const br = new Date(d.getTime() - 3 * 3600 * 1000);
+  const agoraMin = br.getUTCHours() * 60 + br.getUTCMinutes();
+  let dif = largada - agoraMin;
+  // Volta do dia: 23:50 x 00:05 dariam -1425 em vez de 15. Sem isto, a ultima
+  // corrida da noite sumiria da tela logo depois da meia-noite UTC.
+  if (dif > 720) dif -= 1440;
+  if (dif < -720) dif += 1440;
+  return dif;
+}
+
+// A corrida ja largou? Continua valendo a chegada gravada — e' o sinal
+// definitivo. O relogio (minutosParaLargada) e' o sinal ANTECIPADO, pra tela nao
+// depender do robo de resultados ter passado.
 function jaCorreu(finishingOrderJson) {
   let o = finishingOrderJson;
   try { o = (typeof o === 'string') ? JSON.parse(o) : o; } catch (e) { return false; }
   return Array.isArray(o) && o.length > 0;
+}
+
+// SAIU DE CENA? Passou da largada + a graca de 1 minuto. Sem `agora` (chamador
+// antigo, ou teste que nao quer relogio) devolve false: melhor mostrar demais do
+// que sumir com o que vale.
+function expirou(hora, agora, gracaMin) {
+  if (agora == null) return false;
+  const g = (gracaMin != null && gracaMin >= 0) ? gracaMin : GRACA_MIN;
+  const m = minutosParaLargada(hora, agora);
+  return m != null && m < -g;
 }
 
 // DISTANCIA DE SP entre os dois galgos de um confronto, em odd decimal.
@@ -125,10 +164,10 @@ function distanciaSp(lastSp, trapA, trapB) {
 }
 
 // ── desempate: SPLIT, depois TEMPO, depois pct (maior ganha em todos) ────────
-// Decisao do Bruno (set/2026). O split manda porque arrancar na frente e' o que
-// mais decide um frente-a-frente; o CalTm desempata; o pct so entra se os dois
-// primeiros empatarem. Campo ausente vale -Infinity pra nunca ganhar por acaso
-// de um par que tem a medida.
+// Decisao do Bruno (set/2026, reconfirmada em 09/09). O split manda porque
+// arrancar na frente e' o que mais decide um frente-a-frente; o CalTm desempata;
+// o pct so entra se os dois primeiros empatarem. Campo ausente vale -Infinity
+// pra nunca ganhar por acaso de um par que tem a medida.
 function _n(v) { return (v == null || v === '' || isNaN(Number(v))) ? -Infinity : Number(v); }
 function melhorQue(a, b) {
   if (_n(a.split_dif) !== _n(b.split_dif)) return _n(a.split_dif) > _n(b.split_dif);
@@ -136,12 +175,33 @@ function melhorQue(a, b) {
   return _n(a.pct) > _n(b.pct);
 }
 
-// A regua de qualidade do motor vira a camada. O `tier` ja vem calculado por
+// A regua de qualidade do motor vira o tipo. O `tier` ja vem calculado por
 // confronto no motorManha (passaRegua contra a regua TOP e depois a REGULAR).
 function camadaPorRegua(tier) {
   if (tier === 'TOP') return 'TOP';
   if (tier === 'REGULAR') return 'HIGH';
   return 'GOOD';
+}
+
+// Forca do tipo, pra ordenar. OPORTUNIDADE fica atras de todos: ela nao e'
+// resultado de nada ainda, e nunca disputa a vaga do Historico com quem a BW
+// confirmou.
+const ORDEM_TIPO = ['TOP', 'HIGH', 'GOOD', 'OPORTUNIDADE'];
+function forcaTipo(t) {
+  const i = ORDEM_TIPO.indexOf(String(t || '').trim().toUpperCase());
+  return i < 0 ? 99 : i;
+}
+
+// ORDEM DE MERITO, a regra do "mais bem avaliado": tipo primeiro (TOP > HIGH >
+// GOOD), e dentro do mesmo tipo o desempate de sempre. E' com ela que se decide
+// quem ocupa as 4 vagas da tela e qual AvB representa a corrida no Historico
+// quando nao houve aposta.
+function ordenaPorMerito(lista) {
+  return lista.slice().sort(function (a, b) {
+    const f = forcaTipo(a.camada) - forcaTipo(b.camada);
+    if (f !== 0) return f;
+    return melhorQue(a, b) ? -1 : (melhorQue(b, a) ? 1 : 0);
+  });
 }
 
 // ── mercado (INFORMATIVO) ────────────────────────────────────────────────────
@@ -184,8 +244,8 @@ function montaConfronto(ctx, s, camada, daManha, mk, spDif) {
     razao_mercado: mk ? mk.razao : null,
     market_pct: mk ? mk.market_pct : null,
     // APROXIMADO: vem do capturado_em do avb_abertos, que se move enquanto o
-    // mercado enche de pares. Serve pra ORDENAR os tiles. NAO serve pra
-    // deduplicar alarme — o gatilho e' a transicao de camada entre polls.
+    // mercado enche de pares. Nao serve pra ordenar nem pra deduplicar alarme —
+    // fica no payload so pra auditoria.
     promovido_em: (camada !== 'OPORTUNIDADE' && ctx.abertoEm) ? ctx.abertoEm : null,
     bateu: ctx.bateuPar(ctx.finishingOrderJson, Number(s.pick_trap), Number(s.outro_trap)),
     // ADITIVOS: as medidas que decidiram, pra auditar sem abrir o banco.
@@ -195,7 +255,10 @@ function montaConfronto(ctx, s, camada, daManha, mk, spDif) {
     split_dif: (s.split_dif != null ? s.split_dif : null),
     caltm_dif: (s.caltm_dif != null ? s.caltm_dif : null),
     sp_dif: (spDif != null ? spDif : null),
-    colada_mercado: mk ? !!mk.colada : null
+    colada_mercado: mk ? !!mk.colada : null,
+    // Preenchido no fim: o primeiro da ordem de merito entre os que a BW abriu.
+    // E' ele que representa a corrida no Historico quando nao houve aposta.
+    melhor: false
   };
 }
 
@@ -208,6 +271,8 @@ function confrontosDaCorrida(opts) {
   const difSpMax = (o.difSpMax > 0) ? o.difSpMax : DIF_SP_MAX;
   const tetoInfo = (o.tetoInfo > 0) ? o.tetoInfo : TETO_INFO;
   const parelhoAte = (o.parelhoAte > 0) ? o.parelhoAte : 0;
+  const maxTela = (o.maxTela > 0) ? o.maxTela : MAX_TELA;
+  const agora = (o.agora != null) ? o.agora : null;
   const ctx = {
     corrida: o.corrida, hora: o.hora,
     abertoEm: o.abertoEm || null,
@@ -236,42 +301,51 @@ function confrontosDaCorrida(opts) {
   }
 
   // ── 2) O QUE A BW ABRIU ───────────────────────────────────────────────────
-  // Sem teto de mercado: todo par aberto entra na avaliacao. A REGUA decide a
-  // camada; o pct decide se ha conviccao suficiente pra valer a tela.
-  // Um slot por camada, disputa por split -> tempo -> pct.
-  const slots = { TOP: null, HIGH: null, GOOD: null };
-  // `avaliados` guarda TODO par que a BW abriu e o motor aprovou, inclusive quem
-  // PERDEU a disputa do slot. Eles nao voltam como OPORTUNIDADE la embaixo: o
-  // mercado ja abriu pra eles, entao nao estao aguardando nada.
-  const avaliados = new Set();
+  // Sem teto de mercado e SEM limite por tipo: todo par que a BW abriu e que tem
+  // conviccao do motor entra na avaliacao, e a regua diz o tipo de cada um.
+  //
+  // Ate 09/09/2026 havia um slot por tipo e teto de 3 linhas. O Bruno derrubou
+  // os dois: a tela comporta 4 e o tipo PODE repetir — se a BW abriu dois pares
+  // que passam na regua TOP, os dois sao TOP e os dois merecem estar na tela.
+  // Esconder o segundo era decidir por ele qual dos dois valia olhar.
+  const classificados = [];
+  const vistos = new Set();
   for (const par of pares) {
     if (par.marketPct == null) continue;
     const ta = Number(par.aTrap), tb = Number(par.bTrap);
+    const k = chaveDe(ta, tb);
+    if (vistos.has(k)) continue;               // a BW as vezes repete o par no feed
     const s = todos.find(x => mesmoPar(Number(x.pick_trap), Number(x.outro_trap), ta, tb));
-    if (!s || !(s.pct > parelhoAte)) continue;        // sem opiniao/conviccao do motor
-    avaliados.add(chaveDe(ta, tb));
-    const camada = camadaPorRegua(s.tier);
-    if (slots[camada] == null || melhorQue(s, slots[camada])) slots[camada] = s;
+    if (!s || !(s.pct > parelhoAte)) continue; // sem opiniao/conviccao do motor
+    vistos.add(k);
+    classificados.push(montaConfronto(
+      ctx, s, camadaPorRegua(s.tier), daManha.has(k), mercadoDe(pares, s, tetoInfo), difDe[k]
+    ));
   }
 
-  const confrontos = [];
-  for (const camada of ['TOP', 'HIGH', 'GOOD']) {
-    const s = slots[camada];
-    if (!s) continue;
-    const k = chaveDe(s.pick_trap, s.outro_trap);
-    confrontos.push(montaConfronto(ctx, s, camada, daManha.has(k), mercadoDe(pares, s, tetoInfo), difDe[k]));
-  }
+  // ORDEM DE MERITO e corte da tela. O primeiro leva a marca `melhor`: e' ele
+  // que vai pro Historico quando o Bruno nao entrar em nenhum.
+  const confrontos = ordenaPorMerito(classificados).slice(0, maxTela);
+  if (confrontos.length) confrontos[0].melhor = true;
 
   // ── 3) OPORTUNIDADE ───────────────────────────────────────────────────────
-  // Enquanto a corrida nao largou, mostra UM achado da manha que a BW ainda nao
-  // abriu — e' o que da pra acompanhar o funil durante o dia. Depois da largada
-  // ela some: o registro do dia so guarda o que o mercado abriu. So entra se
-  // sobrou vaga dentro do teto de 3.
-  if (!jaCorreu(ctx.finishingOrderJson) && confrontos.length < 3) {
+  // So aparece quando a BW NAO abriu nada nesta corrida. E' o par que o motor da
+  // manha levantou, na tela pra voce analisar enquanto espera o mercado.
+  //
+  // Assim que a BW abre qualquer coisa, ela sai: "os que abriram assumem a tela"
+  // (Bruno, 09/09). E ela some de vez 1 minuto depois da largada — o registro do
+  // dia so guarda o que o mercado confirmou, entao um AvB que nunca abriu nao
+  // pode sobreviver ate o Historico.
+  //
+  // Nao ha nada pra apagar quando isso acontece: a OPORTUNIDADE nunca e'
+  // gravada, e' recalculada a cada leitura a partir do PDF + do avb_abertos.
+  if (!confrontos.length
+      && !jaCorreu(ctx.finishingOrderJson)
+      && !expirou(ctx.hora, agora)) {
     let melhor = null;
     for (const s of todos) {
       const k = chaveDe(s.pick_trap, s.outro_trap);
-      if (!daManha.has(k) || avaliados.has(k)) continue;
+      if (!daManha.has(k)) continue;
       if (melhor == null || melhorQue(s, melhor)) melhor = s;
     }
     if (melhor) {
@@ -283,9 +357,32 @@ function confrontosDaCorrida(opts) {
   return confrontos;
 }
 
+// ── QUEM VAI PRO HISTORICO ───────────────────────────────────────────────────
+// UM registro por corrida (Bruno, 09/09/2026):
+//   - entrou em algum dos AvBs -> e' esse, sempre, mesmo que nao fosse o melhor
+//   - nao entrou em nenhum     -> o mais bem avaliado
+//   - so ha OPORTUNIDADE       -> nenhum: a corrida nao entra no Historico
+//
+// A aposta ganha do merito de proposito. O Historico e' o registro do que
+// ACONTECEU: trocar o AvB que ele apostou pelo que o motor preferia apagaria a
+// decisao dele do proprio registro.
+//
+// `idEscolhido` e' o id do confronto apostado (o mesmo idConfronto), ou null.
+function registroDoHistorico(confrontos, idEscolhido) {
+  const lista = Array.isArray(confrontos) ? confrontos : [];
+  const validos = lista.filter(c => c && c.camada !== 'OPORTUNIDADE');
+  if (!validos.length) return null;
+  if (idEscolhido != null) {
+    const esc = validos.find(c => c.id === idEscolhido);
+    if (esc) return esc;
+  }
+  return validos.find(c => c.melhor) || ordenaPorMerito(validos)[0] || null;
+}
+
 module.exports = {
-  DIF_SP_MAX, TETO_INFO,
+  DIF_SP_MAX, TETO_INFO, MAX_TELA, GRACA_MIN,
   chaveCorrida, idConfronto, mesmoPar, pista, horaBr,
-  jaCorreu, melhorQue, camadaPorRegua, distanciaSp,
-  mercadoDe, montaConfronto, confrontosDaCorrida
+  jaCorreu, expirou, minutosParaLargada,
+  melhorQue, camadaPorRegua, forcaTipo, ordenaPorMerito, distanciaSp,
+  mercadoDe, montaConfronto, confrontosDaCorrida, registroDoHistorico
 };
