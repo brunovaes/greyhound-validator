@@ -1492,12 +1492,167 @@ router.get('/sessions', (req, res) => {
 // estrategia que e' melhor, ou so o metodo de contagem?).
 // Resultado null (trap fora da chegada) fica FORA do denominador: nao conta
 // nem como acerto nem como erro.
+// ── ACERTOS "GERAL": A MESMA MEDIDA DO HISTORICO (Bruno, 10/09/2026) ────────
+//
+// Por que existe: o card "Acertos do dia" mostrava 82% enquanto o Historico
+// mostrava 65%. O card lia `dia.motor` — a taxa do AvB do MOTOR DA MANHA em
+// TODAS as corridas analisadas, inclusive as que a BW nunca abriu. O Historico
+// mede outra coisa: o AvB que a BW ABRIU, um por corrida.
+//
+// O `_pintaAcertos` do app.js ja procurava `tres.geral` e caia no motor "enquanto
+// o /api/acertos-resumo nao devolver esse campo". Nunca devolveu. Este bloco e o
+// campo que faltava — o lado do servidor que ficou por escrever quando o conceito
+// de "um AvB por corrida" entrou.
+//
+// A conta e a MESMA do Historico, de proposito, e pelo mesmo caminho:
+// precalcDaCorrida -> confrontosDaCorrida -> tira OPORTUNIDADE -> a aposta se
+// houve, senao registroDoHistorico. Reescrever a regra aqui seria a quarta copia
+// dela no sistema, e as copias divergem em silencio.
+//
+// CUSTO. Isto roda o motor corrida a corrida; o card do MES varreria o mes
+// inteiro a cada poll da sidebar. Por isso o cache e por DIA: o mes e a soma dos
+// dias, e so o dia de hoje recalcula com frequencia. Dia fechado quase nunca
+// muda — muda so quando o robo de resultados preenche uma chegada atrasada —,
+// entao 10 min de TTL nele e folgado.
+const _cacheGeral = new Map();               // 'YYYY-MM-DD|userId' -> { ts, v }
+const _TTL_GERAL_HOJE = 60 * 1000;
+const _TTL_GERAL_PASSADO = 10 * 60 * 1000;
+
+function _geralVazio() {
+  return { qtd: 0, ok: 0, err: 0, tot: 0, acertos: 0, total: 0, pct: null };
+}
+
+function _geralCalcula(date, userId) {
+  const mm = require('../utils/motorManha');
+  const cd = require('../utils/camadasDoDia');
+  const { bateuPar } = require('../utils/avbResultado');
+  const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+  const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+  let difSpCfg = 0, tetoInfoCfg = 0;
+  try {
+    const c = db.prepare('SELECT avb_sp_dif_max, avb_teto_bw FROM analysis_config WHERE user_id=?').get(CANONICO);
+    if (c) {
+      if (c.avb_sp_dif_max > 0) difSpCfg = c.avb_sp_dif_max;
+      if (c.avb_teto_bw > 0) tetoInfoCfg = c.avb_teto_bw;
+    }
+  } catch (e) { /* banco antigo: cai no default do camadasDoDia */ }
+
+  // Mesmo recorte do painel-dia e do Historico: o DIA inteiro, todas as sessoes.
+  const rows = db.prepare(
+    "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json, "
+    + "       (SELECT rud.avb_escolhido FROM race_user_data rud WHERE rud.race_id=r.id AND rud.user_id=?) AS avb_escolhido "
+    + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
+    + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+  ).all(userId, date, CANONICO);
+
+  const h2h = {};
+  try {
+    for (const p of db.prepare('SELECT corrida, hora, pares_json, capturado_em FROM avb_abertos WHERE data=?').all(date)) {
+      let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {}
+      h2h[cd.chaveCorrida(p.corrida, p.hora)] = { pares: arr, em: p.capturado_em || null };
+    }
+  } catch (e) {}
+
+  let ok = 0, err = 0, qtd = 0;
+  for (const row of rows) {
+    let hf = null, ha = null, rc = null;
+    try { hf = JSON.parse(row.hist_full); } catch (e) { continue; }
+    try { ha = JSON.parse(row.hist_all); } catch (e) {}
+    try { rc = JSON.parse(row.race_card); } catch (e) {}
+    if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) continue;
+    let pc;
+    try {
+      pc = mm.precalcDaCorrida(hf, ha, rc, {
+        dataCorrida: row.data_card || date,
+        trackCorrida: cd.pista(row.corrida),
+        distCorrida: row.dist || null
+      }, opts);
+    } catch (e) { continue; }
+
+    const bw = h2h[cd.chaveCorrida(row.corrida, row.hora)] || null;
+    let confs = cd.confrontosDaCorrida({
+      todos: Array.isArray(pc.todos) ? pc.todos : [], lastSp: pc.lastSp,
+      pares: bw ? bw.pares : [], abertoEm: bw ? bw.em : null,
+      corrida: row.corrida, hora: row.hora,
+      finishingOrderJson: row.finishing_order_json,
+      parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar,
+      // `agora: null` igual ao Historico: isto e registro do passado, e o
+      // resultado de um dia fechado nao pode depender da hora em que voce olha.
+      agora: null
+    });
+    confs = confs.filter(function (c) { return c.camada !== 'OPORTUNIDADE'; });
+
+    // A APOSTA NUNCA SOME, igual no Historico: se voce entrou num par que o
+    // painel nao listou, ele entra como registro proprio. Sem isto o card e a
+    // tabela divergiriam de novo, exatamente na corrida que mais importa.
+    let esc = null; try { esc = row.avb_escolhido ? JSON.parse(row.avb_escolhido) : null; } catch (e) {}
+    let escId = null;
+    if (esc && esc.aTrap != null && esc.bTrap != null) {
+      escId = cd.idConfronto(row.corrida, row.hora, Number(esc.aTrap), Number(esc.bTrap));
+      if (!confs.some(function (c) { return c.id === escId; })) {
+        confs.push({
+          id: escId, camada: String(esc.origem || esc.origem_pick || 'FORA').toUpperCase(),
+          pick_trap: Number(esc.aTrap), outro_trap: Number(esc.bTrap),
+          pct: (esc.pct != null ? esc.pct : null),
+          bateu: bateuPar(row.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap))
+        });
+      }
+    }
+
+    const reg = cd.registroDoHistorico(confs, escId);
+    if (!reg) continue;
+    qtd++;
+    if (reg.bateu === true) ok++;
+    else if (reg.bateu === false) err++;
+  }
+  const tot = ok + err;
+  // qtd conta TODOS os registros; a taxa so os RESOLVIDOS. Corrida que ainda nao
+  // correu entraria como erro e afundaria o card ate o robo de resultados passar.
+  return { qtd: qtd, ok: ok, err: err, tot: tot, acertos: ok, total: tot,
+           pct: tot ? Math.round(100 * ok / tot) : null };
+}
+
+function _geralDoDia(date, userId, hojeBr) {
+  const k = date + '|' + userId;
+  const hit = _cacheGeral.get(k);
+  const ttl = (date === hojeBr) ? _TTL_GERAL_HOJE : _TTL_GERAL_PASSADO;
+  if (hit && (Date.now() - hit.ts) < ttl) return hit.v;
+  let v;
+  try { v = _geralCalcula(date, userId); }
+  catch (e) { console.error('[acertos-geral] ' + date + ': ' + e.message); v = _geralVazio(); }
+  _cacheGeral.set(k, { ts: Date.now(), v: v });
+  // Poda simples: sem isto o mapa cresce um item por dia por usuario, pra sempre.
+  if (_cacheGeral.size > 400) {
+    const primeiro = _cacheGeral.keys().next();
+    if (!primeiro.done) _cacheGeral.delete(primeiro.value);
+  }
+  return v;
+}
+
+// O MES E A SOMA DOS DIAS, nao um calculo proprio: somando os mesmos dias que o
+// card do dia mostra, os dois nunca podem se contradizer.
+function _geralSoma(datas, userId, hojeBr) {
+  let ok = 0, err = 0, qtd = 0;
+  for (const d of datas) {
+    const v = _geralDoDia(d, userId, hojeBr);
+    ok += v.ok; err += v.err; qtd += v.qtd;
+  }
+  const tot = ok + err;
+  return { qtd: qtd, ok: ok, err: err, tot: tot, acertos: ok, total: tot,
+           pct: tot ? Math.round(100 * ok / tot) : null };
+}
+
 router.get('/acertos-resumo', (req, res) => {
   try {
     const { bateuPar } = require('../utils/avbResultado');
-    const now = new Date();
-    const todayISO = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-    const yearMonth = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    // DATA DE BRASILIA, nao a do relogio do servidor. O SQL abaixo ja filtrava com
+    // date(created_at,'-3 hours'), mas o valor comparado vinha do fuso do processo
+    // — no Railway, UTC. Entre 21h e meia-noite BR os dois discordavam e o card
+    // passava a somar o dia seguinte. Agora os dois lados falam a mesma lingua, a
+    // mesma que o Historico e o painel-dia usam.
+    const nowBr = new Date(Date.now() - 3 * 3600 * 1000);
+    const todayISO = nowBr.toISOString().slice(0, 10);
+    const yearMonth = todayISO.slice(0, 7);
 
     // As corridas sao COMPARTILHADAS (canonicas) desde a etapa 2.3. Filtrar
     // por req.user.id aqui zerava os cards pra qualquer usuario que nao fosse
@@ -1541,6 +1696,22 @@ router.get('/acertos-resumo', (req, res) => {
 
     const dia = apurar(linhas("date(s.created_at,'-3 hours')=?", todayISO));
     const mes = apurar(linhas("strftime('%Y-%m', s.created_at, '-3 hours')=?", yearMonth));
+
+    // O QUARTO NUMERO: `geral`, a medida do Historico. E' este que o card le.
+    // Os outros tres (motor/rean/minha) continuam saindo, intactos — quem os
+    // consome hoje nao muda de comportamento.
+    try {
+      const diasDoMes = db.prepare(
+        "SELECT DISTINCT date(created_at,'-3 hours') AS d FROM race_sessions "
+        + "WHERE user_id=? AND strftime('%Y-%m', created_at, '-3 hours')=? ORDER BY d"
+      ).all(CANONICO, yearMonth).map(function (r) { return r.d; });
+      dia.geral = _geralDoDia(todayISO, req.user.id, todayISO);
+      mes.geral = _geralSoma(diasDoMes, req.user.id, todayISO);
+    } catch (e) {
+      // Falhar aqui nao pode derrubar o endpoint: sem `geral`, o app.js volta
+      // sozinho pro numero do motor, que e o comportamento de antes.
+      console.error('[acertos-resumo/geral]', e.message);
+    }
 
     res.json({
       // compatibilidade: os campos antigos continuam existindo e apontam pra
