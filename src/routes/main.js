@@ -2343,7 +2343,42 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
   const sess = db.prepare('SELECT * FROM race_sessions WHERE id=? AND user_id=?').get(req.params.id, CANONICO);
   if (!sess) return res.redirect(BASE + '/historico');
-  const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(sess.id);
+  // ── O HISTORICO E' DO DIA, NAO DO LOTE (Bruno, 10/09/2026) ────────────────
+  // Antes: `WHERE session_id=?`. Um dia pode ter mais de um lote de corridas: a
+  // analise automatica recusa criar um segundo (api.js "Sessao ja existe"), mas
+  // o POST /api/session que o navegador usa nao checa duplicata. Quando isso
+  // acontecia, a tela mostrava UM lote e escondia o outro sem avisar — em
+  // 10/09 apareceram 7 corridas onde o dia inteiro tinha 17, e o unico HIGH do
+  // dia estava no lote invisivel. O /api/painel-dia ja lia por DIA; este era o
+  // unico lugar do sistema que lia por lote, e por isso os dois nunca batiam.
+  const racesBrutas = db.prepare(
+    "SELECT r.* FROM races r JOIN race_sessions s ON s.id=r.session_id "
+    + "WHERE date(s.created_at,'-3 hours') = (SELECT date(created_at,'-3 hours') FROM race_sessions WHERE id=?) "
+    + "AND r.user_id=? ORDER BY r.hora"
+  ).all(sess.id, CANONICO);
+  // DEDUPE. Se dois lotes do mesmo dia trouxeram a MESMA corrida, ela viria
+  // duas vezes e o Historico registraria a mesma prova em duplicata — pior do
+  // que o problema que estamos consertando. Fica a copia com historico
+  // carregado (sem hist_full nao ha classificacao possivel) e, empatando, a
+  // mais recente.
+  const races = (function () {
+    const nota = function (r) { return (r.hist_full ? 2 : 0) + (r.finishing_order_json ? 1 : 0); };
+    const porChave = new Map();
+    for (const r of racesBrutas) {
+      const ch = String(r.corrida || '').trim().toLowerCase() + '|' + String(r.hora || '').trim();
+      const atual = porChave.get(ch);
+      if (!atual) { porChave.set(ch, r); continue; }
+      const dif = nota(r) - nota(atual);
+      if (dif > 0 || (dif === 0 && Number(r.id) > Number(atual.id))) porChave.set(ch, r);
+    }
+    // Mesma ordenacao do SQL anterior (texto, nao relogio), de proposito: mudar
+    // o escopo e a ordem da tela na mesma entrega esconderia qual das duas
+    // causou o que voce vai ver.
+    return [...porChave.values()].sort(function (a, b) {
+      const x = String(a.hora || ''), y = String(b.hora || '');
+      return x < y ? -1 : (x > y ? 1 : 0);
+    });
+  })();
   // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
   aplicarPessoais(db, races, user.id);
 
@@ -2454,7 +2489,16 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       }
     } catch (e) {}
     for (const r of races) {
-      if (r.nivel === 'skip') continue;
+      // SEM FILTRO DE `skip` (Bruno, 09/09 e 10/09/2026): "o motor BW podera
+      // identificar oportunidades ate nas corridas que nao foram colocadas como
+      // oportunidade... incluir o registro na tela historico, tao quanto na tela
+      // Analisar/Disputa". O painel-dia ja obedecia; aqui o `continue` que
+      // sobrou do modelo antigo fazia a corrida aparecer na Analisar, aceitar
+      // aposta, e sumir do registro depois.
+      //
+      // Nao vira porta aberta: quem decide se a corrida entra e' o funil abaixo.
+      // Sem AvB que a BW tenha aberto, `confs` sai vazio (ou so com
+      // OPORTUNIDADE, que e' filtrada) e nao nasce linha nenhuma.
       let confs = [];
       try {
         const hf = JSON.parse(r.hist_full || 'null');
@@ -2610,7 +2654,14 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   // duas telas usassem cortes diferentes, os numeros discordariam sem motivo
   // aparente. Conta TODAS as corridas analisadas, nao so as apostadas.
   const logoB64 = getLogo();
-  const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
+  // As corridas que GANHARAM linha no Historico entram no seletor de pista e no
+  // ALL_RACES mesmo sendo `skip` ou sem pick do motor (trap_fav 0). Sem isto a
+  // linha aparece na tabela, mas o filtro "Corrida" nao lista a pista dela e o
+  // lapis de editar nao acha a corrida no ALL_RACES — a linha existiria pela
+  // metade. Puramente aditivo: nada que aparecia antes deixa de aparecer.
+  const idsNoHistorico = new Set(linhasAvb.map(function (L) { return L.r.id; }));
+  const naTela = function (r) { return (r.nivel !== 'skip' && r.trap_fav > 0) || idsNoHistorico.has(r.id); };
+  const pistaOpts = [...new Set(races.filter(naTela).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
 <style>
@@ -2865,7 +2916,7 @@ document.addEventListener('click', function(ev){
   a.textContent = aberto ? 'leia mais' : 'leia menos';
 });
 
-var ALL_RACES=${JSON.stringify(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida)}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
+var ALL_RACES=${JSON.stringify(races.filter(naTela).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida)}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
 // pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
