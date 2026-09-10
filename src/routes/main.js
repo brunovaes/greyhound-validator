@@ -2057,7 +2057,7 @@ function _celulaAvb(r){
     // Diz de onde veio o par, discreto: sem isso nao da pra saber se a linha
     // reflete a sua entrada ou a decisao do motor.
     + '<div style="font-size:8px;color:' + (esc ? '#60a5fa' : '#555') + ';margin-top:2px;text-transform:uppercase;letter-spacing:.4px">' + origem + '</div>'
-    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ')">&#128269; ver historico</a>'
+    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ',' + Number(a.trap||0) + ',' + Number(b.trap||0) + ')">&#128269; ver historico</a>'
     + '</td>';
 }
 
@@ -2129,7 +2129,7 @@ function _celulaAvbConf(r, cf, escolhido){
     + '<div style="font-size:8px;color:#555;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">'
     +   (cf.fora_da_lista ? '<span style="color:#60a5fa">fora da lista</span>' : (cf.da_manha ? 'manhã' : 'BW'))
     + '</div>'
-    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ')">&#128269; ver historico</a>'
+    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ',' + Number(cf.pick_trap||0) + ',' + Number(cf.outro_trap||0) + ')">&#128269; ver historico</a>'
     + '</td>';
 }
 
@@ -3030,15 +3030,61 @@ document.querySelectorAll('table [data-f]').forEach(function(el){
 });
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
 document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});
-function openSessValModal(id){
+// ── VER HISTORICO: os galgos do AvB DA LINHA (Bruno, 10/09/2026) ────────────
+//
+// ATENCAO: esta funcao vive DENTRO do template literal do res.send. Crase aqui
+// fecha a string e derruba a rota inteira — por isso os nomes de coluna abaixo
+// aparecem sem crase.
+// Antes esta janela lia sempre trap_fav/name_fav/hist_fav — o par do MOTOR
+// DA MANHA, gravado na corrida. Dois problemas:
+//
+//   1. Corrida que o motor pulou tem trap_fav = 0 e name_fav vazio. Desde que o
+//      Historico passou a listar tambem as corridas que so a BW abriu, essas
+//      linhas abriam a janela como "T0 vs T0", com a bolinha zerada e sem nome.
+//   2. Mesmo na corrida normal, o par do motor pode NAO ser o AvB da linha — a
+//      linha mostra o que a BW abriu, ou a sua aposta. A janela mostrava dois
+//      galgos e a linha, outros dois.
+//
+// Agora a linha diz de quais galgos ela fala, e a janela resolve nome e
+// historico pelo hist_full, que traz o GRID INTEIRO (trap, nome, historico).
+// Sem par informado, ou sem hist_full, cai no comportamento antigo — historico
+// de sessao velha continua abrindo.
+function _svGalgo(r, trap){
+  if (trap == null || !(Number(trap) > 0)) return null;
+  var grid = null;
+  try { grid = r.hist_full ? (typeof r.hist_full === 'string' ? JSON.parse(r.hist_full) : r.hist_full) : null; } catch(e) {}
+  if (!Array.isArray(grid)) return null;
+  var g = grid.find(function(x){ return x && Number(x.trap) === Number(trap); });
+  if (!g) return null;
+  // perfil so existe para os dois galgos que o motor escolheu; para os demais
+  // preferimos nao mostrar nada a inventar um rotulo.
+  var perfil = null;
+  if (Number(r.trap_fav) === Number(trap)) perfil = r.perfil_fav || null;
+  else if (Number(r.trap_und) === Number(trap)) perfil = r.perfil_und || null;
+  return { trap: Number(trap), nome: g.nome || '', perfil: perfil, hist: g.historico || [] };
+}
+function openSessValModal(id, a, b){
   var r=ALL_RACES.find(function(x){return x.id==id;});
   if(!r)return;
-  var hf=null,hu=null;
-  try{if(r.hist_fav)hf=JSON.parse(r.hist_fav);}catch(e){}
-  try{if(r.hist_und)hu=JSON.parse(r.hist_und);}catch(e){}
-  if(!hf&&!hu){document.getElementById('sv-title').textContent='Historico indisponivel';document.getElementById('sv-body').innerHTML='<p style="color:#888;font-size:12px;padding:20px;text-align:center">Sessao salva antes do recurso ser ativado.</p>';document.getElementById('sv-modal').classList.add('open');return;}
-  document.getElementById('sv-title').textContent='T'+r.trap_fav+' '+(r.name_fav||'')+' vs T'+r.trap_und+' '+(r.name_und||'');
-  document.getElementById('sv-body').innerHTML=svCard(r.trap_fav,r.name_fav,r.perfil_fav,hf)+'<div class="sv-sep"></div>'+svCard(r.trap_und,r.name_und,r.perfil_und,hu);
+  var ga=_svGalgo(r,a), gb=_svGalgo(r,b);
+  if(!ga||!gb){
+    // Fallback: o par do motor, como era antes.
+    var hf=null,hu=null;
+    try{if(r.hist_fav)hf=JSON.parse(r.hist_fav);}catch(e){}
+    try{if(r.hist_und)hu=JSON.parse(r.hist_und);}catch(e){}
+    ga=ga||{trap:r.trap_fav,nome:r.name_fav||'',perfil:r.perfil_fav,hist:hf};
+    gb=gb||{trap:r.trap_und,nome:r.name_und||'',perfil:r.perfil_und,hist:hu};
+  }
+  if((!ga.hist||!ga.hist.length)&&(!gb.hist||!gb.hist.length)){document.getElementById('sv-title').textContent='Historico indisponivel';document.getElementById('sv-body').innerHTML='<p style="color:#888;font-size:12px;padding:20px;text-align:center">Sessao salva antes do recurso ser ativado.</p>';document.getElementById('sv-modal').classList.add('open');return;}
+  // Cabecalho: pista por extenso, categoria e distancia antes do par. Some em
+  // algum momento e a janela ficou so com "T0 vs T0" — sem saber de que corrida
+  // era, a janela nao serve pra conferir nada.
+  var _corr = r.corridaNome || r.corrida || '';
+  var _dist = r.dist ? (String(r.dist).replace(/m$/,'') + 'm') : '';
+  var _ctx = [_corr, _dist].filter(Boolean).join(' · ');
+  var _par = 'T'+ga.trap+' '+(ga.nome||'')+' vs T'+gb.trap+' '+(gb.nome||'');
+  document.getElementById('sv-title').textContent = _ctx ? (_ctx + '  —  ' + _par) : _par;
+  document.getElementById('sv-body').innerHTML=svCard(ga.trap,ga.nome,ga.perfil,ga.hist)+'<div class="sv-sep"></div>'+svCard(gb.trap,gb.nome,gb.perfil,gb.hist);
   document.getElementById('sv-modal').classList.add('open');
 }
 function closeReplayModal(){
