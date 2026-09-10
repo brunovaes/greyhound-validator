@@ -2531,17 +2531,33 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   // pra impedir uma inflacao que so era possivel quando cabiam varias linhas por
   // corrida: entrar em 2 de 5 TOP e acertar os dois daria 100%. Com uma linha por
   // corrida esse caso nao existe.
+  // ACERTOS, ERROS e TAXA de um conjunto de registros.
+  //
+  // `qtd` conta TODOS os registros, inclusive os que ainda nao tem resultado.
+  // `ok` e `err` contam so os resolvidos, e a taxa sai deles: uma corrida que
+  // ainda nao correu nao pode entrar no denominador — entraria como erro e
+  // afundaria a taxa do dia ate o robo de resultados passar.
   const _kpiDe = function (lista) {
-    let ok = 0, tot = 0;
+    let ok = 0, err = 0;
     for (const L of lista) {
-      if (L.cf.bateu === true) { ok++; tot++; }
-      else if (L.cf.bateu === false) { tot++; }
+      if (L.cf.bateu === true) ok++;
+      else if (L.cf.bateu === false) err++;
     }
-    return { ok: ok, tot: tot, pct: tot ? Math.round(100 * ok / tot) : null };
+    const res = ok + err;
+    return { qtd: lista.length, ok: ok, err: err, res: res,
+             pct: res ? Math.round(100 * ok / res) : null };
   };
-  const kpiTop = _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === 'TOP'; }));
-  const kpiMinhas = _kpiDe(linhasAvb.filter(function (L) { return L.escolhido; }));
-  const kpiTotal = _kpiDe(linhasAvb);
+  // Um conjunto por TIPO, mais o geral. Com um registro por corrida, o geral e'
+  // a soma dos tres — nao ha registro fora de TOP/HIGH/GOOD.
+  const _doTipo = function (t) {
+    return _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === t; }));
+  };
+  const KPIS = [
+    { id: 'geral', rot: 'AvBs Geral', cor: '#3b82f6', k: _kpiDe(linhasAvb) },
+    { id: 'top',   rot: 'AvBs TOP',   cor: '#3b82f6', k: _doTipo('TOP') },
+    { id: 'high',  rot: 'AvBs HIGH',  cor: '#f97316', k: _doTipo('HIGH') },
+    { id: 'good',  rot: 'AvBs GOOD',  cor: '#8b5cf6', k: _doTipo('GOOD') }
+  ];
 
   const racesValidas = races.filter(r=>r.nivel!=='skip');
   const skipCount = races.length - racesValidas.length;
@@ -2590,22 +2606,6 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   // Mesmo corte de turno do dashboard de HR (6h e 13h BR) de proposito: se as
   // duas telas usassem cortes diferentes, os numeros discordariam sem motivo
   // aparente. Conta TODAS as corridas analisadas, nao so as apostadas.
-  const _turnos = (function(){
-    const { bateuPar } = require('../utils/avbResultado');
-    const g = { 'Manhã':{ok:0,err:0}, 'Tarde':{ok:0,err:0} };
-    for (const r of racesValidas) {
-      const h = parseInt(String(r.hora_br||'').split(':')[0], 10);
-      if (isNaN(h)) continue;
-      const t = h < 13 ? 'Manhã' : 'Tarde';
-      const par = _parBW(r) || ((r.trap_fav && r.trap_und) ? { aTrap:r.trap_fav, bTrap:r.trap_und } : null);
-      if (!par) continue;
-      const v = bateuPar(r.finishing_order_json, par.aTrap, par.bTrap);
-      if (v === null) continue;      // indefinido fica fora
-      if (v) g[t].ok++; else g[t].err++;
-    }
-    return g;
-  })();
-
   const logoB64 = getLogo();
   const pistaOpts = [...new Set(races.filter(r=>r.nivel!=='skip'&&r.trap_fav>0).map(r=>(r.corrida||'').split(' ')[0]).filter(Boolean))].sort().map(p=>`<option value="${p}">${nomePista(p)}</option>`).join('');
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sess.name} - Greyhound</title>
@@ -2627,15 +2627,6 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
    Sem biblioteca de grafico: sao divs com largura percentual — pra 4 barras,
    trazer dependencia nova nao se justifica. */
 .gtn{min-width:0}   /* a largura vem do grid do .kpis */
-.gtn-cols{display:flex;gap:12px;margin-top:2px}
-.gtn-col{flex:1;min-width:0}
-.gtn-lin{display:flex;align-items:center;gap:6px;margin-top:4px}
-.gtn-rot{font-size:9px;color:#888;width:52px;flex-shrink:0;text-align:right;white-space:nowrap}
-.gtn-bar{flex:1;height:12px;border-radius:3px;overflow:hidden;display:flex;background:rgba(255,255,255,.04);min-width:50px}
-.gtn-ok{background:#22C65E}
-.gtn-err{background:#ef4444}
-.gtn-pct{font-size:10px;font-weight:700;width:32px;flex-shrink:0;white-space:nowrap}
-.gtn-turno{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
 
 ${designTokensCSS()}
 .content{padding:16px 20px;max-width:1600px;margin:0 auto}
@@ -2679,50 +2670,37 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 ${navBar(user, 'historico')}
 <div class="content">
 <div class="kpis">
-<div class="kpi"><div class="kpi-label">AvBs contabilizados</div><div class="kpi-val" id="kpi-corridas" style="color:#3B82F7">${kpiTotal.tot + linhasAvb.filter(function(L2){return (L2.cf.camada==='TOP'||L2.escolhido) && L2.cf.bateu===null;}).length}</div><div style="font-size:9px;color:#666;margin-top:2px">todo TOP + o que voce entrou</div></div>
-<div class="kpi"><div class="kpi-label">Acertos</div><div class="kpi-val" id="kpi-acertos" style="color:#22C65E">${kpiTotal.ok}</div></div>
-<div class="kpi" title="o AvB que valeu em cada corrida: a sua escolha quando você entrou, o do motor quando não entrou">
-  <div class="kpi-label">Taxa de acerto</div>
-  <div class="kpi-val" id="kpi-taxa" style="color:${kpiTotal.pct==null?'#666':(kpiTotal.pct>=50?'#22C65E':'#ef4444')}">${kpiTotal.pct==null?'—':kpiTotal.pct+'%'}</div>
-  <div id="kpi-taxa-cnt" style="font-size:9px;color:#666;margin-top:2px">${kpiTotal.tot?`${kpiTotal.ok}/${kpiTotal.tot}`:''}</div>
-</div>
-<div class="kpi" style="min-width:186px"><div class="kpi-label">Motor x Minhas</div><div style="display:flex;gap:14px;align-items:baseline;margin-top:2px"><div><div style="font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.4px">Motor (TOP)</div><div style="font-size:17px;font-weight:700;color:${kpiTop.pct==null?'#666':(kpiTop.pct>=50?'#22C65E':'#ef4444')}">${kpiTop.pct==null?'—':kpiTop.pct+'%'}</div><div style="font-size:9px;color:#666">${kpiTop.tot?`${kpiTop.ok}/${kpiTop.tot}`:'sem dado'}</div></div><div><div style="font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.4px">Minhas fora do TOP</div><div style="font-size:17px;font-weight:700;color:${kpiMinhas.pct==null?'#666':(kpiMinhas.pct>=50?'#22C65E':'#ef4444')}">${kpiMinhas.pct==null?'—':kpiMinhas.pct+'%'}</div><div style="font-size:9px;color:#666">${kpiMinhas.tot?`${kpiMinhas.ok}/${kpiMinhas.tot}`:'sem entrada'}</div></div></div></div>
-<div class="kpi"><div class="kpi-label">Entradas</div><div class="kpi-val" id="kpi-apostas" style="color:#3B82F7">${ap}</div></div>
-<div class="kpi"><div class="kpi-label">Green</div><div class="kpi-val" id="kpi-green" style="color:#22C65E">${green}</div></div>
-<div class="kpi"><div class="kpi-label">% de Green</div><div class="kpi-val" id="kpi-pctgreen" style="color:${ap>0&&green/ap>=.5?'#22C65E':'#ef4444'}">${pctGreen}%</div></div>
-
-<div class="kpi gtn">
-  <div class="kpi-label">Acerto por turno</div>
-  <div class="gtn-cols" id="kpi-turnos">
-  ${['Manhã','Tarde'].map(function(t){
-    var d=_turnos[t];
-    var linha=function(rot,o){
-      var tot=o.ok+o.err;
-      if(!tot) return '<div class="gtn-lin"><span class="gtn-rot">'+rot+'</span>'
-        + '<span class="gtn-bar"></span><span class="gtn-pct" style="color:#555">—</span></div>';
-      var pct=Math.round(o.ok/tot*100);
-      return '<div class="gtn-lin" title="'+rot+' '+t+': '+o.ok+' acerto(s), '+o.err+' erro(s)">'
-        + '<span class="gtn-rot">'+rot+'</span>'
-        + '<span class="gtn-bar"><span class="gtn-ok" style="width:'+pct+'%"></span>'
-        +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
-        + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
-    };
-    return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'
-      + linha('AvB',d) + '</div>';
-  }).join('')}
-  </div>
-</div>
+${KPIS.map(function(K){
+  // TAXA: 0% em branco, acima de 0% em verde, abaixo em vermelho. O ramo do
+  // vermelho existe porque foi pedido assim, mas uma taxa de acerto nao fica
+  // negativa — na pratica ele so apareceria se a conta passasse a ser de lucro.
+  var corTaxa = K.k.pct == null ? '#555' : (K.k.pct > 0 ? '#22C65E' : (K.k.pct < 0 ? '#ef4444' : '#fff'));
+  return '<div class="kpi kpi-tipo" title="' + K.rot + ': ' + K.k.qtd + ' registro(s), '
+       + K.k.ok + ' acerto(s), ' + K.k.err + ' erro(s)">'
+    + '<div class="kpi-label">' + K.rot + '</div>'
+    + '<div class="kpi-val" id="kpi-' + K.id + '-qtd" style="color:' + K.cor + '">' + K.k.qtd + '</div>'
+    + '<div class="kpi-tri">'
+    +   '<span id="kpi-' + K.id + '-ok"   class="kt-ok">'  + K.k.ok  + '</span>'
+    +   '<span class="kt-sep">/</span>'
+    +   '<span id="kpi-' + K.id + '-err"  class="kt-err">' + K.k.err + '</span>'
+    +   '<span class="kt-sep">/</span>'
+    +   '<span id="kpi-' + K.id + '-pct"  style="color:' + corTaxa + '">'
+    +     (K.k.pct == null ? '—' : K.k.pct + '%') + '</span>'
+    + '</div>'
+    + '</div>';
+}).join('')}
 </div>
 
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="conta" selected>Contabilizável</option><option value="">Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="" selected>Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${linhasAvb.map(function(Lx){
   var r = Lx.r, cf = Lx.cf, pri = Lx.primeira, esc = Lx.escolhido;
   var horaUk = r.hora || '';
   var _brh = (function(h){if(!h)return null;var p=h.split(':');var hr=parseInt(p[0]);if(isNaN(hr))return null;if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr;})(r.hora);
   var turnoBR = _brh==null?'':(_brh>=13?'Tarde':'Manhã');
-  // CONTABILIZAVEL = entra no denominador: todo TOP, mais o que voce apostou em
-  // outra camada. E' o que os KPIs contam e o que o filtro padrao mostra.
-  var conta = (cf.camada === 'TOP' || esc) ? '1' : '';
+  // O data-conta SAIU em 10/09/2026. Ele separava o que entrava no denominador
+  // quando cabiam varias linhas por corrida (todo TOP, mais o que voce apostou
+  // em outra camada). Com UM registro por corrida essa distincao acabou: todo
+  // registro conta, e os quatro cartoes contam por TIPO, lendo o data-camada.
   // Celulas da CORRIDA (Resultado, bandeira, Observacoes, AvB na BW, lapis) so
   // aparecem na PRIMEIRA linha dela: repetir a chegada em tres linhas nao
   // acrescenta nada e tira a leitura de qual AvB e' qual.
@@ -2736,7 +2714,6 @@ ${linhasAvb.map(function(Lx){
     + ' data-abriu="' + (r.abriu==null?'':String(r.abriu)) + '"'
     + ' data-camada="' + (cf.camada||'') + '"'
     + ' data-entrei="' + (esc ? 'sim' : 'nao') + '"'
-    + ' data-conta="' + conta + '"'
     + ' data-primeira="' + (pri ? '1' : '') + '">'
     + (pri
         ? '<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">'+(horaUk||'-')+'</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">'+(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)+'</div></td>'
@@ -2846,23 +2823,15 @@ function saveHistField(id, field, value){
   var race = ALL_RACES.find(function(r){ return String(r.id)===String(id); });
   if (race) { race[field] = value; recomputeKPIs(); }
 }
+// Chamado depois de gravar um campo na linha (Bateu, Odd). Delega pro
+// recalcKpisHist, que le os data-* das linhas — a MESMA fonte que o filtro usa.
+//
+// Antes ele tinha conta propria, sobre o ALL_RACES, e escrevia direto nos ids
+// kpi-acertos, kpi-taxa, kpi-apostas, kpi-green e kpi-pctgreen. Nenhum desses
+// cartoes existe mais, e a conta paralela era mais um lugar de onde os numeros
+// podiam divergir dos da tabela.
 function recomputeKPIs(){
-  var resolvidas = ALL_RACES.filter(function(r){ return r.bateu; }).length;
-  var ac = ALL_RACES.filter(function(r){ return r.bateu==='sim'; }).length;
-  var taxa = resolvidas>0 ? Math.round(ac/resolvidas*100) : 0;
-  var acEl = document.getElementById('kpi-acertos');
-  if (acEl) acEl.textContent = ac;
-  var taxaEl = document.getElementById('kpi-taxa');
-  if (taxaEl) { taxaEl.textContent = taxa + '%'; taxaEl.style.color = (resolvidas>0 && ac/resolvidas>=.5) ? '#22C65E' : '#ef4444'; }
-  var apostadas = ALL_RACES.filter(function(r){ return r.odd; });
-  var ap = apostadas.length;
-  var green = apostadas.filter(function(r){ return r.bateu==='sim'; }).length;
-  var pctGreen = ap>0 ? Math.round(green/ap*100) : 0;
-  document.getElementById('kpi-apostas').textContent = ap;
-  document.getElementById('kpi-green').textContent = green;
-  var pgEl = document.getElementById('kpi-pctgreen');
-  pgEl.textContent = pctGreen + '%';
-  pgEl.style.color = (ap>0 && green/ap>=.5) ? '#22C65E' : '#ef4444';
+  try { recalcKpisHist(); } catch (e) { console.error('[historico] recomputeKPIs', e); }
 }
 // Lapis: liga/desliga o modo de edicao so daquela linha (Odd/Aberto ficam
 // desabilitados por padrao, pra nao editar sem querer)
@@ -2930,40 +2899,9 @@ function openReplay(id){
 }
 // ===== Filtros do cabecalho do historico (Hora BR / Corrida / Bateu) =====
 function _histSet(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-// Refaz o "Acerto por turno" com as linhas que estao na tela. O grafico nascia
-// do servidor sobre TODAS as corridas, entao filtrar por pista ou por VIP
-// mudava a tabela inteira e deixava o grafico contando o que nao estava mais
-// visivel — dois numeros discordando na mesma tela.
-//
-// O turno vem do data-turno, o mesmo atributo que o filtro de turno usa, e o
-// resultado do data-bateu, que o servidor ja derivou com bateuPar sobre o AvB
-// que valeu. Nada e' recalculado aqui: so recontado.
-function redesenhaTurnos(vis){
-  var box=document.getElementById('kpi-turnos');
-  if(!box) return;
-  var g={'Manhã':{ok:0,err:0},'Tarde':{ok:0,err:0}};
-  vis.forEach(function(tr){
-    var t=tr.getAttribute('data-turno')||'';
-    if(!g[t]) return;
-    var b=tr.getAttribute('data-bateu')||'';
-    if(b==='sim') g[t].ok++; else if(b==='nao') g[t].err++;
-  });
-  box.innerHTML=['Manhã','Tarde'].map(function(t){
-    var o=g[t], tot=o.ok+o.err, lin;
-    if(!tot){
-      lin='<div class="gtn-lin"><span class="gtn-rot">AvB</span>'
-        + '<span class="gtn-bar"></span><span class="gtn-pct" style="color:#555">—</span></div>';
-    } else {
-      var pct=Math.round(o.ok/tot*100);
-      lin='<div class="gtn-lin" title="AvB '+t+': '+o.ok+' acerto(s), '+o.err+' erro(s)">'
-        + '<span class="gtn-rot">AvB</span>'
-        + '<span class="gtn-bar"><span class="gtn-ok" style="width:'+pct+'%"></span>'
-        +   '<span class="gtn-err" style="width:'+(100-pct)+'%"></span></span>'
-        + '<span class="gtn-pct" style="color:'+(pct>=50?'#22C65E':'#ef4444')+'">'+pct+'%</span></div>';
-    }
-    return '<div class="gtn-col"><div class="gtn-turno">'+t+'</div>'+lin+'</div>';
-  }).join('');
-}
+// O grafico "Acerto por turno" saiu em 10/09/2026, junto com os outros cartoes
+// que respondiam a mesma pergunta de varios jeitos. Ficaram quatro: geral, TOP,
+// HIGH e GOOD, cada um com quantidade, acertos, erros e taxa.
 
 function recalcKpisHist(){
   // CONTABILIZACAO (regra do Bruno): o denominador e' TODO TOP, tenha havido
@@ -2975,26 +2913,30 @@ function recalcKpisHist(){
   // ao filtrar por pista daria dois numeros pra mesma coisa. Quem manda e o
   // data-conta, gravado no servidor, nao o que esta visivel.
   var todas = Array.prototype.slice.call(document.querySelectorAll('tr[data-race]'));
-  var conta = todas.filter(function(tr){ return tr.getAttribute('data-conta') === '1'; });
-  var resolvidas = conta.filter(function(tr){ return (tr.getAttribute('data-bateu')||'') !== ''; });
-  var ac = conta.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; }).length;
-  _histSet('kpi-corridas', conta.length);
-  _histSet('kpi-acertos', ac);
-  var pctTaxa = resolvidas.length ? Math.round(ac/resolvidas.length*100) : null;
-  _histSet('kpi-taxa', pctTaxa==null ? '—' : pctTaxa+'%');
-  var elTaxa = document.getElementById('kpi-taxa');
-  if(elTaxa) elTaxa.style.color = pctTaxa==null ? '#666' : (pctTaxa>=50 ? '#22C65E' : '#ef4444');
-  var elCnt = document.getElementById('kpi-taxa-cnt');
-  if(elCnt) elCnt.textContent = resolvidas.length ? (ac+'/'+resolvidas.length) : '';
-  // Entradas / Green: so as linhas em que voce realmente entrou.
-  var apost = todas.filter(function(tr){ return tr.getAttribute('data-entrei') === 'sim'; });
-  var green = apost.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; }).length;
-  _histSet('kpi-apostas', apost.length);
-  _histSet('kpi-green', green);
-  _histSet('kpi-pctgreen', (apost.length?Math.round(green/apost.length*100):0)+'%');
-  // O grafico por turno segue as linhas VISIVEIS: ele e' leitura da tabela, nao
-  // placar do dia. Os dois papeis sao diferentes e nao devem se misturar.
-  redesenhaTurnos(todas.filter(function(tr){ return tr.style.display !== 'none'; }));
+
+  // Um conjunto por TIPO, mais o geral. As contas sao as MESMAS do servidor: a
+  // quantidade conta todos os registros, e a taxa so os RESOLVIDOS — corrida que
+  // ainda nao correu entraria como erro e afundaria a taxa ate o robo passar.
+  function pinta(id, linhas) {
+    var ok = linhas.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; }).length;
+    var err = linhas.filter(function(tr){ return tr.getAttribute('data-bateu') === 'nao'; }).length;
+    var res = ok + err;
+    var pct = res ? Math.round(ok / res * 100) : null;
+    _histSet('kpi-' + id + '-qtd', linhas.length);
+    _histSet('kpi-' + id + '-ok', ok);
+    _histSet('kpi-' + id + '-err', err);
+    _histSet('kpi-' + id + '-pct', pct == null ? '\u2014' : pct + '%');
+    var el = document.getElementById('kpi-' + id + '-pct');
+    // 0% branco, acima verde, abaixo vermelho — a regra que o Bruno pediu.
+    if (el) el.style.color = pct == null ? '#555' : (pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff'));
+  }
+  function doTipo(t) {
+    return todas.filter(function(tr){ return (tr.getAttribute('data-camada')||'') === t; });
+  }
+  pinta('geral', todas);
+  pinta('top', doTipo('TOP'));
+  pinta('high', doTipo('HIGH'));
+  pinta('good', doTipo('GOOD'));
 }
 function aplicarFiltroHist(){
   var et=document.getElementById('fh-turno'), ec=document.getElementById('fh-corrida'), eb=document.getElementById('fh-bateu');
@@ -3018,11 +2960,12 @@ function aplicarFiltroHist(){
       : fa==='semdado' ? ab===''
       : fa==='manual' ? na
       : true;
-    // CAMADA: 'conta' = o conjunto contabilizavel (todo TOP + o que voce entrou),
-    // que e' como a tela ABRE. As demais camadas ficam a um clique. O filtro nao
-    // e' lembrado entre visitas: recarregar volta ao padrao.
+    // TIPO: Todas, ou uma de TOP/HIGH/GOOD. A opcao "Contabilizavel" saiu junto
+    // com o data-conta — com um registro por corrida ela virou sinonimo de
+    // Todas, e duas opcoes pro mesmo conjunto so confundem. O filtro nao e'
+    // lembrado entre visitas: recarregar volta ao padrao.
     var cam = tr.getAttribute('data-camada')||'';
-    var casaMotor = !fm ? true : (fm === 'conta' ? tr.getAttribute('data-conta') === '1' : cam === fm);
+    var casaMotor = !fm ? true : (cam === fm);
     // ENTREI: 'sim' = a aposta foi registrada NESTA linha. No maximo uma por
     // corrida, porque a regra e' uma aposta por corrida.
     var en=tr.getAttribute('data-entrei')||'';

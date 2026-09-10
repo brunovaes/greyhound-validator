@@ -42,8 +42,14 @@ for (const nome of ['AvB', '%', 'Tipo', 'Entrei', 'Bateu', 'Resultado', 'Observa
 }
 ok(linhaCab.indexOf('Origem') === -1,
    'a coluna Origem (VIP/Secundaria/Surpresa) saiu de vez');
-ok(/<option value="conta" selected>/.test(linhaCab),
-   'o seletor de Tipo abre em "Contabilizável" — a tela nasce filtrada');
+// A opcao "Contabilizavel" saiu em 10/09/2026, junto com o data-conta. Ela
+// separava o que entrava no denominador quando cabiam varias linhas por corrida;
+// com UM registro por corrida virou sinonimo de "Todas", e duas opcoes pro mesmo
+// conjunto so confundem.
+ok(linhaCab.indexOf('value="conta"') === -1,
+   'a opcao "Contabilizável" saiu do seletor de Tipo');
+ok(/<option value="" selected>Todas<\/option>/.test(linhaCab),
+   'e a tela abre em "Todas"');
 for (const c of ['TOP', 'HIGH', 'GOOD']) {
   ok(linhaCab.indexOf('<option value="' + c + '">') !== -1, 'o filtro oferece ' + c);
 }
@@ -147,32 +153,73 @@ ok(primeira.indexOf('ENTREI') !== -1 && seguinte.indexOf('ENTREI') === -1,
 ok(seguinte.indexOf('Braemar') !== -1,
    'mas os galgos do confronto aparecem em TODAS as linhas — e o que distingue uma da outra');
 
-// ── 4) a regra de contabilizacao gravada na linha ───────────────────────────
-console.log('\n[4] CONTABILIZACAO: todo TOP + o que voce entrou\n');
+// ── 4) OS QUATRO CARTOES ────────────────────────────────────────────────────
+//
+// Um por tipo, mais o geral (Bruno, 10/09/2026). Cada um traz a quantidade na
+// cor do tipo e, embaixo, acertos / erros / taxa.
+//
+// Saiu daqui a regra de contabilizacao com data-conta: ela separava o que
+// entrava no denominador quando cabiam varias linhas por corrida. Com UM
+// registro por corrida, todo registro conta — e a divisao que interessa passou a
+// ser por TIPO.
+console.log('\n[4] OS QUATRO CARTOES: geral, TOP, HIGH e GOOD\n');
 
-function conta(html) { const m = html.match(/data-conta="([^"]*)"/); return m ? m[1] : null; }
-const casos = [
-  ['TOP', false, '1', 'TOP sem aposta CONTA (senao entrar em 2 de 5 e acertar os 2 daria 100%)'],
-  ['TOP', true, '1', 'TOP apostado conta'],
-  ['HIGH', true, '1', 'HIGH apostado conta'],
-  ['GOOD', true, '1', 'GOOD apostado conta'],
-  ['HIGH', false, '', 'HIGH sem aposta NAO conta'],
-  ['GOOD', false, '', 'GOOD sem aposta NAO conta']
+ok(src.indexOf('data-conta') === -1 || !/data-conta="/.test(src),
+   'a linha nao grava mais data-conta');
+
+const CARTOES = [
+  ['geral', '#3b82f6', 'AvBs Geral'],
+  ['top',   '#3b82f6', 'AvBs TOP'],
+  ['high',  '#f97316', 'AvBs HIGH'],
+  ['good',  '#8b5cf6', 'AvBs GOOD']
 ];
-for (const [camada, esc, esperado, msg] of casos) {
-  const html = montarLinha({ r: CORRIDA, cf: Object.assign({}, CF, { camada: camada }), primeira: true, escolhido: esc });
-  ok(conta(html) === esperado, msg);
+for (const [id, cor, rot] of CARTOES) {
+  for (const sufixo of ['qtd', 'ok', 'err', 'pct']) {
+    ok(src.indexOf("'kpi-' + K.id + '-" + sufixo + "'") !== -1
+       || src.indexOf("kpi-' + id + '-" + sufixo) !== -1,
+       'o cartao tem o campo ' + sufixo);
+  }
+  break;   // os quatro sao gerados pelo MESMO template; conferir um basta
 }
+for (const [id, cor, rot] of CARTOES) {
+  ok(src.indexOf("rot: '" + rot + "'") !== -1, 'existe o conjunto ' + rot);
+  ok(src.indexOf("cor: '" + cor + "'") !== -1, 'com a cor ' + cor);
+}
+ok(src.indexOf("id: 'high',  rot: 'AvBs HIGH',  cor: '#f97316'") !== -1,
+   'HIGH em laranja');
+ok(src.indexOf("id: 'good',  rot: 'AvBs GOOD',  cor: '#8b5cf6'") !== -1,
+   'GOOD em roxo');
+
+// A REGRA DA TAXA, executada: 0% branco, acima verde, abaixo vermelho.
+function corDaTaxa(pct) {
+  return pct == null ? '#555' : (pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff'));
+}
+ok(corDaTaxa(null) === '#555', 'sem resultado ainda: cinza');
+ok(corDaTaxa(0) === '#fff', '0% em BRANCO');
+ok(corDaTaxa(1) === '#22C65E', '1% em verde');
+ok(corDaTaxa(100) === '#22C65E', '100% em verde');
+ok(corDaTaxa(-1) === '#ef4444', 'abaixo de 0% em vermelho (o ramo existe, mas taxa nao fica negativa)');
+ok(src.indexOf("pct > 0 ? '#22C65E' : (K.k.pct < 0 ? '#ef4444' : '#fff')") !== -1,
+   'e a MESMA regra esta no servidor');
+ok(src.indexOf("pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff')") !== -1,
+   'e no recalculo do filtro — as duas pontas pintam igual');
+
+// A TAXA SAI DOS RESOLVIDOS, nao do total. Uma corrida que ainda nao correu
+// entraria como erro e afundaria a taxa do dia ate o robo de resultados passar.
+function taxa(ok_, err_) { const r = ok_ + err_; return r ? Math.round(ok_ / r * 100) : null; }
+ok(taxa(2, 1) === 67, '2 acertos e 1 erro -> 67%');
+ok(taxa(0, 0) === null, 'nenhum resolvido -> sem taxa, nao 0%');
+ok(taxa(3, 0) === 100, 'tres acertos e nenhum erro -> 100%');
 
 // ── 5) os atributos que o filtro e os KPIs leem ─────────────────────────────
 console.log('\n[5] ATRIBUTOS DA LINHA E O QUE OS LE\n');
-for (const attr of ['data-camada', 'data-entrei', 'data-conta', 'data-bateu', 'data-primeira']) {
+for (const attr of ['data-camada', 'data-entrei', 'data-bateu', 'data-primeira']) {
   ok(primeira.indexOf(attr + '=') !== -1, 'a linha grava ' + attr);
 }
-ok(src.indexOf("tr.getAttribute('data-conta') === '1'") !== -1,
-   'o filtro "Contabilizável" le o data-conta');
-ok(src.indexOf("conta.filter(function(tr){ return tr.getAttribute('data-bateu') === 'sim'; })") !== -1,
-   'os KPIs contam acertos dentro do conjunto contabilizavel');
+ok(src.indexOf("var casaMotor = !fm ? true : (cam === fm);") !== -1,
+   'o filtro de Tipo compara direto com o data-camada');
+ok(src.indexOf("return todas.filter(function(tr){ return (tr.getAttribute('data-camada')||'') === t; });") !== -1,
+   'e os cartoes por tipo saem do MESMO data-camada que o filtro le');
 ok(src.indexOf("document.addEventListener('DOMContentLoaded', aplicarFiltroHist);") !== -1,
    'a tela abre JA filtrada — senao os cards sairiam de um conjunto e a tabela de outro');
 
@@ -182,6 +229,6 @@ ok(src.indexOf('hist-board') === -1, 'nenhuma referencia a hist-board');
 ok(src.indexOf('boardDia.js') === -1, 'o boardDia.js nao e carregado');
 
 console.log('\n' + (falhas === 0
-  ? 'TUDO OK — um registro por corrida, colunas alinhadas nos dois ramos, contabilizacao na regra.'
+  ? 'TUDO OK — um registro por corrida, colunas alinhadas, e os quatro cartoes por tipo.'
   : falhas + ' FALHA(S) — nao subir.'));
 process.exit(falhas === 0 ? 0 : 1);
