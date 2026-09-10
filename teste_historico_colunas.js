@@ -61,7 +61,7 @@ const DEPS = ['_jsonOuNull', '_mesmoPar', '_parBW', '_blocoAvb', '_avbDoHistoric
               '_celulaObs', '_celulaAvb', '_motorDoAvb', '_celulaMotor',
               '_celulaResultado', '_celulaAberto', '_celulaBW',
               '_celulaAvbConf', '_celulaCamada', '_celulaEntreiConf',
-              '_celulaBateuConf', '_celulaOddConf'];
+              '_celulaBateuConf', '_celulaOddConf', '_abriuDaLinha'];
 let corpo = '';
 for (const n of DEPS) {
   const re = new RegExp('^function\\s+' + n + '\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?^\\}', 'm');
@@ -75,7 +75,7 @@ const STUBS = 'var BASE="/greyhound";'
   + 'function icon(){return "";}';
 let H;
 try {
-  H = new Function(STUBS + corpo + ';return {_celulaAvbConf,_celulaCamada,_celulaEntreiConf,_celulaBateuConf,_celulaOddConf,_celulaResultado,_celulaObs,_celulaAberto};')();
+  H = new Function(STUBS + corpo + ';return {_celulaAvbConf,_celulaCamada,_celulaEntreiConf,_celulaBateuConf,_celulaOddConf,_celulaResultado,_celulaObs,_celulaAberto,_abriuDaLinha};')();
 } catch (e) {
   console.error('ERRO ao montar as funcoes do main.js: ' + e.message);
   process.exit(1);
@@ -102,7 +102,10 @@ const UMA = [
   ['_celulaOddConf', () => H._celulaOddConf(CORRIDA, true)],
   ['_celulaResultado', () => H._celulaResultado(CORRIDA)],
   ['_celulaObs', () => H._celulaObs(CORRIDA)],
-  ['_celulaAberto', () => H._celulaAberto(CORRIDA)]
+  // _celulaAberto passou a receber o estado ja calculado (Bruno, 10/09/2026):
+  // a celula e o data-abriu da linha saem do MESMO _abriuDaLinha, pra o filtro
+  // do cabecalho nunca discordar do visto verde que esta na tela.
+  ['_celulaAberto', () => H._celulaAberto(CORRIDA, H._abriuDaLinha(CORRIDA, CF))]
 ];
 for (const [nome, fn] of UMA) {
   const n = (String(fn()).match(/<td[\s>]/g) || []).length;

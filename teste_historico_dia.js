@@ -1,16 +1,20 @@
-// TESTE: o Historico e' do DIA e da BW (Bruno, 10/09/2026)
+// TESTE: o Historico e' do DIA e da BW, e o cabecalho manda nos cartoes
+// (Bruno, 10/09/2026)
 //
 // Por que existe: em 10/09 a tela mostrou 7 corridas onde o dia inteiro tinha
 // 17, e o unico HIGH do dia sumiu junto. Duas causas, as duas so no Historico:
 //   (1) ele lia por LOTE (`WHERE session_id=?`) enquanto o painel-dia lia por DIA;
 //   (2) ele descartava corrida `nivel='skip'`, contra o "livre acesso" de 09/09.
-// Este arquivo trava as duas, mais a regra de QUAL AvB vira o registro.
+// Depois: os cartoes ignoravam o filtro do cabecalho, e o filtro de Tipo estava
+// quebrado por uma variavel que nao existe.
 //
-// Os blocos [1] a [4] leem o FONTE. E' teste de forma, nao de tela: ele nao
-// prova que a pagina renderiza, prova que a regressao especifica nao voltou.
-// O bloco [5] roda a funcao de verdade.
+// Os blocos [1] a [4] leem o FONTE — provam que a regressao especifica nao
+// voltou, nao que a pagina renderiza. Os blocos [5] e [6] RODAM as funcoes: o
+// [6] arranca o filtro e os cartoes do proprio main.js e executa os dois contra
+// um DOM de mentira. E' o teste que teria pego o `mo` antes de voce.
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const SRC = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'main.js'), 'utf8');
 const cd = require('./src/utils/camadasDoDia');
@@ -96,6 +100,180 @@ t('corrida que so tem OPORTUNIDADE nao gera registro (a BW nao abriu)',
 const doisTop = [mk('p', 'TOP', 70, 0.02, 0.9), mk('q', 'TOP', 70, 0.09, 0.1)];
 t('dois TOP na mesma corrida: desempata por SPLIT antes de tempo e pct',
   cd.registroDoHistorico(doisTop, null) && cd.registroDoHistorico(doisTop, null).id === 'q');
+
+// ── [6] O CABECALHO MANDA NOS CARTOES ───────────────────────────────────────
+// Aqui o teste sai do fonte e RODA. Arranca do main.js o codigo que o navegador
+// executa (_histSet, recalcKpisHist e aplicarFiltroHist), monta um DOM de
+// mentira com quatro linhas e confere o que os cartoes passam a dizer.
+//
+// Por que assim: em 09/09 eu escrevi um teste que conferia o payload e nao a
+// tela, dei o simulador por pronto e o Bruno abriu numa tela em branco. Um
+// teste que le so o texto do arquivo nao teria pego o `mo` inexistente, porque
+// a linha estava sintaticamente perfeita.
+bloco('[6] FILTRAR MUDA OS NUMEROS DOS CARTOES (E O TIPO NAO ESTOURA)');
+
+function extraiFuncao(nome) {
+  const ini = SRC.indexOf('function ' + nome + '(');
+  if (ini < 0) return null;
+  let i = SRC.indexOf('{', ini), nivel = 0;
+  for (; i < SRC.length; i++) {
+    if (SRC[i] === '{') nivel++;
+    else if (SRC[i] === '}') { nivel--; if (!nivel) return SRC.slice(ini, i + 1); }
+  }
+  return null;
+}
+
+const fnHistSet = extraiFuncao('_histSet');
+const fnRecalc = extraiFuncao('recalcKpisHist');
+const fnFiltro = extraiFuncao('aplicarFiltroHist');
+t('as tres funcoes do cabecalho foram encontradas no main.js',
+  !!fnHistSet && !!fnRecalc && !!fnFiltro);
+
+// DOM de mentira: so o que essas funcoes tocam.
+function montaDom(linhas, filtros) {
+  const els = {};
+  const pegaEl = function (id) {
+    if (!els[id]) els[id] = { textContent: '', style: {}, value: (filtros && filtros[id]) || '' };
+    return els[id];
+  };
+  for (const k in (filtros || {})) pegaEl(k).value = filtros[k];
+  const trs = linhas.map(function (L) {
+    return {
+      style: { display: '' },
+      getAttribute: function (a) {
+        const m = { 'data-race': '1', 'data-turno': L.turno || '', 'data-pista': L.pista || '',
+                    'data-bateu': L.bateu || '', 'data-camada': L.camada || '',
+                    'data-entrei': L.entrei || '', 'data-abriu': L.abriu == null ? '' : String(L.abriu),
+                    'data-naoaberto': L.naoaberto ? '1' : '0' };
+        return m[a] == null ? null : m[a];
+      }
+    };
+  });
+  return {
+    els: els, trs: trs,
+    document: {
+      getElementById: function (id) { return (filtros && !(id in filtros) && !/^kpi-/.test(id)) ? null : pegaEl(id); },
+      querySelectorAll: function (sel) { return sel === 'tr[data-race]' ? trs : []; },
+      addEventListener: function () {}
+    }
+  };
+}
+
+function roda(linhas, filtros) {
+  const dom = montaDom(linhas, filtros || {});
+  const ctx = { document: dom.document, console: console };
+  vm.createContext(ctx);
+  vm.runInContext(fnHistSet + '\n' + fnRecalc + '\n' + fnFiltro + '\naplicarFiltroHist();', ctx);
+  const val = function (id) { return dom.els[id] ? dom.els[id].textContent : undefined; };
+  return {
+    visiveis: dom.trs.filter(function (tr) { return tr.style.display !== 'none'; }).length,
+    card: function (n) {
+      return { qtd: val('kpi-' + n + '-qtd'), ok: val('kpi-' + n + '-ok'),
+               err: val('kpi-' + n + '-err'), pct: val('kpi-' + n + '-pct') };
+    }
+  };
+}
+
+const LINHAS = [
+  { camada: 'TOP',  bateu: 'sim', pista: 'Sheff', turno: 'Tarde', entrei: 'sim', abriu: 1 },
+  { camada: 'TOP',  bateu: 'nao', pista: 'CPark', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'HIGH', bateu: 'sim', pista: 'Sheff', turno: 'Manhã', entrei: 'nao', abriu: 1 },
+  { camada: 'GOOD', bateu: '',    pista: 'Towc',  turno: 'Tarde', entrei: 'nao', abriu: 1 }
+];
+const SEM_FILTRO = { 'fh-turno': '', 'fh-corrida': '', 'fh-bateu': '', 'fh-aberto': '', 'fh-motor': '', 'fh-entrei': '' };
+const com = function (o) { return Object.assign({}, SEM_FILTRO, o); };
+
+let base = null;
+try { base = roda(LINHAS, SEM_FILTRO); } catch (e) { console.log('  (erro sem filtro: ' + e.message + ')'); }
+t('sem filtro, o cartao Geral conta as quatro linhas', base && base.card('geral').qtd === 4);
+t('sem filtro, a taxa Geral sai so dos resolvidos: 2 de 3 = 67%', base && base.card('geral').pct === '67%');
+t('sem filtro, o cartao GOOD tem 1 registro e nenhuma taxa (nao correu)',
+  base && base.card('good').qtd === 1 && base.card('good').pct === '—');
+
+// O QUE ESTAVA QUEBRADO: escolher um Tipo estourava ReferenceError no `mo`,
+// o forEach morria na primeira linha e o recalcKpisHist nem chegava a rodar.
+let porTipo = null, erroTipo = null;
+try { porTipo = roda(LINHAS, com({ 'fh-motor': 'TOP' })); } catch (e) { erroTipo = e; }
+t('filtrar por Tipo=TOP nao estoura (era ReferenceError: mo is not defined)', !erroTipo);
+t('filtrar por Tipo=TOP deixa 2 linhas na tela', porTipo && porTipo.visiveis === 2);
+t('e o cartao Geral passa a dizer 2, nao 4 — os cartoes seguem o filtro',
+  porTipo && porTipo.card('geral').qtd === 2);
+t('a taxa Geral vira 1 de 2 = 50%', porTipo && porTipo.card('geral').pct === '50%');
+t('o cartao HIGH zera junto, porque nenhuma HIGH esta visivel',
+  porTipo && porTipo.card('high').qtd === 0);
+
+let porPista = null;
+try { porPista = roda(LINHAS, com({ 'fh-corrida': 'Sheff' })); } catch (e) {}
+t('filtrar por pista tambem mexe nos cartoes', porPista && porPista.card('geral').qtd === 2);
+t('e o TOP de outra pista sai da conta do cartao TOP', porPista && porPista.card('top').qtd === 1);
+
+let porEntrei = null;
+try { porEntrei = roda(LINHAS, com({ 'fh-entrei': 'sim' })); } catch (e) {}
+t('filtrar por Entrei=sim deixa so a aposta e o cartao acompanha',
+  porEntrei && porEntrei.card('geral').qtd === 1 && porEntrei.card('geral').pct === '100%');
+
+let porTurno = null;
+try { porTurno = roda(LINHAS, com({ 'fh-turno': 'Manhã' })); } catch (e) {}
+t('filtrar por turno idem', porTurno && porTurno.card('geral').qtd === 1);
+
+t('nao sobrou nenhuma leitura da variavel `mo` no filtro', !/\(mo === fm\)/.test(SRC));
+
+// ── [7] A COLUNA "AvB na BW" LE A FONTE QUE CLASSIFICOU A LINHA ────────────
+// Bruno, 10/09: "se praticamente todos os que estao no historico abriu no BW,
+// porque a coluna AvB na BW nao foi preenchida pra todos que ja correram?"
+// Porque ela lia races.abriu (par da reanalise, outro robo, congelado) em vez
+// do confronto da propria linha. Aqui a funcao roda de verdade.
+bloco('[7] A ODD DO MERCADO APARECE SEMPRE QUE A BW ABRIU');
+
+const fnAbriu = extraiFuncao('_abriuDaLinha');
+t('_abriuDaLinha existe no main.js', !!fnAbriu);
+
+const ctxAb = {};
+vm.createContext(ctxAb);
+vm.runInContext(fnAbriu + '\nthis.f = _abriuDaLinha;', ctxAb);
+const abriuDa = ctxAb.f;
+
+const cfBW = (camada, odd, pick, outro) => ({
+  camada: camada, odd_bw: odd, pick_trap: pick, outro_trap: outro,
+  par: 'T' + pick + 'xT' + outro
+});
+
+// O caso do print: Sheffield A4 2:04, linha GOOD T6xT5, a BW abriu a 1.57,
+// e a coluna mostrava travessao porque races.abriu era null.
+const sheff = abriuDa({ abriu: null, odd_abertura: null, abriu_par: null }, cfBW('GOOD', 1.57, 6, 5));
+t('linha GOOD com races.abriu null continua marcando que ABRIU', sheff.abriu === 1);
+t('e mostra a odd do mercado que classificou o AvB (1.57)', sheff.odd === 1.57);
+
+t('TOP idem', abriuDa({ abriu: null, odd_abertura: null, abriu_par: null }, cfBW('TOP', 1.65, 1, 3)).abriu === 1);
+t('HIGH idem', abriuDa({ abriu: 0, odd_abertura: null, abriu_par: '9x9' }, cfBW('HIGH', 1.5, 4, 3)).abriu === 1);
+t('races.abriu=0 nao consegue mais desmentir uma linha classificada',
+  abriuDa({ abriu: 0, odd_abertura: 9.9, abriu_par: '9x9' }, cfBW('HIGH', 1.5, 4, 3)).odd === 1.5);
+
+// Fallback: sem odd_bw, so aproveita a odd_abertura se for o MESMO par.
+const mesmo = abriuDa({ abriu: 1, odd_abertura: 1.9, abriu_par: '6x5' }, cfBW('GOOD', null, 6, 5));
+t('sem odd_bw, aproveita a odd_abertura quando o par e o mesmo', mesmo.odd === 1.9);
+const invertido = abriuDa({ abriu: 1, odd_abertura: 1.9, abriu_par: '5x6' }, cfBW('GOOD', null, 6, 5));
+t('e reconhece o par invertido (5x6 e o mesmo que 6x5)', invertido.odd === 1.9);
+const outroPar = abriuDa({ abriu: 1, odd_abertura: 1.9, abriu_par: '2x4' }, cfBW('GOOD', null, 6, 5));
+t('mas NAO usa a odd de outro par — melhor sem odd do que com a odd errada',
+  outroPar.abriu === 1 && outroPar.odd === null);
+
+// A linha FORA nao passou pelo camadasDoDia: nela races.abriu ainda manda.
+const fora = { abriu: 1, odd_abertura: 2.0, abriu_par: '1x2' };
+t('linha FORA com abriu=1 mantem o comportamento antigo',
+  abriuDa(fora, { camada: 'FORA', pick_trap: 1, outro_trap: 2 }).odd === 2.0);
+t('linha FORA com abriu=0 continua dizendo que nao abriu',
+  abriuDa({ abriu: 0, odd_abertura: null, abriu_par: '1x2' }, { camada: 'FORA' }).abriu === 0);
+t('linha FORA sem medicao continua "nao monitorada"',
+  abriuDa({ abriu: null, odd_abertura: null, abriu_par: null }, { camada: 'FORA' }).abriu === null);
+t('sem cf nenhum nao estoura', abriuDa({ abriu: null }, null).abriu === null);
+
+// O filtro e a celula tem que sair do MESMO calculo.
+t('a linha calcula stAberto uma vez so', /var stAberto = _abriuDaLinha\(r, cf\);/.test(SRC));
+t('o data-abriu sai do stAberto, nao mais de r.abriu',
+  /data-abriu="' \+ \(stAberto\.abriu==null\?'':String\(stAberto\.abriu\)\)/.test(SRC));
+t('a celula recebe o mesmo stAberto', /_celulaAberto\(r, stAberto\)/.test(SRC));
+t('nao sobrou leitura de r.abriu na celula', !/_celulaAberto\(r\)\s*:/.test(SRC));
 
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);

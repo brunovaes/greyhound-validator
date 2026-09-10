@@ -2238,15 +2238,58 @@ function _celulaResultado(r){
   return '<td style="text-align:center">' + html + '</td>';
 }
 
-function _celulaAberto(r){
-  var par = r.abriu_par ? ' (' + String(r.abriu_par) + ')' : '';
+// "A BW ABRIU ESTE AvB?" — UMA FONTE SO (Bruno, 10/09/2026)
+//
+// Antes esta coluna lia `races.abriu` / `races.odd_abertura`. Essas colunas
+// descrevem UM par por corrida — o `abriu_par`, principal escolhido pela
+// REANALISE — sao escritas por outro robo (_gravarFechamentoAvb) e congelam no
+// primeiro registro (`WHERE abriu_par IS NULL`). A linha do Historico, porem,
+// vem do camadasDoDia, alimentado por `avb_abertos`. Duas fontes, dois robos,
+// e muitas vezes pares DIFERENTES: dava linha GOOD com a coluna dizendo
+// "corrida nao monitorada" enquanto o par estava aberto na BW a 1.57.
+//
+// A saida e' logica, nao heuristica: em confrontosDaCorrida, os classificados
+// saem SO de `pares` (= avb_abertos). Entao toda linha TOP/HIGH/GOOD e', por
+// definicao, um par que a BW abriu — e o `odd_bw` dela ja e a odd do mercado
+// que classificou aquele AvB. Nao ha o que consultar em outra tabela.
+//
+// Sobre QUAL odd e' esta: `avb_abertos` guarda a captura mais completa vista da
+// corrida (upsert quando aparecem mais pares), entao e a odd do mercado no
+// momento em que aquele conjunto foi capturado. NAO e' garantidamente o
+// primeiro tick da abertura, e por isso o title nao promete isso.
+//
+// A linha FORA (voce entrou num par que o painel nao listou) nao passou pelo
+// camadasDoDia — para ela o comportamento antigo continua valendo, e e' o unico
+// caso em que `races.abriu` ainda manda.
+function _abriuDaLinha(r, cf){
+  var c = cf || {};
+  var mesmoPar = function(){
+    if (!r.abriu_par) return false;
+    var p = String(r.abriu_par).split('x').map(Number);
+    if (p.length !== 2) return false;
+    var x = Number(c.pick_trap), y = Number(c.outro_trap);
+    return (p[0] === x && p[1] === y) || (p[0] === y && p[1] === x);
+  };
+  if (c.camada === 'TOP' || c.camada === 'HIGH' || c.camada === 'GOOD') {
+    var odd = (c.odd_bw != null) ? c.odd_bw : null;
+    // So cai no odd_abertura se for o MESMO par — senao a coluna mostraria a
+    // odd de um confronto que nao e o da linha.
+    if (odd == null && r.odd_abertura != null && mesmoPar()) odd = r.odd_abertura;
+    return { abriu: 1, odd: odd, par: c.par || null };
+  }
+  var ab = (r.abriu === 1 || r.abriu === '1') ? 1 : ((r.abriu === 0 || r.abriu === '0') ? 0 : null);
+  return { abriu: ab, odd: (ab === 1 && r.odd_abertura != null) ? r.odd_abertura : null, par: r.abriu_par || null };
+}
+
+function _celulaAberto(r, st){
+  var par = st && st.par ? ' (' + String(st.par) + ')' : '';
   var base;
-  if (r.abriu === 1 || r.abriu === '1') {
-    base = '<div title="o AvB' + par + ' abriu na BW' + (r.odd_abertura != null ? '; odd real de abertura' : '') + '">'
+  if (st && st.abriu === 1) {
+    base = '<div title="o AvB' + par + ' abriu na BW' + (st.odd != null ? '; odd do mercado na captura' : '') + '">'
       + '<span style="font-size:13px;font-weight:800;color:#22c55e">&#10003;</span>'
-      + (r.odd_abertura != null ? '<div style="font-size:10px;color:#60a5fa;font-weight:700;margin-top:1px">' + r.odd_abertura + '</div>' : '')
+      + (st.odd != null ? '<div style="font-size:10px;color:#60a5fa;font-weight:700;margin-top:1px">' + st.odd + '</div>' : '')
       + '</div>';
-  } else if (r.abriu === 0 || r.abriu === '0') {
+  } else if (st && st.abriu === 0) {
     base = '<div style="font-size:10px;color:#555" title="a corrida foi monitorada e o AvB' + par + ' não abriu na BW">&mdash;</div>';
   } else {
     base = '<div style="font-size:10px;color:#333" title="corrida não monitorada: não dá pra saber se o AvB abriu">&mdash;</div>';
@@ -2810,13 +2853,17 @@ ${linhasAvb.map(function(Lx){
   // aparecem na PRIMEIRA linha dela: repetir a chegada em tres linhas nao
   // acrescenta nada e tira a leitura de qual AvB e' qual.
   var vazia = '<td></td>';
+  // Calculado UMA vez: a mesma resposta vai pro data-abriu (que o filtro le) e
+  // pra celula (que voce ve). Duas contas separadas foi o que deixou o filtro
+  // discordar da tela sem ninguem notar.
+  var stAberto = _abriuDaLinha(r, cf);
   return '<tr' + (r.flag_atrasada && pri ? ' class="row-atrasada"' : '') + ' data-race'
     + ' data-turno="' + turnoBR + '"'
     + ' data-pista="' + (r.corrida||'').split(' ')[0] + '"'
     + ' data-bateu="' + (cf.bateu === true ? 'sim' : (cf.bateu === false ? 'nao' : '')) + '"'
     + ' data-odd="' + (esc ? (r.odd||'') : '') + '"'
     + ' data-naoaberto="' + (r.avb_nao_aberto?'1':'') + '"'
-    + ' data-abriu="' + (r.abriu==null?'':String(r.abriu)) + '"'
+    + ' data-abriu="' + (stAberto.abriu==null?'':String(stAberto.abriu)) + '"'
     + ' data-camada="' + (cf.camada||'') + '"'
     + ' data-entrei="' + (esc ? 'sim' : 'nao') + '"'
     + ' data-primeira="' + (pri ? '1' : '') + '">'
@@ -2835,7 +2882,7 @@ ${linhasAvb.map(function(Lx){
     + (pri ? '<td style="text-align:center">'+(!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':''))+'</td>' : vazia)
     + (pri ? _celulaObs(r) : vazia)
     + _celulaOddConf(r, esc)
-    + (pri ? _celulaAberto(r) : vazia)
+    + (pri ? _celulaAberto(r, stAberto) : vazia)
     + (pri ? '<td style="text-align:center"><span class="edit-pencil" data-row="'+r.id+'" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>' : vazia)
     + '</tr>';
 }).join('')}
@@ -3009,15 +3056,21 @@ function _histSet(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
 // HIGH e GOOD, cada um com quantidade, acertos, erros e taxa.
 
 function recalcKpisHist(){
-  // CONTABILIZACAO (regra do Bruno): o denominador e' TODO TOP, tenha havido
-  // aposta ou nao, MAIS os AvBs de outra camada em que ele entrou. TOP sem
-  // aposta conta de proposito — se so o apostado contasse, entrar em 2 de 5 TOP
-  // e acertar os dois daria 100%, a inflacao que ele quer evitar.
+  // CONTABILIZACAO: com UM registro por corrida, todo registro conta. Nao ha
+  // mais o que escolher — a corrida chega aqui com um AvB so, o que ele apostou
+  // ou o que o motor melhor avaliou.
   //
-  // E o KPI IGNORA O FILTRO de propósito (decisao dele): o placar do dia mudar
-  // ao filtrar por pista daria dois numeros pra mesma coisa. Quem manda e o
-  // data-conta, gravado no servidor, nao o que esta visivel.
-  var todas = Array.prototype.slice.call(document.querySelectorAll('tr[data-race]'));
+  // OS CARTOES SEGUEM O FILTRO (Bruno, 10/09/2026). Ate aqui eles liam TODAS as
+  // linhas e ignoravam o cabecalho de proposito — regra da epoca do data-conta,
+  // quando cabiam varias linhas por corrida e filtrar por pista teria dado dois
+  // numeros pra mesma coisa. Com uma linha por corrida isso virou so confusao:
+  // filtrar por TOP deixava 3 linhas na tela e o cartao Geral continuava
+  // dizendo 17. Agora os quatro cartoes falam do que esta VISIVEL.
+  //
+  // Ler o style.display exige que quem chama ja tenha escondido as linhas —
+  // e' por isso que o aplicarFiltroHist chama esta funcao no fim, nunca antes.
+  var todas = Array.prototype.slice.call(document.querySelectorAll('tr[data-race]'))
+    .filter(function(tr){ return tr.style.display !== 'none'; });
 
   // Um conjunto por TIPO, mais o geral. As contas sao as MESMAS do servidor: a
   // quantidade conta todos os registros, e a taxa so os RESOLVIDOS — corrida que
@@ -3080,8 +3133,6 @@ function aplicarFiltroHist(){
     // corrida, porque a regra e' uma aposta por corrida.
     var en=tr.getAttribute('data-entrei')||'';
     var casaEntrei = !fe ? true : (en === fe);
-    // 'fora' = a corrida nao passou em nenhuma das duas reguas (tier vazio).
-    var casaMotor = !fm ? true : (mo === fm);
     var ok=casaAberto&&casaMotor&&casaEntrei&&(!ft||t===ft)&&(!fc||p===fc)&&(!fb||(fb==='pend'?b==='':b===fb));
     tr.style.display=ok?'':'none';
   });
