@@ -36,6 +36,10 @@ function navBar(user, active) {
         <span style="display:inline-block;width:7px;height:7px;background:#f97316;border-radius:50%"></span>
         <span id="race-alert-txt">Corrida em breve</span>
       </a>
+      <a href="${BASE}" id="avb-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#3b82f6;text-decoration:none;border:1px solid rgba(59,130,246,.45);background:rgba(59,130,246,.12);border-radius:20px;padding:3px 10px;animation:blink 1s ease-in-out infinite">
+        <span id="avb-badge-dot" style="display:inline-block;width:7px;height:7px;background:#3b82f6;border-radius:50%"></span>
+        <span id="avb-badge-txt">AvB esperando</span>
+      </a>
       <a href="${BASE}/robot" id="results-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#a78bfa;text-decoration:none;border:1px solid rgba(167,139,250,.4);background:rgba(167,139,250,.1);border-radius:20px;padding:3px 10px;animation:blink 1.5s ease-in-out infinite">
         <span style="display:inline-block;width:7px;height:7px;background:#a78bfa;border-radius:50%"></span>
         <span>Robô Resultados rodando...</span>

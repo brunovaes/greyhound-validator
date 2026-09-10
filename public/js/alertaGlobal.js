@@ -189,19 +189,71 @@
       return (dd.races && Array.isArray(dd.races)) ? dd.races : [];
     } catch (e) { return []; }
   }
+  // O ALARME DE PROXIMIDADE MORREU AQUI (Bruno, 10/09/2026).
+  //
+  // Este ciclo tocava em TODA corrida do dia, 3 minutos antes, em todas as telas
+  // menos a Analisar (onde o souPassivo o cala). Sino quando a corrida nao casava
+  // com o filtro, beep quando casava — era o "alarme tocando o tempo todo".
+  //
+  // O app.js ja tinha emudecido o ramo equivalente em set/2026 ("o som passou a
+  // ser exclusividade do alarme de camada"), mas a decisao nunca chegou aqui:
+  // este arquivo e' de junho. Ficou um ano de sistema com duas regras opostas
+  // para a mesma pergunta, e quem abrisse qualquer tela que nao a Analisar ouvia
+  // a regra velha.
+  //
+  // O que avisa agora e' o alarme de AvB (painelDia.js), que toca quando a BW
+  // CONFIRMA um par — nao pelo relogio. As funcoes avisar/notificar/matchAlarme
+  // seguem definidas: o push do servidor ainda espelha o matchAlarme, e apagar
+  // uma ponta so deixaria as duas divergindo de novo.
   async function ciclo() {
     if (souPassivo()) return;          // tela de Analise: quem avisa e o app.js
     if (!(await carregarConfig())) return; // não logado / erro
-    var races = await pegarCorridas();
-    races.forEach(function (r) {
-      if ((r.nivel || '') === 'skip') return;
-      if (isOldRaceCard(r)) return;
-      var mins = minutesToRace(r);
-      if (mins === null || mins < 0 || mins > ALERTA_MIN_ANTES) return;
-      var key = (r.hora || '') + '|' + (r.corrida || '');
-      if (jaAvisou(key)) return;
-      avisar(r, matchAlarme(r));
-    });
+    await selosDeAvb();
+  }
+
+  // ── SELO DE AvB EM TODAS AS TELAS ─────────────────────────────────────────
+  // O mesmo painel-dia que a Analisar consome, so que aqui apenas para acender o
+  // selo da barra de navegacao — SEM som. O som fora da Analisar entra junto com
+  // o painelDia.js rodando em todas as telas; misturar as duas coisas agora
+  // faria a mesma promocao apitar duas vezes na Analisar.
+  //
+  // O endpoint tem cache de 12s no servidor, entao pedir de 30 em 30 segundos de
+  // cada aba aberta nao repesa nada.
+  var CORES_CAMADA = { TOP: '#3b82f6', HIGH: '#f97316', GOOD: '#8b5cf6' };
+  var ORDEM_CAMADA = ['TOP', 'HIGH', 'GOOD'];
+  async function selosDeAvb() {
+    try {
+      var el = document.getElementById('avb-badge');
+      if (!el) return;
+      var r = await fetch(BASE + '/api/painel-dia', { credentials: 'same-origin' });
+      if (!r.ok) return;
+      var d = await r.json();
+      var esperando = [];
+      ((d && d.corridas) || []).forEach(function (c) {
+        if (c.ja_correu || c.expirado) return;
+        (c.confrontos || []).forEach(function (x) {
+          if (!x.aguardando_entrada) return;
+          if (ORDEM_CAMADA.indexOf(String(x.camada || '').toUpperCase()) < 0) return;
+          esperando.push(x);
+        });
+      });
+      if (!esperando.length) { el.style.display = 'none'; return; }
+      esperando.sort(function (p, q) {
+        return ORDEM_CAMADA.indexOf(String(p.camada).toUpperCase())
+             - ORDEM_CAMADA.indexOf(String(q.camada).toUpperCase());
+      });
+      var forte = String(esperando[0].camada).toUpperCase();
+      var cor = CORES_CAMADA[forte] || '#3b82f6';
+      var txt = document.getElementById('avb-badge-txt');
+      var dot = document.getElementById('avb-badge-dot');
+      if (txt) txt.textContent = esperando.length === 1
+        ? ('1 AvB ' + forte + ' esperando')
+        : (esperando.length + ' AvBs esperando · ' + forte);
+      if (dot) dot.style.background = cor;
+      el.style.color = cor;
+      el.style.borderColor = cor + '73';
+      el.style.display = 'inline-flex';
+    } catch (e) { /* selo nunca pode derrubar a tela */ }
   }
 
   /* primeiro gesto: destrava áudio e pede permissão de notificação */

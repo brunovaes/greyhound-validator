@@ -267,120 +267,61 @@ Score final = soma ponderada / soma dos pesos. Galgos ordenados do maior para o 
 <div class="tab-panel" id="t-automacao">
 
 <div class="section">
-<div class="sec-title">Alarme para filtro selecionado</div>
+<div class="sec-title">Alarme de AvB (motor BW)</div>
 <div class="bloco-toggle">
-  <input type="hidden" name="alarme_filtro_ativo" value="0">
+  <input type="hidden" name="avb_alarme_ativo" value="0">
   <label class="bloco-switch">
-    <input type="checkbox" name="alarme_filtro_ativo" value="1" ${config.alarme_filtro_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label');l.style.color=this.checked?'#22c55e':'#888';l.textContent=this.checked?'Alarme ativo':'Alarme desligado';var ff=document.getElementById('alarme_filtro_fields');if(ff)ff.setAttribute('data-ativo',this.checked?'1':'0');">
+    <input type="checkbox" name="avb_alarme_ativo" value="1" ${config.avb_alarme_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label');l.style.color=this.checked?'#22c55e':'#888';l.textContent=this.checked?'Alarme ativo':'Alarme desligado';var f=document.getElementById('avb_alarme_fields');if(f)f.setAttribute('data-ativo',this.checked?'1':'0');">
     <span class="slider"></span>
   </label>
-  <span class="bloco-toggle-label" style="color:${config.alarme_filtro_ativo?'#22c55e':'#888'}">${config.alarme_filtro_ativo?'Alarme ativo':'Alarme desligado'}</span>
+  <span class="bloco-toggle-label" style="color:${config.avb_alarme_ativo?'#22c55e':'#888'}">${config.avb_alarme_ativo?'Alarme ativo':'Alarme desligado'}</span>
 </div>
-<div class="info-box">Quando ligado, as corridas que casam com o filtro (turno E pista E classe) piscam na cor escolhida e tocam o som escolhido no tempo do alerta. As demais seguem o alerta normal.</div>
-<div class="bloco-fields" id="alarme_filtro_fields" data-ativo="${config.alarme_filtro_ativo?'1':'0'}">
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
-  <div class="field"><label>Turno</label>
-    <select name="alarme_filtro_turno">
-      <option value="" ${!config.alarme_filtro_turno?'selected':''}>Todos</option>
-      <option value="manha" ${config.alarme_filtro_turno==='manha'?'selected':''}>Manhã</option>
-      <option value="tarde" ${config.alarme_filtro_turno==='tarde'?'selected':''}>Tarde</option>
+<div class="info-box">
+  Toca quando o <strong>motor da BW</strong> confirma um AvB e ele entra numa camada &mdash; nao no horario da corrida, e sim no instante em que o mercado abre o par. A linha na lista pisca na cor da camada ao mesmo tempo.<br><br>
+  <strong>OPORTUNIDADE nunca apita.</strong> Ela e a fila de espera da manha: apitar nela seria alarme o dia inteiro. So apita o que a BW confirmou.
+</div>
+<div class="bloco-fields" id="avb_alarme_fields" data-ativo="${config.avb_alarme_ativo?'1':'0'}">
+${[
+  { k: 'top',  rot: 'TOP',  cor: '#3b82f6' },
+  { k: 'high', rot: 'HIGH', cor: '#f97316' },
+  { k: 'good', rot: 'GOOD', cor: '#8b5cf6' }
+].map(function(C){
+  var _at = config['avb_'+C.k+'_ativo'] != null ? config['avb_'+C.k+'_ativo'] : 1;
+  var _som = config['avb_'+C.k+'_som'] || 'alarme';
+  var _cor = config['avb_'+C.k+'_cor'] || C.cor;
+  return '<div style="border:1px solid #222;border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+    + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">'
+    + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+_cor+'"></span>'
+    + '<strong style="font-size:13px;color:'+_cor+';letter-spacing:.5px">'+C.rot+'</strong>'
+    + '<input type="hidden" name="avb_'+C.k+'_ativo" value="0">'
+    + '<label class="bloco-switch" style="margin-left:auto"><input type="checkbox" name="avb_'+C.k+'_ativo" value="1"'+(_at?' checked':'')+'><span class="slider"></span></label>'
+    + '</div>'
+    + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">'
+    + '<div class="field"><label>Som</label><div style="display:flex;gap:8px;align-items:center">'
+    + '<select name="avb_'+C.k+'_som" id="avb_'+C.k+'_som" style="flex:1">'
+    + [['sino','Sino'],['beep','Beep'],['alarme','Alarme'],['suave','Suave']].map(function(S){
+        return '<option value="'+S[0]+'"'+(_som===S[0]?' selected':'')+'>'+S[1]+'</option>';
+      }).join('')
+    + '</select>'
+    + '<button type="button" class="btn-teste-som" onclick="testarSomAvb(this,\'avb_'+C.k+'_som\')" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap">&#128266; Testar</button>'
+    + '</div></div>'
+    + '<div class="field"><label>Cor</label>'
+    + '<input type="color" name="avb_'+C.k+'_cor" value="'+_cor+'" style="width:100%;height:36px;background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:3px;cursor:pointer">'
+    + '<div class="hint" style="margin-top:3px">Pisca e selo usam esta cor.</div>'
+    + '</div>'
+    + '</div></div>';
+}).join('')}
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+  <div class="field"><label>Repetir de 1 em 1 minuto</label>
+    <select name="avb_alarme_repetir">
+      <option value="1" ${(config.avb_alarme_repetir==null||config.avb_alarme_repetir)?'selected':''}>Sim</option>
+      <option value="0" ${(config.avb_alarme_repetir!=null&&!config.avb_alarme_repetir)?'selected':''}>Nao</option>
     </select>
+    <div class="hint" style="margin-top:3px">Enquanto faltarem 5 minutos ou menos para a largada e voce ainda nao tiver entrado na corrida.</div>
   </div>
-  <div class="field"><label>Som de Alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="alarme_filtro_som" id="alarme_filtro_som" style="flex:1">
-        <option value="sino" ${config.alarme_filtro_som==='sino'?'selected':''}>Sino</option>
-        <option value="beep" ${config.alarme_filtro_som==='beep'||!config.alarme_filtro_som?'selected':''}>Beep</option>
-        <option value="alarme" ${config.alarme_filtro_som==='alarme'?'selected':''}>Alarme</option>
-        <option value="suave" ${config.alarme_filtro_som==='suave'?'selected':''}>Suave</option>
-      </select>
-      <button type="button" class="btn-teste-som" onclick="testarSomAlarme(this)" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;white-space:nowrap">🔊 Testar</button>
-    </div>
-  </div>
-  <div class="field"><label>Cor de Alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="alarme_filtro_cor" id="alarme_filtro_cor" style="flex:1" onchange="previewCorAlarme()">
-        <option value="azul" ${config.alarme_filtro_cor==='azul'||!config.alarme_filtro_cor?'selected':''}>Azul</option>
-        <option value="roxo" ${config.alarme_filtro_cor==='roxo'?'selected':''}>Roxo</option>
-        <option value="laranja" ${config.alarme_filtro_cor==='laranja'?'selected':''}>Laranja</option>
-        <option value="rosa" ${config.alarme_filtro_cor==='rosa'?'selected':''}>Rosa</option>
-      </select>
-      <span id="alarme_cor_preview" style="display:inline-block;width:34px;height:22px;border-radius:5px;flex-shrink:0;background:${alarmeCorHex}"></span>
-    </div>
-  </div>
-</div>
-<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-  <div class="field" style="grid-column:1/-1">
-    <label>Regras do alarme</label>
-    <div class="hint" style="margin-bottom:8px">Monte uma linha por combinação: escolha turno, pista e as classes, e clique em <strong>Incluir</strong>. Cada linha é fechada, então "Youghal A5, A6" não dispara em outra pista nem em outra classe. Sem nenhuma regra, o alarme vale para qualquer corrida.</div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;background:#0D1117;border:1px solid #222;border-radius:8px;padding:10px">
-      <div style="flex:0 0 120px">
-        <label style="font-size:10px">Turno</label>
-        <select id="rg_turno" style="width:100%;padding:6px 8px;background:#161B27;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:12px;color-scheme:dark">
-          <option value="">Todos</option><option value="manha">Manhã</option><option value="tarde">Tarde</option>
-        </select>
-      </div>
-      <div style="flex:1;min-width:170px">
-        <label style="font-size:10px">Pista</label>
-        <select id="rg_pista" onchange="rgPistaMudou()" style="width:100%;padding:6px 8px;background:#161B27;border:1px solid #222;border-radius:5px;color:#f0f0f0;font-size:12px;color-scheme:dark">
-          <option value="">Qualquer pista</option>
-          ${pistasAlarme.map(function(p){return `<option value="${p[0]}">${p[1]}</option>`;}).join('')}
-        </select>
-      </div>
-      <div style="flex:2;min-width:220px">
-        <label style="font-size:10px">Classes (nenhuma = todas)</label>
-        <div id="rg_classes" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div>
-      </div>
-      <button type="button" class="btn-save" style="padding:8px 18px;font-size:12px" onclick="rgIncluir()">Incluir</button>
-    </div>
-
-    <div id="rg_lista" style="margin-top:10px"></div>
-    <input type="hidden" name="alarme_filtro_regras" id="alarme_regras_val" value="">
-  </div>
-
-</div>
-</div>
-</div>
-
-<div class="section">
-<div class="sec-title">Alarme TOP</div>
-<div class="bloco-toggle">
-  <input type="hidden" name="alarme_top_ativo" value="0">
-  <label class="bloco-switch">
-    <input type="checkbox" name="alarme_top_ativo" value="1" ${config.alarme_top_ativo?'checked':''} onchange="var l=this.closest('.bloco-toggle').querySelector('.bloco-toggle-label'); var f=document.getElementById('alarme_top_fields'); if(l){l.textContent=this.checked?'Alarme ativo':'Alarme desligado'; l.style.color=this.checked?'#22c55e':'#888';} if(f) f.dataset.ativo=this.checked?'1':'0';">
-    <span class="slider"></span>
-  </label>
-  <span class="bloco-toggle-label" style="color:${config.alarme_top_ativo?'#22c55e':'#888'}">${config.alarme_top_ativo?'Alarme ativo':'Alarme desligado'}</span>
-</div>
-<div class="info-box">Toca <strong>só nas corridas da régua TOP</strong>, perto da largada. É independente do alarme acima: os dois podem ficar ligados ao mesmo tempo. Se uma corrida casar nos dois, toca uma vez só, e o TOP tem prioridade.</div>
-<div class="bloco-fields" id="alarme_top_fields" data-ativo="${config.alarme_top_ativo?'1':'0'}">
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
-  <div class="field"><label>Som de Alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="alarme_top_som" id="alarme_top_som" style="flex:1">
-        <option value="sino" ${config.alarme_top_som==='sino'?'selected':''}>Sino</option>
-        <option value="beep" ${config.alarme_top_som==='beep'?'selected':''}>Beep</option>
-        <option value="alarme" ${config.alarme_top_som==='alarme'||!config.alarme_top_som?'selected':''}>Alarme</option>
-        <option value="suave" ${config.alarme_top_som==='suave'?'selected':''}>Suave</option>
-      </select>
-      <button type="button" class="btn-teste-som" onclick="testarSomAlarmeTop(this)" style="background:#222;color:#fff;border:1px solid #444;border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap">&#128266; Testar</button>
-    </div>
-  </div>
-  <div class="field"><label>Cor de Alerta</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select name="alarme_top_cor" id="alarme_top_cor" style="flex:1" onchange="previewCorAlarmeTop()">
-        <option value="azul" ${config.alarme_top_cor==='azul'?'selected':''}>Azul</option>
-        <option value="roxo" ${config.alarme_top_cor==='roxo'||!config.alarme_top_cor?'selected':''}>Roxo</option>
-        <option value="laranja" ${config.alarme_top_cor==='laranja'?'selected':''}>Laranja</option>
-        <option value="rosa" ${config.alarme_top_cor==='rosa'?'selected':''}>Rosa</option>
-      </select>
-      <span id="alarme_top_cor_preview" style="width:22px;height:22px;border-radius:5px;border:1px solid #444;display:inline-block"></span>
-    </div>
-  </div>
-  <div class="field"><label>Minutos antes da largada</label>
-    <input type="number" name="alarme_top_min_antes" min="0" max="60" value="${config.alarme_top_min_antes != null ? config.alarme_top_min_antes : 5}">
-    <div class="hint" style="margin-top:3px">Quando faltar esse tempo, a corrida TOP toca e a linha pisca. Toca uma vez por corrida.</div>
+  <div class="field"><label>Quantas vezes repetir</label>
+    <input type="number" name="avb_alarme_vezes" min="1" max="5" value="${config.avb_alarme_vezes != null ? config.avb_alarme_vezes : 3}">
+    <div class="hint" style="margin-top:3px">Alem do toque da confirmacao. O maximo e 5 de proposito: acima disso o alarme vira ruido de fundo e voce para de reagir a ele.</div>
   </div>
 </div>
 </div>
@@ -873,6 +814,11 @@ document.addEventListener('click', function(ev){
   rgPintaClasses(); rgPintaLista();
 })();
 
+// Teste de som do alarme de AvB: um so, parametrizado pelo id do <select>.
+// As funcoes vizinhas foram clonadas em vez de parametrizadas porque eram
+// chamadas por onclick inline em varios lugares; esta nasce depois disso e nao
+// tem esse passivo.
+function testarSomAvb(btn, idSel){ var el=document.getElementById(idSel); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
 function testarSomAlarme(btn){ var el=document.getElementById('alarme_filtro_som'); if(el) _tocarTeste(el.value); _flashBtnTeste(btn); }
 try{ document.addEventListener('DOMContentLoaded', _cfgPrepararSons); }catch(e){}
 var CORES_ALARME_CFG={azul:'#3b82f6',roxo:'#8b5cf6',laranja:'#f97316',rosa:'#ec4899'};
@@ -1161,6 +1107,14 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     // colateral sobre o resto da configuracao.
     const _atual = db.prepare('SELECT * FROM analysis_config WHERE user_id = ?').get(CONFIG_GLOBAL_ID) || {};
     const d = Object.assign({}, _atual, req.body || {});
+    // Checkbox + hidden: marcado manda ['0','1'], desmarcado manda '0'. Vale
+    // tambem pro valor que ja estava no banco (numero), pro merge acima nao
+    // virar "desligado" quando o campo nao veio no POST.
+    const _liga = function (v, padrao) {
+      if (v === undefined || v === null || v === '') return padrao ? 1 : 0;
+      if (Array.isArray(v)) return v.indexOf('1') >= 0 || v.indexOf(1) >= 0 ? 1 : 0;
+      return (v === '1' || v === 1 || v === true) ? 1 : 0;
+    };
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN max_cat_diff_caltm INTEGER DEFAULT 1').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN peso_post_pick INTEGER DEFAULT 0').run(); } catch(e) {}
     try { db.prepare('ALTER TABLE analysis_config ADD COLUMN ajuste_classe_segundos REAL DEFAULT 0.20').run(); } catch(e) {}
@@ -1230,7 +1184,7 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN vip_premium_cor_linha TEXT DEFAULT '#161B27'").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_ativo INTEGER DEFAULT 1").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN cio_recente_dias INTEGER DEFAULT 90").run(); } catch(e) {}
-    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=COALESCE(?,sp_ratio_max),caltm_min_dif=COALESCE(?,caltm_min_dif),split_min=COALESCE(?,split_min),podio_min=COALESCE(?,podio_min),desaba_min=COALESCE(?,desaba_min),reg_sp_ratio_max=COALESCE(?,reg_sp_ratio_max),reg_caltm_min_dif=COALESCE(?,reg_caltm_min_dif),reg_split_min=COALESCE(?,reg_split_min),reg_podio_min=COALESCE(?,reg_podio_min),reg_desaba_min=COALESCE(?,reg_desaba_min),desaba_queda=COALESCE(?,desaba_queda),alarme_top_ativo=?,alarme_top_som=?,alarme_top_cor=?,alarme_top_min_antes=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET peso_caltm=?,peso_categoria=?,peso_bends=?,peso_remarks=?,peso_sp=?,peso_split=?,peso_brt=?,dist_min=?,dist_max=?,classes_aceitas=?,min_corridas_uteis=?,pct_alta=?,pct_media=?,max_cat_diff_caltm=?,peso_post_pick=?,ajuste_classe_segundos=?,desconto_acidente_leve=?,desconto_acidente_medio=?,proporcao_media_caltm=?,proporcao_melhor_caltm=?,teto_diff_normalizacao=?,threshold_skip_avb=?,threshold_back=?,max_niveis_pool=?,max_linhas_cat_inferior=?,max_dias_gap_nova_cat=?,cio_recente_ativo=?,cio_recente_dias=?,bloco_pesos_ativo=?,bloco_categoria_ativo=?,bloco_filtros_ativo=?,bloco_confianca_ativo=?,bloco_motor_ativo=?,alarme_filtro_ativo=?,alarme_filtro_turno=?,alarme_filtro_pistas=?,alarme_filtro_classes=?,alarme_filtro_som=?,alarme_filtro_cor=?,alarme_filtro_regras=?,vip_skip_ativo=?,vip_skip_min_antes=?,vip_skip_alarme=?,vip_cor_destaque=?,vip_cor_fundo=?,vip_som=?,vip_premium_ativo=?,vip_premium_min_antes=?,vip_premium_alarme=?,vip_premium_som=?,vip_premium_cor_destaque=?,vip_premium_cor_fundo=?,vip_cor_alerta=?,vip_premium_cor_alerta=?,vip_cor_linha=?,vip_premium_cor_linha=?,sp_ratio_max=COALESCE(?,sp_ratio_max),caltm_min_dif=COALESCE(?,caltm_min_dif),split_min=COALESCE(?,split_min),podio_min=COALESCE(?,podio_min),desaba_min=COALESCE(?,desaba_min),reg_sp_ratio_max=COALESCE(?,reg_sp_ratio_max),reg_caltm_min_dif=COALESCE(?,reg_caltm_min_dif),reg_split_min=COALESCE(?,reg_split_min),reg_podio_min=COALESCE(?,reg_podio_min),reg_desaba_min=COALESCE(?,reg_desaba_min),desaba_queda=COALESCE(?,desaba_queda),alarme_top_ativo=?,alarme_top_som=?,alarme_top_cor=?,alarme_top_min_antes=?,avb_alarme_ativo=?,avb_alarme_repetir=?,avb_alarme_vezes=?,avb_top_ativo=?,avb_top_som=?,avb_top_cor=?,avb_high_ativo=?,avb_high_som=?,avb_high_cor=?,avb_good_ativo=?,avb_good_som=?,avb_good_cor=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       d.peso_caltm||5,d.peso_categoria||4,d.peso_bends||3,d.peso_remarks||2,d.peso_sp||3,d.peso_split||3,d.peso_brt||1,
       d.dist_min,d.dist_max,d.classes_aceitas,d.min_corridas_uteis,
       d.pct_alta,d.pct_media,
@@ -1290,6 +1244,23 @@ router.post('/save', requireAdmin, express.json(), (req, res) => {
       d.alarme_top_som || 'alarme',
       d.alarme_top_cor || 'roxo',
       parseInt(d.alarme_top_min_antes, 10) || 5,
+      // ALARME DE AvB. Mesmo cuidado do bloco acima: cada checkbox tem um hidden
+      // com '0' antes, senao o campo desmarcado nem aparece no POST e o valor
+      // antigo ficaria de pe. `_liga` trata o par hidden+checkbox: o navegador
+      // manda os dois quando marcado, e o Express entrega array — por isso o
+      // teste aceita array e procura o '1' dentro dele.
+      _liga(d.avb_alarme_ativo, 1),
+      _liga(d.avb_alarme_repetir, 1),
+      Math.max(1, Math.min(5, parseInt(d.avb_alarme_vezes, 10) || 3)),
+      _liga(d.avb_top_ativo, 1),
+      d.avb_top_som || 'alarme',
+      d.avb_top_cor || '#3b82f6',
+      _liga(d.avb_high_ativo, 1),
+      d.avb_high_som || 'alarme',
+      d.avb_high_cor || '#f97316',
+      _liga(d.avb_good_ativo, 1),
+      d.avb_good_som || 'alarme',
+      d.avb_good_cor || '#8b5cf6',
       // Linha GLOBAL, e nao user.id: a configuracao e' uma so pro sistema
       // inteiro. Antes cada admin gravava na propria linha e o robo lia a do
       // usuario 1, entao mexer nas Configuracoes logado como outro admin nao

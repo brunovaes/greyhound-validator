@@ -1364,6 +1364,21 @@ router.get('/config', (req, res) => {
       alarme_top_som: config.alarme_top_som || 'alarme',
       alarme_top_cor: config.alarme_top_cor || 'roxo',
       alarme_top_min_antes: config.alarme_top_min_antes != null ? config.alarme_top_min_antes : 5,
+      // ALARME DE AvB (Bruno, 10/09/2026). Campo que nao for listado aqui nunca
+      // chega na tela — mesmo padrao do resto deste bloco, e a razao pela qual
+      // o alarme_filtro_regras passou meses salvando no banco sem efeito nenhum.
+      avb_alarme_ativo: config.avb_alarme_ativo != null ? config.avb_alarme_ativo : 1,
+      avb_alarme_repetir: config.avb_alarme_repetir != null ? config.avb_alarme_repetir : 1,
+      avb_alarme_vezes: config.avb_alarme_vezes != null ? config.avb_alarme_vezes : 3,
+      avb_top_ativo: config.avb_top_ativo != null ? config.avb_top_ativo : 1,
+      avb_top_som: config.avb_top_som || 'alarme',
+      avb_top_cor: config.avb_top_cor || '#3b82f6',
+      avb_high_ativo: config.avb_high_ativo != null ? config.avb_high_ativo : 1,
+      avb_high_som: config.avb_high_som || 'alarme',
+      avb_high_cor: config.avb_high_cor || '#f97316',
+      avb_good_ativo: config.avb_good_ativo != null ? config.avb_good_ativo : 1,
+      avb_good_som: config.avb_good_som || 'alarme',
+      avb_good_cor: config.avb_good_cor || '#8b5cf6',
       // VIP Plus: destrave de skip perto da largada, som e cores do destaque.
       vip_skip_ativo: config.vip_skip_ativo != null ? config.vip_skip_ativo : 1,
       vip_skip_min_antes: config.vip_skip_min_antes != null ? config.vip_skip_min_antes : 5,

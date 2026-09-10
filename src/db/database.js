@@ -415,6 +415,29 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN alarme_top_som TEXT DEFAULT 'alarme'",
   "ALTER TABLE analysis_config ADD COLUMN alarme_top_cor TEXT DEFAULT 'roxo'",
   "ALTER TABLE analysis_config ADD COLUMN alarme_top_min_antes INTEGER DEFAULT 5",
+  // ── ALARME DE AvB (motor BW) — Bruno, 10/09/2026 ──────────────────────────
+  // Substitui, na tela, o "Alarme para filtro selecionado" (turno/pista/classe)
+  // e o "Alarme TOP" — este ultimo era configuracao morta: as quatro colunas
+  // alarme_top_* existiam, apareciam na tela e nenhum arquivo do runtime as lia.
+  //
+  // As colunas antigas NAO sao removidas. Em SQLite derrubar coluna e'
+  // destrutivo e irreversivel, e elas nao atrapalham: so deixam de ser lidas.
+  //
+  // Um bloco por camada porque o Bruno quer poder diferenciar depois; os tres
+  // nascem iguais ('alarme') porque hoje ele quer um som so. As cores nascem
+  // nas combinadas: TOP azul, HIGH laranja, GOOD roxo.
+  "ALTER TABLE analysis_config ADD COLUMN avb_alarme_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN avb_alarme_repetir INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN avb_alarme_vezes INTEGER DEFAULT 3",
+  "ALTER TABLE analysis_config ADD COLUMN avb_top_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN avb_top_som TEXT DEFAULT 'alarme'",
+  "ALTER TABLE analysis_config ADD COLUMN avb_top_cor TEXT DEFAULT '#3b82f6'",
+  "ALTER TABLE analysis_config ADD COLUMN avb_high_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN avb_high_som TEXT DEFAULT 'alarme'",
+  "ALTER TABLE analysis_config ADD COLUMN avb_high_cor TEXT DEFAULT '#f97316'",
+  "ALTER TABLE analysis_config ADD COLUMN avb_good_ativo INTEGER DEFAULT 1",
+  "ALTER TABLE analysis_config ADD COLUMN avb_good_som TEXT DEFAULT 'alarme'",
+  "ALTER TABLE analysis_config ADD COLUMN avb_good_cor TEXT DEFAULT '#8b5cf6'",
   // CORTES DO MODELO DE CAMADAS (Bruno set/2026). Estavam cravados no codigo do
   // /api/painel-dia (teto 1.5, faixa 1.8) enquanto o motor usava sp_ratio_max 1.15 —
   // tres numeros pra duas perguntas. Agora sao um so cada, e configuraveis:

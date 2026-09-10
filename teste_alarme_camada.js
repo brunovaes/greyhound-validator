@@ -111,7 +111,7 @@ ok(!linhas[0].classList.contains('rc-perto') && ctx.sons.length === 0,
    'corrida longe da largada: sem marca e sem som');
 
 // ═════════════════════════════════════════════════════════════════════════════
-console.log('\n[2] ALARME DE FILTRO — continua funcionando, com o toggle dele\n');
+console.log('\n[2] ALARME DE FILTRO — APOSENTADO (Bruno, 10/09/2026)\n');
 
 linhas = [novaLinha(0)];
 corridas = [{ corrida: 'Sheff A2', hora: '1:31', _min: 2 }];
@@ -119,10 +119,21 @@ ctx = montarAmbiente(linhas, corridas, {
   filtro: { ativo: 1, turno: '', pistas: [], classes: [], regras: [], som: 'beep', cor: 'roxo' }
 });
 rodarCheck(ctx);
-ok(ctx.sons.length === 1 && ctx.sons[0].custom === true,
-   'com alarme_filtro_ativo=1 ele volta a tocar  (tocou ' + ctx.sons.length + 'x)');
-ok(linhas[0].classList.contains('rc-alert-custom') && linhas[0]._estilo['--alert-col'] === '#8b5cf6',
-   'e pinta na cor configurada, sem usar verde nem azul');
+// ESTE BLOCO FOI INVERTIDO DE PROPOSITO. Ate 10/09/2026 ele exigia o contrario:
+// que com alarme_filtro_ativo=1 o alarme por turno/pista/classe VOLTASSE a tocar.
+// A secao "Alarme para filtro selecionado" saiu da tela de Configuracoes e o
+// matchAlarmeFiltro passa a devolver false na raiz — quem tivesse deixado o
+// alarme ligado continuaria ouvindo o beep sem ter mais onde desliga-lo.
+//
+// A coluna alarme_filtro_ativo continua no banco e pode valer 1: e' justamente
+// por isso que o teste continua montando o cenario com ela ligada. O que ele
+// verifica agora e' que nem assim o alarme volta.
+ok(ctx.sons.length === 0,
+   'mesmo com alarme_filtro_ativo=1 o alarme aposentado NAO toca  (tocou ' + ctx.sons.length + 'x)');
+ok(!linhas[0].classList.contains('rc-alert-custom'),
+   'e a linha nao recebe mais a cor do filtro');
+ok(linhas[0].classList.contains('rc-perto'),
+   'ela cai na marca cinza de proximidade, como qualquer outra');
 
 // ═════════════════════════════════════════════════════════════════════════════
 // A LINHA DA CORRIDA COM AvB ESPERANDO.

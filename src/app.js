@@ -2528,6 +2528,15 @@ function ALARME_CASA_REGRAS(regras, turnoCorrida, pista, classe){
   return false;
 }
 function matchAlarmeFiltro(r){
+  // DESLIGADO NA RAIZ (Bruno, 10/09/2026). O alarme por turno/pista/classe saiu
+  // da tela de Configuracoes junto com a secao "Alarme para filtro selecionado".
+  // O valor de alarme_filtro_ativo continua no banco — em SQLite nao se derruba
+  // coluna —, e sem este corte quem tivesse deixado o alarme LIGADO continuaria
+  // ouvindo o beep na Analisar sem ter mais onde desliga-lo. O corpo original
+  // fica abaixo, intacto, porque o push do servidor ainda espelha esta regra:
+  // quando ele mudar, as duas pontas mudam juntas ou nenhuma.
+  return false;
+  // eslint-disable-next-line no-unreachable
   if (!ALARME_FILTRO.ativo) return false;
   var _pista = (r.corrida||'').trim().split(' ')[0];
   var _classe = (getRaceClass(r.corrida||'') || '').toUpperCase();
