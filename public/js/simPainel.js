@@ -451,14 +451,34 @@
   function atualizarBanner() {
     var el = document.getElementById('sim-estado');
     if (!el) return;
-    var h = new Date().getHours();
+    var agora = new Date();
+    var hhmm = agora.getHours() + ':' + String(agora.getMinutes()).padStart(2, '0');
     el.textContent = _ancora.foraDaJanela
-      ? 'FORA DO HORÁRIO (' + h + 'h): a simulação só funciona entre '
-        + JANELA_INI + 'h e ' + JANELA_FIM + 'h. Não existe hora inglesa que dê este horário aqui, '
-        + 'então uma corrida agora não pode aparecer na tela — nem simulada, nem de verdade.'
+      ? 'FORA DO HORÁRIO (' + hhmm + '): a simulação vai de ' + limiteIni() + ' às ' + limiteFim()
+        + '. Ela monta uma corrida ' + FOLGA_FRENTE + ' min à frente e outra '
+        + Math.abs(FOLGA_ATRAS) + ' min atrás, e as duas pontas têm que caber entre '
+        + JANELA_INI + 'h e ' + JANELA_FIM + 'h59 — que é a faixa inteira que uma hora inglesa '
+        + 'consegue virar aqui. Fora dela, nem corrida de verdade aparece.'
       : 'horários a partir de agora';
     el.style.background = _ancora.foraDaJanela ? '#000' : 'transparent';
     el.style.padding = _ancora.foraDaJanela ? '3px 10px' : '0';
+  }
+
+  // Os limites PRATICOS, ja descontada a folga do cenario. Sao eles que a tarja
+  // mostra: dizer "entre 6h e 20h" as 20:52 e' mentir na cara do usuario, porque
+  // 20h esta dentro da faixa e mesmo assim a simulacao recusa — o que recusa e'
+  // a corrida de +9 min, que cairia as 21:01.
+  function doisDig(n) { return String(n).padStart(2, '0'); }
+  function limiteIni() {
+    var m = FOLGA_ATRAS < 0 ? -FOLGA_ATRAS : 0;
+    return JANELA_INI + 'h' + (m ? doisDig(m) : '00');
+  }
+  function limiteFim() {
+    // -1 porque o ultimo minuto ACEITO e' aquele cuja corrida de +FOLGA_FRENTE
+    // ainda cai DENTRO da faixa. Com JANELA_FIM=20 e folga 9: 20:51 + 9 = 21:00,
+    // que ja e' hora 21 e portanto fora. O ultimo que monta e' 20:50.
+    var t = (JANELA_FIM + 1) * 60 - FOLGA_FRENTE - 1;
+    return Math.floor(t / 60) + 'h' + doisDig(t % 60);
   }
 
   function banner() {
@@ -493,7 +513,9 @@
   function roteiro() {
     if (_ancora.foraDaJanela) {
       console.log('%c[simpainel] FORA DO HORARIO', 'background:#991b1b;color:#fff;padding:2px 8px');
-      console.log('A simulacao so funciona entre ' + JANELA_INI + 'h e ' + JANELA_FIM + 'h.');
+      console.log('A simulacao vai de ' + limiteIni() + ' as ' + limiteFim()
+        + ' (o cenario precisa de ' + FOLGA_FRENTE + ' min a frente e '
+        + Math.abs(FOLGA_ATRAS) + ' atras).');
       console.log('A hora do PDF e inglesa e vira BR somando 12 (quando e 1..9) e tirando 4.');
       console.log('Essa conta so alcanca de 6h as 20h — nao ha hora UK que resulte em 21h aqui.');
       console.log('Entao uma corrida neste horario nao pode existir na tela, nem simulada.');
@@ -534,7 +556,8 @@
     document.addEventListener('DOMContentLoaded', arrancar);
   } else { arrancar(); }
 
-  glob._SIM_PAINEL = { payload: payload, corrida: corrida, ukDeBr: ukDeBr,
+  glob._SIM_PAINEL = { limiteIni: limiteIni, limiteFim: limiteFim,
+                       payload: payload, corrida: corrida, ukDeBr: ukDeBr,
                        corridaDaLista: corridaDaLista, semearResults: semearResults,
                        reiniciar: reiniciar, guardar: guardar,
                        // getter, e nao o objeto: depois de reiniciar, o _ancora

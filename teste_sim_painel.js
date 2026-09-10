@@ -159,6 +159,42 @@ for (const h of [12, 18, 20]) {
      'e o app aceita ' + aceitas + ' das 5 corridas na tela — nao e dia encerrado');
 }
 
+// O NUMERO ANUNCIADO TEM QUE SER O REAL. A tarja diz ate que horas a simulacao
+// vai; se esse numero divergir do minuto em que ela de fato para de montar, ela
+// mente — e mentir sobre horario foi exatamente o que custou uma hora hoje.
+//
+// O teste varre minuto a minuto as bordas e compara com o que a tarja anuncia.
+(function () {
+  const { sim } = carregar(15, 0);
+  const ini = sim.limiteIni(), fim = sim.limiteFim();
+
+  function montaEm(h, m) { return carregar(h, m).sim.ancora.foraDaJanela === false; }
+  function achaPrimeiro() {
+    for (let m = 0; m < 60; m++) if (montaEm(JANELA[0], m)) return JANELA[0] + 'h' + String(m).padStart(2, '0');
+    return null;
+  }
+  function achaUltimo() {
+    for (let m = 59; m >= 0; m--) if (montaEm(JANELA[1], m)) return JANELA[1] + 'h' + String(m).padStart(2, '0');
+    return null;
+  }
+  const JANELA = [6, 20];
+  const primeiro = achaPrimeiro(), ultimo = achaUltimo();
+
+  ok(ini === primeiro,
+     'a tarja anuncia o inicio CERTO: diz ' + ini + ', e o primeiro que monta e ' + primeiro);
+  ok(fim === ultimo,
+     'e o fim CERTO: diz ' + fim + ', e o ultimo que monta e ' + ultimo);
+
+  // As bordas, uma a uma: o minuto anterior ao primeiro e o seguinte ao ultimo
+  // NAO podem montar.
+  const pm = parseInt(primeiro.split('h')[1], 10);
+  const um = parseInt(ultimo.split('h')[1], 10);
+  ok(montaEm(JANELA[0], pm) === true, 'em ' + primeiro + ' monta');
+  ok(pm === 0 || montaEm(JANELA[0], pm - 1) === false, 'e um minuto antes NAO monta');
+  ok(montaEm(JANELA[1], um) === true, 'em ' + ultimo + ' monta');
+  ok(um === 59 || montaEm(JANELA[1], um + 1) === false, 'e um minuto depois NAO monta');
+})();
+
 for (const h of [21, 23, 3]) {
   const { sim, win } = carregar(h, 30);
   ok(sim.ancora.foraDaJanela === true, 'as ' + h + ':30 ele se recusa a montar');
