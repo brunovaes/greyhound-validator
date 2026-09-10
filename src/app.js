@@ -1196,14 +1196,35 @@ function _perfilDoTrap(r, trap, parA, parB){
 // (oddAvenceB/enginePct no robo atual, odd/avaliacao no contrato do handoff).
 // Lemos os dois pra tela nao quebrar quando o motor migrar.
 // Odd do par que esta na arena, guardada pelo ultimo ciclo do poller.
+// A odd de um par, procurada em TRES fontes, da mais fresca pra mais antiga.
+//
+// A fonte 2 entrou em 10/09/2026 e resolve um caso que aparecia direto: a BW
+// abre o par, o painel do dia recebe a odd pelo avb_abertos e classifica o AvB
+// como GOOD — a linha pisca roxo na lista —, mas a tela mostrava o campo Odd
+// VAZIO e a nota "BW ainda nao monitorou esta corrida".
+//
+// A causa e' que existem duas fontes para "a BW abriu", alimentadas por robos
+// diferentes: o avb_abertos (que o painel do dia le) e o MM_CACHE do monitor de
+// card (que esta tela lia). Quando o segundo ainda nao passou por aquela corrida,
+// a tela dizia que nao havia nada — com a odd na mao, do outro lado.
 function _parOddAtual(r, ta, tb){
-  // 1) odd do ultimo ciclo do robo pra ESTE par
+  // 1) odd do ultimo ciclo do robo de odds ao vivo (5s) — a mais fresca
   var l=(r&&r._avbsAoVivo)||[];
   var achado=l.find(function(x){return String(x.aTrap)===String(ta)&&String(x.bTrap)===String(tb);});
   if(achado) return _avbOdd(achado);
-  // 2) se o par pedido e' justamente o escolhido, usa a odd guardada na escolha
+  // 2) odd do PAINEL DO DIA (18s), que vem do avb_abertos. E' a mesma fonte que
+  //    classificou o AvB em TOP/HIGH/GOOD, entao se ele esta classificado a odd
+  //    existe aqui.
+  try {
+    var doPainel = _tiposDaCorrida(r).filter(function(x){
+      return (String(x.pick_trap)===String(ta) && String(x.outro_trap)===String(tb))
+          || (String(x.pick_trap)===String(tb) && String(x.outro_trap)===String(ta));
+    })[0];
+    if (doPainel && doPainel.odd_bw != null) return doPainel.odd_bw;
+  } catch(e){}
+  // 3) se o par pedido e' justamente o escolhido, usa a odd guardada na escolha
   if(r&&r.avbEscolhido&&String(r.avbEscolhido.a)===String(ta)&&String(r.avbEscolhido.b)===String(tb)) return r.avbEscolhido.odd||null;
-  // 3) nao ha odd conhecida — devolve null pra o campo ficar vazio em vez de
+  // 4) nao ha odd conhecida — devolve null pra o campo ficar vazio em vez de
   //    manter um valor de outro par (dado errado passa despercebido)
   return null;
 }
@@ -1469,8 +1490,21 @@ function _mmPintarNotas(r){
   // Estado da BW. "nao monitorada" e "nao abriu" sao coisas diferentes: a
   // primeira e' a casa nem ter olhado ainda, a segunda e' ter olhado e o par
   // nao estar la. Juntar as duas esconderia buraco de cobertura.
+  //
+  // MAS o painel do dia manda quando tem opiniao (10/09/2026). Sao dois robos
+  // alimentando duas fontes diferentes pra mesma pergunta, e o do painel chega
+  // primeiro: dava pra ver a linha piscando roxo na lista — o que so acontece
+  // quando a BW abriu — e esta nota logo abaixo dizendo que a casa nao tinha
+  // olhado a corrida ainda. Com AvB classificado, a BW abriu; ponto.
+  var doPainel = _tiposDaCorrida(r);
   var bw = _mmBw(r);
-  if (bw) {
+  if (doPainel.length) {
+    var oddP = doPainel.filter(function(x){ return x.odd_bw != null; })[0];
+    out.push(nota('#60a5fa',
+      'a BW abriu ' + doPainel.length + (doPainel.length > 1 ? ' AvBs' : ' AvB') + ' nesta corrida'
+        + (oddP ? ' (odd ' + oddP.odd_bw + ')' : ''),
+      'vem do painel do dia, a mesma fonte que classificou o AvB em TOP, HIGH ou GOOD'));
+  } else if (bw) {
     if (!bw.monitorada) {
       out.push(nota('#8a94a6', 'BW ainda não monitorou esta corrida', 'a casa ainda não abriu o mercado; a odd aparece quando abrir'));
     } else if (bw.abriu) {

@@ -355,6 +355,40 @@ ok(_corpoPintar.indexOf("box.innerHTML = ''") !== -1,
    'e o proprio _mmPintarBw continua podendo limpar, quando nao ha o que mostrar');
 
 // ═════════════════════════════════════════════════════════════════════════════
+// DUAS FONTES PRA "A BW ABRIU", e a tela tem que ler a que tem o dado.
+//
+// O caso real (10/09/2026): a BW abriu o par T1xT6 do Towcester A3 a 1.91. O
+// painel do dia recebeu isso pelo avb_abertos e classificou o AvB como GOOD — a
+// linha piscou roxo na lista. Ao mesmo tempo, a tela da corrida mostrava o campo
+// Odd VAZIO e a nota "BW ainda nao monitorou esta corrida".
+//
+// A causa: o avb_abertos e o MM_CACHE do monitor de card sao alimentados por
+// robos diferentes, e o segundo ainda nao tinha passado naquela corrida. A tela
+// lia so ele, e dizia que nao havia nada — com a odd na mao, do outro lado.
+console.log('\n[3e] A ODD E A NOTA DA BW SAEM DO PAINEL DO DIA\n');
+
+ok(src.indexOf('if (doPainel && doPainel.odd_bw != null) return doPainel.odd_bw;') !== -1,
+   'o _parOddAtual consulta o painel do dia antes de desistir');
+
+// A ORDEM importa: as odds ao vivo (5s) sao mais frescas que o painel (18s), e
+// tem que continuar ganhando quando existem.
+const _corpoOdd = (src.match(/^function _parOddAtual[\s\S]*?^\}/m) || [''])[0];
+ok(_corpoOdd.indexOf('_avbsAoVivo') < _corpoOdd.indexOf('_tiposDaCorrida'),
+   'e consulta DEPOIS das odds ao vivo — elas sao de 5s, o painel e de 18s');
+ok(_corpoOdd.indexOf('_tiposDaCorrida') < _corpoOdd.indexOf('avbEscolhido'),
+   'mas ANTES da odd guardada na escolha, que pode ser de horas atras');
+
+// A nota nao pode dizer "nao monitorou" com AvB classificado na mesma tela.
+ok(src.indexOf("var doPainel = _tiposDaCorrida(r);") !== -1,
+   'a nota da BW consulta o painel do dia');
+ok(/if \(doPainel\.length\) \{[\s\S]{0,400}?\} else if \(bw\) \{/.test(src),
+   'e o painel MANDA: so cai no MM_CACHE quando o painel nao tem opiniao');
+const _iPainel = src.indexOf("'a BW abriu ' + doPainel.length");
+const _iNaoMon = src.indexOf("'BW ainda não monitorou esta corrida'");
+ok(_iPainel !== -1 && _iNaoMon !== -1 && _iPainel < _iNaoMon,
+   'com AvB classificado a tela diz que a BW ABRIU, nunca que nao monitorou');
+
+// ═════════════════════════════════════════════════════════════════════════════
 console.log('\n[4] O HOOK ESTA LIGADO nas duas pontas\n');
 
 const pd = fs.readFileSync(PD, 'utf8');
