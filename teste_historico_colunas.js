@@ -167,8 +167,10 @@ console.log('\n[4] OS QUATRO CARTOES: geral, TOP, HIGH e GOOD\n');
 ok(src.indexOf('data-conta') === -1 || !/data-conta="/.test(src),
    'a linha nao grava mais data-conta');
 
+// O GERAL e' BRANCO no desenho, nao azul: ele nao e' um tipo, e' a soma dos
+// tres. De azul ficaria com a mesma cara do TOP.
 const CARTOES = [
-  ['geral', '#3b82f6', 'AvBs Geral'],
+  ['geral', '#ffffff', 'AvBs Geral'],
   ['top',   '#3b82f6', 'AvBs TOP'],
   ['high',  '#f97316', 'AvBs HIGH'],
   ['good',  '#8b5cf6', 'AvBs GOOD']
@@ -189,6 +191,38 @@ ok(src.indexOf("id: 'high',  rot: 'AvBs HIGH',  cor: '#f97316'") !== -1,
    'HIGH em laranja');
 ok(src.indexOf("id: 'good',  rot: 'AvBs GOOD',  cor: '#8b5cf6'") !== -1,
    'GOOD em roxo');
+ok(src.indexOf("id: 'geral', rot: 'AvBs Geral', cor: '#ffffff'") !== -1,
+   'e o Geral em BRANCO — ele nao e um tipo, e a soma dos tres');
+
+// O DESENHO: titulo e quantidade na mesma linha, uma regua, e tres colunas
+// embaixo. Os rotulos sao Acertos / Derrotas / Taxa.
+ok(src.indexOf('<div class="kc-rot">Acertos</div><div class="kc-rot">Derrotas</div><div class="kc-rot">Taxa</div>') !== -1,
+   'os tres rotulos, nessa ordem: Acertos, Derrotas, Taxa');
+ok(src.indexOf('class="kc-reg"') !== -1, 'a regua entre o topo e a tabela');
+ok(/\.kc-top\{[^}]*justify-content:space-between/.test(src),
+   'titulo a esquerda e quantidade a direita, na mesma linha');
+ok(/\.kc-num\{[^}]*color:#dfe5ee/.test(src),
+   'Acertos e Derrotas em BRANCO — no desenho eles sao neutros, so a taxa e colorida');
+
+// O GRAFICO DE EVOLUCAO: uma barra por tipo, do tamanho da taxa.
+console.log('\n[4b] O GRAFICO DE EVOLUCAO\n');
+ok(src.indexOf('Gráfico de Evolução') !== -1, 'o cartao do grafico existe');
+ok(src.indexOf("KPIS.filter(function(K){ return K.id !== 'geral'; })") !== -1,
+   'e ele traz so os TRES tipos — o geral nao e uma barra, e a soma delas');
+ok(src.indexOf("var w = (K.k.pct == null ? 0 : Math.max(0, Math.min(100, K.k.pct)));") !== -1,
+   'a largura da barra e a TAXA, presa entre 0 e 100');
+ok(src.indexOf("bar.style.width = (pct == null ? 0 : Math.max(0, Math.min(100, pct))) + '%';") !== -1,
+   'e o recalculo do filtro move a barra junto — senao o grafico congela e passa a discordar do cartao ao lado');
+ok(/\.kg-tri\{[^}]*background:rgba\(255,255,255,\.05\)/.test(src),
+   'a barra tem trilha: um tipo com 0% precisa ocupar espaco, senao a linha parece erro de render');
+
+// A largura, calculada: e' o unico ponto onde um numero vira pixel.
+function larg(pct) { return pct == null ? 0 : Math.max(0, Math.min(100, pct)); }
+ok(larg(null) === 0, 'sem resultado: barra vazia');
+ok(larg(0) === 0, '0%: barra vazia');
+ok(larg(50) === 50, '50%: meia barra');
+ok(larg(100) === 100, '100%: barra cheia');
+ok(larg(140) === 100, 'acima de 100 nao estoura o cartao');
 
 // A REGRA DA TAXA, executada: 0% branco, acima verde, abaixo vermelho.
 function corDaTaxa(pct) {

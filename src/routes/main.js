@@ -2552,8 +2552,11 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   const _doTipo = function (t) {
     return _kpiDe(linhasAvb.filter(function (L) { return L.cf.camada === t; }));
   };
+  // O GERAL e' branco no desenho, nao azul: ele nao e' um tipo, e' a soma dos
+  // tres. Pintar de azul o deixaria com a mesma cara do TOP e faria os dois
+  // parecerem a mesma coisa lida duas vezes.
   const KPIS = [
-    { id: 'geral', rot: 'AvBs Geral', cor: '#3b82f6', k: _kpiDe(linhasAvb) },
+    { id: 'geral', rot: 'AvBs Geral', cor: '#ffffff', k: _kpiDe(linhasAvb) },
     { id: 'top',   rot: 'AvBs TOP',   cor: '#3b82f6', k: _doTipo('TOP') },
     { id: 'high',  rot: 'AvBs HIGH',  cor: '#f97316', k: _doTipo('HIGH') },
     { id: 'good',  rot: 'AvBs GOOD',  cor: '#8b5cf6', k: _doTipo('GOOD') }
@@ -2638,12 +2641,48 @@ ${designTokensCSS()}
    grafico leva todo o resto. */
 .kpis{
   display:grid;
-  grid-template-columns:0.62fr 0.62fr 1.15fr 0.62fr 0.62fr 0.62fr 1.75fr;
-  gap:8px;margin-bottom:16px;
+  /* Quatro cartoes iguais + o grafico um pouco mais estreito. */
+  grid-template-columns:repeat(4,1fr) 0.85fr;
+  gap:10px;margin-bottom:16px;align-items:stretch;
 }
 /* Sem ponto de quebra por largura: um valor chutado (1400px) jogava tudo em
    3 colunas em monitor comum. Se ficar apertado, o proprio grid encolhe as
    colunas — os numeros sao curtos e aguentam. */
+
+/* ── OS CARTOES DO HISTORICO (desenho do Bruno, 10/09/2026) ───────────────
+   Cada um: titulo a ESQUERDA e quantidade a DIREITA na mesma linha, uma regua
+   fina, e embaixo tres colunas — Acertos, Derrotas, Taxa.
+
+   O GERAL e' branco; TOP azul, HIGH laranja, GOOD roxo. O titulo e o numero
+   sempre na mesma cor, porque sao a mesma informacao lida de dois jeitos.
+
+   Acertos e Derrotas ficam em BRANCO. Na conversa anterior tinham sido pedidos
+   em verde e vermelho, mas o desenho os traz neutros — e faz sentido: com a
+   taxa colorida logo ao lado, tres cores na mesma linha competem entre si e
+   nenhuma chama atencao. */
+.kc{background:#161a21;border:1px solid #262b36;border-radius:10px;
+  padding:12px 16px 11px;display:flex;flex-direction:column}
+.kc-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.kc-nome{font-size:15px;font-weight:700;white-space:nowrap}
+.kc-qtd{font-size:17px;font-weight:800;line-height:1}
+.kc-reg{height:1px;background:#2a303c;margin:9px 0 8px}
+.kc-tab{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;text-align:center}
+.kc-rot{font-size:11px;color:#8a94a6;line-height:1.4}
+.kc-num{font-size:13px;font-weight:600;color:#dfe5ee;line-height:1.5}
+.kc-taxa{font-size:13px;font-weight:700;line-height:1.5}
+
+/* ── GRAFICO DE EVOLUCAO ──────────────────────────────────────────────────
+   Uma barra por tipo, do tamanho da TAXA de acerto daquele tipo. Sao tres
+   numeros que ja estao nos cartoes ao lado; a barra existe pra comparar os
+   tres de relance, que e' o que a coluna de numeros nao faz. */
+.kc-graf{justify-content:flex-start}
+.kc-titg{font-size:13px;font-weight:700;color:#e7ecf5;text-align:center;margin-bottom:10px}
+.kg-lin{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.kg-rot{font-size:11px;font-weight:700;width:38px;flex-shrink:0}
+/* A trilha da barra: sem ela, um tipo com 0% nao ocupa espaco nenhum e a linha
+   parece um erro de renderizacao em vez de um zero. */
+.kg-tri{flex:1;height:15px;border-radius:3px;background:rgba(255,255,255,.05);overflow:hidden;min-width:0}
+.kg-bar{height:100%;border-radius:3px}
 /* Cabecalho fixo: o container ganha altura maxima e rolagem propria, e o
    thead cola no topo dele. Sem o max-height quem rola e' a PAGINA inteira,
    e ai o sticky nao tem em relacao a que grudar. */
@@ -2672,23 +2711,38 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 ${KPIS.map(function(K){
   // TAXA: 0% em branco, acima de 0% em verde, abaixo em vermelho. O ramo do
-  // vermelho existe porque foi pedido assim, mas uma taxa de acerto nao fica
-  // negativa — na pratica ele so apareceria se a conta passasse a ser de lucro.
+  // vermelho existe porque foi pedido assim; uma taxa de acerto nao fica
+  // negativa, entao na pratica ele nunca aparece.
   var corTaxa = K.k.pct == null ? '#555' : (K.k.pct > 0 ? '#22C65E' : (K.k.pct < 0 ? '#ef4444' : '#fff'));
-  return '<div class="kpi kpi-tipo" title="' + K.rot + ': ' + K.k.qtd + ' registro(s), '
-       + K.k.ok + ' acerto(s), ' + K.k.err + ' erro(s)">'
-    + '<div class="kpi-label">' + K.rot + '</div>'
-    + '<div class="kpi-val" id="kpi-' + K.id + '-qtd" style="color:' + K.cor + '">' + K.k.qtd + '</div>'
-    + '<div class="kpi-tri">'
-    +   '<span id="kpi-' + K.id + '-ok"   class="kt-ok">'  + K.k.ok  + '</span>'
-    +   '<span class="kt-sep">/</span>'
-    +   '<span id="kpi-' + K.id + '-err"  class="kt-err">' + K.k.err + '</span>'
-    +   '<span class="kt-sep">/</span>'
-    +   '<span id="kpi-' + K.id + '-pct"  style="color:' + corTaxa + '">'
-    +     (K.k.pct == null ? '—' : K.k.pct + '%') + '</span>'
+  return '<div class="kc" title="' + K.rot + ': ' + K.k.qtd + ' registro(s), '
+       + K.k.ok + ' acerto(s), ' + K.k.err + ' derrota(s)">'
+    + '<div class="kc-top">'
+    +   '<span class="kc-nome" style="color:' + K.cor + '">' + K.rot + '</span>'
+    +   '<span class="kc-qtd" id="kpi-' + K.id + '-qtd" style="color:' + K.cor + '">' + K.k.qtd + '</span>'
+    + '</div>'
+    + '<div class="kc-reg"></div>'
+    + '<div class="kc-tab">'
+    +   '<div class="kc-rot">Acertos</div><div class="kc-rot">Derrotas</div><div class="kc-rot">Taxa</div>'
+    +   '<div class="kc-num" id="kpi-' + K.id + '-ok">'  + K.k.ok  + '</div>'
+    +   '<div class="kc-num" id="kpi-' + K.id + '-err">' + K.k.err + '</div>'
+    +   '<div class="kc-taxa" id="kpi-' + K.id + '-pct" style="color:' + corTaxa + '">'
+    +     (K.k.pct == null ? '\u2014' : K.k.pct + '%') + '</div>'
     + '</div>'
     + '</div>';
 }).join('')}
+<div class="kc kc-graf">
+  <div class="kc-titg">Gráfico de Evolução</div>
+  ${KPIS.filter(function(K){ return K.id !== 'geral'; }).map(function(K){
+    // A barra e' a TAXA daquele tipo. Sem resultado ainda, fica vazia — melhor
+    // que uma barra cheia que mediria zero.
+    var w = (K.k.pct == null ? 0 : Math.max(0, Math.min(100, K.k.pct)));
+    return '<div class="kg-lin" title="' + K.rot + ': ' + (K.k.pct == null ? 'sem resultado' : K.k.pct + '% de acerto') + '">'
+      + '<span class="kg-rot" style="color:' + K.cor + '">' + K.rot.replace('AvBs ', '') + '</span>'
+      + '<span class="kg-tri"><span class="kg-bar" id="kpi-' + K.id + '-bar"'
+      +   ' style="width:' + w + '%;background:' + K.cor + '"></span></span>'
+      + '</div>';
+  }).join('')}
+</div>
 </div>
 
 <div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="" selected>Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
@@ -2929,6 +2983,11 @@ function recalcKpisHist(){
     var el = document.getElementById('kpi-' + id + '-pct');
     // 0% branco, acima verde, abaixo vermelho — a regra que o Bruno pediu.
     if (el) el.style.color = pct == null ? '#555' : (pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff'));
+    // A barra do grafico e' o MESMO numero da taxa. Se ela nao for atualizada
+    // aqui, o grafico congela no valor que veio do servidor e passa a mostrar
+    // uma coisa enquanto o cartao ao lado mostra outra.
+    var bar = document.getElementById('kpi-' + id + '-bar');
+    if (bar) bar.style.width = (pct == null ? 0 : Math.max(0, Math.min(100, pct))) + '%';
   }
   function doTipo(t) {
     return todas.filter(function(tr){ return (tr.getAttribute('data-camada')||'') === t; });
