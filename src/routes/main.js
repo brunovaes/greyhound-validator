@@ -2780,7 +2780,11 @@ ${designTokensCSS()}
 /* A trilha da barra: sem ela, um tipo com 0% nao ocupa espaco nenhum e a linha
    parece um erro de renderizacao em vez de um zero. */
 .kg-tri{flex:1;height:15px;border-radius:3px;background:rgba(255,255,255,.05);overflow:hidden;min-width:0}
-.kg-bar{height:100%;border-radius:3px}
+/* display:block e OBRIGATORIO aqui. A barra e um <span>, e em elemento inline o
+   navegador IGNORA width e height — a barra nascia com largura zero e o grafico
+   parecia vazio, com ou sem dado. A trilha (.kg-tri) ao lado escapa disso por
+   acaso: ela e item de um flex container, e item de flex e blocado automatico. */
+.kg-bar{display:block;height:100%;border-radius:3px}
 /* Cabecalho fixo: o container ganha altura maxima e rolagem propria, e o
    thead cola no topo dele. Sem o max-height quem rola e' a PAGINA inteira,
    e ai o sticky nao tem em relacao a que grudar. */
@@ -2809,9 +2813,12 @@ ${navBar(user, 'historico')}
 <div class="kpis">
 ${KPIS.map(function(K){
   // TAXA: 0% em branco, acima de 0% em verde, abaixo em vermelho. O ramo do
-  // vermelho existe porque foi pedido assim; uma taxa de acerto nao fica
-  // negativa, entao na pratica ele nunca aparece.
-  var corTaxa = K.k.pct == null ? '#555' : (K.k.pct > 0 ? '#22C65E' : (K.k.pct < 0 ? '#ef4444' : '#fff'));
+  // VERMELHO ABAIXO DE 50% (Bruno, 11/09/2026). A regra anterior era "0% branco,
+  // abaixo de 0% vermelho" — e taxa de acerto nao fica negativa, entao o vermelho
+  // nunca acendia. 50% e o corte que significa alguma coisa: abaixo disso o AvB
+  // acerta menos que cara ou coroa. Sem resultado ainda fica cinza, que nao e
+  // desempenho ruim, e sim desempenho nenhum.
+  var corTaxa = K.k.pct == null ? '#555' : (K.k.pct >= 50 ? '#22C65E' : '#ef4444');
   return '<div class="kc" title="' + K.rot + ': ' + K.k.qtd + ' registro(s), '
        + K.k.ok + ' acerto(s), ' + K.k.err + ' derrota(s)">'
     + '<div class="kc-top">'
@@ -3139,8 +3146,10 @@ function recalcKpisHist(){
     _histSet('kpi-' + id + '-err', err);
     _histSet('kpi-' + id + '-pct', pct == null ? '\u2014' : pct + '%');
     var el = document.getElementById('kpi-' + id + '-pct');
-    // 0% branco, acima verde, abaixo vermelho — a regra que o Bruno pediu.
-    if (el) el.style.color = pct == null ? '#555' : (pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff'));
+    // MESMA regra do servidor (Bruno, 11/09/2026): verde de 50% pra cima,
+    // vermelho abaixo, cinza sem resultado. As duas pontas pintam o mesmo
+    // numero — se divergirem, a cor muda sozinha no primeiro filtro.
+    if (el) el.style.color = pct == null ? '#555' : (pct >= 50 ? '#22C65E' : '#ef4444');
     // A barra do grafico e' o MESMO numero da taxa. Se ela nao for atualizada
     // aqui, o grafico congela no valor que veio do servidor e passa a mostrar
     // uma coisa enquanto o cartao ao lado mostra outra.

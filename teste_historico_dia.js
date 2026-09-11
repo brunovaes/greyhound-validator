@@ -170,7 +170,10 @@ function roda(linhas, filtros) {
     card: function (n) {
       return { qtd: val('kpi-' + n + '-qtd'), ok: val('kpi-' + n + '-ok'),
                err: val('kpi-' + n + '-err'), pct: val('kpi-' + n + '-pct') };
-    }
+    },
+    // Estilos aplicados: e por aqui que se verifica a cor da taxa e a largura da
+    // barra do grafico, que sao efeito colateral do pinta() e nao valor de texto.
+    estilo: function (id) { return (dom.els[id] && dom.els[id].style) || {}; }
   };
 }
 
@@ -404,6 +407,84 @@ t('o _svGalgo do main.js passa o nome pelo svLimpaNome',
   /typeof svLimpaNome === 'function'\) \? svLimpaNome\(g\.nome\)/.test(SRC));
 t('e o cardGalgo.js esta carregado nesta tela (senao o guarda de typeof cairia sempre)',
   /static\/js\/cardGalgo\.js/.test(SRC));
+
+// ── [10] COR DA TAXA E BARRA DO GRAFICO ────────────────────────────────────
+// Bruno, 11/09: "a taxa sempre que tiver abaixo de 50% tem que vir em vermelho"
+// e "nao esta atualizando o grafico TOP, HIGH e GOOD".
+//
+// A regra anterior era "0% branco, abaixo de 0% vermelho" — e taxa de acerto nao
+// fica negativa, entao o vermelho nunca acendeu desde que foi escrito.
+//
+// O grafico e outro assunto: a barra e um <span>, e width em elemento inline e
+// ignorada pelo navegador. Ela nascia com largura zero e NUNCA apareceu — nem no
+// HTML do servidor. Nao era "parou de atualizar", era "nunca funcionou".
+bloco('[10] TAXA VERMELHA ABAIXO DE 50% E A BARRA QUE NUNCA APARECEU');
+
+const VERDE = '#22C65E', VERMELHO = '#ef4444', CINZA = '#555';
+
+// 2 de 3 = 67% -> verde
+const cVerde = roda([
+  { camada: 'TOP', bateu: 'sim', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'TOP', bateu: 'sim', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'TOP', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 }
+], SEM_FILTRO);
+t('67% fica verde', cVerde.card('geral').pct === '67%' && cVerde.estilo('kpi-geral-pct').color === VERDE);
+
+// 1 de 2 = 50% -> verde (50 e o piso do verde, nao do vermelho)
+const cMeio = roda([
+  { camada: 'TOP', bateu: 'sim', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'TOP', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 }
+], SEM_FILTRO);
+t('exatamente 50% ainda e verde', cMeio.card('geral').pct === '50%' && cMeio.estilo('kpi-geral-pct').color === VERDE);
+
+// 1 de 3 = 33% -> vermelho
+const cRuim = roda([
+  { camada: 'TOP', bateu: 'sim', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'TOP', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'TOP', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 }
+], SEM_FILTRO);
+t('33% vem em VERMELHO — era isto que nunca acendia',
+  cRuim.card('geral').pct === '33%' && cRuim.estilo('kpi-geral-pct').color === VERMELHO);
+
+// 0 de 2 = 0% -> vermelho (antes era branco)
+const cZero = roda([
+  { camada: 'TOP', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'TOP', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 }
+], SEM_FILTRO);
+t('0% agora e vermelho, nao branco — 0 tambem esta abaixo de 50',
+  cZero.card('geral').pct === '0%' && cZero.estilo('kpi-geral-pct').color === VERMELHO);
+
+// nada resolvido -> cinza, nao vermelho
+const cPend = roda([
+  { camada: 'TOP', bateu: '', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 }
+], SEM_FILTRO);
+t('sem resultado fica CINZA — desempenho nenhum nao e desempenho ruim',
+  cPend.card('geral').pct === '—' && cPend.estilo('kpi-geral-pct').color === CINZA);
+
+t('o servidor pinta pela mesma regra do cliente',
+  /K\.k\.pct >= 50 \? '#22C65E' : '#ef4444'/.test(SRC) && /pct >= 50 \? '#22C65E' : '#ef4444'/.test(SRC));
+t('e nenhuma das duas pontas guarda o ramo "abaixo de 0%", que nunca podia rodar',
+  !/pct < 0 \? '#ef4444'/.test(SRC));
+
+// ── a barra ────────────────────────────────────────────────────────────────
+t('a barra do grafico e display:block (width em <span> inline e ignorada)',
+  /\.kg-bar\{display:block;height:100%/.test(SRC));
+t('e a trilha continua sendo item de flex, que ja e blocada sozinha',
+  /\.kg-lin\{display:flex/.test(SRC) && /\.kg-tri\{flex:1/.test(SRC));
+
+t('o pinta() escreve a largura da barra de cada tipo',
+  cRuim.estilo('kpi-top-bar').width === '33%');
+const cBarra = roda([
+  { camada: 'GOOD', bateu: 'sim', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'GOOD', bateu: 'sim', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 },
+  { camada: 'HIGH', bateu: 'nao', pista: 'S', turno: 'Tarde', entrei: 'nao', abriu: 1 }
+], SEM_FILTRO);
+t('GOOD 100% enche a barra', cBarra.estilo('kpi-good-bar').width === '100%');
+t('HIGH 0% esvazia a barra', cBarra.estilo('kpi-high-bar').width === '0%');
+t('TOP sem registro fica com a barra zerada, nao com lixo da volta anterior',
+  cBarra.estilo('kpi-top-bar').width === '0%');
+t('filtrar tambem mexe na barra, nao so no numero',
+  roda(LINHAS, com({ 'fh-motor': 'TOP' })).estilo('kpi-top-bar').width === '50%');
 
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);

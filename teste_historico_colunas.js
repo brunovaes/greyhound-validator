@@ -227,18 +227,23 @@ ok(larg(50) === 50, '50%: meia barra');
 ok(larg(100) === 100, '100%: barra cheia');
 ok(larg(140) === 100, 'acima de 100 nao estoura o cartao');
 
-// A REGRA DA TAXA, executada: 0% branco, acima verde, abaixo vermelho.
+// A REGRA DA TAXA, executada: verde de 50% pra cima, vermelho abaixo.
+//
+// MUDOU EM 11/09/2026, a pedido do Bruno. A regra anterior era "0% branco, acima
+// de 0% verde, abaixo de 0% vermelho" — e taxa de acerto nao fica negativa, entao
+// o vermelho nunca acendeu desde que foi escrito. Agora o corte e 50%: abaixo
+// disso o AvB acerta menos que cara ou coroa, e isso merece vermelho.
 function corDaTaxa(pct) {
-  return pct == null ? '#555' : (pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff'));
+  return pct == null ? '#555' : (pct >= 50 ? '#22C65E' : '#ef4444');
 }
-ok(corDaTaxa(null) === '#555', 'sem resultado ainda: cinza');
-ok(corDaTaxa(0) === '#fff', '0% em BRANCO');
-ok(corDaTaxa(1) === '#22C65E', '1% em verde');
+ok(corDaTaxa(null) === '#555', 'sem resultado ainda: cinza (nao vermelho)');
+ok(corDaTaxa(0) === '#ef4444', '0% em VERMELHO (era branco ate 11/09)');
+ok(corDaTaxa(49) === '#ef4444', '49% em vermelho');
+ok(corDaTaxa(50) === '#22C65E', '50% em verde — o corte pertence ao verde');
 ok(corDaTaxa(100) === '#22C65E', '100% em verde');
-ok(corDaTaxa(-1) === '#ef4444', 'abaixo de 0% em vermelho (o ramo existe, mas taxa nao fica negativa)');
-ok(src.indexOf("pct > 0 ? '#22C65E' : (K.k.pct < 0 ? '#ef4444' : '#fff')") !== -1,
+ok(src.indexOf("K.k.pct >= 50 ? '#22C65E' : '#ef4444'") !== -1,
    'e a MESMA regra esta no servidor');
-ok(src.indexOf("pct > 0 ? '#22C65E' : (pct < 0 ? '#ef4444' : '#fff')") !== -1,
+ok(src.indexOf("pct >= 50 ? '#22C65E' : '#ef4444'") !== -1,
    'e no recalculo do filtro — as duas pontas pintam igual');
 
 // A TAXA SAI DOS RESOLVIDOS, nao do total. Uma corrida que ainda nao correu
