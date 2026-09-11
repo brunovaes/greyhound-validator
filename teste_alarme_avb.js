@@ -289,6 +289,62 @@ async function cena(cfg, corridas, quantosRepiques) {
   t('o shouldShowRace ja tinha a excecao — o corte era mais acima',
     /if \(_avbDaCorrida\(r\)\) return true;/.test(SRC_APP));
 
+  // ── [5] CABECALHO DO "ANALISAR DISPUTA" ──────────────────────────────────
+  // Bruno, 11/09: a janela trazia so o par ("T6 X vs T1 Y"). Ela abre POR CIMA
+  // da tela e cobre o cabecalho da corrida — com duas disputas abrindo a MESMA
+  // janela, nao dava pra saber de qual prova era aquele historico.
+  bloco('[5] O TITULO DA JANELA DIZ DE QUAL CORRIDA E');
+
+  function extraiDe(fonte, nome) {
+    const ini = fonte.indexOf('function ' + nome + '(');
+    if (ini < 0) return null;
+    let i = fonte.indexOf('{', ini), nivel = 0;
+    for (; i < fonte.length; i++) {
+      if (fonte[i] === '{') nivel++;
+      else if (fonte[i] === '}') { nivel--; if (!nivel) return fonte.slice(ini, i + 1); }
+    }
+    return null;
+  }
+  t('_tituloValModal e convertHora existem no app.js',
+    !!extraiDe(SRC_APP, '_tituloValModal') && !!extraiDe(SRC_APP, 'convertHora'));
+
+  function tituloCom(r, a, na, b, nb) {
+    const ctx = {
+      // Recorte do getRaceClass real: aqui basta devolver a classe do codigo da
+      // corrida, que e o unico uso dentro do _tituloValModal.
+      getRaceClass: function (c) { const m = String(c || '').match(/([A-Z]\d+)\s*$/); return m ? m[1] : ''; }
+    };
+    vm.createContext(ctx);
+    vm.runInContext(extraiDe(SRC_APP, 'convertHora') + '\n'
+      + extraiDe(SRC_APP, '_tituloValModal') + '\nthis.f = _tituloValModal;', ctx);
+    return ctx.f(r, a, na, b, nb);
+  }
+
+  const RCOMPLETA = { hora: '6:18', hora_br: '14:18', trackFull: 'Sheffield', corrida: 'Sheff A3', dist: '500' };
+  t('o formato e exatamente o pedido',
+    tituloCom(RCOMPLETA, 6, 'Brushbrushtaptap (W)', 1, 'Tip Top Peaky')
+      === '6:18 UK / 14:18 BR - Sheffield A3 500m - T6 Brushbrushtaptap (W) vs T1 Tip Top Peaky');
+
+  t('sem hora_br salvo, o BR e calculado do UK (14:18 de 6:18)',
+    tituloCom({ hora: '6:18', trackFull: 'Sheffield', corrida: 'Sheff A3', dist: '500' }, 6, 'X', 1, 'Y')
+      === '6:18 UK / 14:18 BR - Sheffield A3 500m - T6 X vs T1 Y');
+
+  t('distancia ja com "m" nao vira 500mm',
+    tituloCom({ hora: '6:18', trackFull: 'Sheffield', corrida: 'Sheff A3', dist: '500m' }, 6, 'X', 1, 'Y')
+      .indexOf('500m -') >= 0);
+
+  t('sessao antiga sem trackFull cai no codigo curto, que ja traz a classe',
+    tituloCom({ hora: '2:04', corrida: 'Sheff A4', dist: '500' }, 6, 'X', 5, 'Y')
+      === '2:04 UK / 10:04 BR - Sheff A4 500m - T6 X vs T5 Y');
+
+  t('corrida sem nada nao deixa hifen solto — sobra so o par',
+    tituloCom({ hora: '', corrida: '', dist: '' }, 1, '', 2, '') === 'T1 ? vs T2 ?');
+
+  t('as DUAS aberturas da janela usam o mesmo titulo',
+    (SRC_APP.match(/val-title'\)\.textContent=_tituloValModal\(/g) || []).length === 2);
+  t('e nenhuma delas monta o titulo por conta propria',
+    !/val-title'\)\.textContent='T'\+/.test(SRC_APP));
+
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);
 })();

@@ -1862,6 +1862,38 @@ function _cardAlternativa(r, a, escolhidoAtual){
     + '</div>';
 }
 
+// CABECALHO DO "ANALISAR DISPUTA" (Bruno, 11/09/2026).
+//
+// Antes trazia so o par: "T6 Fulano vs T1 Beltrano". A janela abre POR CIMA da
+// tela e cobre o cabecalho da corrida, entao nao dava pra saber de qual prova
+// era aquele historico — ainda mais agora que a mesma tela mostra duas disputas
+// ao mesmo tempo e as duas abrem a mesma janela.
+//
+// Formato: "6:18 UK / 14:18 BR - Sheffield A3 500m - T6 X vs T1 Y".
+//
+// As duas funcoes que abrem esta janela passam por aqui. Montar o titulo em
+// cada uma seria a garantia de que um dia elas mostrariam coisas diferentes.
+function _tituloValModal(r, trapA, nomeA, trapB, nomeB) {
+  var partes = [];
+  var uk = String((r && r.hora) || '').trim();
+  var br = (r && r.hora_br) || convertHora(uk) || '';
+  if (uk || br) partes.push((uk ? uk + ' UK' : '') + (uk && br ? ' / ' : '') + (br ? br + ' BR' : ''));
+  // trackFull e' o nome por extenso ("Sheffield"). Sessao antiga nao tem esse
+  // campo: cai no codigo curto da corrida ("Sheff A3"), que ja carrega a classe
+  // junto — por isso a classe so e' anexada no ramo do trackFull.
+  var cls = getRaceClass((r && r.corrida) || '') || '';
+  var local = (r && r.trackFull)
+    ? (r.trackFull + (cls ? ' ' + cls : ''))
+    : String((r && r.corrida) || '').trim();
+  // A distancia vem ora como "500", ora como "500m": normaliza pra nao sair
+  // "500mm" numa sessao e "500" em outra.
+  var dist = (r && r.dist) ? String(r.dist).replace(/m$/i, '') + 'm' : '';
+  var comDist = [local, dist].filter(Boolean).join(' ');
+  if (comDist) partes.push(comDist);
+  partes.push('T' + trapA + ' ' + (nomeA || '?') + ' vs T' + trapB + ' ' + (nomeB || '?'));
+  return partes.join(' - ');
+}
+
 // "Analisar disputa" de QUALQUER par, nao so o fav x und. Mesma tabela, par
 // parametrizavel — o buildDogCard ja aceita qualquer galgo.
 function openValModalPar(key, trapA, trapB){
@@ -1869,7 +1901,7 @@ function openValModalPar(key, trapA, trapB){
   if(!r){console.warn('[VAL-PAR] nao achou:',key);return;}
   var nA=_nomeDoTrap(r,trapA,trapA,trapB), nB=_nomeDoTrap(r,trapB,trapA,trapB);
   var hA=_histDoTrap(r,trapA,trapA,trapB), hB=_histDoTrap(r,trapB,trapA,trapB);
-  document.getElementById('val-title').textContent='T'+trapA+' '+(nA||'?')+' vs T'+trapB+' '+(nB||'?');
+  document.getElementById('val-title').textContent=_tituloValModal(r, trapA, nA, trapB, nB);
   var body=document.getElementById('val-body');
   body.classList.remove('val-compact');
   // O card do galgo aparece SEMPRE, mesmo que o motor nao o tenha sugerido: o
@@ -2962,7 +2994,7 @@ function closeValModal(){var m=document.getElementById('val-modal');if(m)m.class
 function openValModal(key){
   var r=results.find(function(x){return x.tipo==='avb'&&x.histFav&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[VAL] nao achou:',key);return;}
-  document.getElementById('val-title').textContent='T'+r.trapFav+' '+r.nameFav+' vs T'+r.trapUnd+' '+r.nameUnd;
+  document.getElementById('val-title').textContent=_tituloValModal(r, r.trapFav, r.nameFav, r.trapUnd, r.nameUnd);
   document.getElementById('val-body').classList.remove('val-compact');
   document.getElementById('val-body').innerHTML=buildDogCard(r.trapFav,r.nameFav,r.perfilFav,r.histFav)+'<div class="val-sep"></div>'+buildDogCard(r.trapUnd,r.nameUnd,r.perfilUnd,r.histUnd);
   document.getElementById('val-modal').classList.add('open');
