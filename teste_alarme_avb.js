@@ -220,6 +220,75 @@ async function cena(cfg, corridas, quantosRepiques) {
   t('e o OPORTUNIDADE continua sem som, aconteca o que acontecer',
     h.PD.CAMADAS.OPORTUNIDADE.som === null && h.PD.CAMADAS.OPORTUNIDADE.apita === false);
 
+  // ── [4] O SELO E A TELA TEM QUE CONCORDAR ────────────────────────────────
+  // Bruno, 11/09: o selo dizia "2 AvBs esperando · GOOD" e a Analisar nao
+  // mostrava nada. A lista da Analisar saia de
+  // results.filter(nivel!=='skip' && trapFav>0) — a regua da MANHA —, enquanto o
+  // painel-dia (fonte do selo) nao tem esse filtro desde o "livre acesso" de
+  // 09/09. Corrida que a BW abriu sem o motor ter previsto era cortada antes de
+  // qualquer coisa, e o filtro de tier a cortava de novo logo depois.
+  bloco('[4] A CORRIDA COM AvB ESPERANDO CHEGA NA LISTA DA ANALISAR');
+
+  // O filtro da lista, extraido do fonte e EXECUTADO: se alguem reescrever a
+  // linha no app.js, este teste passa a medir a linha nova.
+  // Ancorado no _avbDaCorrida de proposito: existem outros
+  // `var avbs = results.filter(...)` no app.js (autoSaveSession,
+  // atualizarProximas) que continuam com a regra antiga porque nao montam a
+  // TELA. Sem a ancora, o teste media a linha errada — foi o que aconteceu na
+  // primeira tentativa.
+  const RE_LISTA = /var avbs = results\.filter\((function\(r\)\{return \(r\.nivel!=='skip'&&r\.trapFav>0\)\|\|!!_avbDaCorrida\(r\);\})\);/;
+  const mFiltro = SRC_APP.match(RE_LISTA);
+  t('o filtro da lista foi encontrado no app.js', !!mFiltro);
+  const nMontagens = (SRC_APP.match(new RegExp(RE_LISTA.source, 'g')) || []).length;
+  t('as DUAS montagens da lista usam a mesma regra (refresh e enter)', nMontagens === 2);
+
+  function filtroCom(temAvb) {
+    const ctx = { _avbDaCorrida: function (r) { return temAvb(r) ? { camada: 'GOOD' } : null; } };
+    vm.createContext(ctx);
+    return vm.runInContext('(' + mFiltro[1] + ')', ctx);
+  }
+  const semAvbNenhum = filtroCom(function () { return false; });
+  const comAvbNaSkip = filtroCom(function (r) { return r.nome === 'skip-com-avb'; });
+
+  const RSKIP = { nome: 'skip-com-avb', nivel: 'skip', trapFav: 0 };
+  const RNORMAL = { nome: 'normal', nivel: 'alta', trapFav: 3 };
+  const RSKIP_SEM = { nome: 'skip-sem-avb', nivel: 'skip', trapFav: 0 };
+
+  t('corrida pulada pelo motor, COM AvB da BW, entra na lista', comAvbNaSkip(RSKIP) === true);
+  t('corrida normal continua entrando', semAvbNenhum(RNORMAL) === true);
+  t('corrida pulada SEM AvB continua fora — a lista nao escancara',
+    semAvbNenhum(RSKIP_SEM) === false && comAvbNaSkip(RSKIP_SEM) === false);
+  t('corrida sem pick do motor (trapFav 0) tambem entra quando tem AvB',
+    comAvbNaSkip({ nome: 'skip-com-avb', nivel: 'alta', trapFav: 0 }) === true);
+
+  // O segundo portao: o filtro de regua da manha descartava tier null.
+  const fnTier = (function () {
+    const m = SRC_APP.match(/function passaNoFiltroTier\(r, sessaoClassificada\) \{[\s\S]*?\n\}/);
+    return m ? m[0] : null;
+  })();
+  t('passaNoFiltroTier foi encontrado', !!fnTier);
+  function tierCom(temAvb) {
+    const ctx = { _avbDaCorrida: function (r) { return temAvb(r) ? { camada: 'GOOD' } : null; },
+                  _tierDe: function (r) { return r.tier || null; } };
+    vm.createContext(ctx);
+    vm.runInContext(fnTier + '\nthis.f = passaNoFiltroTier;', ctx);
+    return ctx.f;
+  }
+  const tierSem = tierCom(function () { return false; });
+  const tierCom1 = tierCom(function (r) { return r.nome === 'bw'; });
+
+  t('sessao classificada + tier null + AvB da BW -> PASSA (era o segundo corte)',
+    tierCom1({ nome: 'bw', tier: null }, true) === true);
+  t('sessao classificada + tier null + sem AvB -> continua barrada',
+    tierSem({ nome: 'x', tier: null }, true) === false);
+  t('sessao classificada + tier TOP -> passa como antes',
+    tierSem({ nome: 'x', tier: 'TOP' }, true) === true);
+  t('sessao nao classificada -> passa tudo, como antes',
+    tierSem({ nome: 'x', tier: null }, false) === true);
+
+  t('o shouldShowRace ja tinha a excecao — o corte era mais acima',
+    /if \(_avbDaCorrida\(r\)\) return true;/.test(SRC_APP));
+
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);
 })();

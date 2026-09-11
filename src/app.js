@@ -523,6 +523,11 @@ function _sessaoTemRegua(lista) {
 // passar esta funcao direto pra um .filter() faz o segundo argumento virar o
 // INDICE do item, e a protecao dispararia sozinha na primeira posicao.
 function passaNoFiltroTier(r, sessaoClassificada) {
+  // AvB CONFIRMADO PELA BW PASSA SEMPRE (Bruno, 11/09/2026). Este filtro mede a
+  // regua da MANHA, e corrida que a BW abriu sem o motor ter previsto tem tier
+  // null — exatamente o caso do "livre acesso" de 09/09. Sem esta linha, a
+  // corrida entrava na lista e era descartada aqui, um passo antes de aparecer.
+  if (_avbDaCorrida(r)) return true;
   if (sessaoClassificada === false) return true;
   return _tierDe(r) !== null;
 }
@@ -877,8 +882,26 @@ function showAllExpiredMsg() {
   if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
 }
 
+// A LISTA DA ANALISAR INCLUI A CORRIDA COM AvB ESPERANDO (Bruno, 11/09/2026).
+//
+// O sintoma: o selo dizia "2 AvBs esperando · GOOD" e a tela nao mostrava nada.
+//
+// O filtro abaixo era `nivel!=='skip' && trapFav>0` — a regua da MANHA. Corrida
+// que o motor pulou, ou que ficou sem pick, nunca entrava em `avbs`, e tudo o
+// que vem depois opera sobre essa lista. O painel-dia nao tem esse filtro
+// (o "livre acesso" de 09/09), entao o selo contava uma corrida que a tela
+// tinha descartado antes de olhar.
+//
+// O resto da esteira JA estava preparado: o shouldShowRace tem
+// `if (_avbDaCorrida(r)) return true;` e o bloco _comAvb traz essas corridas
+// pra frente da fila — inclusive com um comentario descrevendo este mesmo
+// sintoma. So que nada daquilo rodava, porque a corrida era cortada aqui em
+// cima. Corrigiu-se a ponta errada na vez passada.
+//
+// Nao escancara a lista: entra SO enquanto houver AvB esperando. Sem AvB, a
+// corrida pulada continua fora, como sempre esteve.
 function refreshFocusMode() {
-  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  var avbs = results.filter(function(r){return (r.nivel!=='skip'&&r.trapFav>0)||!!_avbDaCorrida(r);});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
 
   // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
@@ -963,7 +986,10 @@ function atualizarProximas() {
 }
 
 function enterFocusMode() {
-  var avbs = results.filter(function(r){return r.nivel!=='skip'&&r.trapFav>0;});
+  // Mesma regra do refreshFocusMode: as duas montam a MESMA lista, e deixar uma
+  // so corrigida faria a tela mudar de conteudo dependendo de como voce entrou
+  // nela.
+  var avbs = results.filter(function(r){return (r.nivel!=='skip'&&r.trapFav>0)||!!_avbDaCorrida(r);});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
   if (!avbs.length) return;
 
