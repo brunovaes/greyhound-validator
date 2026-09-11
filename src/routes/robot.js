@@ -1043,6 +1043,14 @@ ${navBar(req.user, 'robot')}
   <div class="mgrp-itens">
     <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
     <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/como-nasce-um-avb"><span class="icon">${icon('scroll',{size:16})}</span> Como nasce um AvB</a>
+    <!-- A Cascata saiu da barra de navegacao do topo e veio pra ca (Bruno,
+         11/09/2026). Ela e' a bancada de calibragem das peneiras do motor —
+         governanca da regra, nao operacao do dia —, e ficava disputando espaco
+         no topo com as telas que voce usa o tempo todo.
+         A ROTA continua sendo /cascata, nao /robot/cascata: mudar o caminho
+         quebraria qualquer atalho salvo e obrigaria a mexer numa pagina que
+         nao tem nada de errado. O que mudou e' de onde se chega nela. -->
+    <a class="robot-menu-item robot-hide-mobile" href="${BASE}/cascata"><span class="icon">${icon('sliders',{size:16})}</span> Cascata de Cortes</a>
   </div>
 </div>
 </div>

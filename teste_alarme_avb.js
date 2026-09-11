@@ -444,6 +444,20 @@ async function cena(cfg, corridas, quantosRepiques) {
     t('e linka os diags de onde os numeros vieram', html.indexOf('/diag/funil-do-dia') >= 0);
   }
 
+  // ── A CASCATA MUDOU DE PORTA, NAO DE ENDERECO ────────────────────────────
+  // Bruno, 11/09: ela saiu da barra do topo e foi pro Painel Admin. A ROTA
+  // continua /cascata — mudar o caminho quebraria atalho salvo e obrigaria a
+  // mexer numa pagina que nao tem defeito nenhum.
+  const SRC_MAIN = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'main.js'), 'utf8');
+  t('a rota /cascata continua existindo', /router\.get\('\/cascata'/.test(SRC_MAIN));
+  t('e a bancada continua viva: as peneiras dela alimentam o motor',
+    /cascAtivos/.test(fs.readFileSync(path.join(__dirname, 'src', 'utils', 'motorManha.js'), 'utf8')));
+  t('saiu da barra de navegacao do topo', !/class="nl\$\{active==='cascata'/.test(SRC_MAIN));
+  t('e entrou no menu Governanca do Painel Admin',
+    /data-g="gov"[\s\S]{0,1600}?href="\$\{BASE\}\/cascata"/.test(SRC_ROBOT));
+  t('dentro dela, o item aceso passa a ser o Painel Admin',
+    !/navBar\(user, 'cascata'\)/.test(SRC_MAIN));
+
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);
 })();

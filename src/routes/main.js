@@ -28,7 +28,6 @@ function navBar(user, active) {
       ${can(user,'screen.banca') ? `<a href="${BASE}/banca" class="nl${active==='banca'?' na':''}">Banca</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Painel Admin</a>` : ''}
-      ${isAdmin ? `<a href="${BASE}/cascata" class="nl${active==='cascata'?' na':''}">Cascata</a>` : ''}
       ${can(user,'screen.live') ? `<a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>` : ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">
@@ -1841,7 +1840,7 @@ body{background:#0D1117;color:#e9edf2;font-family:'Segoe UI',system-ui,sans-seri
 #casc-toast{display:none;padding:7px 12px;border-radius:8px;border:1px solid;font-size:12px}
 select,input[type=date]{background:#0d0d0d;border:1px solid #333;border-radius:5px;color:#e9edf2;padding:4px 7px;font-size:12px}
 </style></head><body>
-${navBar(user, 'cascata')}
+${navBar(user, 'robot')}
 <div class="wrap">
 
   <div class="casc-hd">
