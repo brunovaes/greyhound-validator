@@ -345,6 +345,56 @@ async function cena(cfg, corridas, quantosRepiques) {
   t('e nenhuma delas monta o titulo por conta propria',
     !/val-title'\)\.textContent='T'\+/.test(SRC_APP));
 
+  // ── [6] O MESMO PAR NAO PODE APARECER DUAS VEZES ─────────────────────────
+  // Bruno, 11/09: "tinha 1v2 e 2v1... isso jamais pode ocorrer". A mesma corrida
+  // mostrou T1 x T2 no PRINCIPAL e T2 x T1 num card GOOD.
+  //
+  // Dois defeitos na mesma funcao:
+  //   1. a comparacao tinha DIRECAO — um AvB e o mesmo confronto nos dois
+  //      sentidos, o que muda e quem o motor aponta como vencedor;
+  //   2. comparava com trap_fav/trap_und (o palpite gravado) em vez do
+  //      _parNaTela (o par que a arena desenhou), que a reanalise pode trocar.
+  bloco('[6] PRINCIPAL E ALTERNATIVA NUNCA SAO O MESMO PAR');
+
+  const mMesmo = SRC_APP.match(/var _mesmoParTrap = function\(a1, b1, a2, b2\)\{[\s\S]*?\n  \};/);
+  t('_mesmoParTrap existe', !!mMesmo);
+  const ctxPar = {};
+  vm.createContext(ctxPar);
+  vm.runInContext(mMesmo[0].replace(/^var /, '') + '\nthis.f = _mesmoParTrap;', ctxPar);
+  const mesmo = ctxPar.f;
+
+  t('1x2 e 1x2 sao o mesmo par', mesmo(1, 2, 1, 2) === true);
+  t('1x2 e 2x1 sao o MESMO par — era exatamente isto que passava', mesmo(1, 2, 2, 1) === true);
+  t('1x2 e 1x3 nao sao', mesmo(1, 2, 1, 3) === false);
+  t('1x2 e 3x4 nao sao', mesmo(1, 2, 3, 4) === false);
+  t('numero e texto comparam igual (o payload mistura os dois)',
+    mesmo('1', 2, 1, '2') === true && mesmo(6, '5', '5', 6) === true);
+
+  // O filtro completo, extraido e executado, com e sem _parNaTela.
+  const mFiltro6 = SRC_APP.match(/var _naTela = r\._parNaTela[\s\S]*?\n  \};/);
+  t('o ehPrincipal foi encontrado', !!mFiltro6);
+  function ehPrincipalCom(r) {
+    const ctx = { r: r, _mesmoParTrap: mesmo };
+    vm.createContext(ctx);
+    vm.runInContext(mFiltro6[0].replace(/^var /, '') + '\nthis.f = ehPrincipal;', ctx);
+    return ctx.f;
+  }
+  const semTroca = ehPrincipalCom({ trapFav: 1, trapUnd: 2 });
+  t('sem _parNaTela, cai no trap_fav/trap_und, como antes',
+    semTroca({ pick_trap: 1, outro_trap: 2 }) === true);
+  t('e reconhece o invertido tambem nesse caminho',
+    semTroca({ pick_trap: 2, outro_trap: 1 }) === true);
+
+  // A reanalise trocou o par em foco: o palpite gravado e 1x2, a arena desenha 3x4.
+  const comTroca = ehPrincipalCom({ trapFav: 1, trapUnd: 2, _parNaTela: { a: 3, b: 4 } });
+  t('com o par trocado, o que a ARENA desenhou e que e filtrado',
+    comTroca({ pick_trap: 4, outro_trap: 3 }) === true);
+  t('e o palpite antigo volta como alternativa, que e o certo — ele nao esta na tela',
+    comTroca({ pick_trap: 1, outro_trap: 2 }) === false);
+
+  t('a comparacao com direcao nao sobrou em lugar nenhum',
+    !/x\.pick_trap\) === String\(r\.trapFav\) && String\(x\.outro_trap\) === String\(r\.trapUnd\)/.test(SRC_APP));
+
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);
 })();

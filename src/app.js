@@ -1408,8 +1408,31 @@ function _mmPintarBw(r){
 
   // O par do PRINCIPAL nao volta como alternativa: apareciam dois cards do
   // mesmo par, os dois marcados como escolhido.
+  //
+  // ── DOIS DEFEITOS CONSERTADOS AQUI (Bruno, 11/09/2026) ────────────────────
+  // Sintoma: a mesma corrida mostrou T1 x T2 no PRINCIPAL e T2 x T1 num card
+  // GOOD. O mesmo confronto, duas vezes, invertido.
+  //
+  // 1) A COMPARACAO TINHA DIRECAO. Era
+  //      x.pick_trap === r.trapFav && x.outro_trap === r.trapUnd
+  //    Um AvB e' o mesmo confronto nos dois sentidos — o que muda e' quem o
+  //    motor aponta como vencedor, nao o PAR. Se a arena desenhou T1 x T2 e a
+  //    BW devolveu o par como T2 x T1, o filtro nao reconhecia e o card voltava.
+  //
+  // 2) COMPARAVA CONTRA O PAR ERRADO. trap_fav/trap_und e' o palpite gravado;
+  //    a arena desenha o `_parNaTela`, que a reanalise pode ter trocado no meio
+  //    do dia. Quando os dois divergem, o filtro comparava com um par que nao
+  //    estava na tela e deixava passar o que estava.
+  //    O proprio _parNaTela nasceu de um bug irmao deste, no chip do topo —
+  //    o comentario dele avisa exatamente isso, e mesmo assim esta funcao
+  //    continuou lendo trap_fav.
+  var _mesmoParTrap = function(a1, b1, a2, b2){
+    var x1 = String(a1), y1 = String(b1), x2 = String(a2), y2 = String(b2);
+    return (x1 === x2 && y1 === y2) || (x1 === y2 && y1 === x2);
+  };
+  var _naTela = r._parNaTela || { a: r.trapFav, b: r.trapUnd };
   var ehPrincipal = function(x){
-    return String(x.pick_trap) === String(r.trapFav) && String(x.outro_trap) === String(r.trapUnd);
+    return _mesmoParTrap(x.pick_trap, x.outro_trap, _naTela.a, _naTela.b);
   };
   // Uma vaga ja e' do card principal, entao sobram 3 aqui — a nao ser que o
   // principal esteja na propria lista da BW, caso em que ele sai daqui e as 4

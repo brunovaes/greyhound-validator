@@ -3845,6 +3845,175 @@ router.get('/diag/oportunidades-bw', requireAdmin, (req, res) => {
 //   GOOD = colada na BW + pct > corte, com a regua de qualidade AFROUXADA (tier == null).
 // odd_bw = odd decimal do pick vencer o outro (oddAvenceB/oddBvenceA do par). bateu = pick chegou na
 // frente do outro (avbResultado.bateuPar). So-leitura, nao grava nada.
+// ── FUNIL DO DIA (admin, so-leitura) — Bruno, 11/09/2026 ────────────────────
+//
+// Por que existe: tres vezes em dois dias eu diagnostiquei "por que este AvB nao
+// apareceu" olhando a tela e inferindo. Errei o peso duas vezes. Esta rota mede
+// o funil inteiro, corrida por corrida, em vez de a gente discutir sintoma.
+//
+// Uma linha por corrida do dia, com o motivo de ela nao ter chegado ao fim:
+//   sem_hist_full   -> nunca pode ser classificada (o motor nao tem o que ler).
+//                      E o caso da corrida marcada skip na analise: nenhum dos
+//                      returns de skip do processarCorrida carrega histFull.
+//   sem_pares_bw    -> a BW nao abriu frente-a-frente nesta corrida, ou o robo
+//                      de odds nao a alcancou (ele so olha corrida com scores_json).
+//   sem_confronto   -> a BW abriu, mas nenhum par casou com um confronto do motor
+//                      (avaliarPar descartou por falta de historico de um dos dois).
+//   abaixo_do_corte -> casou, mas nenhum passou de pct > parelhoAte.
+//   ok              -> classificou; `camadas` diz o que saiu.
+//
+// `na_lista` responde a pergunta que gerou tudo isto: a corrida estava visivel na
+// Analisar? E' `nivel != skip && trap_fav > 0` — a mesma regra que monta a lista.
+// Corrida com na_lista=false e camadas preenchidas e' justamente o "AvB que abriu
+// numa corrida que nao estava na lista".
+//
+// NAO GRAVA NADA. Mesmos parametros do painel-dia, de proposito: se este diag
+// discordar da tela, um dos dois esta errado e da pra ver qual.
+//   GET /diag/funil-do-dia?date=YYYY-MM-DD
+router.get('/diag/funil-do-dia', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const mm = require('../utils/motorManha');
+    const cd = require('../utils/camadasDoDia');
+    const { bateuPar } = require('../utils/avbResultado');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+
+    const opts = (mm._aplicaConfigMotor ? mm._aplicaConfigMotor(db, { date }) : { date });
+    const parelhoAte = opts.parelhoAte > 0 ? opts.parelhoAte : mm.PARELHO_ATE;
+    let difSpCfg = 0, tetoInfoCfg = 0;
+    try {
+      const c = db.prepare('SELECT avb_sp_dif_max, avb_teto_bw FROM analysis_config WHERE user_id=?').get(1);
+      if (c) {
+        if (c.avb_sp_dif_max > 0) difSpCfg = c.avb_sp_dif_max;
+        if (c.avb_teto_bw > 0) tetoInfoCfg = c.avb_teto_bw;
+      }
+    } catch (e) {}
+
+    // TODAS as corridas do dia, sem filtro nenhum — e o ponto do diag.
+    const rows = db.prepare(
+      "SELECT r.id, r.hora, r.corrida, r.dist, r.nivel, r.trap_fav, r.trap_und, r.tier, "
+      + "       (r.hist_full IS NULL) AS semHist, (r.scores_json IS NULL) AS semScores, "
+      + "       r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json, s.id AS sessao "
+      + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? ORDER BY r.hora"
+    ).all(date);
+
+    const h2h = {};
+    try {
+      for (const p of db.prepare('SELECT corrida, hora, pares_json FROM avb_abertos WHERE data=?').all(date)) {
+        let arr = []; try { arr = JSON.parse(p.pares_json) || []; } catch (e) {}
+        h2h[cd.chaveCorrida(p.corrida, p.hora)] = arr;
+      }
+    } catch (e) {}
+
+    const resumo = {
+      corridas: rows.length, sessoes: {}, na_lista: 0, fora_da_lista: 0,
+      sem_hist_full: 0, sem_pares_bw: 0, sem_confronto: 0, abaixo_do_corte: 0, ok: 0,
+      classificados_em_corrida_da_lista: 0, classificados_fora_da_lista: 0,
+      avbs_classificados: 0
+    };
+    const corridas = [];
+
+    for (const row of rows) {
+      resumo.sessoes[row.sessao] = (resumo.sessoes[row.sessao] || 0) + 1;
+      const naLista = (row.nivel !== 'skip' && row.trap_fav > 0);
+      naLista ? resumo.na_lista++ : resumo.fora_da_lista++;
+
+      const pares = h2h[cd.chaveCorrida(row.corrida, row.hora)] || [];
+      const linha = {
+        hora: row.hora, corrida: row.corrida, dist: row.dist || null,
+        na_lista: naLista, nivel: row.nivel || '', trap_fav: row.trap_fav || 0,
+        tier: row.tier || null,
+        tem_hist_full: !row.semHist, tem_scores: !row.semScores,
+        pares_bw: pares.length, confrontos_no_motor: 0, classificados: 0,
+        camadas: [], motivo: null
+      };
+
+      if (row.semHist) {
+        linha.motivo = 'sem_hist_full';
+        resumo.sem_hist_full++;
+        corridas.push(linha); continue;
+      }
+      if (!pares.length) {
+        linha.motivo = 'sem_pares_bw';
+        resumo.sem_pares_bw++;
+        corridas.push(linha); continue;
+      }
+
+      let hf = null, ha = null, rc = null;
+      try { hf = JSON.parse(row.hist_full); } catch (e) {}
+      try { ha = JSON.parse(row.hist_all); } catch (e) {}
+      try { rc = JSON.parse(row.race_card); } catch (e) {}
+      if (!Array.isArray(hf) || hf.length < 2 || !Array.isArray(ha)) {
+        linha.motivo = 'sem_hist_full';
+        resumo.sem_hist_full++;
+        corridas.push(linha); continue;
+      }
+      let pc;
+      try {
+        pc = mm.precalcDaCorrida(hf, ha, rc, {
+          dataCorrida: row.data_card || date, trackCorrida: cd.pista(row.corrida), distCorrida: row.dist || null
+        }, opts);
+      } catch (e) {
+        linha.motivo = 'sem_hist_full'; linha.erro = e.message;
+        resumo.sem_hist_full++;
+        corridas.push(linha); continue;
+      }
+
+      // Quantos dos pares que a BW abriu tem confronto no motor, e quantos passam
+      // do corte. Os dois numeros separados: "nao casou" e "casou e reprovou" sao
+      // problemas diferentes — um e falta de dado, o outro e a regua.
+      const todos = Array.isArray(pc.todos) ? pc.todos : [];
+      const mesmo = (s, x, y) => (Number(s.pick_trap) === x && Number(s.outro_trap) === y)
+                              || (Number(s.pick_trap) === y && Number(s.outro_trap) === x);
+      const vistos = new Set();
+      for (const par of pares) {
+        if (par.marketPct == null) continue;
+        const x = Number(par.aTrap), y = Number(par.bTrap);
+        const k = Math.min(x, y) + 'x' + Math.max(x, y);
+        if (vistos.has(k)) continue;
+        vistos.add(k);
+        if (todos.find(s => mesmo(s, x, y))) linha.confrontos_no_motor++;
+      }
+
+      const confs = cd.confrontosDaCorrida({
+        todos, lastSp: pc.lastSp, pares, abertoEm: null,
+        corrida: row.corrida, hora: row.hora,
+        finishingOrderJson: row.finishing_order_json,
+        parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar,
+        agora: null
+      }).filter(c => c.camada !== 'OPORTUNIDADE');
+
+      linha.classificados = confs.length;
+      linha.camadas = confs.map(c => c.camada + ' ' + c.par + ' ' + (c.pct != null ? c.pct + '%' : '-'));
+
+      if (!linha.confrontos_no_motor) { linha.motivo = 'sem_confronto'; resumo.sem_confronto++; }
+      else if (!confs.length) { linha.motivo = 'abaixo_do_corte'; resumo.abaixo_do_corte++; }
+      else {
+        linha.motivo = 'ok';
+        resumo.ok++;
+        resumo.avbs_classificados += confs.length;
+        naLista ? resumo.classificados_em_corrida_da_lista++ : resumo.classificados_fora_da_lista++;
+      }
+      corridas.push(linha);
+    }
+
+    res.json({
+      date, parelho_ate: parelhoAte, dif_sp_max: difSpCfg || null, teto_info: tetoInfoCfg || null,
+      resumo, corridas,
+      legenda: 'So-leitura. Uma linha por corrida do dia, sem filtro nenhum. `na_lista` = '
+        + 'nivel != skip && trap_fav > 0, a MESMA regra que monta a lista da Analisar. '
+        + 'Corrida com na_lista=false e motivo=ok e um AvB que abriu numa corrida fora da lista. '
+        + 'Motivos: sem_hist_full (nao ha o que o motor leia — e o caso do skip, cujos returns '
+        + 'no processarCorrida nao carregam histFull); sem_pares_bw (a BW nao abriu par, ou o robo '
+        + 'de odds nao alcancou a corrida — ele so olha corrida com scores_json); sem_confronto (a BW '
+        + 'abriu mas o avaliarPar descartou o par por falta de historico de um dos galgos); '
+        + 'abaixo_do_corte (casou e nenhum passou de pct > ' + parelhoAte + '); ok (classificou). '
+        + '`sessoes` conta corridas por lote: mais de uma chave ai significa mais de uma sessao no dia.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 //   GET /diag/oportunidades-bw-resultado?date=YYYY-MM-DD&teto=1.5&faixa=1.8
 router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
   try {
