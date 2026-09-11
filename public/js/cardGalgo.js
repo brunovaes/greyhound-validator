@@ -32,8 +32,38 @@ function svExtrairRemarks(mixed){
   return mixed;
 }
 function svClassRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
+// NOME DO GALGO, limpo (Bruno, 11/09/2026).
+//
+// O PDF traz o nome grudado na ficha de criacao: "Golden Lion (W) ltbd d Dorotas
+// Wildcat-Golden Mist Jun24". O sistema ja tratava isso — _limpaNome existe no
+// app.js e no cargaVip.js — mas este card recebia o nome CRU do hist_full e
+// mostrava a ficha inteira.
+//
+// Esta e a versao do cargaVip.js, nao a do app.js: a do app.js lista as cores
+// uma a uma e nao cobre "ltbd"; esta reconhece cor como token minusculo de 2 a 6
+// letras do alfabeto de cores, que e uma regra e nao uma lista pra manter.
+//
+// Idempotente de proposito: nome ja limpo passa inteiro. Assim da pra chamar sem
+// precisar saber se quem chamou ja tratou.
+function svLimpaNome(n){
+  if(!n) return '';
+  var txt=String(n).trim();
+  var mSexo=txt.match(/^(.*?\((?:M|W)\))/);
+  if(mSexo) return mSexo[1].trim();
+  var toks=txt.split(/\s+/);
+  var MESANO=/^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2}$/i;
+  var CORGEN=/^[bdefgklrtw]{2,6}$/;
+  for(var k=1;k<toks.length;k++){
+    var t=toks[k];
+    if((t===t.toLowerCase()&&CORGEN.test(t))||MESANO.test(t)||/^\(Ssn/i.test(t)) return toks.slice(0,k).join(' ').trim();
+  }
+  return txt;
+}
 function svCard(trap,nome,perfil,hist){
   var tc=['','t1','t2','t3','t4','t5','t6'];
+  // Limpa AQUI, na exibicao, e nao na gravacao: corrigir so na origem deixaria
+  // toda corrida ja analisada com a ficha de criacao na tela pra sempre.
+  nome=svLimpaNome(nome);
   if(!hist||!hist.length)return'<div class="sv-dog"><div class="sv-dog-hdr"><span class="trap-badge '+tc[trap||0]+'" style="width:26px;height:26px;font-size:12px">'+trap+'</span><span class="sv-name">'+(nome||'')+'</span></div><p style="color:rgba(255,255,255,.3);font-size:11px;padding:8px 0">Sem histórico</p></div>';
   // Calcular melhores valores para destaques
   var caltms=hist.filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});

@@ -359,5 +359,51 @@ t('sem historico nenhum, avisa em vez de abrir uma janela vazia',
 t('a celula do Historico passa o par no onclick',
   /openSessValModal\(' \+ r\.id \+ ',' \+ Number\(cf\.pick_trap/.test(SRC));
 
+// ── [9] NOME DO GALGO SEM A FICHA DE CRIACAO ───────────────────────────────
+// Bruno, 11/09: "Golden Lion (W) ltbd d Dorotas Wildcat-Golden Mist Jun24modoturbo".
+// O PDF traz o nome grudado na ficha de criacao. O sistema ja tratava isso
+// (_limpaNome, no app.js e no cargaVip.js), mas o card deste modal recebia o
+// nome CRU do hist_full. A limpeza e na EXIBICAO: corrigir so na gravacao
+// deixaria toda corrida ja analisada com a ficha na tela pra sempre.
+bloco('[9] O NOME DO GALGO CHEGA LIMPO NA TELA');
+
+const SRC_CARD = fs.readFileSync(path.join(__dirname, 'public', 'js', 'cardGalgo.js'), 'utf8');
+const ctxCard = {};
+vm.createContext(ctxCard);
+vm.runInContext(SRC_CARD + '\nthis.limpa = svLimpaNome; this.card = svCard;', ctxCard);
+const limpa = ctxCard.limpa;
+
+[
+  ['Golden Lion (W) ltbd d Dorotas Wildcat-Golden Mist Jun24', 'Golden Lion (W)'],
+  ['Dorotas Wildcat (M) bk d Pat C Sabbath-Ballymac Jun22', 'Dorotas Wildcat (M)'],
+  ['Swift Finnery ltbd d Kinloch Brae-Ela Mai Jun24', 'Swift Finnery'],
+  ['Beach Hollyoak bkw d X-Y Aug23', 'Beach Hollyoak'],
+  ['Romeo On Point Jun24', 'Romeo On Point'],
+  ['Braemar Millie (Ssn 12Aug)', 'Braemar Millie']
+].forEach(function (C) {
+  t('corta a ficha de criacao: ' + C[0].slice(0, 34) + '...', limpa(C[0]) === C[1]);
+  // Idempotencia: sem isso, quem ja limpou na entrada nao poderia chamar de novo.
+  t('   e chamar de novo nao muda nada', limpa(C[1]) === C[1]);
+});
+t('nome sem ficha passa inteiro', limpa('Golden Lion (W)') === 'Golden Lion (W)');
+t('a mascara "sem nome" do motor nao e mutilada', limpa('b3 (sem nome)') === 'b3 (sem nome)');
+t('vazio e nulo nao estouram', limpa('') === '' && limpa(null) === '');
+t('corta "ltbd", que a lista de cores do app.js nao cobria',
+  limpa('Fulano Beltrano ltbd d X-Y Jan25') === 'Fulano Beltrano');
+
+const cardSujo = ctxCard.card(3, 'Golden Lion (W) ltbd d Dorotas Wildcat-Golden Mist Jun24', 'modoturbo',
+  [{ data: '03Sep26', pista: 'Wtrfd', dist: 480, trap: 6, split: '3.34', bends: '4322', pos: 1, remarks: 'StrFn', classe: 'A4', caltm: '29.48' }]);
+t('o svCard mostra o nome limpo', cardSujo.indexOf('Golden Lion (W)</span>') >= 0);
+t('e nao deixa a ficha de criacao vazar pro HTML', cardSujo.indexOf('Dorotas Wildcat-Golden') < 0);
+
+const cardVazio = ctxCard.card(3, 'Golden Lion (W) ltbd d X-Y Jun24', null, []);
+t('o ramo "Sem historico" tambem limpa',
+  cardVazio.indexOf('Sem hist') >= 0 && cardVazio.indexOf('Dorotas') < 0 && cardVazio.indexOf('X-Y') < 0);
+
+t('o _svGalgo do main.js passa o nome pelo svLimpaNome',
+  /typeof svLimpaNome === 'function'\) \? svLimpaNome\(g\.nome\)/.test(SRC));
+t('e o cardGalgo.js esta carregado nesta tela (senao o guarda de typeof cairia sempre)',
+  /static\/js\/cardGalgo\.js/.test(SRC));
+
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);

@@ -3061,7 +3061,11 @@ function _svGalgo(r, trap){
   var perfil = null;
   if (Number(r.trap_fav) === Number(trap)) perfil = r.perfil_fav || null;
   else if (Number(r.trap_und) === Number(trap)) perfil = r.perfil_und || null;
-  return { trap: Number(trap), nome: g.nome || '', perfil: perfil, hist: g.historico || [] };
+  // O hist_full guarda o nome CRU do PDF, com a ficha de criacao grudada. Quem
+  // limpa e o svLimpaNome do cardGalgo.js, ja carregado nesta tela; o guarda de
+  // typeof existe porque o titulo nao pode sumir se aquele arquivo faltar.
+  var _nome = (typeof svLimpaNome === 'function') ? svLimpaNome(g.nome) : (g.nome || '');
+  return { trap: Number(trap), nome: _nome || '', perfil: perfil, hist: g.historico || [] };
 }
 function openSessValModal(id, a, b){
   var r=ALL_RACES.find(function(x){return x.id==id;});
