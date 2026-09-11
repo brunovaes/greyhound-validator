@@ -395,6 +395,55 @@ async function cena(cfg, corridas, quantosRepiques) {
   t('a comparacao com direcao nao sobrou em lugar nenhum',
     !/x\.pick_trap\) === String\(r\.trapFav\) && String\(x\.outro_trap\) === String\(r\.trapUnd\)/.test(SRC_APP));
 
+  // ── [7] A PAGINA "COMO NASCE UM AvB" ─────────────────────────────────────
+  // Documentacao do funil dentro do app, em Painel Admin > Governanca. Nao le
+  // nem grava banco: e texto. O teste RENDERIZA a rota num contexto de mentira,
+  // porque pagina montada por concatenacao quebra em silencio — uma tag aberta
+  // a mais nao derruba o node --check nem o valida-templates.
+  bloco('[7] A PAGINA DE DOCUMENTACAO RENDERIZA INTEIRA');
+
+  const SRC_ROBOT = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'robot.js'), 'utf8');
+  t('a rota existe', SRC_ROBOT.indexOf("router.get('/como-nasce-um-avb'") >= 0);
+  t('e esta no menu Governanca, nao no de Diagnostico',
+    /data-g="gov"[\s\S]{0,700}?robot\/como-nasce-um-avb/.test(SRC_ROBOT));
+  t('usa um icone que existe no icons.js (icon() devolve vazio pra nome desconhecido)',
+    /como-nasce-um-avb"><span class="icon">\$\{icon\('scroll'/.test(SRC_ROBOT));
+
+  const iR = SRC_ROBOT.indexOf("router.get('/como-nasce-um-avb'");
+  const iniR = SRC_ROBOT.indexOf('{', SRC_ROBOT.indexOf('(req, res) =>', iR));
+  let dR = 0, jR = iniR;
+  for (; jR < SRC_ROBOT.length; jR++) {
+    if (SRC_ROBOT[jR] === '{') dR++;
+    else if (SRC_ROBOT[jR] === '}') { dR--; if (!dR) break; }
+  }
+  const corpoRota = SRC_ROBOT.slice(iniR + 1, jR);
+  let html = null, erroRender = null;
+  try {
+    const { designTokensCSS } = require('./src/utils/designTokens');
+    const ctxR = {
+      BASE: '/greyhound', designTokensCSS, navBar: function () { return '<nav>NAV</nav>'; },
+      req: { user: { name: 'Bruno' } }, res: { send: function (h) { html = h; } }, console: console
+    };
+    vm.createContext(ctxR);
+    vm.runInContext('(function(req,res){' + corpoRota + '})(req,res)', ctxR);
+  } catch (e) { erroRender = e; }
+  t('a rota renderiza sem estourar', !erroRender && !!html);
+  if (erroRender) console.log('        -> ' + erroRender.message);
+
+  if (html) {
+    const abertas = (html.match(/<div/g) || []).length;
+    const fechadas = (html.match(/<\/div>/g) || []).length;
+    t('as divs fecham todas (' + abertas + ' / ' + fechadas + ')', abertas === fechadas);
+    t('nenhuma interpolacao vazou pro HTML final', !/\$\{/.test(html));
+    t('herda a tipografia do app (designTokensCSS)', /Oswald/.test(html) && /Inter/.test(html));
+    t('e o fundo do app, nao um tema proprio', /background:#0D1117/.test(html));
+    t('as cores das camadas sao as combinadas',
+      html.indexOf('#3b82f6') >= 0 && html.indexOf('#f97316') >= 0 && html.indexOf('#8b5cf6') >= 0);
+    t('traz as tres situacoes de corrida fora da lista',
+      html.indexOf('regua reprovou') >= 0 && html.indexOf('Corrida parelha') >= 0 && html.indexOf('fora do perfil') >= 0);
+    t('e linka os diags de onde os numeros vieram', html.indexOf('/diag/funil-do-dia') >= 0);
+  }
+
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);
 })();

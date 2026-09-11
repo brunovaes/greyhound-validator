@@ -1042,6 +1042,7 @@ ${navBar(req.user, 'robot')}
   <button class="mgrp-tit" onclick="toggleGrupo(this)"><span class="mgrp-seta">▸</span> Governança</button>
   <div class="mgrp-itens">
     <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
+    <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/como-nasce-um-avb"><span class="icon">${icon('scroll',{size:16})}</span> Como nasce um AvB</a>
   </div>
 </div>
 </div>
@@ -5373,6 +5374,151 @@ ${categorizados.map(l => `<tr><td>${l.token}</td><td class="cat">${l.categoria}<
 
 <p style="margin-top:20px"><a href="${BASE}/robot/diagnostico-traps" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pro diagnóstico</a></p>
 </div></body></html>`);
+});
+
+// ── COMO NASCE UM AvB (admin, so-leitura) — Bruno, 11/09/2026 ───────────────
+//
+// A explicacao do funil de selecao, em linguagem simples, dentro do proprio app.
+// Vive em Painel Admin > Governanca porque e' documentacao do sistema, nao
+// operacao: nao le nem grava nada do banco, e' texto.
+//
+// Os numeros citados sao de 10 e 11/09/2026 e vieram das rotas de diagnostico
+// (/diag/oportunidades-bw e /diag/persistir-manha). Ficam escritos aqui de
+// proposito, e nao calculados ao vivo: a pagina explica COMO o funil funciona e
+// usa um dia real como exemplo. Numero ao vivo tem lugar proprio, que e' o
+// /diag/funil-do-dia — linkado no rodape.
+router.get('/como-nasce-um-avb', requireAdmin, (req, res) => {
+  const C = { top: '#3b82f6', high: '#f97316', good: '#8b5cf6' };
+  const etapa = (n, quando, titulo, corpo) =>
+    '<div class="et">'
+    + '<div class="et-n">' + n + '<span class="et-q">' + quando + '</span></div>'
+    + '<div class="et-c"><h3>' + titulo + '</h3>' + corpo + '</div>'
+    + '</div>';
+  const tipo = (nome, cor, txt) =>
+    '<div class="tp"><span class="tp-tag" style="color:' + cor
+    + ';background:' + cor + '1f;border-color:' + cor + '59">' + nome + '</span><p>' + txt + '</p></div>';
+  const caso = (cor, titulo, corpo, veredito) =>
+    '<div class="cs"><div class="cs-b" style="background:' + cor + '"></div>'
+    + '<div><h3>' + titulo + '</h3>' + corpo
+    + '<span class="cs-v" style="color:' + cor + '">' + veredito + '</span></div></div>';
+
+  res.send('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
++ '<meta name="viewport" content="width=device-width,initial-scale=1">'
++ '<title>Como nasce um AvB - Greyhound Factory</title>'
++ '<link rel="stylesheet" href="' + BASE + '/static/css/shared.css">'
++ '<style>'
++ designTokensCSS()
++ 'body{background:#0D1117}'
++ 'nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}'
++ '.content{padding:24px 20px 64px;max-width:860px;margin:0 auto}'
++ 'h1{font-size:26px;font-weight:700;margin:0 0 6px}'
++ '.sub{color:#8a94a6;font-size:14px;line-height:1.6;margin:0 0 22px;max-width:66ch}'
++ '.sub b{color:#e8edf6;font-weight:600}'
+/* A faixa verde e' a mesma do Catalogo de Remarks: quem conhece o Painel Admin
+   ja sabe que ali vem o resumo da tela. */
++ '.tese{background:rgba(34,197,94,.08);border-top:2px solid #22c55e;border-radius:10px;padding:16px 20px;margin-bottom:28px;font-size:14px;line-height:1.65;color:#c9d2e0}'
++ '.tese b{color:#fff}'
++ 'h2{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.9px;margin:34px 0 12px;font-weight:700}'
++ 'h3{font-size:15px;font-weight:600;margin:0 0 5px;color:#e8edf6;letter-spacing:.2px}'
++ '.et{display:grid;grid-template-columns:66px 1fr;gap:18px;padding:20px 0;border-top:1px solid #1e2532}'
++ '.et:first-of-type{border-top:none}'
++ '.et-n{font-family:var(--font-display);font-size:15px;font-weight:700;color:#4b5566;font-variant-numeric:tabular-nums}'
++ '.et-q{display:block;font-family:var(--font-body);font-size:10px;font-weight:500;color:#3d4757;letter-spacing:.3px;margin-top:3px;line-height:1.3}'
++ '.et-c p{margin:0 0 9px;font-size:13.5px;line-height:1.65;color:#8a94a6}'
++ '.et-c p:last-child{margin-bottom:0}'
++ '.et-c b{color:#c9d2e0;font-weight:600}'
++ '.tps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}'
++ '.tp{background:#161B27;border:1px solid #222;border-radius:8px;padding:14px}'
++ '.tp-tag{display:inline-block;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 9px;border-radius:20px;border:1px solid;margin-bottom:9px}'
++ '.tp p{margin:0;font-size:13px;line-height:1.55;color:#8a94a6}'
+/* Nota de margem: sem fundo nem borda de card, porque nao e' um objeto — e' um
+   comentario sobre o que esta acima. */
++ '.nota{border-left:2px solid #2a3242;padding-left:16px;margin:18px 0;font-size:13.5px;line-height:1.65;color:#8a94a6}'
++ '.nota b{color:#e8edf6}'
++ '.cs{display:grid;grid-template-columns:8px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid #1e2532}'
++ '.cs:last-child{border-bottom:none}'
++ '.cs-b{border-radius:2px;margin-top:4px}'
++ '.cs p{margin:0;font-size:13.5px;line-height:1.65;color:#8a94a6}'
++ '.cs b{color:#c9d2e0;font-weight:600}'
++ '.cs-v{display:block;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;margin-top:8px}'
++ '.tw{overflow-x:auto}'
++ 'table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden}'
++ 'th{padding:8px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222}'
++ 'td{padding:9px 12px;border-bottom:1px solid #222;font-size:13px;color:#8a94a6}'
++ 'td.n{text-align:right;font-variant-numeric:tabular-nums;color:#e8edf6;font-weight:600}'
++ 'tr:last-child td{border-bottom:none;color:#e8edf6}'
++ '.pe{margin-top:34px;padding-top:18px;border-top:1px solid #1e2532;font-size:12.5px;color:#4b5566;line-height:1.7}'
++ '.pe a{color:#22c55e;text-decoration:none}'
++ '.pe a:hover{text-decoration:underline}'
++ '@media(max-width:560px){.et{grid-template-columns:1fr;gap:6px}.et-q{display:inline;margin-left:8px}}'
++ '</style></head><body>'
++ navBar(req.user, 'robot')
++ '<div class="content">'
++ '<h1>Como nasce um AvB</h1>'
++ '<div class="sub">Documentacao do funil de selecao. Explica por que um AvB aparece, por que outro nao aparece, e o que acontece com as corridas que nao estao na lista da manha.</div>'
+
++ '<div class="tese">Um AvB so existe quando <b>duas opinioes independentes concordam</b>: o motor acha que um galgo ganha do outro, e a BetWinner abre esse par no mercado. Uma sozinha nao vale nada &mdash; e e essa exigencia dupla que explica quase tudo o que aparece, e o que nao aparece, na tela.</div>'
+
++ '<h2>O dia, do comeco ao fim</h2>'
++ etapa('01', 'madrugada', 'O robo baixa os PDFs',
+    '<p>Um PDF por corrida, do Racing Post, com as ultimas cinco corridas de cada galgo: tempo, arranque, curvas, classe e as observacoes da prova.</p>')
++ etapa('02', 'manha', 'O motor da manha le e pontua',
+    '<p>Cada galgo recebe uma nota a partir do tempo ajustado pela categoria, do arranque, das curvas e do podio recente. O motor ordena os seis e separa as corridas que valem a pena olhar.</p>'
+  + '<p>Corrida onde os seis chegam muito perto uns dos outros e marcada como <b>parelha</b> e sai da lista &mdash; nao ha margem para apontar favorito com seguranca. Tambem saem as de distancia ou classe fora do perfil, e as sem historico suficiente.</p>')
++ etapa('03', 'o dia todo, de 4 em 4 min', 'A regua reavalia e limpa',
+    '<p>A cada quatro minutos o motor reaplica a regua de qualidade em todas as corridas que ainda nao largaram. Quem nao passa <b>perde o palpite</b> e some da lista de corridas.</p>'
+  + '<p>E por isso que o dia comeca com dezenas de AvBs carregados e a lista vai esvaziando. Em 11/09, de 76 corridas analisadas, sobraram 12 com palpite aprovado. Isso nao e defeito: e a regua dizendo que as outras 64 nao tem conviccao suficiente para virar indicacao.</p>')
++ etapa('04', 'de 5 em 5 segundos', 'O robo da BetWinner assiste ao mercado',
+    '<p>Ele varre as corridas que estao ao vivo na BW e guarda <b>todos</b> os confrontos frente-a-frente que ela abre &mdash; nao apenas os que o motor tinha proposto de manha. A BW costuma abrir o mercado poucos minutos antes da largada.</p>'
+  + '<p>Uma ressalva: o robo so olha corrida que ele consegue casar com uma analise sua. Corrida que o sistema nunca analisou nao e consultada.</p>')
++ etapa('05', 'de 18 em 18 segundos', 'O cruzamento &mdash; onde o AvB nasce',
+    '<p>Para cada corrida, o sistema monta a <b>tabela oculta</b>: todos os confrontos possiveis entre os seis galgos, quinze pares. Ela nunca aparece na tela; existe para que qualquer par que a BW abra encontre uma opiniao ja pronta.</p>'
+  + '<p>Ai cruza: o par que a BW abriu e que tem <b>mais de 70% de conviccao</b> do motor vira AvB. O que nao passa desse corte e descartado em silencio.</p>')
+
++ '<h2>O que decide a cor</h2>'
++ '<div class="tps">'
++ tipo('TOP', C.top, 'Passou na regua mais exigente. E a nata: tempo, arranque, curvas e podio, todos a favor.')
++ tipo('HIGH', C.high, 'Passou na regua intermediaria. Boa avaliacao, sem a folga do TOP em todos os eixos.')
++ tipo('GOOD', C.good, 'Passou so no corte de conviccao. O motor acha que um ganha do outro, mas sem respaldo da regua de qualidade.')
++ '</div>'
++ '<div class="nota"><b>Entre dois AvBs, quem vai para a tela de disputa?</b> Primeiro o tipo &mdash; TOP na frente de HIGH, HIGH na frente de GOOD. Empatando, decide o arranque (SPLIT), depois o tempo (CalTm), depois a porcentagem. Cabem quatro na tela ao mesmo tempo.</div>'
++ '<div class="nota"><b>E o OPORTUNIDADE?</b> E a sala de espera. O par que o motor levantou de manha e que a BW ainda nao abriu fica ali so para voce acompanhar. Ele nunca apita, nunca entra no Historico, e sai de cena assim que a BW abre qualquer coisa naquela corrida &mdash; ou um minuto depois da largada, o que vier primeiro.</div>'
+
++ '<h2>E as corridas que nao estao na lista?</h2>'
++ '<div class="sub" style="margin-bottom:4px">"Fora da lista" nao e uma coisa so. Sao tres situacoes diferentes, e elas terminam de jeitos opostos.</div>'
++ caso('#22c55e', 'Corrida analisada que a regua reprovou',
+    '<p>Ela foi lida, tem o historico dos seis galgos guardado, e so perdeu o palpite na etapa 03. O robo da BW continua assistindo, a tabela oculta continua existindo, e se a BW abrir um par com conviccao ele <b>vira AvB normalmente</b>. E a maioria esmagadora &mdash; em 11/09, 64 das 76.</p>',
+    'Vira AvB &middot; e a origem mais comum do dia')
++ caso('#f97316', 'Corrida parelha',
+    '<p>O motor a descartou porque os seis chegam muito perto. O robo da BW ate a monitora e guarda os pares que ela abre &mdash; mas o historico dos galgos <b>nao foi gravado</b> nessas corridas, e sem ele nao ha como avaliar par nenhum. Os pares ficam no banco sem nunca serem cruzados.</p>',
+    'Nao vira AvB &middot; buraco conhecido, conserto mapeado')
++ caso('#ef4444', 'Corrida fora do perfil',
+    '<p>Distancia ou classe que voce nao aceita, ou galgos sem historico utilizavel. O sistema nunca a analisou, entao o robo da BW nem chega a consulta-la.</p>',
+    'Nao vira AvB &middot; e esta correto assim')
+
++ '<h2>O funil, medido em 10/09/2026</h2>'
++ '<div class="tw"><table><thead><tr><th>Etapa</th><th style="text-align:right">Pares</th></tr></thead><tbody>'
++ '<tr><td>A BW abriu, em 46 corridas</td><td class="n">142</td></tr>'
++ '<tr><td>O motor tinha opiniao sobre o par</td><td class="n">49</td></tr>'
++ '<tr><td>Passaram do corte de conviccao</td><td class="n">25</td></tr>'
++ '</tbody></table></div>'
++ '<div class="nota">Dos 93 pares sem opiniao, 43 estavam em corridas cujo historico nunca foi gravado, e 50 eram pares onde pelo menos um dos dois galgos nao tinha corrida suficiente para ser avaliado. So os 24 restantes foram uma decisao da regua.</div>'
+
++ '<h2>Onde cada coisa aparece</h2>'
++ etapa('&mdash;', '', 'Lista de corridas',
+    '<p>As corridas aprovadas pela regua, mais <b>qualquer corrida que tenha um AvB esperando</b>, mesmo sem palpite da manha. Estas vao para o topo da fila, ordenadas por tipo e depois por horario.</p>')
++ etapa('&mdash;', '', 'Tela de disputa',
+    '<p>Ate quatro AvBs da corrida vigente, cada um com os dois galgos e os cinco indicadores embaixo. O mesmo par nunca aparece duas vezes, nem invertido.</p>')
++ etapa('&mdash;', '', 'Historico',
+    '<p>Um registro por corrida: o AvB em que voce entrou, ou &mdash; se nao entrou &mdash; o mais bem avaliado dos que a BW abriu. A sua aposta sempre ganha do merito, porque o Historico registra o que aconteceu, nao o que o motor preferia.</p>')
+
++ '<div class="pe">'
++ '<p>Os numeros de 10 e 11/09 vieram das rotas de diagnostico. Todas sao so-leitura e nao gravam nada:</p>'
++ '<p><a href="' + BASE + '/robot/diag/funil-do-dia" target="_blank" rel="noopener">Funil do dia</a> &nbsp;&middot;&nbsp; '
++ '<a href="' + BASE + '/robot/diag/oportunidades-bw" target="_blank" rel="noopener">Oportunidades pelo lado da BW</a> &nbsp;&middot;&nbsp; '
++ '<a href="' + BASE + '/robot/diag/persistir-manha" target="_blank" rel="noopener">Persistir a manha (dry-run)</a></p>'
++ '</div>'
++ '</div></body></html>');
 });
 
 router.get('/diagnostico-traps', requireAdmin, (req, res) => {
