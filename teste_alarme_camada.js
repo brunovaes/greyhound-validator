@@ -456,6 +456,39 @@ for (const marca of ['.ap-tile{', '.ap-grid{display:grid', '.ap-entrada{', '.ap-
 }
 ok(MAIN.indexOf('id="ap-painel"') !== -1, 'e o container #ap-painel esta na mesma rota');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Bruno, 11/09/2026: com DUAS disputas na tela ele queria os cinco aneis embaixo
+// de cada galgo. O HTML sempre esteve la nos dois cards (buildGauges e chamado
+// na arena e no card alternativo) — quem escondia era uma regra de CSS: janela
+// com menos de 800px de altura sumia com os gauges ja a partir de duas
+// disputas, e a tela dele cabe nessa faixa.
+console.log('\n[7] GAUGES COM DUAS DISPUTAS: ENCOLHEM, NAO SOMEM\n');
+
+ok(!/@media\(max-height:800px\)\{\s*\.fp-grid\.g2 \.fp-gauges-row\{display:none\}/.test(MAIN),
+   'a regra que escondia os gauges a 800px de altura saiu');
+ok(/@media\(max-height:620px\)\{[\s\S]{0,120}?\.fp-grid\.g2 \.fp-gauges-row\{display:none\}/.test(MAIN),
+   'o corte desceu pra 620px — abaixo disso nao cabe mesmo, e vazaria por cima do nome');
+ok(/\.fp-grid\.g2 \.fp-gauge svg\{width:46px;height:46px\}/.test(MAIN),
+   'com 2 disputas o anel cai de 64px pra 46px');
+ok(/\.fp-grid\.g2 \.fp-gauge-lbl\{font-size:7px/.test(MAIN),
+   'e o rotulo encolhe junto (senao a legenda fica maior que o anel)');
+ok(/@media\(max-height:800px\)\{[\s\S]{0,260}?\.fp-grid\.g2 \.fp-gauge svg\{width:38px;height:38px\}/.test(MAIN),
+   'em janela baixa encolhe mais um degrau, pra 38px, em vez de sumir');
+
+// O que NAO pode ter mudado junto.
+ok(/\.fp-grid\.g3 \.fp-gauges-row,\s*\.fp-grid\.g4 \.fp-gauges-row\{display:none\}/.test(MAIN),
+   '3 e 4 disputas continuam SEM gauges — la o problema nao e tamanho, e falta de altura');
+ok(/\.fp-gauge svg,?/.test(MAIN) === false || MAIN.indexOf('.fp-grid.g1 .fp-gauge svg') === -1,
+   'o tamanho padrao (1 disputa) nao foi tocado');
+ok(MAIN.indexOf('.fp-gauges-row{display:none!important}') !== -1,
+   'e o mobile continua sem gauges, como antes');
+
+const okGauge = (function(){
+  const APP = require('fs').readFileSync(require('path').join(__dirname, 'src', 'app.js'), 'utf8');
+  return /width="64" height="64" viewBox="0 0 72 72"/.test(APP);
+})();
+ok(okGauge, 'o anel continua com viewBox — e por isso que encolher no CSS nao distorce o numero de dentro');
+
 console.log('\n' + (falhas === 0
   ? 'TUDO OK — pisca e selo na cor do TIPO, verde de volta no aviso de 3 min, e o CSS na rota certa.'
   : falhas + ' FALHA(S) — nao subir.'));

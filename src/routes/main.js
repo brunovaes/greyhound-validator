@@ -834,8 +834,30 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
    conteudo nao e' a mesma coisa que mostrar menos conteudo. */
 .fp-grid.g3 .fp-gauges-row,
 .fp-grid.g4 .fp-gauges-row{display:none}
-/* Em janela baixa some ja a partir de 2, pelo mesmo motivo. */
+
+/* ── COM DUAS DISPUTAS OS GAUGES FICAM, ENCOLHIDOS (Bruno, 11/09/2026) ──────
+   Ate aqui, janela com menos de 800px de altura escondia os gauges ja a partir
+   de duas disputas — e a tela do Bruno cabe nessa faixa, entao na pratica com
+   dois AvBs eles nunca apareciam.
+   O HTML sempre esteve la, nos dois cards: quem sumia era o CSS.
+   Encolher resolve porque o anel e' um SVG com viewBox — ele reduz sem perder
+   nitidez nem reposicionar o texto de dentro. So a moldura muda de tamanho.
+   Tres e quatro disputas continuam sem gauges: ai nao e' questao de tamanho,
+   e' que nao sobra altura nenhuma depois do galgo e da odd. */
+.fp-grid.g2 .fp-gauges-row{padding:4px 8px 6px;gap:2px}
+.fp-grid.g2 .fp-gauges-grp{gap:4px}
+.fp-grid.g2 .fp-gauges-div{margin:0 4px}
+.fp-grid.g2 .fp-gauge svg{width:46px;height:46px}
+.fp-grid.g2 .fp-gauge-lbl{font-size:7px;letter-spacing:.2px}
 @media(max-height:800px){
+  .fp-grid.g2 .fp-gauges-row{padding:2px 6px 4px}
+  .fp-grid.g2 .fp-gauges-grp{gap:3px}
+  .fp-grid.g2 .fp-gauge svg{width:38px;height:38px}
+  .fp-grid.g2 .fp-gauge-lbl{font-size:6px}
+}
+/* Janela bem baixa: ai sim nao cabe, e vale a regra antiga — melhor sumir do
+   que vazar por cima do nome do galgo. */
+@media(max-height:620px){
   .fp-grid.g2 .fp-gauges-row{display:none}
 }
 
