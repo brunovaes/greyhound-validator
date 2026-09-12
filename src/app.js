@@ -1528,7 +1528,11 @@ function _mmPintarBw(r){
     var tipo = String(a.camada || '').toUpperCase();
     return _cardAvb(r, {
       aTrap:a.pick_trap, bTrap:a.outro_trap,
-      aNome:a.pick_nome, bNome:a.outro_nome, odd:a.odd_bw
+      aNome:a.pick_nome, bNome:a.outro_nome,
+      // _parOddAtual prefere o feed ao vivo (5s) e so entao o painel-dia (18s).
+      // Usar a.odd_bw direto prendia o card a volta do painel — e, enquanto a
+      // guarda do avb_abertos existiu, a valores que nunca mudavam.
+      odd:(function(){ var o=_parOddAtual(r,a.pick_trap,a.outro_trap); return o!=null?o:a.odd_bw; })()
     // A etiqueta vai DENTRO do card: titulo separado viraria mais um filho da
     // grade e bagunçaria a contagem do arranjo.
     }, { rotulo:tipo, corRotulo:_corDaCamada(tipo), escolhido:r.avbEscolhido });
@@ -1839,6 +1843,37 @@ function _avbRow(par, odd, mercado, motor, edge, trend){
     + '<span style="color:var(--mut);display:flex;gap:7px;align-items:center;white-space:nowrap">'+parts.join(' &middot; ')+' '+edgeStr+' '+seta+'</span>'
     + '</div>';
 }
+// Troca SO o numero da odd dentro dos cards ja desenhados. Roda no ciclo de 5s
+// do renderOddsLive.
+//
+// Por que nao redesenhar: o card carrega os botoes Analisar/Entrar e o estado
+// de escolha. Reconstruir tudo a cada 5s faria a tela piscar e podia comer um
+// clique no meio. Trocar o texto e o data-odd nao mexe em nada disso.
+//
+// O data-odd do botao Entrar tambem e atualizado: e dele que sai a odd gravada
+// na escolha, e deixar o botao com um numero velho registraria a aposta por uma
+// odd que nao existe mais.
+function _atualizarOddsDosCards(r){
+  var alts = document.getElementById('fp-alts');
+  var grid = document.getElementById('fp-grid');
+  if (!grid) return;
+  var caixas = grid.querySelectorAll('.fp-card-odd[data-par]');
+  for (var i = 0; i < caixas.length; i++) {
+    var cx = caixas[i];
+    var p = String(cx.getAttribute('data-par') || '').split('x');
+    if (p.length !== 2) continue;
+    var odd = _parOddAtual(r, p[0], p[1]);
+    if (odd == null) odd = _parOddAtual(r, p[1], p[0]);
+    var forte = cx.querySelector('strong');
+    if (odd == null) { cx.style.display = 'none'; continue; }
+    cx.style.display = '';
+    if (forte && String(forte.textContent) !== String(odd)) forte.textContent = odd;
+    var card = cx.closest ? cx.closest('.fp-card-avb') : null;
+    var btn = card ? card.querySelector('.alt-entrar') : null;
+    if (btn) btn.setAttribute('data-odd', odd);
+  }
+}
+
 // Card compacto de uma alternativa (pos 2 e 3): os 2 galgos, a seta VENCE, os
 // numeros do mercado e os dois botoes. Sem onclick inline com aspas — os dados
 // vao em data-* e um listener unico trata o clique (aspas escapadas dentro de
@@ -1907,7 +1942,13 @@ function _cardAvb(r, a, opts){
     +   '<div class="fp-gauges-grp">' + buildGauges(hB, classe, hA) + '</div>'
     + '</div>'
     + '<div class="fp-card-acoes">'
-    +   (a.odd != null ? '<span class="fp-card-odd">odd <strong>' + a.odd + '</strong></span>' : '')
+    // data-par no elemento da odd: e por ele que o ciclo de 5s acha e atualiza
+    // esta odd sem redesenhar o card. Redesenhar seria mais simples e e o que
+    // nao se pode fazer: o card carrega os botoes e o estado de escolha, e
+    // reconstrui-lo a cada 5s faria a tela piscar e perder o clique no meio.
+    +   '<span class="fp-card-odd" data-par="' + Math.min(ta,tb) + 'x' + Math.max(ta,tb) + '"'
+    +     (a.odd != null ? '' : ' style="display:none"') + '>odd <strong>'
+    +     (a.odd != null ? a.odd : '-') + '</strong></span>'
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'">Analisar</button>'
     +   (opts.principal ? '<button type="button" onclick="inverterAvb()" title="trocar o sentido">&#8646;</button>' : '')
     +   '<button type="button" class="alt-entrar' + (ehEscolhido ? ' on' : '') + '" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(a.odd!=null?a.odd:'')+'">'
@@ -2340,6 +2381,13 @@ function _pintaOddsLive(r, d){
       // fazem diferenca de verdade.
       r._avbsAoVivo = avbs.length ? avbs : sug;
       r._snapAoVivo = snap;   // guarda o snapshot pro link da casa
+      // A ODD DOS CARDS ACOMPANHA ESTE CICLO (Bruno, 12/09/2026). O fp-alts e
+      // desenhado pelo _mmPintarBw, que so roda no pulso de 75s — a odd ficava
+      // parada mais de um minuto mesmo com o feed de 5s na mao. Aqui so o TEXTO
+      // da odd e trocado; o card, os botoes e o estado de escolha nao sao
+      // tocados. E o mesmo cuidado que fez o ciclo de 5s parar de escrever no
+      // fp-alts em set/2026: quem redesenha aquele bloco e' um so.
+      try { _atualizarOddsDosCards(r); } catch(e){}
       // O bloco de baixo virou so uma FAIXA DE STATUS. As linhas de AvB que
       // ficavam aqui foram removidas de proposito: depois que a arena e os
       // cards de alternativa passaram a mostrar par, odd, mercado, motor e

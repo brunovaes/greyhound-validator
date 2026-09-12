@@ -19,6 +19,7 @@ const SRC_CFG = fs.readFileSync(P('src/routes/config.js'), 'utf8');
 const SRC_API = fs.readFileSync(P('src/routes/api.js'), 'utf8');
 const SRC_DB = fs.readFileSync(P('src/db/database.js'), 'utf8');
 const SRC_MAIN = fs.readFileSync(P('src/routes/main.js'), 'utf8');
+function SRC_APP2(){ return SRC_APP; }
 const SRC_APP = fs.readFileSync(P('src/app.js'), 'utf8');
 
 let ok = 0, fail = 0;
@@ -656,6 +657,120 @@ async function cena(cfg, corridas, quantosRepiques) {
     novas: [{ corrida: 'Nao Existe', hora: '1:11', camada: 'TOP' }]
   });
   t('corrida fora do results nao estoura nem troca a tela', p5.render.length === 0);
+
+  // ── [10] A ODD DOS AvBs ACOMPANHA O MERCADO ──────────────────────────────
+  // Bruno, 12/09: "a odd das oportunidades entra a primeira e nao atualiza
+  // conforme sobe ou cai".
+  //
+  // Eram dois travamentos em serie: a FONTE congelava no servidor, e a TELA so
+  // repintava de 75 em 75 segundos.
+  bloco('[10] A ODD NAO CONGELA MAIS NA PRIMEIRA CAPTURA');
+
+  const SRC_ROBOT2 = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'robot.js'), 'utf8');
+  // Ancorado no inicio da linha: o comentario que substituiu a guarda CITA o
+  // codigo antigo pra explicar o que mudou, e sem a ancora o teste encontrava a
+  // propria explicacao e dava a guarda como viva.
+  t('a guarda que descartava captura com o mesmo numero de pares saiu',
+    !/^\s*if \(existe && existe\.n_pares >= info\.pares\.length\) return;/m.test(SRC_ROBOT2));
+  t('e no lugar dela ha uma fusao', /const fundido = info\.pares\.slice\(\);/.test(SRC_ROBOT2));
+
+  // Roda a funcao de verdade, com o banco de mentira.
+  const mGravar = SRC_ROBOT2.match(/function _gravarParesAbertos\(info\)\{[\s\S]*?\n\}/);
+  t('_gravarParesAbertos foi encontrada', !!mGravar);
+
+  function bancoFalso() {
+    const linhas = {};
+    return {
+      linhas: linhas,
+      prepare: function (sql) {
+        return {
+          get: function (id) { return linhas[id] ? { pares_json: linhas[id].pares_json, n_pares: linhas[id].n } : undefined; },
+          run: function () {
+            const args = Array.prototype.slice.call(arguments);
+            // ordem do INSERT: gameId,data,corrida,hora,track,pares_json,n_pares
+            linhas[args[0]] = { pares_json: args[5], n: args[6] };
+          }
+        };
+      }
+    };
+  }
+
+  function grava(db, pares) {
+    const ctx = {
+      console: { log: function () {}, error: function () {} },
+      require: function (m) {
+        if (String(m).indexOf('database') >= 0) return { db: db };
+        throw new Error('sem modulo');   // o resto do corpo vive em try/catch
+      },
+      getTodayDate: function () { return '2026-09-12'; },
+      JSON: JSON, Array: Array, Number: Number, Math: Math, Set: Set, Map: Map, Object: Object, String: String
+    };
+    vm.createContext(ctx);
+    vm.runInContext(mGravar[0] + '\n_gravarParesAbertos({gameId:"g1",corrida:"Towc A6",hora:"3:13",track:"Towc",pares:'
+      + JSON.stringify(pares) + '});', ctx);
+    return db.linhas['g1'] ? JSON.parse(db.linhas['g1'].pares_json) : null;
+  }
+  const oddDe = (lista, a, b) => {
+    const p = lista.find(function (x) { return (x.aTrap === a && x.bTrap === b) || (x.aTrap === b && x.bTrap === a); });
+    return p ? p.oddAvenceB : null;
+  };
+
+  const db1 = bancoFalso();
+  grava(db1, [{ aTrap: 1, bTrap: 2, oddAvenceB: 2.00 }, { aTrap: 3, bTrap: 4, oddAvenceB: 3.00 }]);
+  const dep2 = grava(db1, [{ aTrap: 1, bTrap: 2, oddAvenceB: 1.90 }, { aTrap: 3, bTrap: 4, oddAvenceB: 3.10 }]);
+  t('MESMO numero de pares: a odd nova entra (antes era descartada)',
+    oddDe(dep2, 1, 2) === 1.90 && oddDe(dep2, 3, 4) === 3.10);
+
+  const dep3 = grava(db1, [{ aTrap: 1, bTrap: 2, oddAvenceB: 1.75 }]);
+  t('captura MENOR atualiza a odd do par que veio', oddDe(dep3, 1, 2) === 1.75);
+  t('e nao perde o par que sumiu do feed — era pra isso que a guarda existia',
+    oddDe(dep3, 3, 4) === 3.10 && dep3.length === 2);
+
+  const dep4 = grava(db1, [{ aTrap: 2, bTrap: 1, oddAvenceB: 1.60 }]);
+  t('o mesmo par invertido nao vira par duplicado', dep4.length === 2);
+
+  const db2 = bancoFalso();
+  const dep5 = grava(db2, [{ aTrap: 5, bTrap: 6, oddAvenceB: 4.00 }]);
+  t('primeira captura de uma corrida grava normal', dep5.length === 1 && oddDe(dep5, 5, 6) === 4.00);
+
+  // ── a tela ───────────────────────────────────────────────────────────────
+  t('o card nasce com a odd mais fresca que houver, nao com a do painel',
+    /var o=_parOddAtual\(r,a\.pick_trap,a\.outro_trap\); return o!=null\?o:a\.odd_bw;/.test(SRC_APP2()));
+  t('a odd do card carrega o par no data-par, pra ser achada sem redesenhar',
+    /class="fp-card-odd" data-par="/.test(SRC_APP2()));
+  t('e o ciclo de 5s atualiza as odds', /_atualizarOddsDosCards\(r\)/.test(SRC_APP2()));
+
+  const mAtualiza = SRC_APP2().match(/function _atualizarOddsDosCards\(r\)\{[\s\S]*?\n\}/);
+  t('_atualizarOddsDosCards existe', !!mAtualiza);
+
+  function telaFalsa(odds) {
+    const strong = { textContent: '1.50' };
+    const btn = { attrs: {}, setAttribute: function (k, v) { this.attrs[k] = v; } };
+    const card = { querySelector: function () { return btn; } };
+    const cx = {
+      style: {}, _attr: { 'data-par': '1x2' },
+      getAttribute: function (k) { return this._attr[k]; },
+      querySelector: function () { return strong; },
+      closest: function () { return card; }
+    };
+    const ctx = {
+      document: { getElementById: function (id) {
+        return id === 'fp-grid' ? { querySelectorAll: function () { return [cx]; } } : null;
+      } },
+      _parOddAtual: function (r, a, b) { return odds; },
+      console: console
+    };
+    vm.createContext(ctx);
+    vm.runInContext(mAtualiza[0] + '\n_atualizarOddsDosCards({});', ctx);
+    return { texto: strong.textContent, escondido: cx.style.display, botao: btn.attrs['data-odd'] };
+  }
+
+  const t1 = telaFalsa(1.83);
+  t('a odd do card e trocada sem redesenhar o card', t1.texto === 1.83 || String(t1.texto) === '1.83');
+  t('e o data-odd do botao Entrar acompanha — senao a aposta gravaria a odd velha',
+    String(t1.botao) === '1.83');
+  const t2 = telaFalsa(null);
+  t('sem odd conhecida, o campo some em vez de mostrar valor velho', t2.escondido === 'none');
 
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);

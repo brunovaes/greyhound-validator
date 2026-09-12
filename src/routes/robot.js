@@ -518,8 +518,40 @@ function _gravarParesAbertos(info){
   try{
     if(!info || !info.gameId || !Array.isArray(info.pares) || !info.pares.length) return;
     const { db } = require('../db/database');
-    const existe = db.prepare('SELECT n_pares FROM avb_abertos WHERE game_id=?').get(info.gameId);
-    if (existe && existe.n_pares >= info.pares.length) return; // ja temos igual/mais pares
+    // ── A ODD CONGELAVA AQUI (Bruno, 12/09/2026) ─────────────────────────────
+    //
+    // A guarda era:
+    //   if (existe && existe.n_pares >= info.pares.length) return;
+    // "ja temos igual ou mais pares, nao precisa gravar". Fazia sentido quando
+    // esta tabela existia so pra CALIBRAR o limiar do avb_parelho: o que
+    // interessava era o conjunto mais completo de pares, e a odd era detalhe.
+    //
+    // So que ela virou a FONTE DE PRODUCAO da odd dos AvBs: o painel-dia le o
+    // pares_json daqui e e' dele que sai o odd_bw dos cards TOP/HIGH/GOOD. Com a
+    // guarda, a primeira captura de um par ficava valendo pra sempre — a odd
+    // entrava e nunca mais mexia, enquanto o mercado subia e descia.
+    //
+    // Agora FUNDE em vez de descartar: os pares da captura nova trazem a odd
+    // fresca, e os que sumiram do feed continuam guardados com o ultimo valor
+    // conhecido. Assim a odd atualiza a cada ciclo (5s) sem perder o conjunto
+    // completo, que era o motivo da guarda existir.
+    const atual = db.prepare('SELECT pares_json FROM avb_abertos WHERE game_id=?').get(info.gameId);
+    let pares = info.pares;
+    if (atual) {
+      let antigos = [];
+      try { antigos = JSON.parse(atual.pares_json) || []; } catch (e) {}
+      if (Array.isArray(antigos) && antigos.length) {
+        // Chave sem direcao: a BW as vezes devolve o mesmo par invertido, e
+        // duas entradas do mesmo confronto viram par duplicado na tela.
+        const chave = (p) => Math.min(Number(p.aTrap), Number(p.bTrap)) + 'x' + Math.max(Number(p.aTrap), Number(p.bTrap));
+        const novos = new Map();
+        for (const p of info.pares) novos.set(chave(p), p);
+        const fundido = info.pares.slice();
+        for (const velho of antigos) if (!novos.has(chave(velho))) fundido.push(velho);
+        pares = fundido;
+      }
+    }
+    info = Object.assign({}, info, { pares });
     db.prepare(
       'INSERT INTO avb_abertos (game_id,data,corrida,hora,track,pares_json,n_pares,capturado_em) '
       + 'VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP) '
