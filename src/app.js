@@ -523,6 +523,10 @@ function _sessaoTemRegua(lista) {
 // passar esta funcao direto pra um .filter() faz o segundo argumento virar o
 // INDICE do item, e a protecao dispararia sozinha na primeira posicao.
 function passaNoFiltroTier(r, sessaoClassificada) {
+  // MARCADA A MAO PASSA SEMPRE (Bruno, 12/09/2026). Voce clicou na bandeira:
+  // nenhum filtro automatico tem autoridade pra desfazer isso. Sem esta linha a
+  // corrida atrasada sumia da tela quando a regua a reprovava no meio do dia.
+  if (r.flagAtrasada) return true;
   // AvB CONFIRMADO PELA BW PASSA SEMPRE (Bruno, 11/09/2026). Este filtro mede a
   // regua da MANHA, e corrida que a BW abriu sem o motor ter previsto tem tier
   // null — exatamente o caso do "livre acesso" de 09/09. Sem esta linha, a
@@ -824,6 +828,22 @@ window.aplicarAguardandoNaLista = function (itens) {
   try { refreshFocusMode(); } catch (e) {}
 };
 
+// QUEM ABRE A TELA (Bruno, 12/09/2026).
+//
+// A corrida marcada como atrasada fica FIXA em primeiro na lista — mas primeiro
+// na lista nao pode significar "e essa que voce esta olhando agora". Ela e uma
+// corrida velha, parada esperando resultado; abrir a disputa dela, ou pendurar
+// nela o selo PROXIMA, seria trocar o que importa pelo que ficou pendente.
+//
+// Entao a lista e a FILA sao coisas diferentes: a marcada lidera a lista, e
+// quem lidera a fila e a primeira NAO marcada. So quando nao sobra mais nada
+// e que a marcada assume tambem esse papel — melhor ela que tela vazia.
+function _primeiraPraFoco(lista) {
+  if (!Array.isArray(lista) || !lista.length) return null;
+  for (var i = 0; i < lista.length; i++) if (!lista[i].flagAtrasada) return lista[i];
+  return lista[0];
+}
+
 function _forcaCamada(x) {
   try {
     if (window.PainelDia && window.PainelDia.forcaDe) return window.PainelDia.forcaDe(x);
@@ -901,7 +921,7 @@ function showAllExpiredMsg() {
 // Nao escancara a lista: entra SO enquanto houver AvB esperando. Sem AvB, a
 // corrida pulada continua fora, como sempre esteve.
 function refreshFocusMode() {
-  var avbs = results.filter(function(r){return (r.nivel!=='skip'&&r.trapFav>0)||!!_avbDaCorrida(r);});
+  var avbs = results.filter(function(r){return (r.nivel!=='skip'&&r.trapFav>0)||!!_avbDaCorrida(r)||!!r.flagAtrasada;});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
 
   // Ciclo encerrado quando nao sobra nenhuma corrida futura na sessao.
@@ -929,32 +949,56 @@ function refreshFocusMode() {
   // contrario, uma corrida promovida que estivesse em decimo lugar na ordem do
   // relogio era cortada antes de chegar aqui — o alarme tocava e a lista nao
   // mostrava nada.
-  var _comAvb = [], _resto = [];
-  _passou.forEach(function(x){ (_avbDaCorrida(x) ? _comAvb : _resto).push(x); });
+  //
+  // ── A CORRIDA MARCADA COMO ATRASADA (Bruno, 12/09/2026) ───────────────────
+  // Ela fica FIXA em primeiro, e FORA da conta do RACAS_EM_TELA.
+  //
+  // Antes ela disputava as N vagas com as outras. Era o pior dos dois mundos:
+  // voce marcava a bandeira justamente pra nao perder a corrida de vista, e ela
+  // ou descia na fila, ou ficava ocupando uma vaga e travando a entrada das
+  // proximas. Duas ou tres marcadas e a lista inteira parava de andar.
+  //
+  // Ficando de fora do teto, marcar uma corrida nunca custa uma vaga: a lista
+  // continua mostrando as N de sempre, com as marcadas acima delas.
+  var _atrasadas = [], _comAvb = [], _resto = [];
+  _passou.forEach(function(x){
+    if (x.flagAtrasada) _atrasadas.push(x);
+    else if (_avbDaCorrida(x)) _comAvb.push(x);
+    else _resto.push(x);
+  });
+  // Entre varias marcadas, a mais antiga primeiro: e a que voce esta esperando
+  // ha mais tempo.
+  _atrasadas.sort(function(x, y){ return ukHoraParaOrdem(x.hora) - ukHoraParaOrdem(y.hora); });
   _comAvb.sort(function(x, y){
     var f = _forcaCamada(_avbDaCorrida(x)) - _forcaCamada(_avbDaCorrida(y));
     if (f !== 0) return f;
     return ukHoraParaOrdem(x.hora) - ukHoraParaOrdem(y.hora);
   });
-  var toShow = _comAvb.concat(_resto).slice(0, RACAS_EM_TELA);
+  // O slice pega SO o que nao foi marcado. Marcadas entram por fora.
+  var toShow = _atrasadas.concat(_comAvb.concat(_resto).slice(0, RACAS_EM_TELA));
 
   renderRaceListPanel(toShow);
 
   // Simulado: se nada esta em foco (dia encerrado, por exemplo), foca a
   // primeira corrida pra haver painel onde desenhar os AvBs de teste.
   if ((typeof _SIM_AVB !== 'undefined' && _SIM_AVB) && focusRaceIdx < 0 && toShow.length) {
-    renderFocusPanel(toShow[0], results.indexOf(toShow[0]));
+    var _sim = _primeiraPraFoco(toShow);
+    if (_sim) renderFocusPanel(_sim, results.indexOf(_sim));
   }
 
   // Se a corrida em foco já passou, avança para a próxima automaticamente
   // (corridas antigas nunca "avançam" sozinhas — ficam fixas pra consulta)
   if (focusRaceIdx >= 0 && results[focusRaceIdx] && !shouldShowRace(results[focusRaceIdx])) {
-    var next = toShow[0];
+    var next = _primeiraPraFoco(toShow);
     if (next) {
-      renderFocusPanel(next, results.indexOf(next));
+      var _idxNext = results.indexOf(next);
+      renderFocusPanel(next, _idxNext);
       document.querySelectorAll('.rc').forEach(function(el){el.classList.remove('rc-active');});
-      var firstCard = document.querySelector('.rc');
-      if (firstCard) firstCard.classList.add('rc-active');
+      // Pelo data-idx, e nao pelo primeiro .rc do DOM: com a corrida marcada
+      // como atrasada fixa no topo, o primeiro cartao da tela deixou de ser o
+      // que acabou de abrir, e o destaque ia parar na linha errada.
+      var cardNext = document.querySelector('.rc[data-idx="' + _idxNext + '"]');
+      if (cardNext) cardNext.classList.add('rc-active');
     } else {
       avbs.length>0 ? showAllExpiredMsg() : showDayEndMsg();
     }
@@ -989,7 +1033,7 @@ function enterFocusMode() {
   // Mesma regra do refreshFocusMode: as duas montam a MESMA lista, e deixar uma
   // so corrigida faria a tela mudar de conteudo dependendo de como voce entrou
   // nela.
-  var avbs = results.filter(function(r){return (r.nivel!=='skip'&&r.trapFav>0)||!!_avbDaCorrida(r);});
+  var avbs = results.filter(function(r){return (r.nivel!=='skip'&&r.trapFav>0)||!!_avbDaCorrida(r)||!!r.flagAtrasada;});
   avbs.sort(function(a,b){return ukHoraParaOrdem(a.hora)-ukHoraParaOrdem(b.hora);});
   if (!avbs.length) return;
 
@@ -1009,7 +1053,7 @@ function enterFocusMode() {
   var toShow = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); }).slice(0, RACAS_EM_TELA);
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
-  var next = toShow[0];
+  var next = _primeiraPraFoco(toShow);
   if (next) renderFocusPanel(next, results.indexOf(next));
 
   // Auto-refresh a cada minuto
@@ -2654,9 +2698,14 @@ function renderRaceListPanel(avbs) {
     + '<span></span>'
     + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
-  var first = true;
+  // `first` marca a PROXIMA da fila (selo verde + destaque), e nao a primeira
+  // linha desenhada. Com a corrida marcada como atrasada fixa no topo, os dois
+  // deixaram de ser a mesma coisa: ela aparece primeiro, mas a proxima e a
+  // seguinte. Sem esta distincao o selo PROXIMA ia parar numa corrida velha.
+  var _proxima = _primeiraPraFoco(avbs);
   var tc = ['','t1','t2','t3','t4','t5','t6'];
   avbs.forEach(function(r, i) {
+    var first = (r === _proxima);
     var hbr = r.hora_br || convertHora(r.hora||'');
     var rIdx = results.indexOf(r);
     var div = document.createElement('div');
@@ -2727,7 +2776,6 @@ function renderRaceListPanel(avbs) {
       renderFocusPanel(r, rIdx);
     });
     col.appendChild(div);
-    first = false;
   });
 
   // Filtro ligado e nada na tela: avisa em vez de deixar a lista muda. Isso

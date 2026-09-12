@@ -236,7 +236,7 @@ async function cena(cfg, corridas, quantosRepiques) {
   // atualizarProximas) que continuam com a regra antiga porque nao montam a
   // TELA. Sem a ancora, o teste media a linha errada — foi o que aconteceu na
   // primeira tentativa.
-  const RE_LISTA = /var avbs = results\.filter\((function\(r\)\{return \(r\.nivel!=='skip'&&r\.trapFav>0\)\|\|!!_avbDaCorrida\(r\);\})\);/;
+  const RE_LISTA = /var avbs = results\.filter\((function\(r\)\{return \(r\.nivel!=='skip'&&r\.trapFav>0\)\|\|!!_avbDaCorrida\(r\)\|\|!!r\.flagAtrasada;\})\);/;
   const mFiltro = SRC_APP.match(RE_LISTA);
   t('o filtro da lista foi encontrado no app.js', !!mFiltro);
   const nMontagens = (SRC_APP.match(new RegExp(RE_LISTA.source, 'g')) || []).length;
@@ -260,6 +260,9 @@ async function cena(cfg, corridas, quantosRepiques) {
     semAvbNenhum(RSKIP_SEM) === false && comAvbNaSkip(RSKIP_SEM) === false);
   t('corrida sem pick do motor (trapFav 0) tambem entra quando tem AvB',
     comAvbNaSkip({ nome: 'skip-com-avb', nivel: 'alta', trapFav: 0 }) === true);
+  // Bruno, 12/09: a bandeira e a sua decisao — nenhum filtro automatico a desfaz.
+  t('corrida MARCADA como atrasada entra mesmo sem pick e sem AvB',
+    semAvbNenhum({ nome: 'marcada', nivel: 'skip', trapFav: 0, flagAtrasada: 1 }) === true);
 
   // O segundo portao: o filtro de regua da manha descartava tier null.
   const fnTier = (function () {
@@ -285,6 +288,8 @@ async function cena(cfg, corridas, quantosRepiques) {
     tierSem({ nome: 'x', tier: 'TOP' }, true) === true);
   t('sessao nao classificada -> passa tudo, como antes',
     tierSem({ nome: 'x', tier: null }, false) === true);
+  t('e a marcada a mao passa na regua mesmo sem tier e sem AvB',
+    tierSem({ nome: 'x', tier: null, flagAtrasada: 1 }, true) === true);
 
   t('o shouldShowRace ja tinha a excecao — o corte era mais acima',
     /if \(_avbDaCorrida\(r\)\) return true;/.test(SRC_APP));
@@ -457,6 +462,121 @@ async function cena(cfg, corridas, quantosRepiques) {
     /data-g="gov"[\s\S]{0,1600}?href="\$\{BASE\}\/cascata"/.test(SRC_ROBOT));
   t('dentro dela, o item aceso passa a ser o Painel Admin',
     !/navBar\(user, 'cascata'\)/.test(SRC_MAIN));
+
+  // ── [8] A BANDEIRA DE ATRASADA, NA LISTA DA ANALISAR ─────────────────────
+  // Bruno, 12/09: "pode deixar ela em primeiro da fila fixo, porem sem impedir
+  // de entrar corridas novas". Antes ela disputava as N vagas com as outras:
+  // ou descia na fila, ou ocupava vaga e travava a entrada das proximas.
+  // Agora fica em primeiro e FORA da conta do RACAS_EM_TELA.
+  bloco('[8] MARCADA COMO ATRASADA: PRIMEIRA E SEM CUSTAR VAGA');
+
+  const mOrdem = SRC_APP.match(/var _atrasadas = \[\], _comAvb = \[\], _resto = \[\];[\s\S]*?var toShow = [^;]+;/);
+  t('o bloco de ordenacao foi encontrado', !!mOrdem);
+
+  function ordena(passou, teto) {
+    const ctx = {
+      _passou: passou,
+      RACAS_EM_TELA: teto,
+      _avbDaCorrida: function (x) { return x.avb || null; },
+      _forcaCamada: function (c) { return ['TOP', 'HIGH', 'GOOD'].indexOf((c && c.camada) || '') ; },
+      ukHoraParaOrdem: function (h) { return parseInt(String(h).replace(':', ''), 10) || 0; }
+    };
+    vm.createContext(ctx);
+    vm.runInContext(mOrdem[0] + '\nthis.out = toShow;', ctx);
+    return ctx.out.map(function (x) { return x.nome; });
+  }
+
+  const R = (nome, hora, extra) => Object.assign({ nome: nome, hora: hora }, extra || {});
+
+  // Uma marcada, cinco normais, teto de 3.
+  const cena1 = [
+    R('normal-1', '1:00'), R('normal-2', '2:00'), R('normal-3', '3:00'),
+    R('normal-4', '4:00'), R('normal-5', '5:00'),
+    R('MARCADA', '9:00', { flagAtrasada: 1 })
+  ];
+  const o1 = ordena(cena1, 3);
+  t('a marcada vai em PRIMEIRO, mesmo sendo a mais tarde do dia', o1[0] === 'MARCADA');
+  t('e nao custa vaga: 3 normais continuam entrando (4 na tela)', o1.length === 4);
+  t('as normais entram na ordem de sempre',
+    o1[1] === 'normal-1' && o1[2] === 'normal-2' && o1[3] === 'normal-3');
+
+  // A marcada nao pode perder o primeiro lugar nem pra um TOP.
+  const cena2 = [
+    R('com-top', '1:00', { avb: { camada: 'TOP' } }),
+    R('MARCADA', '8:00', { flagAtrasada: 1 }),
+    R('normal', '2:00')
+  ];
+  const o2 = ordena(cena2, 4);
+  t('a marcada fica na frente ate de um AvB TOP — a bandeira e a sua decisao',
+    o2[0] === 'MARCADA' && o2[1] === 'com-top');
+
+  // Varias marcadas: a mais antiga primeiro.
+  const cena3 = [
+    R('MARCADA-tarde', '7:00', { flagAtrasada: 1 }),
+    R('MARCADA-cedo', '2:00', { flagAtrasada: 1 }),
+    R('normal', '3:00')
+  ];
+  const o3 = ordena(cena3, 2);
+  t('entre varias marcadas, a mais antiga primeiro',
+    o3[0] === 'MARCADA-cedo' && o3[1] === 'MARCADA-tarde');
+  t('e as normais continuam entrando por baixo', o3[2] === 'normal');
+
+  // Marcada que TAMBEM tem AvB entra uma vez so, no balde das marcadas.
+  const cena4 = [
+    R('MARCADA-com-avb', '5:00', { flagAtrasada: 1, avb: { camada: 'GOOD' } }),
+    R('normal', '1:00')
+  ];
+  const o4 = ordena(cena4, 3);
+  t('marcada que tambem tem AvB aparece UMA vez, no topo',
+    o4.length === 2 && o4[0] === 'MARCADA-com-avb');
+
+  // Sem nenhuma marcada, nada muda em relacao ao comportamento anterior.
+  const cena5 = [
+    R('a', '1:00'), R('b', '2:00'), R('c', '3:00'), R('d', '4:00'),
+    R('top', '9:00', { avb: { camada: 'TOP' } })
+  ];
+  const o5 = ordena(cena5, 3);
+  t('sem marcada, o teto continua valendo como antes', o5.length === 3);
+  t('e o AvB continua indo pra frente da fila', o5[0] === 'top');
+
+  // ── A LISTA E A FILA SAO COISAS DIFERENTES ───────────────────────────────
+  // Bruno, 12/09: "essa corrida atrasada nao tem que impedir que outra pisque
+  // prioridade e nao impeca de aparecer na tela de disputa".
+  // A marcada lidera a LISTA; quem lidera a FILA (foco, selo PROXIMA,
+  // destaque) e a primeira NAO marcada.
+  const mFoco = SRC_APP.match(/function _primeiraPraFoco\(lista\) \{[\s\S]*?\n\}/);
+  t('_primeiraPraFoco existe', !!mFoco);
+  const ctxFoco = {};
+  vm.createContext(ctxFoco);
+  vm.runInContext(mFoco[0] + '\nthis.f = _primeiraPraFoco;', ctxFoco);
+  const praFoco = ctxFoco.f;
+
+  const listaCom = [
+    { nome: 'MARCADA', flagAtrasada: 1 },
+    { nome: 'proxima-de-verdade' },
+    { nome: 'outra' }
+  ];
+  t('a marcada NAO abre a tela de disputa — quem abre e a proxima real',
+    praFoco(listaCom).nome === 'proxima-de-verdade');
+  t('varias marcadas seguidas nao travam a fila',
+    praFoco([{ nome: 'm1', flagAtrasada: 1 }, { nome: 'm2', flagAtrasada: 1 }, { nome: 'vale' }]).nome === 'vale');
+  t('se SO houver marcadas, a marcada assume — melhor ela que tela vazia',
+    praFoco([{ nome: 'so-marcada', flagAtrasada: 1 }]).nome === 'so-marcada');
+  t('lista vazia nao estoura', praFoco([]) === null && praFoco(null) === null);
+
+  t('o avanco automatico usa a fila, nao a primeira linha',
+    /var next = _primeiraPraFoco\(toShow\);/.test(SRC_APP));
+  t('entrar no modo foco tambem', (SRC_APP.match(/_primeiraPraFoco\(toShow\)/g) || []).length >= 2);
+  t('o selo PROXIMA e o destaque seguem a fila, nao a posicao na tela',
+    /var _proxima = _primeiraPraFoco\(avbs\);/.test(SRC_APP) && /var first = \(r === _proxima\);/.test(SRC_APP));
+  t('e o rc-active vai pelo data-idx da corrida aberta, nao pelo primeiro \.rc do DOM',
+    /\.rc\[data-idx="' \+ _idxNext \+ '"\]/.test(SRC_APP));
+  t('nao sobrou nenhum toShow[0] escolhendo o foco', !/var next = toShow\[0\];/.test(SRC_APP));
+
+  // O pisca e por linha, nunca por posicao — uma marcada no topo nao rouba o
+  // destaque de camada de quem tem AvB.
+  t('o pisca de camada continua saindo do AvB da propria linha',
+    /var avb = _avbDaCorrida\(r\);/.test(SRC_APP) && /\(avb \? ' rc-camada'/.test(SRC_APP));
 
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);

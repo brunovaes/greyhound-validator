@@ -155,8 +155,12 @@ console.log('\n[3] A LINHA DA CORRIDA COM AvB ESPERANDO\n');
 // o relogio da maquina, e um teste que depende da hora em que roda passa de
 // manha e falha a tarde. Aqui elas entram como stub, pelo ctx, e cada cenario
 // diz quantos minutos faltam.
+// _primeiraPraFoco entrou em 12/09/2026: o renderRaceListPanel passou a usa-la
+// pra saber qual linha leva o selo PROXIMA. Sem ela na lista, o extrator monta
+// a funcao pela metade e o teste quebra com ReferenceError em vez de acusar o
+// que mudou.
 const AUX = ['_horaChave', '_chaveCorridaRc', '_corDaCamada', '_forcaCamada',
-             '_avbExpirou', '_avbDaCorrida'];
+             '_avbExpirou', '_avbDaCorrida', '_primeiraPraFoco'];
 
 // DOM de mentira com o suficiente pro renderRaceListPanel: ele cria <div>,
 // escreve innerHTML, poe atributo e empilha no container.
