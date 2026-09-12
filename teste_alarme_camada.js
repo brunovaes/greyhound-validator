@@ -468,16 +468,24 @@ ok(MAIN.indexOf('id="ap-painel"') !== -1, 'e o container #ap-painel esta na mesm
 // disputas, e a tela dele cabe nessa faixa.
 console.log('\n[7] GAUGES COM DUAS DISPUTAS: ENCOLHEM, NAO SOMEM\n');
 
-ok(!/@media\(max-height:800px\)\{\s*\.fp-grid\.g2 \.fp-gauges-row\{display:none\}/.test(MAIN),
-   'a regra que escondia os gauges a 800px de altura saiu');
-ok(/@media\(max-height:620px\)\{[\s\S]{0,120}?\.fp-grid\.g2 \.fp-gauges-row\{display:none\}/.test(MAIN),
-   'o corte desceu pra 620px — abaixo disso nao cabe mesmo, e vazaria por cima do nome');
-ok(/\.fp-grid\.g2 \.fp-gauge svg\{width:46px;height:46px\}/.test(MAIN),
-   'com 2 disputas o anel cai de 64px pra 46px');
-ok(/\.fp-grid\.g2 \.fp-gauge-lbl\{font-size:7px/.test(MAIN),
-   'e o rotulo encolhe junto (senao a legenda fica maior que o anel)');
-ok(/@media\(max-height:800px\)\{[\s\S]{0,260}?\.fp-grid\.g2 \.fp-gauge svg\{width:38px;height:38px\}/.test(MAIN),
-   'em janela baixa encolhe mais um degrau, pra 38px, em vez de sumir');
+// A REGRA E POR NUMERO DE DISPUTAS, NAO POR ALTURA DE JANELA (Bruno, 12/09).
+// Duas tentativas antes disso puseram um limiar de altura escolhido no chute —
+// 800px numa, 620px na outra — e as duas esconderam os gauges na tela dele.
+// Agora nao ha limiar nenhum pra calibrar errado: o tamanho e continuo.
+ok(!/\.fp-grid\.g2 \.fp-gauges-row\{display:none\}/.test(MAIN),
+   'NENHUMA regra esconde os gauges com 2 disputas — nem em janela baixa');
+ok(!/@media\(max-height:\d+px\)\{[\s\S]{0,400}?\.fp-grid\.g2 \.fp-gauge svg/.test(MAIN),
+   'e o tamanho do anel nao depende de media query nenhuma');
+ok(/\.fp-grid\.g2 \.fp-gauges-row\{display:flex/.test(MAIN),
+   'com 2 disputas a fileira e explicitamente visivel');
+ok(/\.fp-grid\.g2 \.fp-gauge svg\{width:clamp\(26px,5vh,42px\)/.test(MAIN),
+   'o anel acompanha a altura da janela por clamp, com piso de 26px — nunca some');
+ok(/\.fp-grid\.g2 \.fp-gauge-lbl\{font-size:clamp\(/.test(MAIN),
+   'e o rotulo acompanha junto');
+ok(/\.fp-grid\.g2\{--dogh:min\(180px,20vh\)\}/.test(MAIN),
+   'quem cede altura pro gauge caber e a IMAGEM do galgo, tambem sem degrau');
+ok(/\.fp-grid\.g2 \.fp-gauges-row\{[^}]*align-items:flex-start/.test(MAIN),
+   'os itens nao esticam pra altura da linha (senao a fileira incha e empurra os botoes)');
 
 // O que NAO pode ter mudado junto.
 ok(/\.fp-grid\.g3 \.fp-gauges-row,\s*\.fp-grid\.g4 \.fp-gauges-row\{display:none\}/.test(MAIN),

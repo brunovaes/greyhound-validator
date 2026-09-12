@@ -819,7 +819,9 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .fp-grid.g3,.fp-grid.g4{--dogh:130px;--dogn:11px}
 @media(max-height:800px){
   .fp-grid.g1{--dogh:180px}
-  .fp-grid.g2{--dogh:140px}
+  /* O --dogh do g2 mora junto com as regras dos gauges, mais abaixo: em duas
+     disputas o tamanho do galgo e consequencia do espaco que o gauge precisa,
+     e separar as duas decisoes foi como elas se contradisseram antes. */
   .fp-grid.g3,.fp-grid.g4{--dogh:110px}
 }
 
@@ -834,31 +836,43 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .fp-grid.g3 .fp-gauges-row,
 .fp-grid.g4 .fp-gauges-row{display:none}
 
-/* ── COM DUAS DISPUTAS OS GAUGES FICAM, ENCOLHIDOS (Bruno, 11/09/2026) ──────
-   Ate aqui, janela com menos de 800px de altura escondia os gauges ja a partir
-   de duas disputas — e a tela do Bruno cabe nessa faixa, entao na pratica com
-   dois AvBs eles nunca apareciam.
-   O HTML sempre esteve la, nos dois cards: quem sumia era o CSS.
-   Encolher resolve porque o anel e' um SVG com viewBox — ele reduz sem perder
-   nitidez nem reposicionar o texto de dentro. So a moldura muda de tamanho.
-   Tres e quatro disputas continuam sem gauges: ai nao e' questao de tamanho,
-   e' que nao sobra altura nenhuma depois do galgo e da odd. */
-.fp-grid.g2 .fp-gauges-row{padding:4px 8px 6px;gap:2px}
-.fp-grid.g2 .fp-gauges-grp{gap:4px}
-.fp-grid.g2 .fp-gauges-div{margin:0 4px}
-.fp-grid.g2 .fp-gauge svg{width:46px;height:46px}
-.fp-grid.g2 .fp-gauge-lbl{font-size:7px;letter-spacing:.2px}
-@media(max-height:800px){
-  .fp-grid.g2 .fp-gauges-row{padding:2px 6px 4px}
-  .fp-grid.g2 .fp-gauges-grp{gap:3px}
-  .fp-grid.g2 .fp-gauge svg{width:38px;height:38px}
-  .fp-grid.g2 .fp-gauge-lbl{font-size:6px}
-}
-/* Janela bem baixa: ai sim nao cabe, e vale a regra antiga — melhor sumir do
-   que vazar por cima do nome do galgo. */
-@media(max-height:620px){
-  .fp-grid.g2 .fp-gauges-row{display:none}
-}
+/* ── COM DUAS DISPUTAS OS GAUGES FICAM. SEMPRE. (Bruno, 12/09/2026) ─────────
+   A regra e por NUMERO DE DISPUTAS, nao por altura de janela: com 2 tem gauge,
+   com 3 ou 4 nao tem. Ponto.
+
+   Em 11/09 eu tentei encolher e ainda deixei um corte por altura (sumia abaixo
+   de 620px) que eu mesmo inventei — e a tela dele fica abaixo disso, entao na
+   pratica nao mudou nada. Dois erros no mesmo lugar: manter uma condicao que o
+   Bruno nao pediu, e chutar o valor dela sem medir a tela de ninguem.
+
+   Como cabe agora: QUEM CEDE ALTURA E A IMAGEM DO GALGO, nao o gauge. O --dogh
+   abaixo e teto, nao altura fixa — baixando ele em janela curta, a arena encolhe
+   e o gauge entra inteiro, em vez de vazar por cima do nome. E a troca certa:
+   a imagem e ilustracao, o gauge e dado.
+
+   Encolher o anel funciona porque e um SVG com viewBox: reduz sem distorcer o
+   numero de dentro. So a moldura muda.
+
+   O unico lugar que continua sem gauge com 2 disputas e o celular, pela regra
+   de mobile la embaixo — ali a coluna e estreita demais pra cinco aneis. */
+.fp-grid.g2 .fp-gauges-row{display:flex;padding:2px 6px 4px;gap:2px;align-items:flex-start}
+.fp-grid.g2 .fp-gauges-grp{gap:3px}
+.fp-grid.g2 .fp-gauges-div{margin:0 3px}
+/* SEM DEGRAU DE MEDIA QUERY, de proposito. Nas duas tentativas anteriores eu
+   escolhi um limiar de altura no chute e errei as duas vezes — uma escondendo
+   os gauges abaixo de 800px, outra abaixo de 620px. O clamp resolve sozinho:
+   o anel acompanha a altura da janela, do menor ao maior, sem nenhum ponto de
+   corte pra eu calibrar errado. E nunca chega a zero, entao nao some.
+   O align-items:flex-start acima impede que os itens estiquem pra altura da
+   linha — sem isso a fileira inchava e empurrava os botoes.
+   (Sem crase neste comentario: ele vive dentro do template literal do res.send,
+   e crase aqui fecha a string e derruba a rota inteira. Ja aconteceu.) */
+.fp-grid.g2 .fp-gauge svg{width:clamp(26px,5vh,42px);height:clamp(26px,5vh,42px)}
+.fp-grid.g2 .fp-gauge-lbl{font-size:clamp(5px,.85vh,8px);letter-spacing:.2px;line-height:1.2}
+/* A imagem do galgo cede a altura pro gauge caber. E' a troca certa: a imagem
+   e ilustracao, o gauge e dado. Continua sendo TETO — o card encolhe mais se
+   precisar. */
+.fp-grid.g2{--dogh:min(180px,20vh)}
 
 /* Rede de seguranca: nada dentro do card pode transbordar, mesmo que a conta
    acima erre em alguma resolucao. */
