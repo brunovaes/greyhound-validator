@@ -859,7 +859,47 @@ function _forcaCamada(x) {
 window.pintarPromocaoNaLista = function (novas) {
   if (!Array.isArray(novas) || !novas.length) return;
   try { refreshFocusMode(); } catch (e) {}
+  try { _abrirDisputaDaPromocao(novas); } catch (e) {}
 };
+
+// ── O ALARME LEVA A TELA JUNTO (Bruno, 12/09/2026) ──────────────────────────
+//
+// Ate aqui o alarme tocava e a tela de disputa continuava no AvB da manha: pra
+// ver o que acabou de abrir voce tinha que achar a corrida na lista e clicar.
+// Nos segundos que decidem uma entrada, isso e tempo demais.
+//
+// A regra antiga era deliberada — o comentario do voltarAoPainelDia explica que
+// a tela nao era puxada debaixo de voce no meio da analise. Ela continua valendo
+// pro caso que importa: se voce JA escolheu um AvB na corrida aberta, esta
+// montando uma entrada, e a tela nao sai do lugar. Fora isso, o alarme manda.
+function _abrirDisputaDaPromocao(novas) {
+  // Mesma prioridade do som: a camada mais forte e a que merece a tela.
+  var alvo = novas.slice().sort(function (x, y) { return _forcaCamada(x) - _forcaCamada(y); })[0];
+  if (!alvo) return;
+  var k = String(alvo.corrida || '').trim().toLowerCase() + '|' + _horaChave(alvo.hora);
+  var idx = results.findIndex(function (r) { return _chaveCorridaRc(r) === k; });
+  if (idx < 0) return;
+
+  // JA E A CORRIDA ABERTA: nao redesenha o painel inteiro — isso apagaria a odd
+  // e a stake que voce esta digitando. Repinta so os cards de AvB, que e onde o
+  // confronto novo precisa aparecer.
+  //
+  // Isto tambem conserta uma espera: com a corrida ja em foco, os cards novos so
+  // entravam no pulso de 75 segundos do _mmAgendarPulso. O alarme tocava e o
+  // card demorava mais de um minuto pra aparecer na tela que voce ja olhava.
+  if (idx === focusRaceIdx) { try { _mmPintarBw(results[idx]); } catch (e) {} return; }
+
+  // ENTRADA EM ANDAMENTO em outra corrida: respeita. Voce escolheu um par e
+  // esta com a odd na mao; trocar a tela agora perderia a aposta que ja estava
+  // sendo montada, que e pior do que chegar alguns segundos depois na nova.
+  var aberta = (focusRaceIdx >= 0) ? results[focusRaceIdx] : null;
+  if (aberta && aberta.avbEscolhido) return;
+
+  renderFocusPanel(results[idx], idx);
+  document.querySelectorAll('.rc').forEach(function (el) { el.classList.remove('rc-active'); });
+  var card = document.querySelector('.rc[data-idx="' + idx + '"]');
+  if (card) card.classList.add('rc-active');
+}
 
 // VOLTAR AO PAINEL DO DIA (Bruno set/2026). Abrir uma corrida pela lista faz o
 // app.js sobrescrever a coluna de foco, e o painel de tiles some junto — por

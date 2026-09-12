@@ -578,6 +578,85 @@ async function cena(cfg, corridas, quantosRepiques) {
   t('o pisca de camada continua saindo do AvB da propria linha',
     /var avb = _avbDaCorrida\(r\);/.test(SRC_APP) && /\(avb \? ' rc-camada'/.test(SRC_APP));
 
+  // ── [9] O ALARME LEVA A TELA JUNTO ───────────────────────────────────────
+  // Bruno, 12/09: "sempre que toca o alerta, a tela disputa ainda ta no foco do
+  // AvB do motor da manha... tendo que clicar na corrida demora".
+  bloco('[9] QUANDO O ALARME TOCA, A DISPUTA VAI PRA CORRIDA PROMOVIDA');
+
+  const mAbrir = SRC_APP.match(/function _abrirDisputaDaPromocao\(novas\) \{[\s\S]*?\n\}/);
+  t('_abrirDisputaDaPromocao existe', !!mAbrir);
+  t('e o painelDia dispara ela junto com o som',
+    /pintarPromocaoNaLista = function[\s\S]{0,300}?_abrirDisputaDaPromocao\(novas\)/.test(SRC_APP));
+
+  function cenaPromo(opts) {
+    const chamadas = { render: [], pintarBw: [], ativo: [] };
+    const ctx = {
+      console: console,
+      results: opts.results,
+      focusRaceIdx: opts.focusRaceIdx,
+      _forcaCamada: function (x) { return ['TOP', 'HIGH', 'GOOD'].indexOf(String(x.camada || '')); },
+      _horaChave: function (h) { return String(h || '').trim(); },
+      _chaveCorridaRc: function (r) { return String(r.corrida || '').trim().toLowerCase() + '|' + String(r.hora || '').trim(); },
+      renderFocusPanel: function (r, i) { chamadas.render.push(i); },
+      _mmPintarBw: function (r) { chamadas.pintarBw.push(r.corrida); },
+      document: {
+        querySelectorAll: function () { return []; },
+        querySelector: function (sel) { chamadas.ativo.push(sel); return null; }
+      }
+    };
+    vm.createContext(ctx);
+    vm.runInContext(mAbrir[0] + '\n_abrirDisputaDaPromocao(' + JSON.stringify(opts.novas) + ');', ctx);
+    return chamadas;
+  }
+
+  const CORRIDAS = [
+    { corrida: 'Notts A3', hora: '9:28' },   // idx 0 — a que esta aberta
+    { corrida: 'Towc A6', hora: '3:13' },    // idx 1 — a que promoveu
+    { corrida: 'Hove A2', hora: '6:08' }     // idx 2
+  ];
+
+  const p1 = cenaPromo({
+    results: CORRIDAS, focusRaceIdx: 0,
+    novas: [{ corrida: 'Towc A6', hora: '3:13', camada: 'GOOD' }]
+  });
+  t('a tela pula pra corrida que promoveu, sem clique', p1.render.length === 1 && p1.render[0] === 1);
+  t('e o destaque da lista acompanha', p1.ativo.some(function (s) { return s.indexOf('data-idx="1"') >= 0; }));
+
+  // Duas promocoes na mesma volta: manda a camada mais forte, igual ao som.
+  const p2 = cenaPromo({
+    results: CORRIDAS, focusRaceIdx: 0,
+    novas: [{ corrida: 'Hove A2', hora: '6:08', camada: 'GOOD' },
+            { corrida: 'Towc A6', hora: '3:13', camada: 'TOP' }]
+  });
+  t('com duas promocoes, abre a de camada mais forte', p2.render.length === 1 && p2.render[0] === 1);
+
+  // Ja e a corrida aberta: repinta so os cards, sem redesenhar o painel — senao
+  // apagaria a odd e a stake que estao sendo digitadas. E resolve a espera de
+  // 75s do pulso, que era quando os cards novos apareciam.
+  const p3 = cenaPromo({
+    results: CORRIDAS, focusRaceIdx: 1,
+    novas: [{ corrida: 'Towc A6', hora: '3:13', camada: 'TOP' }]
+  });
+  t('se a corrida ja esta aberta, NAO redesenha o painel', p3.render.length === 0);
+  t('mas repinta os cards na hora, em vez de esperar o pulso de 75s',
+    p3.pintarBw.length === 1 && p3.pintarBw[0] === 'Towc A6');
+
+  // Entrada em andamento: a tela nao sai do lugar.
+  const comEscolha = [Object.assign({}, CORRIDAS[0], { avbEscolhido: { a: 1, b: 2 } }), CORRIDAS[1], CORRIDAS[2]];
+  const p4 = cenaPromo({
+    results: comEscolha, focusRaceIdx: 0,
+    novas: [{ corrida: 'Towc A6', hora: '3:13', camada: 'TOP' }]
+  });
+  t('com um AvB ja escolhido na tela aberta, o alarme NAO puxa a tela',
+    p4.render.length === 0 && p4.pintarBw.length === 0);
+
+  // Promocao de corrida que nao esta carregada: ignora sem estourar.
+  const p5 = cenaPromo({
+    results: CORRIDAS, focusRaceIdx: 0,
+    novas: [{ corrida: 'Nao Existe', hora: '1:11', camada: 'TOP' }]
+  });
+  t('corrida fora do results nao estoura nem troca a tela', p5.render.length === 0);
+
   console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
   process.exit(fail ? 1 : 0);
 })();
