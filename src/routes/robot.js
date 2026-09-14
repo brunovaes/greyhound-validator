@@ -4055,6 +4055,228 @@ router.get('/diag/funil-do-dia', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ── ESTUDO DO AvB (admin, so-leitura) — Bruno, 14/09/2026 ───────────────────
+//
+// Por que existe: em 14/09 o Bruno estranhou um par marcado TOP com pct 71,
+// enquanto um GOOD da MESMA corrida tinha 82. Nao era caso isolado — no dia
+// inteiro a camada nao guardava relacao com a conviccao (media do TOP 82.6, do
+// GOOD 83.7). A causa esta no codigo: camadasDoDia decide a camada com
+// camadaPorRegua(s.tier), e o tier de cada confronto e' marcado no motorManha
+// como "so informativo (nao decide)". O rotulo da tela sai de um campo que o
+// proprio motor declara que nao decide nada, enquanto o pct — que ja embute
+// categoria, tempo, split e podio pelos pesos do Config — entra so como portao
+// (> parelhoAte) e como terceiro desempate.
+//
+// Mudar a regua no chute seria o terceiro erro de peso deste projeto. Esta rota
+// existe pra medir ANTES: exporta o historico de confrontos com as medidas como
+// o motor as viu no dia, o preco que a BW deu, e o resultado da corrida. Com
+// isso da pra responder com numero qual eixo merece ser a manchete.
+//
+// A materia-prima ja existia e ninguem tinha usado: avb_precalc guarda uma linha
+// POR CONFRONTO (pct, tier, sp_ratio, caltm_dif, split_dif, podio_dif,
+// desaba_count, rank de mercado) e NAO e' limpa todo dia — o DELETE do
+// _precalcManha e' por race_id e so dispara quando a assinatura do card muda.
+// Entao aqui nao ha reconstrucao do passado com a regua de hoje: e' o que o
+// motor disse na hora. Essa distincao e' o que separa estudo de historia.
+//
+// ATENCAO ao ler o resultado: TAXA DE ACERTO NAO E' A METRICA. O Bruno aposta.
+// Um par de 95% pagando 1.10 perde dinheiro; um de 71% pagando 2.20 ganha. Por
+// isso o CSV traz odd_pick e edge (pct do motor menos o pct do mercado): e'
+// perfeitamente possivel que a regua esteja selecionando MARGEM DE VALOR e nao
+// probabilidade, e nesse caso o selo TOP esta certo. As duas contas tem que ser
+// feitas antes de mexer em qualquer regra.
+//
+// DOIS MODOS:
+//   ?fmt=json (padrao) -> INVENTARIO por dia: quantos confrontos, quantos a BW
+//     abriu, quantos ja tem resultado. E' pequeno, cabe colado no chat, e serve
+//     pra decidir o que da pra estudar antes de baixar qualquer coisa.
+//   ?fmt=csv -> uma linha por confronto, com cabecalho, pra abrir no Excel.
+//
+// PARAMETROS
+//   de=YYYY-MM-DD, ate=YYYY-MM-DD   (padrao: tudo que existir)
+//   so_abertos=1 (padrao)  -> so os pares que a BW ABRIU: sao os apostaveis, e
+//                             sao o objeto do estudo.
+//   so_abertos=0           -> todos os confrontos do precalc, inclusive os que
+//                             nunca viraram mercado. Serve so pra perguntas de
+//                             cobertura, e multiplica o arquivo por ~6.
+//
+// NAO GRAVA NADA: nenhum INSERT, nenhum UPDATE, nenhuma tela existente tocada.
+//   GET /diag/estudo-avb?fmt=json
+//   GET /diag/estudo-avb?fmt=csv&de=2026-08-01&ate=2026-09-13
+router.get('/diag/estudo-avb', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const cd = require('../utils/camadasDoDia');
+    const { bateuPar } = require('../utils/avbResultado');
+
+    const soData = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
+    const de = soData(req.query.de), ate = soData(req.query.ate);
+    const fmt = String(req.query.fmt || 'json').toLowerCase();
+    const soAbertos = String(req.query.so_abertos == null ? '1' : req.query.so_abertos) !== '0';
+
+    // O MESMO recorte de datas nas tres tabelas, montado uma vez.
+    const recorte = (col) => {
+      const o = [], a = [];
+      if (de) { o.push(col + ' >= ?'); a.push(de); }
+      if (ate) { o.push(col + ' <= ?'); a.push(ate); }
+      return { sql: o.length ? (' WHERE ' + o.join(' AND ')) : '', args: a };
+    };
+
+    // LEFT JOIN em races de proposito: se a sessao foi apagada, a linha do
+    // precalc continua valendo pelas medidas — so nao tera resultado, e o
+    // inventario mostra isso como "sem_resultado" em vez de sumir com ela.
+    const rp = recorte('p.data');
+    const linhas = db.prepare(
+      'SELECT p.data, p.corrida, p.hora, p.race_id, p.pick_trap, p.outro_trap, '
+      + '       p.pct, p.tier, p.bw_provavel, p.indicado, p.rank_pick, p.rank_outro, '
+      + '       p.sp_ratio, p.caltm_dif, p.split_dif, p.podio_dif, p.desaba_count, '
+      + '       r.dist, r.nivel, r.trap_fav, r.tier AS race_tier, r.finishing_order_json '
+      + 'FROM avb_precalc p LEFT JOIN races r ON r.id = p.race_id'
+      + rp.sql + ' ORDER BY p.data, p.hora, p.pick_trap, p.outro_trap'
+    ).all(...rp.args);
+
+    // O que a BW abriu, por corrida. Chave = data + chaveCorrida, a MESMA do
+    // funil-do-dia: se as duas rotas discordarem, e' erro de uma delas, nao de
+    // chave diferente.
+    const ra = recorte('data');
+    const h2h = {};
+    for (const x of db.prepare('SELECT data, corrida, hora, pares_json FROM avb_abertos' + ra.sql).all(...ra.args)) {
+      let arr = []; try { arr = JSON.parse(x.pares_json) || []; } catch (e) {}
+      h2h[x.data + '|' + cd.chaveCorrida(x.corrida, x.hora)] = arr;
+    }
+    // Odd individual de cada trap no mercado "Vencedor". Existe INDEPENDENTE de
+    // a BW ter aberto frente-a-frente, entao serve de segunda opiniao sobre o
+    // preco quando o par nao abriu.
+    const venc = {};
+    for (const x of db.prepare('SELECT data, corrida, hora, odds_json FROM odds_vencedor' + ra.sql).all(...ra.args)) {
+      let arr = []; try { arr = JSON.parse(x.odds_json) || []; } catch (e) {}
+      const porTrap = {};
+      for (const d of arr) if (d && d.trap != null) porTrap[Number(d.trap)] = (Number(d.odd) > 0 ? Number(d.odd) : null);
+      venc[x.data + '|' + cd.chaveCorrida(x.corrida, x.hora)] = porTrap;
+    }
+
+    const mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2)
+                                 || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
+    const num1 = (v) => (v == null || !Number.isFinite(Number(v))) ? null : Math.round(Number(v) * 10) / 10;
+    const num2 = (v) => (v == null || !Number.isFinite(Number(v))) ? null : Math.round(Number(v) * 100) / 100;
+
+    const inv = {};                 // inventario por dia
+    const saida = [];               // linhas do CSV
+    let total = 0, abertos = 0, comResultado = 0;
+
+    for (const L of linhas) {
+      const chave = L.data + '|' + cd.chaveCorrida(L.corrida, L.hora);
+      const pick = Number(L.pick_trap), outro = Number(L.outro_trap);
+      const pares = h2h[chave] || [];
+      const par = pares.find(p => p && p.marketPct != null && mesmoPar(p, pick, outro)) || null;
+
+      const d = inv[L.data] || (inv[L.data] = {
+        confrontos: 0, corridas_distintas: 0, abriu_bw: 0, com_resultado: 0, sem_resultado: 0,
+        _corridas: new Set()
+      });
+      d.confrontos++;
+      d._corridas.add(cd.chaveCorrida(L.corrida, L.hora));
+      if (par) d.abriu_bw++;
+      total++; if (par) abertos++;
+
+      if (soAbertos && !par) continue;
+
+      // marketPct do feed e' sempre "aTrap vence bTrap"; aqui tudo fica na
+      // orientacao do PICK do motor, senao metade das linhas sai invertida.
+      const aEhPick = par && Number(par.aTrap) === pick;
+      const mkt = par ? (aEhPick ? Number(par.marketPct) : 100 - Number(par.marketPct)) : null;
+      const oddPick = par ? (aEhPick ? Number(par.oddAvenceB) : Number(par.oddBvenceA)) : null;
+      const oddOutro = par ? (aEhPick ? Number(par.oddBvenceA) : Number(par.oddAvenceB)) : null;
+
+      const b = bateuPar(L.finishing_order_json, pick, outro);
+      if (b !== null) { comResultado++; d.com_resultado++; } else { d.sem_resultado++; }
+
+      // Posicoes de chegada: servem pra auditar o `bateu` sem confiar nele.
+      let fp = null, fo = null;
+      try {
+        const ordem = JSON.parse(L.finishing_order_json || '[]') || [];
+        for (const f of ordem) {
+          if (!f || f.pos == null) continue;
+          if (Number(f.trap) === pick) fp = Number(f.pos);
+          if (Number(f.trap) === outro) fo = Number(f.pos);
+        }
+      } catch (e) {}
+
+      const partes = String(L.corrida || '').trim().split(/\s+/);
+      saida.push({
+        data: L.data, hora: L.hora, hora_br: cd.horaBr(L.hora),
+        track: cd.pista(L.corrida), categoria: partes.slice(1).join(' ') || '', dist: L.dist || '',
+        race_id: L.race_id, pick: pick, outro: outro,
+        pct: L.pct, tier: L.tier || '', camada: cd.camadaPorRegua(L.tier),
+        bw_provavel: L.bw_provavel ? 1 : 0, indicado: L.indicado ? 1 : 0,
+        rank_pick: L.rank_pick, rank_outro: L.rank_outro, sp_ratio: num2(L.sp_ratio),
+        caltm_dif: num2(L.caltm_dif), split_dif: num2(L.split_dif),
+        podio_dif: num1(L.podio_dif), desaba_count: L.desaba_count,
+        abriu_bw: par ? 1 : 0, market_pct: num1(mkt),
+        odd_pick: num2(oddPick), odd_outro: num2(oddOutro),
+        edge: (L.pct != null && mkt != null) ? num1(Number(L.pct) - mkt) : null,
+        odd_venc_pick: num2((venc[chave] || {})[pick]),
+        odd_venc_outro: num2((venc[chave] || {})[outro]),
+        na_lista: (L.nivel !== 'skip' && L.trap_fav > 0) ? 1 : 0,
+        nivel: L.nivel || '', race_tier: L.race_tier || '',
+        fin_pick: fp, fin_outro: fo,
+        bateu: (b === null) ? '' : (b ? 1 : 0)
+      });
+    }
+
+    const dias = Object.keys(inv).sort().map(k => ({
+      data: k, confrontos: inv[k].confrontos, corridas: inv[k]._corridas.size,
+      abriu_bw: inv[k].abriu_bw, com_resultado: inv[k].com_resultado, sem_resultado: inv[k].sem_resultado
+    }));
+
+    if (fmt === 'csv') {
+      const cols = Object.keys(saida[0] || {
+        data: 1, hora: 1, hora_br: 1, track: 1, categoria: 1, dist: 1, race_id: 1, pick: 1, outro: 1,
+        pct: 1, tier: 1, camada: 1, bw_provavel: 1, indicado: 1, rank_pick: 1, rank_outro: 1,
+        sp_ratio: 1, caltm_dif: 1, split_dif: 1, podio_dif: 1, desaba_count: 1, abriu_bw: 1,
+        market_pct: 1, odd_pick: 1, odd_outro: 1, edge: 1, odd_venc_pick: 1, odd_venc_outro: 1,
+        na_lista: 1, nivel: 1, race_tier: 1, fin_pick: 1, fin_outro: 1, bateu: 1
+      });
+      const esc = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        return /[",\n]/.test(s) ? ('"' + s.replace(/"/g, '""') + '"') : s;
+      };
+      // BOM no inicio: sem ele o Excel abre UTF-8 como Latin-1 e estraga os
+      // nomes de pista acentuados.
+      let csv = '﻿' + cols.join(',') + '\n';
+      for (const r of saida) csv += cols.map(c => esc(r[c])).join(',') + '\n';
+      const nome = 'estudo-avb_' + (de || 'inicio') + '_a_' + (ate || 'fim') + '.csv';
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="' + nome + '"');
+      return res.send(csv);
+    }
+
+    res.json({
+      de: de || null, ate: ate || null, so_abertos: soAbertos,
+      resumo: {
+        dias: dias.length,
+        primeiro_dia: dias.length ? dias[0].data : null,
+        ultimo_dia: dias.length ? dias[dias.length - 1].data : null,
+        confrontos_no_precalc: total,
+        confrontos_que_a_bw_abriu: abertos,
+        linhas_no_csv: saida.length,
+        com_resultado: comResultado
+      },
+      dias,
+      legenda: 'So-leitura. Uma linha por CONFRONTO (par de galgos), com as medidas como o motor '
+        + 'as viu no dia (avb_precalc, que nao e limpa diariamente), o preco da BW (avb_abertos e '
+        + 'odds_vencedor) e o resultado (races.finishing_order_json via bateuPar). '
+        + 'camada = camadaPorRegua(tier), exatamente o rotulo que a tela mostra. '
+        + 'pct = conviccao do motor. market_pct = % implicito da BW, ja na orientacao do pick. '
+        + 'edge = pct - market_pct: onde o motor discorda do mercado. '
+        + 'bateu = 1 se o pick chegou na frente do outro, 0 se nao, vazio se um dos dois nao '
+        + 'aparece na chegada (retirada ou chegada incompleta) — vazio NAO conta como erro. '
+        + 'Baixe as linhas com fmt=csv. so_abertos=0 inclui os confrontos que a BW nunca abriu.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 //   GET /diag/oportunidades-bw-resultado?date=YYYY-MM-DD&teto=1.5&faixa=1.8
 router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
   try {
@@ -5557,6 +5779,8 @@ router.get('/como-nasce-um-avb', requireAdmin, (req, res) => {
 + '<p><a href="' + BASE + '/robot/diag/funil-do-dia" target="_blank" rel="noopener">Funil do dia</a> &nbsp;&middot;&nbsp; '
 + '<a href="' + BASE + '/robot/diag/oportunidades-bw" target="_blank" rel="noopener">Oportunidades pelo lado da BW</a> &nbsp;&middot;&nbsp; '
 + '<a href="' + BASE + '/robot/diag/persistir-manha" target="_blank" rel="noopener">Persistir a manha (dry-run)</a></p>'
++ '<p><a href="' + BASE + '/robot/diag/estudo-avb" target="_blank" rel="noopener">Estudo do AvB (inventario)</a> &nbsp;&middot;&nbsp; '
++ '<a href="' + BASE + '/robot/diag/estudo-avb?fmt=csv" target="_blank" rel="noopener">baixar o CSV do historico</a></p>'
 + '</div>'
 + '</div></body></html>');
 });
