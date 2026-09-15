@@ -1258,8 +1258,76 @@ router.put('/race/:id', express.json(), (req, res) => {
   // (aguardando_entrada ficava true pra sempre) e o alarme seguia apitando numa
   // corrida ja apostada. Vale pros DOIS produtores: analisarPainel.js (tiles) e
   // app.js/_persistirEscolha (Analisar antiga). A coluna nasce no garantirColunas.
-  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada', 'avb_escolhido'];
+  // 'finishing_order_json' entrou em 15/09/2026 (Bruno): ate aqui a CHEGADA so
+  // podia ser escrita pelos robos. Corrida cujo resultado nao veio ficava
+  // "aguarda" pra sempre no Historico, e chegada lida errada nao tinha conserto
+  // em lugar nenhum do sistema.
+  //
+  // Ela NAO chega crua do front: o bloco abaixo normaliza e valida antes. Deixar
+  // o navegador montar o JSON seria deixar um typo virar chegada corrompida — e
+  // este e' o campo do qual o "bateu" inteiro deriva.
+  const allowed = ['odd', 'valor', 'resultado_1', 'resultado_2', 'resultado_3', 'bateu', 'avb_nao_aberto', 'video_url', 'bet_entrou', 'bet_unidades', 'flag_atrasada', 'avb_escolhido', 'finishing_order_json'];
   const body = { ...req.body };
+
+  // ── CHEGADA CORRIGIDA A MAO ───────────────────────────────────────────────
+  //
+  // Aceita "3-1-5-2", "3 1 5 2", "3,1,5,2" ou "3152" e devolve o mesmo formato
+  // que o robo grava: [{pos,trap}, ...]. String vazia LIMPA a chegada (volta a
+  // "aguarda"), que e como se desfaz um erro de digitacao.
+  //
+  // A validacao e' fechada de proposito: so traps de 1 a 6, sem repetir, no
+  // minimo dois. Chegada e' a fonte do "bateu" de TODOS os AvBs da corrida —
+  // uma entrada meia-boca aqui contamina a taxa do dia inteiro.
+  if (Object.prototype.hasOwnProperty.call(body, 'finishing_order_json')) {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Somente admin pode corrigir a chegada.' });
+    }
+    const cru = body.finishing_order_json;
+    if (cru == null || String(cru).trim() === '') {
+      body.finishing_order_json = null;
+      body.resultado_1 = null; body.resultado_2 = null; body.resultado_3 = null;
+    } else {
+      let traps = [];
+      if (Array.isArray(cru)) {
+        traps = cru.map(x => Number(x && x.trap != null ? x.trap : x));
+      } else {
+        const txt = String(cru).trim();
+        // Sem separador ("3152") cada digito e' um trap — so funciona porque
+        // trap vai ate 6, entao nunca ha numero de dois digitos.
+        traps = (/[^0-9]/.test(txt) ? txt.split(/[^0-9]+/) : txt.split(''))
+          .filter(Boolean).map(Number);
+      }
+      const valido = traps.length >= 2 && traps.length <= 6
+        && traps.every(n => Number.isInteger(n) && n >= 1 && n <= 6)
+        && new Set(traps).size === traps.length;
+      if (!valido) {
+        return res.status(400).json({
+          error: 'Chegada invalida. Use os boxes de 1 a 6, na ordem de chegada, sem repetir. Ex.: 3-1-5-2'
+        });
+      }
+      body.finishing_order_json = JSON.stringify(traps.map((t, i) => ({ pos: i + 1, trap: t })));
+      // O podio acompanha. Ele ainda e lido em vario lugar (top3, fallback do
+      // _celulaResultado, recalculo antigo): deixar os dois discordando seria
+      // criar de novo a divergencia que a correcao de 03/09 fechou.
+      body.resultado_1 = traps[0] != null ? String(traps[0]) : null;
+      body.resultado_2 = traps[1] != null ? String(traps[1]) : null;
+      body.resultado_3 = traps[2] != null ? String(traps[2]) : null;
+    }
+    // E o 'bateu' da COLUNA (o que a Banca, o export de derrotas e o recalculo
+    // do dia leem) e regravado pela MESMA funcao dos robos. Sem isto eu
+    // consertaria a tela do Historico e deixaria a Banca com o valor velho —
+    // exatamente a divergencia que esta entrega existe pra nao criar.
+    try {
+      const { recalcularBateu } = require('../utils/avbResultado');
+      const alvo = db.prepare('SELECT trap_fav, trap_und FROM races WHERE id=?').get(raceId);
+      if (alvo) {
+        body.bateu = recalcularBateu(
+          body.resultado_1, body.resultado_2, body.resultado_3,
+          alvo.trap_fav, alvo.trap_und, body.finishing_order_json
+        );
+      }
+    } catch (e) { /* sem o recalculo a chegada ainda grava; a coluna fica pro robo */ }
+  }
   // Se a Odd esta sendo preenchida (nao vazia) e nao veio bet_unidades junto,
   // usa o valor padrao configurado — Odd preenchida ja conta como aposta
   // feita, nao precisa mais de checkbox separado nem de unidade por corrida,
@@ -1278,6 +1346,7 @@ router.put('/race/:id', express.json(), (req, res) => {
     if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
     if (ehCampoPessoal(key)) { pessoais.push(key); continue; }
     // "bateu" e' compartilhado: corrigir afeta todo mundo, entao so admin.
+    // (A chegada tem a mesma natureza e ja foi barrada la em cima.)
     if (key === 'bateu' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Somente admin pode alterar o campo "bateu".' });
     }

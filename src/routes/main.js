@@ -2364,6 +2364,29 @@ function _celulaResultado(r){
   if (r.video_url) {
     html += '<div style="margin-top:5px"><button onclick="openReplay(' + r.id + ')" style="font-size:9px;color:#60a5fa;cursor:pointer;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.25);border-radius:4px;padding:2px 8px">&#9654; Replay</button></div>';
   }
+
+  // ── CHEGADA EDITAVEL PELO LAPIS (Bruno, 15/09/2026) ───────────────────────
+  //
+  // "nao estou conseguindo editar a coluna BATEU". E nao da mesmo: o BATEU nao
+  // e' um dado gravado, e' uma conta — bateuPar(chegada, galgo A, galgo B). Nao
+  // existe campo ali pro lapis habilitar.
+  //
+  // O campo que resolve e' ESTE. Corrigindo a chegada, o BATEU se acerta em
+  // TODOS os AvBs daquela corrida, a coluna Resultado passa a mostrar certo, e a
+  // Banca e os exports acompanham — uma fonte so. Um override do BATEU
+  // consertaria uma celula e deixaria o resto discordando.
+  //
+  // Nasce desabilitado e escondido, como os outros: fora do modo de edicao a
+  // celula e' exatamente a de antes.
+  var _ordemTxt = (Array.isArray(ordem) && ordem.length)
+    ? ordem.slice().sort(function(a,b){ return Number(a.pos) - Number(b.pos); })
+        .map(function(f){ return Number(f.trap); }).filter(function(n){ return n >= 1 && n <= 6; }).join('-')
+    : '';
+  html += '<input type="text" class="hist-inp cheg-inp" value="' + _ordemTxt + '" placeholder="3-1-5-2" disabled'
+    + ' data-id="' + r.id + '" data-chegada="1" title="Ordem de chegada, do 1o ao ultimo. Vazio limpa."'
+    + ' style="width:82px;text-align:center;border-radius:4px;padding:3px;font-size:11px;margin-top:5px"'
+    + ' onkeydown="if(event.key===\'Enter\')this.blur();">';
+
   return '<td style="text-align:center">' + html + '</td>';
 }
 
@@ -3119,6 +3142,10 @@ ${!linhasAvb.length?'<tr><td colspan="13" style="text-align:center;color:#666;pa
 .entrei-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;
   color:#04140a;background:#21AB58;border-radius:4px;padding:2px 6px}
 .entrei-vazio{color:#444}
+/* A chegada so aparece com o lapis aberto: ela e' correcao de dado do sistema
+   (afeta todo mundo, e so admin grava), nao um campo do dia a dia. */
+.cheg-inp[disabled]{display:none}
+.cheg-inp.erro{border-color:#ef4444!important;color:#ef4444}
 /* A odd so e' mostrada na linha da aposta — ou em qualquer linha com o lapis
    aberto, pra poder digitar antes de marcar o Entrei. */
 tr[data-entrei="sim"] .odd-vazio{display:none}
@@ -3263,6 +3290,45 @@ document.querySelectorAll('table [data-f]').forEach(function(el){
     });
   }
 });
+// ── CORRIGIR A CHEGADA (Bruno, 15/09/2026) ─────────────────────────────────
+//
+// Fica FORA do laco generico de [data-f] de proposito, por dois motivos: o
+// campo precisa de validacao do lado do servidor (uma chegada torta contamina
+// a taxa do dia inteiro), e depois de gravar a tela precisa ser REDESENHADA.
+//
+// Por que recarregar em vez de recalcular aqui: o BATEU de cada AvB e derivado
+// no servidor, pelo bateuPar. Refazer essa conta no navegador criaria uma
+// segunda implementacao da regra mais importante do Historico — e' justamente o
+// que o teste_bateu_fonte_unica.js existe pra impedir. Recarregar custa um
+// segundo e garante que a tela esta dizendo o que o servidor gravou.
+document.querySelectorAll('.cheg-inp').forEach(function(el){
+  el.setAttribute('data-antes', el.value);
+  el.addEventListener('blur', function(){
+    var campo = this;
+    var valor = campo.value.trim();
+    if (valor === campo.getAttribute('data-antes')) { setRowEdit(campo.getAttribute('data-id'), false); return; }
+    campo.classList.remove('erro');
+    fetch(BASE+'/api/race/'+campo.getAttribute('data-id'), {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ finishing_order_json: valor })
+    }).then(function(resp){
+      if (resp.ok) { location.reload(); return; }
+      // Recusado: devolve o que estava e acende a borda. Sem dialogo — a
+      // corrida pode estar pra largar e um modal atravessado e pior que a
+      // borda vermelha.
+      return resp.json().catch(function(){ return {}; }).then(function(j){
+        campo.classList.add('erro');
+        campo.value = campo.getAttribute('data-antes');
+        campo.title = (j && j.error) ? j.error : 'Nao foi possivel gravar a chegada.';
+      });
+    }).catch(function(e){
+      campo.classList.add('erro');
+      campo.value = campo.getAttribute('data-antes');
+      console.error('[historico] falhou ao gravar a chegada', e);
+    });
+  });
+});
+
 // ── ENTREI pelo Historico (Bruno, 15/09/2026) ──────────────────────────────
 //
 // Grava exatamente o que a tela Analisar grava em avb_escolhido: o par, os
