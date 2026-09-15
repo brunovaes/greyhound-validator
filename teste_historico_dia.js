@@ -486,5 +486,62 @@ t('TOP sem registro fica com a barra zerada, nao com lixo da volta anterior',
 t('filtrar tambem mexe na barra, nao so no numero',
   roda(LINHAS, com({ 'fh-motor': 'TOP' })).estilo('kpi-top-bar').width === '50%');
 
+// ── [7] NAVEGACAO POR DIA ───────────────────────────────────────────────────
+// Bruno, 15/09/2026: setas de dia anterior/seguinte no proprio Historico.
+// O risco aqui nao e a seta nao aparecer — e ela andar por LOTE em vez de por
+// DIA, que desfaria em silencio a correcao de 10/09 que este arquivo inteiro
+// existe pra proteger: num dia com dois lotes, a seta mostraria o mesmo dia
+// duas vezes.
+bloco('[7] AS SETAS ANDAM POR DIA, NAO POR LOTE');
+
+t('a consulta de vizinho agrupa por DATA, nao por sessao',
+  /_diaVizinho[\s\S]{0,700}?GROUP BY d ORDER BY d/.test(SRC));
+t('e usa o mesmo corte de fuso do resto da tela (-3 horas)',
+  /_diaVizinho[\s\S]{0,700}?date\(created_at,'-3 hours'\)/.test(SRC));
+t('o dia anterior vem com DESC e o seguinte com ASC',
+  /const cmp = parcTras \? '<' : '>'/.test(SRC) && /const ord = parcTras \? 'DESC' : 'ASC'/.test(SRC));
+t('presa ao usuario canonico, como todo o resto da tela',
+  /_diaVizinho[\s\S]{0,700}?\.get\(CANONICO, diaAtual\)/.test(SRC));
+t('o link aponta pra /sessao/<sid> do dia vizinho',
+  /href="\$\{BASE\}\/sessao\/\$\{diaAnterior\.sid\}"/.test(SRC)
+  && /href="\$\{BASE\}\/sessao\/\$\{diaSeguinte\.sid\}"/.test(SRC));
+
+t('sem vizinho a seta vira SPAN, nao link morto',
+  /<span class="dnav-b off"[^>]*>&#8249;<\/span>/.test(SRC)
+  && /<span class="dnav-b off"[^>]*>&#8250;<\/span>/.test(SRC));
+t('as tres consultas novas estao isoladas em try — nao podem derrubar o Historico',
+  (SRC.match(/catch \(e\) \{ return null; \}/g) || []).length >= 3);
+
+// A data e montada e lida em UTC: com o construtor local, '2026-09-15' volta
+// um dia em qualquer fuso a oeste e o Historico mostraria a data errada no
+// proprio cabecalho.
+const mRot = /const _rotuloDia = function \(d\) \{[\s\S]*?\n  \};/.exec(SRC);
+t('achei o _rotuloDia no fonte', !!mRot);
+if (mRot) {
+  const _rotuloDia = new Function('return ' + mRot[0].replace(/^const _rotuloDia = /, '').replace(/;$/, ''))();
+  t('15/09/2026 e uma terca-feira', _rotuloDia('2026-09-15') === 'terca, 15 set');
+  t('01/01/2026 e uma quinta-feira', _rotuloDia('2026-01-01') === 'quinta, 1 jan');
+  t('31/12/2026 e uma quinta-feira', _rotuloDia('2026-12-31') === 'quinta, 31 dez');
+  t('data invalida devolve o proprio texto, nunca "Invalid Date"',
+    _rotuloDia('xx') === 'xx' && _rotuloDia(null) === '');
+  t('usa UTC, nao o fuso local (o teste roda em UTC, entao o guarda e o fonte)',
+    /Date\.UTC\(/.test(mRot[0]) && /getUTCDay\(\)/.test(mRot[0]));
+}
+
+t('o CSS da barra existe e nao depende de cor fixa sem fallback',
+  /\.dnav\{/.test(SRC) && /var\(--bdr2,#222b38\)/.test(SRC));
+t('o link "mais recente" sai do fluxo pra data nao saltar ao navegar',
+  /\.dnav-hoje\{position:absolute/.test(SRC));
+t('e volta pro fluxo no celular',
+  /@media\(max-width:600px\)[\s\S]{0,140}?\.dnav-hoje\{position:static/.test(SRC));
+t('so a primeira letra e maiuscula (capitalize deixava o mes como "Set")',
+  /\.dnav-d::first-letter\{text-transform:uppercase\}/.test(SRC)
+  && !/\.dnav-d\{[^}]*text-transform:capitalize/.test(SRC));
+const posDnav = SRC.indexOf('<div class="dnav">');
+t('a barra entra ANTES dos cartoes da PROPRIA tela, sem mexer neles',
+  posDnav > 0
+  && SRC.indexOf('<div class="kpis">', posDnav) > posDnav
+  && SRC.indexOf('${KPIS.map(function(K){') > posDnav);
+
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);

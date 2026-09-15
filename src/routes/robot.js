@@ -4558,6 +4558,94 @@ router.get('/diag/estudo-galgo', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ── NOMES QUEBRADOS NO HISTORICO (admin, so-leitura) — Bruno, 15/09/2026 ────
+//
+// Por que existe: ate 15/09 o pdfParser reconhecia cor de galgo por uma LISTA
+// fechada de codigos. Cor fora da lista (`ltbd`, `wf`) fazia o parser tomar a
+// ficha de criacao inteira por nome, e o nome de verdade se perdia na gravacao.
+// A correcao daquele dia vale so pra card NOVO: o que ja esta no hist_full
+// continua errado, e o nome real nao esta na string — nem a tela recupera.
+//
+// Esta rota mede o estrago antes de decidir se vale reprocessar algum PDF.
+//
+// A assinatura e' precisa: nome que COMECA com um token minusculo curto
+// seguido de `b` ou `d` isolado. Nome de galgo no card e Titulo Maiusculo,
+// entao isto nao acusa nome legitimo — e o teste_nome_galgo.js trava essa
+// distincao com onze nomes-armadilha.
+//
+// NAO GRAVA NADA. So conta e mostra exemplos.
+//   GET /diag/nomes-quebrados            (tudo)
+//   GET /diag/nomes-quebrados?de=2026-09-01&ate=2026-09-15
+router.get('/diag/nomes-quebrados', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const soData = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
+    const de = soData(req.query.de), ate = soData(req.query.ate);
+    const limite = (req.query.limite > 0) ? Math.min(Number(req.query.limite), 20000) : 20000;
+
+    const onde = ["r.hist_full IS NOT NULL"];
+    const args = [];
+    if (de) { onde.push("date(s.created_at,'-3 hours') >= ?"); args.push(de); }
+    if (ate) { onde.push("date(s.created_at,'-3 hours') <= ?"); args.push(ate); }
+
+    const rows = db.prepare(
+      "SELECT r.id, r.corrida, r.hora, r.hist_full, date(s.created_at,'-3 hours') AS dia "
+      + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE " + onde.join(' AND ')
+      + " ORDER BY dia, r.hora LIMIT " + limite
+    ).all(...args);
+
+    const SUSPEITO = /^[a-z]{1,6}\s+(?:b|d)\s+/;
+    const porDia = {};
+    const exemplos = [];
+    let corridasComProblema = 0, galgosQuebrados = 0, galgosTotal = 0;
+
+    for (const r of rows) {
+      let hf = null;
+      try { hf = JSON.parse(r.hist_full); } catch (e) { continue; }
+      if (!Array.isArray(hf)) continue;
+      let daCorrida = 0;
+      for (const g of hf) {
+        if (!g) continue;
+        galgosTotal++;
+        if (!SUSPEITO.test(String(g.nome || ''))) continue;
+        daCorrida++; galgosQuebrados++;
+        if (exemplos.length < 25) {
+          exemplos.push({
+            dia: r.dia, hora: r.hora, corrida: r.corrida, race_id: r.id,
+            trap: g.trap != null ? g.trap : null,
+            nome_gravado: String(g.nome || '').slice(0, 70)
+          });
+        }
+      }
+      if (daCorrida) {
+        corridasComProblema++;
+        const d = porDia[r.dia] || (porDia[r.dia] = { corridas: 0, galgos: 0 });
+        d.corridas++; d.galgos += daCorrida;
+      }
+    }
+
+    const dias = Object.keys(porDia).sort().map(k => Object.assign({ dia: k }, porDia[k]));
+    res.json({
+      de: de || null, ate: ate || null,
+      resumo: {
+        corridas_lidas: rows.length,
+        galgos_lidos: galgosTotal,
+        corridas_com_nome_quebrado: corridasComProblema,
+        galgos_com_nome_quebrado: galgosQuebrados,
+        pct_galgos: galgosTotal ? +(100 * galgosQuebrados / galgosTotal).toFixed(2) : 0,
+        dias_afetados: dias.length
+      },
+      por_dia: dias,
+      exemplos,
+      legenda: 'So-leitura. Procura no races.hist_full nomes que COMECAM com codigo de cor '
+        + 'minusculo seguido de b ou d — a assinatura do bug do pdfParser corrigido em 15/09. '
+        + 'O nome real nao esta na string gravada, entao a unica forma de recuperar e reenviar '
+        + 'o PDF daquela corrida. `exemplos` traz ate 25 casos com dia, hora, corrida e trap.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 //   GET /diag/oportunidades-bw-resultado?date=YYYY-MM-DD&teto=1.5&faixa=1.8
 router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
   try {
@@ -6064,6 +6152,7 @@ router.get('/como-nasce-um-avb', requireAdmin, (req, res) => {
 + '<a href="' + BASE + '/robot/diag/estudo-avb?fmt=csv" target="_blank" rel="noopener">baixar o CSV do historico</a></p>'
 + '<p><a href="' + BASE + '/robot/diag/estudo-galgo" target="_blank" rel="noopener">Estudo por galgo (cobertura)</a> &nbsp;&middot;&nbsp; '
 + '<a href="' + BASE + '/robot/diag/estudo-galgo?fmt=csv" target="_blank" rel="noopener">baixar o CSV dos fatos por galgo</a></p>'
++ '<p><a href="' + BASE + '/robot/diag/nomes-quebrados" target="_blank" rel="noopener">Nomes quebrados no historico</a></p>'
 + '</div>'
 + '</div></body></html>');
 });

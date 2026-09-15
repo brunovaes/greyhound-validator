@@ -874,6 +874,36 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
    precisar. */
 .fp-grid.g2{--dogh:min(180px,20vh)}
 
+/* -- DOIS AvBs: O BLOCO GALGO+GAUGE CENTRADO NO CARD (Bruno, 12/09/2026) ----
+   Antes: a arena era o unico filho do card com flex-grow, entao ela comia TODA
+   a sobra de altura, e como o galgo dentro dela fica alinhado ao rodape
+   (justify-content:flex-end), o vazio inteiro se juntava EM CIMA. Resultado: o
+   galgo baixo, a fileira de gauges colada nos botoes e o card pesado embaixo.
+   Nao era falta de conteudo, era distribuicao da sobra.
+
+   Agora a arena ocupa so o que precisa (flex:0 1 auto — continua ENCOLHENDO se
+   o card apertar, isso nao mudou) e a sobra e' repartida por DUAS margens auto:
+   uma acima da arena e outra acima dos botoes. Margens auto irmas dividem a
+   sobra em partes iguais, entao o par galgo+gauge para exatamente no meio, com
+   a etiqueta ainda no topo e os botoes ainda no rodape.
+
+   Por que nao um justify-content:center no card: ele e' ignorado quando existe
+   margem auto no eixo; e sem a margem auto nos botoes eles subiriam junto com o
+   resto e sobraria um vazio no rodape do card — so trocaria o lado do problema.
+
+   So no g2, de proposito. No g1 a imagem AINDA cresce ate o teto de 230px por
+   causa do flex-grow da arena; tirar o grow la encolheria o galgo da disputa
+   unica, que ninguem pediu. No g3/g4 os gauges nem aparecem e nao ha sobra pra
+   dividir.
+
+   O minimo de 5px entre gauge e botao, que vinha do margin-top fixo do
+   .fp-card-acoes, passa a sair do padding inferior da propria fileira de gauges
+   (os 4px da regra logo acima) quando a sobra for zero.
+   (Sem crase neste comentario: ele vive dentro do template literal do res.send,
+   e crase aqui fecha a string e derruba a rota inteira. Ja aconteceu duas.) */
+.fp-grid.g2 .fp-card-arena{flex:0 1 auto;margin-top:auto}
+.fp-grid.g2 .fp-card-acoes{margin-top:auto}
+
 /* Rede de seguranca: nada dentro do card pode transbordar, mesmo que a conta
    acima erre em alguma resolucao. */
 .fp-card-avb > *{max-width:100%}
@@ -2461,6 +2491,61 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       return x < y ? -1 : (x > y ? 1 : 0);
     });
   })();
+  // ── NAVEGACAO POR DIA (Bruno, 15/09/2026) ────────────────────────────────
+  //
+  // Antes, pra ver outro dia era preciso sair do Historico, ir na Analisar,
+  // escolher a data e voltar. Tres telas pra uma seta.
+  //
+  // Anda por DIA, nao por lote, porque a tela ja e do dia desde 10/09: pular
+  // de session_id em session_id mostraria o mesmo dia duas vezes quando houver
+  // dois lotes, e e' justamente o que a mudanca daquele dia veio consertar.
+  // Por isso o GROUP BY na data e o MAX(id) — qualquer lote do dia serve de
+  // porta de entrada, ja que a consulta la em cima resolve o dia inteiro.
+  //
+  // So-leitura e isolado em try: dia sem vizinho, banco vazio ou consulta que
+  // falhe apagam as setas, nunca derrubam o Historico.
+  const diaAtual = (function () {
+    try {
+      const r = db.prepare("SELECT date(created_at,'-3 hours') AS d FROM race_sessions WHERE id=?").get(sess.id);
+      return r ? r.d : null;
+    } catch (e) { return null; }
+  })();
+  const _diaVizinho = function (parcTras) {
+    if (!diaAtual) return null;
+    // cmp/ord sao literais escolhidos aqui dentro, nunca entrada de usuario.
+    const cmp = parcTras ? '<' : '>';
+    const ord = parcTras ? 'DESC' : 'ASC';
+    try {
+      return db.prepare(
+        "SELECT date(created_at,'-3 hours') AS d, MAX(id) AS sid FROM race_sessions "
+        + "WHERE user_id=? AND date(created_at,'-3 hours') " + cmp + " ? "
+        + "GROUP BY d ORDER BY d " + ord + " LIMIT 1"
+      ).get(CANONICO, diaAtual) || null;
+    } catch (e) { return null; }
+  };
+  const diaAnterior = _diaVizinho(true);
+  const diaSeguinte = _diaVizinho(false);
+  const diaMaisNovo = (function () {
+    try {
+      return db.prepare(
+        "SELECT date(created_at,'-3 hours') AS d, MAX(id) AS sid FROM race_sessions "
+        + "WHERE user_id=? GROUP BY d ORDER BY d DESC LIMIT 1"
+      ).get(CANONICO) || null;
+    } catch (e) { return null; }
+  })();
+  // "2026-09-15" -> "segunda, 15 set". Monta a data em UTC e le em UTC de
+  // proposito: new Date('2026-09-15') e interpretado como meia-noite UTC e,
+  // lido com getDay() local, volta um dia em qualquer fuso a oeste — o dia 15
+  // apareceria como 14 aqui no Brasil.
+  const _rotuloDia = function (d) {
+    const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return String(d || '');
+    const SEM = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+    const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    return SEM[dt.getUTCDay()] + ', ' + (+m[3]) + ' ' + MES[+m[2] - 1];
+  };
+
   // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
   aplicarPessoais(db, races, user.id);
 
@@ -2751,6 +2836,32 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 /* As tres taxas LADO A LADO, cada uma como uma mini-coluna: rotulo em cima,
    percentual no meio, contagem embaixo. Usa !important porque o container dos
    KPIs tem regras proprias pros filhos do card. */
+/* ── Navegacao por dia ──────────────────────────────────────────────────
+   Barra fina acima dos cartoes. Nao mexe em nada do que ja existia: entra
+   como primeiro filho do .content e empurra o resto 14px pra baixo.
+   A seta sem destino vira <span> com .off, e nao um link morto: assim ela
+   nao entra na navegacao por teclado nem convida ao clique. */
+.dnav{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 14px;flex-wrap:wrap}
+.dnav-b{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+  border:1px solid var(--bdr2,#222b38);border-radius:8px;background:#11161f;color:#cbd5e1;
+  text-decoration:none;font-size:18px;line-height:1;transition:border-color .15s,color .15s}
+.dnav-b:hover{border-color:#21AB58;color:#21AB58}
+.dnav-b:focus-visible{outline:2px solid #21AB58;outline-offset:2px}
+.dnav-b.off{opacity:.25}
+.dnav-d{min-width:180px;text-align:center;font-size:14px;font-weight:700;color:#e5e7eb;
+  letter-spacing:.2px}
+/* So a primeira letra: com text-transform:capitalize o mes virava "Set". */
+.dnav-d::first-letter{text-transform:uppercase}
+/* Fora do fluxo: se ele entrasse na linha, a data sairia do centro toda vez
+   que o link aparecesse, e a tela saltaria ao navegar. No celular volta pro
+   fluxo e quebra linha. */
+.dnav-hoje{position:absolute;right:0;top:50%;transform:translateY(-50%);
+  font-size:11px;color:#8a94a6;text-decoration:none;padding:5px 9px;border-radius:6px;
+  border:1px solid transparent;transition:color .15s,border-color .15s}
+.dnav-hoje:hover{color:#21AB58;border-color:rgba(33,171,88,.35)}
+@media(max-width:600px){.dnav-d{min-width:0;font-size:13px}
+  .dnav-hoje{position:static;transform:none}}
+
 .tx3{display:flex!important;gap:14px;justify-content:space-between;margin-top:4px}
 .tx3 .tx3-l{display:flex!important;flex-direction:column;align-items:center;gap:1px;flex:1}
 .tx3 .tx3-rot{font-size:10px;color:#888;white-space:nowrap}
@@ -2845,6 +2956,18 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
 ${navBar(user, 'historico')}
 <div class="content">
+<div class="dnav">
+  ${diaAnterior
+    ? `<a class="dnav-b" href="${BASE}/sessao/${diaAnterior.sid}" title="${_rotuloDia(diaAnterior.d)}" aria-label="dia anterior">&#8249;</a>`
+    : '<span class="dnav-b off" aria-hidden="true">&#8249;</span>'}
+  <div class="dnav-d">${_rotuloDia(diaAtual)}</div>
+  ${diaSeguinte
+    ? `<a class="dnav-b" href="${BASE}/sessao/${diaSeguinte.sid}" title="${_rotuloDia(diaSeguinte.d)}" aria-label="proximo dia">&#8250;</a>`
+    : '<span class="dnav-b off" aria-hidden="true">&#8250;</span>'}
+  ${(diaSeguinte && diaMaisNovo && diaMaisNovo.d !== diaAtual)
+    ? `<a class="dnav-hoje" href="${BASE}/sessao/${diaMaisNovo.sid}">ir para o mais recente</a>`
+    : ''}
+</div>
 <div class="kpis">
 ${KPIS.map(function(K){
   // TAXA: 0% em branco, acima de 0% em verde, abaixo em vermelho. O ramo do
