@@ -19,7 +19,11 @@ function getLogo() {
   return '';
 }
 
-function navBar(user, active) {
+// `extra` (Bruno, 15/09/2026): HTML opcional colado logo DEPOIS do item Live.
+// Nasceu pra navegacao por dia do Historico, que ocupava uma linha inteira da
+// tela. E' opcional de proposito: quem chama com dois argumentos — todas as
+// outras telas — recebe string vazia e nao muda em nada.
+function navBar(user, active, extra) {
   const isAdmin = user.role === 'admin';
   return `<nav id="topnav" style="position:relative;background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
     <button id="nav-burger" onclick="toggleNav()" aria-label="Menu" style="display:none;background:none;border:none;color:#e9edf2;font-size:22px;cursor:pointer;padding:10px 8px;line-height:1">&#9776;</button>
@@ -29,6 +33,7 @@ function navBar(user, active) {
       ${isAdmin ? `<a href="${BASE}/config" class="nl${active==='config'?' na':''}">Configurações</a>` : ''}
       ${isAdmin ? `<a href="${BASE}/robot" class="nl${active==='robot'?' na':''}">Painel Admin</a>` : ''}
       ${can(user,'screen.live') ? `<a href="${BASE}/live" class="nl${active==='live'?' na':''}">Live</a>` : ''}
+      ${extra || ''}
     </div>
     <div style="display:flex;align-items:center;gap:14px">
       <a href="${BASE}" id="race-alert-badge" style="display:none;align-items:center;gap:6px;font-size:11px;color:#f97316;text-decoration:none;border:1px solid rgba(249,115,22,.4);background:rgba(249,115,22,.1);border-radius:20px;padding:3px 10px;animation:blink 1.2s ease-in-out infinite">
@@ -90,6 +95,26 @@ function navBar(user, active) {
   <style>
     .nl{padding:12px 18px;color:#888;text-decoration:none;font-size:13px;border-bottom:2px solid transparent;display:inline-block}
     .nl:hover,.na{color:#22c55e!important;border-bottom-color:#22c55e!important}
+    /* ── Seletor de dia no menu (Bruno, 15/09/2026) ──────────────────────
+       Vive so onde alguem passa o terceiro argumento da navBar. Desenhado
+       como PASTILHA, e nao como mais um .nl, pra ficar claro que nao e' uma
+       tela: e' um controle da tela em que voce ja esta.
+       A seta sem destino vira <span> com .off e pointer-events:none — nao
+       entra na navegacao por teclado nem convida ao clique. */
+    .nvd{display:inline-flex;align-items:center;gap:1px;align-self:center;margin-left:12px;
+      border:1px solid #223041;background:#0f141c;border-radius:8px;padding:2px}
+    .nvd-b,.nvd-h{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+      border-radius:6px;color:#8a94a6;text-decoration:none;line-height:1;
+      transition:background .15s,color .15s}
+    .nvd-b{font-size:16px}
+    .nvd-h{font-size:13px}
+    .nvd-b:hover,.nvd-h:hover{background:#18212d;color:#22c55e}
+    .nvd-b:focus-visible,.nvd-h:focus-visible{outline:2px solid #22c55e;outline-offset:1px}
+    .nvd-b.off{opacity:.18;pointer-events:none}
+    .nvd-d{min-width:108px;text-align:center;font-size:11px;font-weight:700;color:#cbd5e1;
+      letter-spacing:.2px;padding:0 4px;white-space:nowrap}
+    /* So a primeira letra: com text-transform:capitalize o mes virava "Set". */
+    .nvd-d::first-letter{text-transform:uppercase}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
     /* ===== Mobile: menu vira hamburguer e os avisos de robo somem ===== */
     @media(max-width:768px){
@@ -99,6 +124,8 @@ function navBar(user, active) {
       #nav-links.open{display:flex!important}
       #nav-links .nl{padding:13px 18px;border-bottom:1px solid #222!important;border-left:2px solid transparent}
       #nav-links .nl.na{border-left-color:#22c55e!important}
+      /* No hamburguer o menu e' coluna: a pastilha ocupa a largura e centra. */
+      #nav-links .nvd{margin:10px 18px;justify-content:center}
       #nav-userinfo{display:none!important}
       #race-alert-badge,#results-badge,#robot-badge{display:none!important}
       #res-banner,#mon-banner,#suspicious-banner,#stop-banner{display:none!important}
@@ -2224,11 +2251,34 @@ function _celulaCamada(cf){
     + 'border-radius:10px;border:1px solid ' + v[0] + '55;color:' + v[0] + ';white-space:nowrap">' + v[1] + '</span></td>';
 }
 
+// Texto seguro dentro de aspas duplas de atributo. Nome de galgo com & ou
+// aspas quebraria a tag em silencio e o par iria pro banco errado.
+function _attrTxt(s){
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 // Marca a linha em que a aposta foi feita. No maximo uma por corrida.
-function _celulaEntreiConf(escolhido){
-  if (!escolhido) return '<td style="text-align:center;color:#444">&mdash;</td>';
-  return '<td style="text-align:center"><span style="font-size:10px;font-weight:800;letter-spacing:.4px;'
-    + 'color:#04140a;background:#21AB58;border-radius:4px;padding:2px 6px">ENTREI</span></td>';
+//
+// MUDOU EM 15/09/2026 (Bruno): "cliquei no lapis pra editar os campos ENTREI e
+// ODD, mas nao permitiu a edicao". Nao era o lapis. Esta celula devolvia um
+// "&mdash;" LITERAL quando a linha nao era a aposta — nao existia input nenhum
+// pro lapis habilitar, entao ele abria o modo de edicao sobre o nada.
+//
+// Agora o checkbox existe SEMPRE e quem aparece e' decidido no CSS. Fora do
+// modo de edicao a celula e' identica a de antes: "&mdash;" ou o selo ENTREI.
+//
+// Marcar grava o par DESTA linha em avb_escolhido — a mesma forma que a tela
+// Analisar grava — e liga o bet_entrou. Desmarcar limpa os dois.
+function _celulaEntreiConf(r, cf, escolhido){
+  return '<td style="text-align:center">'
+    + '<input type="checkbox" class="hist-inp entrei-chk"' + (escolhido ? ' checked' : '') + ' disabled'
+    +   ' data-id="' + r.id + '"'
+    +   ' data-a="' + Number(cf.pick_trap || 0) + '" data-b="' + Number(cf.outro_trap || 0) + '"'
+    +   ' data-an="' + _attrTxt(cf.pick_nome) + '" data-bn="' + _attrTxt(cf.outro_nome) + '"'
+    +   ' title="Marcar que a aposta foi neste par">'
+    + '<span class="entrei-tag">ENTREI</span>'
+    + '<span class="entrei-vazio">&mdash;</span>'
+    + '</td>';
 }
 
 // O "bateu" do CONFRONTO, derivado da chegada pelo bateuPar — a mesma funcao do
@@ -2243,11 +2293,21 @@ function _celulaBateuConf(cf){
 }
 
 // Odd registrada — so faz sentido na linha em que voce entrou.
+//
+// O input agora e' desenhado SEMPRE, pelo mesmo motivo do Entrei: antes, fora
+// da linha da aposta, esta celula era um traco literal e o lapis nao tinha o
+// que habilitar. O CSS mostra o input quando a linha e' a aposta (como antes)
+// ou quando o lapis esta aberto — assim da pra digitar a odd ANTES de marcar
+// o Entrei, que e' a ordem natural de quem esta registrando a aposta depois.
+//
+// A odd continua sendo da CORRIDA (races.odd), nao do par: e' um valor so.
 function _celulaOddConf(r, escolhido){
-  if (!escolhido) return '<td style="text-align:center;color:#333">&mdash;</td>';
-  return '<td style="text-align:center"><input type="text" class="hist-inp" value="' + (r.odd || '') + '" placeholder="-" '
+  return '<td style="text-align:center">'
+    + '<input type="text" class="hist-inp odd-inp" value="' + _attrTxt(r.odd || '') + '" placeholder="-" '
     + 'data-id="' + r.id + '" data-f="odd" disabled style="width:44px;text-align:center;border-radius:4px;padding:4px;font-size:11px" '
-    + 'onkeydown="if(event.key===\'Enter\')this.blur();"></td>';
+    + 'onkeydown="if(event.key===\'Enter\')this.blur();">'
+    + '<span class="odd-vazio">&mdash;</span>'
+    + '</td>';
 }
 
 function _celulaMotor(r){
@@ -2546,6 +2606,25 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
     return SEM[dt.getUTCDay()] + ', ' + (+m[3]) + ' ' + MES[+m[2] - 1];
   };
 
+  // A navegacao por dia MORA NO MENU (Bruno, 15/09/2026). Antes ela era uma
+  // faixa propria no topo do .content: funcionava, mas gastava uma linha
+  // inteira de tela numa tabela que ja pede rolagem.
+  // O conteudo e' o mesmo de antes; muda so onde ele e' desenhado.
+  const navDia = '<div class="nvd">'
+    + (diaAnterior
+        ? '<a class="nvd-b" href="' + BASE + '/sessao/' + diaAnterior.sid + '" title="' + _rotuloDia(diaAnterior.d) + '" aria-label="dia anterior">&#8249;</a>'
+        : '<span class="nvd-b off" aria-hidden="true">&#8249;</span>')
+    + '<span class="nvd-d">' + _rotuloDia(diaAtual) + '</span>'
+    + (diaSeguinte
+        ? '<a class="nvd-b" href="' + BASE + '/sessao/' + diaSeguinte.sid + '" title="' + _rotuloDia(diaSeguinte.d) + '" aria-label="proximo dia">&#8250;</a>'
+        : '<span class="nvd-b off" aria-hidden="true">&#8250;</span>')
+    // So aparece quando ha para onde pular: no dia mais recente ele seria um
+    // link pra propria tela.
+    + ((diaSeguinte && diaMaisNovo && diaMaisNovo.d !== diaAtual)
+        ? '<a class="nvd-h" href="' + BASE + '/sessao/' + diaMaisNovo.sid + '" title="ir para o dia mais recente" aria-label="ir para o dia mais recente">&#187;</a>'
+        : '')
+    + '</div>';
+
   // odd/valor/aposta/atrasada vem da race_user_data do usuario logado
   aplicarPessoais(db, races, user.id);
 
@@ -2836,32 +2915,6 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
 /* As tres taxas LADO A LADO, cada uma como uma mini-coluna: rotulo em cima,
    percentual no meio, contagem embaixo. Usa !important porque o container dos
    KPIs tem regras proprias pros filhos do card. */
-/* ── Navegacao por dia ──────────────────────────────────────────────────
-   Barra fina acima dos cartoes. Nao mexe em nada do que ja existia: entra
-   como primeiro filho do .content e empurra o resto 14px pra baixo.
-   A seta sem destino vira <span> com .off, e nao um link morto: assim ela
-   nao entra na navegacao por teclado nem convida ao clique. */
-.dnav{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 14px;flex-wrap:wrap}
-.dnav-b{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
-  border:1px solid var(--bdr2,#222b38);border-radius:8px;background:#11161f;color:#cbd5e1;
-  text-decoration:none;font-size:18px;line-height:1;transition:border-color .15s,color .15s}
-.dnav-b:hover{border-color:#21AB58;color:#21AB58}
-.dnav-b:focus-visible{outline:2px solid #21AB58;outline-offset:2px}
-.dnav-b.off{opacity:.25}
-.dnav-d{min-width:180px;text-align:center;font-size:14px;font-weight:700;color:#e5e7eb;
-  letter-spacing:.2px}
-/* So a primeira letra: com text-transform:capitalize o mes virava "Set". */
-.dnav-d::first-letter{text-transform:uppercase}
-/* Fora do fluxo: se ele entrasse na linha, a data sairia do centro toda vez
-   que o link aparecesse, e a tela saltaria ao navegar. No celular volta pro
-   fluxo e quebra linha. */
-.dnav-hoje{position:absolute;right:0;top:50%;transform:translateY(-50%);
-  font-size:11px;color:#8a94a6;text-decoration:none;padding:5px 9px;border-radius:6px;
-  border:1px solid transparent;transition:color .15s,border-color .15s}
-.dnav-hoje:hover{color:#21AB58;border-color:rgba(33,171,88,.35)}
-@media(max-width:600px){.dnav-d{min-width:0;font-size:13px}
-  .dnav-hoje{position:static;transform:none}}
-
 .tx3{display:flex!important;gap:14px;justify-content:space-between;margin-top:4px}
 .tx3 .tx3-l{display:flex!important;flex-direction:column;align-items:center;gap:1px;flex:1}
 .tx3 .tx3-rot{font-size:10px;color:#888;white-space:nowrap}
@@ -2954,20 +3007,8 @@ td{padding:10px 8px;border-bottom:1px solid var(--sur2);font-size:12px;vertical-
 tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
 </style></head><body>
 <div class="hero">${logoB64?`<img src="${logoB64}" alt="">`:'<div style="height:130px;background:#000"></div>'}</div>
-${navBar(user, 'historico')}
+${navBar(user, 'historico', navDia)}
 <div class="content">
-<div class="dnav">
-  ${diaAnterior
-    ? `<a class="dnav-b" href="${BASE}/sessao/${diaAnterior.sid}" title="${_rotuloDia(diaAnterior.d)}" aria-label="dia anterior">&#8249;</a>`
-    : '<span class="dnav-b off" aria-hidden="true">&#8249;</span>'}
-  <div class="dnav-d">${_rotuloDia(diaAtual)}</div>
-  ${diaSeguinte
-    ? `<a class="dnav-b" href="${BASE}/sessao/${diaSeguinte.sid}" title="${_rotuloDia(diaSeguinte.d)}" aria-label="proximo dia">&#8250;</a>`
-    : '<span class="dnav-b off" aria-hidden="true">&#8250;</span>'}
-  ${(diaSeguinte && diaMaisNovo && diaMaisNovo.d !== diaAtual)
-    ? `<a class="dnav-hoje" href="${BASE}/sessao/${diaMaisNovo.sid}">ir para o mais recente</a>`
-    : ''}
-</div>
 <div class="kpis">
 ${KPIS.map(function(K){
   // TAXA: 0% em branco, acima de 0% em verde, abaixo em vermelho. O ramo do
@@ -3045,7 +3086,7 @@ ${linhasAvb.map(function(Lx){
     + _celulaAvbConf(r, cf, esc)
     + '<td style="text-align:center"><span style="font-weight:700;font-size:12px;color:'+(cf.pct>=90?'#22c55e':cf.pct>=75?'#eab308':'#888')+'">'+(cf.pct?cf.pct+'%':'-')+'</span></td>'
     + _celulaCamada(cf)
-    + _celulaEntreiConf(esc)
+    + _celulaEntreiConf(r, cf, esc)
     + _celulaBateuConf(cf)
     + (pri ? _celulaResultado(r) : vazia)
     + (pri ? '<td style="text-align:center">'+(!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':''))+'</td>' : vazia)
@@ -3065,6 +3106,25 @@ ${!linhasAvb.length?'<tr><td colspan="13" style="text-align:center;color:#666;pa
 .hist-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff;cursor:pointer}
 .hist-inp[type=checkbox]{cursor:default}
 .hist-inp[type=checkbox]:not([disabled]){cursor:pointer}
+/* ── ENTREI e ODD sob o lapis (Bruno, 15/09/2026) ───────────────────────
+   Quem aparece e' decidido aqui, no CSS, e nao por JS: assim nao existe um
+   segundo estado da tela pra desencontrar do primeiro.
+   FORA do modo de edicao a celula e' exatamente a de antes. */
+.entrei-chk{vertical-align:middle;margin:0}
+.entrei-chk[disabled]{display:none}
+.entrei-chk:not([disabled]) ~ .entrei-tag{margin-left:6px}
+.entrei-chk:not(:checked) ~ .entrei-tag{display:none}
+.entrei-chk:checked ~ .entrei-vazio{display:none}
+.entrei-chk:not([disabled]) ~ .entrei-vazio{display:none}
+.entrei-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;
+  color:#04140a;background:#21AB58;border-radius:4px;padding:2px 6px}
+.entrei-vazio{color:#444}
+/* A odd so e' mostrada na linha da aposta — ou em qualquer linha com o lapis
+   aberto, pra poder digitar antes de marcar o Entrei. */
+tr[data-entrei="sim"] .odd-vazio{display:none}
+.odd-inp:not([disabled]) ~ .odd-vazio{display:none}
+tr[data-entrei="nao"] .odd-inp[disabled]{display:none}
+.odd-vazio{color:#333}
 .edit-pencil{cursor:pointer;font-size:13px;opacity:.55;transition:opacity .15s}
 .edit-pencil:hover{opacity:1}
 .edit-pencil.editing{opacity:1;color:#22c55e}
@@ -3144,6 +3204,16 @@ function saveHistField(id, field, value){
   var race = ALL_RACES.find(function(r){ return String(r.id)===String(id); });
   if (race) { race[field] = value; recomputeKPIs(); }
 }
+// Dois campos no MESMO PUT (Bruno, 15/09/2026). O Entrei grava avb_escolhido
+// e bet_entrou juntos; dois saveHistField seguidos seriam duas requisicoes
+// disputando o mesmo upsert da race_user_data, e a ordem de chegada decidiria
+// qual das duas sobrevive.
+function saveHistFields(id, campos){
+  fetch(BASE+'/api/race/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(campos)})
+    .catch(function(e){console.error('[historico] erro ao salvar',campos,e);});
+  var race = ALL_RACES.find(function(r){ return String(r.id)===String(id); });
+  if (race) { Object.keys(campos).forEach(function(k){ race[k] = campos[k]; }); recomputeKPIs(); }
+}
 // Chamado depois de gravar um campo na linha (Bateu, Odd). Delega pro
 // recalcKpisHist, que le os data-* das linhas — a MESMA fonte que o filtro usa.
 //
@@ -3192,6 +3262,44 @@ document.querySelectorAll('table [data-f]').forEach(function(el){
       setRowEdit(this.getAttribute('data-id'), false);
     });
   }
+});
+// ── ENTREI pelo Historico (Bruno, 15/09/2026) ──────────────────────────────
+//
+// Grava exatamente o que a tela Analisar grava em avb_escolhido: o par, os
+// nomes, a odd e o carimbo de hora. O origem:'historico' e' pra saber depois
+// de onde veio a marcacao — a Analisar usa 'inversao' no mesmo lugar.
+//
+// CONSEQUENCIA que vale saber: DESMARCAR apaga o avb_escolhido, e a linha
+// volta a mostrar o AvB que o motor melhor avaliou naquela corrida. Se o par
+// que voce desmarcou nao era esse, a linha muda de par ao recarregar. Nao e'
+// perda de dado — e' a regra de sempre: sem aposta registrada, o registro do
+// dia e' o melhor avaliado.
+//
+// Fica FORA do laco generico de [data-f] de proposito: aquele manda um campo
+// so, com o nome do data-f, e aqui sao dois campos num PUT.
+document.querySelectorAll('.entrei-chk').forEach(function(el){
+  el.addEventListener('change', function(){
+    var id = this.getAttribute('data-id');
+    var tr = this.closest('tr');
+    var marcado = this.checked;
+    var escolha = '';
+    if (marcado) {
+      var oddEl = document.querySelector('.odd-inp[data-id="'+id+'"]');
+      escolha = JSON.stringify({
+        aTrap: Number(this.getAttribute('data-a')) || null,
+        bTrap: Number(this.getAttribute('data-b')) || null,
+        aNome: this.getAttribute('data-an') || null,
+        bNome: this.getAttribute('data-bn') || null,
+        odd: (oddEl && oddEl.value) ? oddEl.value : null,
+        em: Date.now(),
+        origem: 'historico'
+      });
+    }
+    saveHistFields(id, { avb_escolhido: escolha, bet_entrou: marcado ? 1 : 0 });
+    // O filtro "Entrei" e o CSS da coluna Odd leem este atributo. Sem atualizar
+    // aqui, a tela so concordaria consigo mesma depois de um F5.
+    if (tr) tr.setAttribute('data-entrei', marcado ? 'sim' : 'nao');
+  });
 });
 function closeSvModal(){document.getElementById('sv-modal').classList.remove('open');}
 document.addEventListener('click',function(e){if(e.target.id==='rv-modal')closeReplayModal();if(e.target.id==='sv-modal')closeSvModal();});

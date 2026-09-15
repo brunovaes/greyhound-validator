@@ -57,7 +57,10 @@ for (const c of ['TOP', 'HIGH', 'GOOD']) {
 // ── 2) as celulas de funcao, extraidas e EXECUTADAS ─────────────────────────
 console.log('\n[2] CELULAS QUE VEM DE FUNCAO (extraidas do main.js e executadas)\n');
 
-const DEPS = ['_jsonOuNull', '_mesmoPar', '_parBW', '_blocoAvb', '_avbDoHistorico',
+// `_attrTxt` entrou em 15/09/2026: as celulas Entrei e Odd agora escrevem
+// nome de galgo dentro de atributo HTML e passam por ele. Sem estar aqui, o
+// corpo extraido estouraria com "_attrTxt is not defined".
+const DEPS = ['_attrTxt', '_jsonOuNull', '_mesmoPar', '_parBW', '_blocoAvb', '_avbDoHistorico',
               '_celulaObs', '_celulaAvb', '_motorDoAvb', '_celulaMotor',
               '_celulaResultado', '_celulaAberto', '_celulaBW',
               '_celulaAvbConf', '_celulaCamada', '_celulaEntreiConf',
@@ -97,7 +100,9 @@ const CF = {
 const UMA = [
   ['_celulaAvbConf', () => H._celulaAvbConf(CORRIDA, CF, true)],
   ['_celulaCamada', () => H._celulaCamada(CF)],
-  ['_celulaEntreiConf', () => H._celulaEntreiConf(true)],
+  // ASSINATURA NOVA (15/09/2026): a celula precisa do par pra gravar
+  // avb_escolhido quando voce marca o Entrei pelo lapis.
+  ['_celulaEntreiConf', () => H._celulaEntreiConf(CORRIDA, CF, true)],
   ['_celulaBateuConf', () => H._celulaBateuConf(CF)],
   ['_celulaOddConf', () => H._celulaOddConf(CORRIDA, true)],
   ['_celulaResultado', () => H._celulaResultado(CORRIDA)],
@@ -112,10 +117,47 @@ for (const [nome, fn] of UMA) {
   ok(n === 1, nome + ' devolve exatamente 1 celula  (devolveu ' + n + ')');
 }
 // Os ramos "vazios" contam tanto quanto os cheios: e' onde a coluna some.
-ok((String(H._celulaEntreiConf(false)).match(/<td[\s>]/g) || []).length === 1,
+ok((String(H._celulaEntreiConf(CORRIDA, CF, false)).match(/<td[\s>]/g) || []).length === 1,
    '_celulaEntreiConf devolve 1 celula tambem quando NAO houve entrada');
 ok((String(H._celulaOddConf(CORRIDA, false)).match(/<td[\s>]/g) || []).length === 1,
    '_celulaOddConf devolve 1 celula tambem na linha sem aposta');
+
+// ── O LAPIS PRECISA TER O QUE HABILITAR (Bruno, 15/09/2026) ────────────────
+// "cliquei no lapis pra editar os campos ENTREI e ODD, mas nao permitiu a
+// edicao". O lapis funcionava: ele faz `.hist-inp[data-id=ID].disabled=false`.
+// O que faltava era o input — as duas celulas devolviam um "&mdash;" LITERAL
+// na linha sem aposta. Estas assertivas travam a existencia do controle nos
+// DOIS ramos, que e' a condicao pra o lapis significar alguma coisa.
+const entSem = String(H._celulaEntreiConf(CORRIDA, CF, false));
+const entCom = String(H._celulaEntreiConf(CORRIDA, CF, true));
+ok(/class="hist-inp entrei-chk"/.test(entSem) && /class="hist-inp entrei-chk"/.test(entCom),
+   'a celula Entrei traz o checkbox nos dois ramos (e o que o lapis habilita)');
+ok(/data-id="1"/.test(entSem), 'o checkbox leva o data-id da corrida (o lapis casa por ele)');
+ok(/ disabled/.test(entSem) && / disabled/.test(entCom),
+   'e nasce DESABILITADO — sem o lapis nao se edita sem querer');
+ok(/ checked/.test(entCom) && !/ checked/.test(entSem),
+   'vem marcado so na linha da aposta');
+ok(/data-a="1"/.test(entCom) && /data-b="6"/.test(entCom),
+   'carrega o par desta linha, que e o que vai pro avb_escolhido');
+ok(/data-an="Braemar Millie"/.test(entCom) && /data-bn="Romeo On Point"/.test(entCom),
+   'e os nomes dos dois galgos');
+ok(/class="entrei-tag"/.test(entCom) && /class="entrei-vazio"/.test(entCom),
+   'o selo ENTREI e o traco viraram spans — quem aparece e o CSS que decide');
+
+const oddSem = String(H._celulaOddConf(CORRIDA, false));
+const oddCom = String(H._celulaOddConf(CORRIDA, true));
+ok(/class="hist-inp odd-inp"/.test(oddSem) && /class="hist-inp odd-inp"/.test(oddCom),
+   'a celula Odd traz o input nos dois ramos');
+ok(/data-f="odd"/.test(oddSem), 'e continua gravando pelo laco generico de data-f');
+ok(/value="1.7"/.test(oddCom), 'com o valor que ja estava gravado');
+ok(/class="odd-vazio"/.test(oddSem), 'o traco da Odd tambem virou span');
+
+// O nome do galgo vai pra dentro de atributo entre aspas duplas: aspas ou &
+// no nome quebrariam a tag em silencio e o par iria pro banco errado.
+const CF_SUJO = Object.assign({}, CF, { pick_nome: 'Bit "Of" A & Lad' });
+const entSujo = String(H._celulaEntreiConf(CORRIDA, CF_SUJO, true));
+ok(entSujo.indexOf('data-an="Bit &quot;Of&quot; A &amp; Lad"') >= 0,
+   'nome com aspas e & sai escapado no atributo');
 ok((String(H._celulaCamada({ camada: 'VIP' })).match(/<td[\s>]/g) || []).length === 1,
    '_celulaCamada devolve 1 celula com camada desconhecida (linha antiga do banco)');
 ok(String(H._celulaCamada({ camada: 'VIP' })).indexOf('VIP') !== -1,
@@ -151,8 +193,18 @@ ok(nP === nS, 'os dois ramos batem entre si');
 
 ok(primeira.indexOf('Sheff A2') !== -1 && seguinte.indexOf('Sheff A2') === -1,
    'o nome da corrida aparece so na primeira linha');
-ok(primeira.indexOf('ENTREI') !== -1 && seguinte.indexOf('ENTREI') === -1,
+// MUDOU EM 15/09/2026, e vale explicar por que a assertiva trocou de alvo.
+// O selo ENTREI passou a existir no HTML das DUAS linhas — quem o esconde na
+// linha sem aposta e o CSS (`.entrei-chk:not(:checked) ~ .entrei-tag`), pra a
+// tela nao ter um segundo estado em JS pra desencontrar do primeiro.
+// Procurar o TEXTO 'ENTREI' portanto acusaria as duas, sem nada estar errado.
+// O que distingue a linha da aposta e o `checked` do checkbox, e e' isso que
+// esta assertiva passa a travar. Nao e guarda desarmada: e a mesma pergunta
+// ("a marca so na linha da aposta") feita no lugar onde a resposta agora mora.
+ok(/ checked/.test(primeira) && !/ checked/.test(seguinte),
    'a marca ENTREI so na linha em que a aposta foi feita');
+ok(primeira.indexOf('class="entrei-tag"') !== -1 && seguinte.indexOf('class="entrei-tag"') !== -1,
+   'o selo existe nas duas — e o CSS que decide, nao o servidor');
 ok(seguinte.indexOf('Braemar') !== -1,
    'mas os galgos do confronto aparecem em TODAS as linhas — e o que distingue uma da outra');
 

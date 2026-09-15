@@ -502,13 +502,18 @@ t('o dia anterior vem com DESC e o seguinte com ASC',
   /const cmp = parcTras \? '<' : '>'/.test(SRC) && /const ord = parcTras \? 'DESC' : 'ASC'/.test(SRC));
 t('presa ao usuario canonico, como todo o resto da tela',
   /_diaVizinho[\s\S]{0,700}?\.get\(CANONICO, diaAtual\)/.test(SRC));
+// MUDOU EM 15/09/2026: a faixa saiu do .content e virou PASTILHA dentro do
+// menu, depois do Live ("gasta muita tela uma linha inteira pra isso" —
+// Bruno). O que o bloco protege continua sendo o mesmo: as setas andam por
+// DIA e nao por lote. Mudou so onde o HTML e montado — e por isso ele agora e
+// concatenacao de string, e nao interpolacao de template.
 t('o link aponta pra /sessao/<sid> do dia vizinho',
-  /href="\$\{BASE\}\/sessao\/\$\{diaAnterior\.sid\}"/.test(SRC)
-  && /href="\$\{BASE\}\/sessao\/\$\{diaSeguinte\.sid\}"/.test(SRC));
+  /\/sessao\/' \+ diaAnterior\.sid \+ '/.test(SRC)
+  && /\/sessao\/' \+ diaSeguinte\.sid \+ '/.test(SRC));
 
 t('sem vizinho a seta vira SPAN, nao link morto',
-  /<span class="dnav-b off"[^>]*>&#8249;<\/span>/.test(SRC)
-  && /<span class="dnav-b off"[^>]*>&#8250;<\/span>/.test(SRC));
+  /<span class="nvd-b off"[^>]*>&#8249;<\/span>/.test(SRC)
+  && /<span class="nvd-b off"[^>]*>&#8250;<\/span>/.test(SRC));
 t('as tres consultas novas estao isoladas em try — nao podem derrubar o Historico',
   (SRC.match(/catch \(e\) \{ return null; \}/g) || []).length >= 3);
 
@@ -528,20 +533,41 @@ if (mRot) {
     /Date\.UTC\(/.test(mRot[0]) && /getUTCDay\(\)/.test(mRot[0]));
 }
 
-t('o CSS da barra existe e nao depende de cor fixa sem fallback',
-  /\.dnav\{/.test(SRC) && /var\(--bdr2,#222b38\)/.test(SRC));
-t('o link "mais recente" sai do fluxo pra data nao saltar ao navegar',
-  /\.dnav-hoje\{position:absolute/.test(SRC));
-t('e volta pro fluxo no celular',
-  /@media\(max-width:600px\)[\s\S]{0,140}?\.dnav-hoje\{position:static/.test(SRC));
+t('o CSS da pastilha existe', /\.nvd\{/.test(SRC));
+// A pastilha mora na navBar, que e desenhada em TODAS as telas. As variaveis
+// de tema (--bdr2 e companhia) sao declaradas por cada tela, nao pela navBar —
+// entao aqui a cor literal e a escolha certa, e a assertiva antiga (que exigia
+// var() com fallback) descreveria o oposto do que se quer.
+t('e nao depende de variavel de tema, que a navBar nao pode garantir',
+  /\.nvd\{[^}]*#0f141c/.test(SRC) && !/\.nvd[\w-]*\{[^}]*var\(--/.test(SRC));
+// O "ir para o mais recente" deixou de ser um link de texto fora do fluxo e
+// virou o botao >> dentro da propria pastilha — nao ha mais o que tirar do
+// fluxo, entao as duas assertivas de position viraram esta.
+t('o "mais recente" so e desenhado quando ha pra onde pular',
+  /diaSeguinte && diaMaisNovo && diaMaisNovo\.d !== diaAtual/.test(SRC)
+  && /class="nvd-h"[\s\S]{0,220}?&#187;/.test(SRC));
+t('no hamburguer a pastilha centra em vez de encostar na borda',
+  /#nav-links \.nvd\{margin:10px 18px;justify-content:center\}/.test(SRC));
 t('so a primeira letra e maiuscula (capitalize deixava o mes como "Set")',
-  /\.dnav-d::first-letter\{text-transform:uppercase\}/.test(SRC)
-  && !/\.dnav-d\{[^}]*text-transform:capitalize/.test(SRC));
-const posDnav = SRC.indexOf('<div class="dnav">');
-t('a barra entra ANTES dos cartoes da PROPRIA tela, sem mexer neles',
-  posDnav > 0
-  && SRC.indexOf('<div class="kpis">', posDnav) > posDnav
-  && SRC.indexOf('${KPIS.map(function(K){') > posDnav);
+  /\.nvd-d::first-letter\{text-transform:uppercase\}/.test(SRC)
+  && !/\.nvd-d\{[^}]*text-transform:capitalize/.test(SRC));
+
+// ── ONDE ELA ENTRA ─────────────────────────────────────────────────────────
+// A navBar e compartilhada: um terceiro argumento obrigatorio deixaria
+// "undefined" escrito no menu de todas as outras telas.
+t('a navBar aceita um terceiro argumento opcional', /function navBar\(user, active, extra\)/.test(SRC));
+t('e ele e desenhado logo DEPOIS do Live', /Live<\/a>` : ''\}\s*\n\s*\$\{extra \|\| ''\}/.test(SRC));
+t('com o guarda de vazio (sem ele, as outras telas mostrariam "undefined")',
+  /\$\{extra \|\| ''\}/.test(SRC));
+t('so o Historico passa o terceiro argumento', /navBar\(user, 'historico', navDia\)/.test(SRC));
+t('e as outras telas seguem chamando com dois',
+  /navBar\(user, 'analisar'\)/.test(SRC) && /navBar\(user, 'live'\)/.test(SRC)
+  && /navBar\(user, 'robot'\)/.test(SRC));
+t('a faixa antiga .dnav nao sobrou em lugar nenhum — nem markup nem CSS',
+  !/dnav/.test(SRC));
+const posNvd = SRC.indexOf('const navDia =');
+t('o navDia e montado ANTES do res.send que o usa (senao e ReferenceError)',
+  posNvd > 0 && SRC.indexOf("navBar(user, 'historico', navDia)") > posNvd);
 
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);
