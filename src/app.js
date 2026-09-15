@@ -1339,6 +1339,48 @@ function _parOddAtual(r, ta, tb){
   return null;
 }
 function _avbOdd(a){ return a && (a.oddAvenceB != null ? a.oddAvenceB : a.odd); }
+
+// ── SENTIDO INVERTIDO DE UM CARD (Bruno, 15/09/2026) ────────────────────────
+//
+// Inverter DEIXOU DE SER uma aposta. Ate agora o botao chamava escolherAvb(),
+// ou seja: trocar o sentido colocava voce no estado de ENTRADA — a tela
+// fechava nos outros cards, a odd descia pro campo de baixo e o botao virava
+// DESISTIR. Bruno: "quando clicar em inverter ainda fica na tela de disputa
+// com a odd do avb invertido agora... nao e pra entrar".
+//
+// Agora inverter vira o CARD no lugar, e mais nada. Os outros AvBs continuam
+// na tela, nada e' gravado, e quem entra continua sendo o botao Entrar.
+//
+// O sentido fica na CORRIDA (r._avbInvertidos), nao no DOM: o _mmPintarBw
+// redesenha o fp-alts a cada 75s e qualquer marca posta no HTML se perderia
+// ali — o card voltaria sozinho pro sentido do motor.
+function _chaveParInv(ta, tb){
+  return Math.min(Number(ta), Number(tb)) + 'x' + Math.max(Number(ta), Number(tb));
+}
+function _avbInvertido(r, ta, tb){
+  return !!(r && r._avbInvertidos && r._avbInvertidos[_chaveParInv(ta, tb)]);
+}
+
+// A ODD DO SENTIDO CONTRARIO.
+//
+// A BW manda os DOIS lados no mesmo par (oddAvenceB e oddBvenceA); o app so
+// lia o primeiro. Por isso um card invertido mostrava a odd do sentido oposto
+// — numero errado e silencioso, que e' o pior tipo.
+//
+// O _parOddAtual NAO serve aqui: o passo dele do painel-dia casa o par sem
+// olhar direcao e devolveria a mesma odd_bw do sentido original.
+//
+// Sem odd conhecida pro sentido novo devolve null, e o card esconde a odd. Em
+// aposta, campo vazio e' honesto; numero errado nao.
+function _oddInvertida(r, ta, tb){
+  var l = (r && r._avbsAoVivo) || [];
+  var inv = l.find(function(y){ return String(y.aTrap)===String(tb) && String(y.bTrap)===String(ta); });
+  if (inv && inv.oddBvenceA != null) return inv.oddBvenceA;
+  // A BW as vezes publica o par ja no sentido pedido: ai o lado A serve.
+  var dir = l.find(function(y){ return String(y.aTrap)===String(ta) && String(y.bTrap)===String(tb); });
+  if (dir && dir.oddAvenceB != null) return dir.oddAvenceB;
+  return null;
+}
 // Dois percentuais distintos, entregues pelo robo:
 //   reanalisePct  = motor 2, reanalise par-a-par (pode vir null em analise antiga)
 //   motorOrigPct  = motor 1, analise global original, ja orientada pro favorito do par
@@ -1862,8 +1904,16 @@ function _atualizarOddsDosCards(r){
     var cx = caixas[i];
     var p = String(cx.getAttribute('data-par') || '').split('x');
     if (p.length !== 2) continue;
-    var odd = _parOddAtual(r, p[0], p[1]);
-    if (odd == null) odd = _parOddAtual(r, p[1], p[0]);
+    var odd;
+    if (cx.getAttribute('data-inv')) {
+      // Card invertido: so a odd do sentido desenhado serve. NADA de cair pro
+      // outro lado aqui — era exatamente esse fallback que punha a odd errada
+      // num card virado.
+      odd = _oddInvertida(r, cx.getAttribute('data-sa'), cx.getAttribute('data-sb'));
+    } else {
+      odd = _parOddAtual(r, p[0], p[1]);
+      if (odd == null) odd = _parOddAtual(r, p[1], p[0]);
+    }
     var forte = cx.querySelector('strong');
     if (odd == null) { cx.style.display = 'none'; continue; }
     cx.style.display = '';
@@ -1907,6 +1957,23 @@ function _botaoApostar(r){
 function _cardAvb(r, a, opts){
   opts = opts || {};
   var ta = a.aTrap, tb = a.bTrap;
+  // O card e desenhado no sentido que VOCE escolheu, nao no do motor. A troca
+  // acontece aqui, e nao em quem chama, pra valer pros tres caminhos de uma
+  // vez: o principal, as alternativas da BW e o repinte de 75s.
+  var invertido = _avbInvertido(r, ta, tb);
+  var oddCard = a.odd;
+  // Quando este par JA e' a sua escolha, o ta/tb chega no sentido escolhido (o
+  // _parEmFoco devolve a escolha). Virar de novo desfaria a inversao na tela —
+  // o card voltaria pro sentido do motor depois de voce ter entrado.
+  var jaNoSentido = opts.escolhido
+    && String(opts.escolhido.a) === String(ta) && String(opts.escolhido.b) === String(tb);
+  if (invertido && !jaNoSentido) {
+    var _t = ta; ta = tb; tb = _t;
+    var _n = a.aNome; a = Object.assign({}, a, { aNome: a.bNome, bNome: _n });
+    // A odd do sentido original nao vale mais. Se nao houver a do novo, some.
+    oddCard = _oddInvertida(r, ta, tb);
+  }
+  a = Object.assign({}, a, { odd: oddCard });
   var esc = opts.escolhido;
   var ehEscolhido = esc && String(esc.a) === String(ta) && String(esc.b) === String(tb);
   var borda = opts.principal ? '#21AB58' : (ehEscolhido ? '#1d4ed8' : 'var(--bdr2)');
@@ -1916,6 +1983,10 @@ function _cardAvb(r, a, opts){
   var nomeB = a.bNome || _nomeDoTrap(r, tb, ta, tb) || ('T' + tb);
   var etiqueta = opts.principal ? 'PRINCIPAL' : (opts.rotulo || '');
   var corEtq = opts.principal ? '#21AB58' : (opts.corRotulo || 'var(--mut)');
+  // A camada NAO e' substituida: ela continua dizendo de onde o AvB veio, e o
+  // INVERTIDO entra ao lado. Card virado sem aviso na tela e' aposta trocada.
+  if (invertido) etiqueta = (etiqueta ? etiqueta + ' &middot; ' : '')
+    + '<span style="color:#ef4444">INVERTIDO</span>';
 
   return '<div class="fp-card-avb' + (ehEscolhido ? ' escolhido' : '') + '" style="border-color:' + borda + '">'
     + (etiqueta ? '<div class="fp-card-tag" style="color:' + corEtq + '">' + etiqueta + '</div>' : '')
@@ -1946,7 +2017,11 @@ function _cardAvb(r, a, opts){
     // esta odd sem redesenhar o card. Redesenhar seria mais simples e e o que
     // nao se pode fazer: o card carrega os botoes e o estado de escolha, e
     // reconstrui-lo a cada 5s faria a tela piscar e perder o clique no meio.
+    // data-inv: sem isto o ciclo de 5s reescreveria aqui a odd do sentido
+    // ORIGINAL (o _atualizarOddsDosCards casa o par sem olhar direcao) e o
+    // card invertido voltaria a mostrar o numero errado meio segundo depois.
     +   '<span class="fp-card-odd" data-par="' + Math.min(ta,tb) + 'x' + Math.max(ta,tb) + '"'
+    +     (invertido ? ' data-inv="1" data-sa="' + ta + '" data-sb="' + tb + '"' : '')
     +     (a.odd != null ? '' : ' style="display:none"') + '>odd <strong>'
     +     (a.odd != null ? a.odd : '-') + '</strong></span>'
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'">Analisar</button>'
@@ -2086,8 +2161,12 @@ document.addEventListener('click', function(ev){
   if(t.classList.contains('alt-analisar')){
     openValModalPar(key, parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10));
   } else if(t.classList.contains('alt-entrar')){
-    // Veio da coluna de alternativas: sao os pares que a camada BW trouxe.
-    escolherAvb(parseInt(t.getAttribute('data-a'),10), parseInt(t.getAttribute('data-b'),10), t.getAttribute('data-odd'), 'bw');
+    // Os data-a/data-b ja vem no sentido DESENHADO: se o card estava
+    // invertido, e' o sentido invertido que entra. A origem acompanha, pra a
+    // coluna Motor do Historico poder dizer que a escolha foi sua e nao do
+    // motor — era o que o antigo caminho da inversao gravava.
+    var _ea=parseInt(t.getAttribute('data-a'),10), _eb=parseInt(t.getAttribute('data-b'),10);
+    escolherAvb(_ea, _eb, t.getAttribute('data-odd'), _avbInvertido(r, _ea, _eb) ? 'inversao' : 'bw');
   }
 });
 
@@ -2197,28 +2276,33 @@ function escolherAvb(trapA, trapB, odd, origem){
   renderFocusPanel(r, idx);   // redesenha arena + alternativas com o novo estado
 }
 
-// Inverte o par em foco: 1v2 vira 2v1. Nao e' cosmetico — e' outra aposta.
-// O bateuPar devolve o oposto, e o Historico e a Banca passam a contar pelo
-// par invertido. Por isso grava como escolha pessoal (o mesmo caminho do
-// botao Entrar) e a coluna AvB do Historico marca "sua escolha" na linha.
-// `ta`/`tb` sao o par do CARD que foi clicado. Sem eles vale o par em foco —
-// o comportamento antigo, mantido pra qualquer chamada que ainda passe vazio.
+// Inverte o SENTIDO do card: 1v2 passa a ser desenhado como 2v1.
+//
+// MUDOU EM 15/09/2026 (Bruno). Antes isto chamava escolherAvb(), quer dizer:
+// inverter era ENTRAR. A tela fechava nos outros AvBs, a odd descia pro campo
+// de baixo e o botao virava DESISTIR, sem voce ter decidido nada — "nao e pra
+// entrar". Agora inverter so vira o card; quem entra continua sendo o Entrar.
+//
+// A CONFIRMACAO SAIU JUNTO, e nao por economia: o texto dela dizia "isso muda
+// a aposta: o resultado, o Historico e a Banca passam a contar por esse
+// sentido". Isso deixou de ser verdade — nada e' gravado aqui. Manter um aviso
+// que mente e' pior que nao ter aviso, e a troca agora e' visivel no card (o
+// selo INVERTIDO) e se desfaz com o mesmo clique.
+//
+// `ta`/`tb` sao o par do CARD clicado. Sem eles vale o par em foco.
 function inverterAvb(ta, tb){
   var idx=focusRaceIdx, r=results[idx];
   if(!r) return;
   var p=(ta!=null && tb!=null) ? { a:ta, b:tb } : _parEmFoco(r);
   if(!p || !p.a || !p.b) return;
-  _confirmarNaTela(
-    'Inverter o AvB?',
-    'O par passa a ser T' + p.b + ' vence T' + p.a + '. Isso muda a aposta: o resultado, o Histórico e a Banca passam a contar por esse sentido.',
-    'Inverter',
-    function(){
-      // A odd do par invertido e' outra: a do sentido A vence B nao serve.
-      // Se nao houver odd pro sentido novo, limpa em vez de manter a antiga.
-      var novaOdd=_parOddAtual(r, p.b, p.a);
-      escolherAvb(p.b, p.a, novaOdd, 'inversao');
-    }
-  );
+  if(!r._avbInvertidos) r._avbInvertidos={};
+  var k=_chaveParInv(p.a, p.b);
+  // Clicar de novo desfaz. Some do objeto em vez de virar false: assim o
+  // sessionStorage nao acumula par nenhum que nao esteja invertido.
+  if(r._avbInvertidos[k]) delete r._avbInvertidos[k];
+  else r._avbInvertidos[k]=true;
+  saveSessionState();
+  renderFocusPanel(r, idx);
 }
 
 // Link pra corrida no betwinner. O robo ainda nao entrega a URL real — quando

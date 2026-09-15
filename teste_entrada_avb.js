@@ -155,11 +155,27 @@ ok(/function inverterAvb\(ta, tb\)/.test(srcApp),
 ok(/var p=\(ta!=null && tb!=null\) \? \{ a:ta, b:tb \} : _parEmFoco\(r\);/.test(srcApp),
    'usa o par recebido e so cai no _parEmFoco quando nao vier nada');
 
-// O sentido gravado tem que ser o INVERSO do card, e com a odd do sentido novo.
-ok(/escolherAvb\(p\.b, p\.a, novaOdd, 'inversao'\)/.test(srcApp),
-   'a inversao grava b vence a — e com a odd do sentido novo, nao a antiga');
-ok(/_confirmarNaTela\(\s*\n?\s*'Inverter o AvB\?'/.test(srcApp),
-   'e continua pedindo confirmacao: inverter e outra aposta, nao um ajuste de tela');
+// AS DUAS ASSERTIVAS QUE ESTAVAM AQUI SAIRAM (15/09/2026), e elas descreviam
+// justamente o defeito que o Bruno reportou horas depois: "quando clicar em
+// inverter ainda fica na tela de disputa com a odd do avb invertido agora...
+// nao e pra entrar".
+//
+//   - "a inversao grava b vence a"  -> ela chamava escolherAvb(), ou seja,
+//     inverter ERA entrar. Agora inverter so vira o card.
+//   - "continua pedindo confirmacao" -> o texto do dialogo dizia "isso muda a
+//     aposta: o resultado, o Historico e a Banca passam a contar por esse
+//     sentido". Deixou de ser verdade, porque nada e' gravado ali.
+//
+// Nao e' cobertura perdida: o comportamento inteiro da inversao passou a ser
+// testado RODANDO as funcoes, no teste_inversao_avb.js (29 verificacoes,
+// incluindo a odd do sentido contrario e o par ja escolhido). As duas linhas
+// abaixo sao o que sobra aqui: a garantia de que o caminho antigo nao volta.
+ok(!/escolherAvb\(p\.b, p\.a, novaOdd, 'inversao'\)/.test(srcApp),
+   'inverter NAO chama mais escolherAvb (inverter deixou de ser entrar)');
+ok(!/'Inverter o AvB\?'/.test(srcApp),
+   'e nao abre mais o dialogo que prometia gravar a aposta');
+ok(/r\._avbInvertidos\[k\]=true;/.test(srcApp),
+   'o sentido agora e estado da corrida — o resto esta no teste_inversao_avb.js');
 
 // ── resultado ────────────────────────────────────────────────────────────────
 console.log('\n' + (falhas === 0
