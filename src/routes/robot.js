@@ -4277,6 +4277,287 @@ router.get('/diag/estudo-avb', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ── ESTUDO POR GALGO (admin, so-leitura) — Bruno, 15/09/2026 ────────────────
+//
+// Por que existe: o estudo-avb exporta as medidas JA AGREGADAS pelo motor
+// (caltm_dif, split_dif, podio_dif). As hipoteses do Bruno vivem um nivel
+// abaixo — "venceu a ultima", "desceu de grade", "larga bem na mesma categoria",
+// "foi atrapalhado" — e nenhuma delas cabe numa diferenca ja calculada.
+//
+// Esta rota abre o races.hist_full e emite os FATOS BRUTOS dos dois galgos lado
+// a lado: a ultima corrida de cada um (posicao, grade, split, caltm, margem pro
+// vencedor, trap, peso, piso, remarks) mais os resumos das cinco. As 16
+// hipoteses do ESTUDO_HIPOTESES.md sao todas respondiveis com estas colunas, e
+// a lista foi congelada ANTES desta rota existir — de proposito.
+//
+// O hist_full guarda [{trap, nome, brtClasse, ssnDate, historico}], e cada linha
+// do historico vem do parseHistoryLine com {data, pista, dist, trap, split,
+// bends, pos, remarks, caltm, classe, peso, gng, sp, vencedorTm}. E' o card do
+// DIA: nao ha reconstrucao retroativa aqui.
+//
+// DECISOES QUE MUDAM A LEITURA, explicitadas pra ninguem interpretar errado:
+//
+//   "ultima corrida" = a mais recente NAO-TRIAL. O motor ja ignora trial no
+//   resumoGalgo (ehTrial: grade comecando em T, ou remark Solo/Trial), e
+//   misturar trial com corrida de verdade estragaria "venceu a ultima".
+//
+//   degrau = nivel de hoje menos o nivel da ultima. nivelCat da MENOR numero pra
+//   categoria MAIS FORTE (OR=1, A1=1 ... A9=9), entao degrau POSITIVO quer dizer
+//   que a corrida de hoje e MAIS FRACA — o galgo DESCEU de categoria. E' a
+//   hipotese A2. Escrevi por extenso porque o sinal e contraintuitivo e um erro
+//   aqui inverteria a conclusao inteira.
+//
+//   margem = caltm - vencedorTm: segundos atras do vencedor (~0,08s por corpo).
+//   Zero, ou quase, quando o galgo venceu. E a hipotese B1/B2: o publico le a
+//   POSICAO, quase ninguem le por quanto perdeu.
+//
+//   dias_desc = dias entre a data da ultima e a data do card. A data do
+//   historico vem como "09Sep26"; se nao der pra ler, sai vazio em vez de zero,
+//   porque zero aqui seria "correu hoje" e mentiria.
+//
+// NAO GRAVA NADA. Nenhum INSERT, nenhum UPDATE, nenhuma tela existente tocada.
+//   GET /diag/estudo-galgo?fmt=json      (inventario: cobertura dos campos)
+//   GET /diag/estudo-galgo?fmt=csv&de=2026-08-26&ate=2026-09-14
+router.get('/diag/estudo-galgo', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const cd = require('../utils/camadasDoDia');
+    const reanalise = require('../utils/reanaliseEngine');
+    const { bateuPar } = require('../utils/avbResultado');
+
+    const soData = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
+    const de = soData(req.query.de), ate = soData(req.query.ate);
+    const fmt = String(req.query.fmt || 'json').toLowerCase();
+
+    const recorte = (col) => {
+      const o = [], ar = [];
+      if (de) { o.push(col + ' >= ?'); ar.push(de); }
+      if (ate) { o.push(col + ' <= ?'); ar.push(ate); }
+      return { sql: o.length ? (' WHERE ' + o.join(' AND ')) : '', args: ar };
+    };
+
+    // O ponto de partida e o precalc: uma linha por confronto que o motor avaliou.
+    // O hist_full vem junto pelo race_id.
+    const rp = recorte('p.data');
+    const linhas = db.prepare(
+      'SELECT p.data, p.corrida, p.hora, p.race_id, p.pick_trap, p.outro_trap, '
+      + '       p.pct, p.tier, p.bw_provavel, p.indicado, p.sp_ratio, '
+      + '       r.dist, r.data_card, r.nivel, r.trap_fav, r.hist_full, r.finishing_order_json '
+      + 'FROM avb_precalc p JOIN races r ON r.id = p.race_id'
+      + rp.sql + ' ORDER BY p.data, p.hora, p.pick_trap, p.outro_trap'
+    ).all(...rp.args);
+
+    const ra = recorte('data');
+    const h2h = {};
+    for (const x of db.prepare('SELECT data, corrida, hora, pares_json FROM avb_abertos' + ra.sql).all(...ra.args)) {
+      let arr = []; try { arr = JSON.parse(x.pares_json) || []; } catch (e) {}
+      h2h[x.data + '|' + cd.chaveCorrida(x.corrida, x.hora)] = arr;
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+    const ATRAPALHO = /(Bmp|Crd|Ck|Blk|Baulk|Stmb|Fll|KO|BBlk|SnBlk|BdStt)/i;
+    const SAIDA_LENTA = /SAw/i;
+    const MES = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    // "09Sep26" -> Date. Devolve null quando nao da pra ler: vazio e' honesto,
+    // zero seria "correu hoje".
+    const dataHist = (s) => {
+      const m = String(s || '').match(/^(\d{2})([A-Za-z]{3})(\d{2})$/);
+      if (!m) return null;
+      const mes = MES[m[2].toLowerCase()];
+      if (mes == null) return null;
+      return new Date(Date.UTC(2000 + parseInt(m[3], 10), mes, parseInt(m[1], 10)));
+    };
+    const n2 = (v) => (v == null || !Number.isFinite(Number(v))) ? null : Math.round(Number(v) * 100) / 100;
+    const n3 = (v) => (v == null || !Number.isFinite(Number(v))) ? null : Math.round(Number(v) * 1000) / 1000;
+
+    // Grade de HOJE, tirada do proprio nome da corrida ("Harlow A6" -> A6).
+    const gradeHoje = (corrida) => {
+      const t = String(corrida || '').trim().split(/\s+/);
+      return t.length > 1 ? t[t.length - 1] : '';
+    };
+
+    // Todos os fatos de um galgo, a partir das linhas do card daquele dia.
+    function fatos(g, distHoje, trapHoje, dataCard, nivelHoje) {
+      const vazio = {
+        n_hist: 0, ult_pos: null, ult_grade: '', ult_nivel: null, degrau: null,
+        ult_split: null, ult_caltm: null, ult_margem: null, ult_trap: null,
+        ult_dist: null, ult_peso: null, ult_gng: '', ult_remarks: '', ult_data: '',
+        dias_desc: null, venceu_ult: null, atrapalho_ult: null, saw_n: null,
+        peso_var: null, mudou_dist: null, trap_dif: null,
+        split_med2: null, caltm_med: null, caltm_melhor: null, caltm_dp: null, podio_rate: null
+      };
+      if (!g || !Array.isArray(g.historico) || !g.historico.length) return vazio;
+
+      // So corrida de verdade: trial distorce tudo, e o motor ja o ignora.
+      const reais = g.historico.filter(l => l && !reanalise.ehTrial(l));
+      if (!reais.length) return vazio;
+      const u = reais[0];
+
+      const nivelUlt = reanalise.nivelCat(u.classe);
+      const dUlt = dataHist(u.data), dCard = dataCard ? new Date(dataCard + 'T00:00:00Z') : null;
+      const dias = (dUlt && dCard && !isNaN(dCard)) ? Math.round((dCard - dUlt) / 86400000) : null;
+
+      const caltms = reais.map(l => l.caltm).filter(v => v > 0);
+      const media = caltms.length ? caltms.reduce((s, v) => s + v, 0) / caltms.length : null;
+      const dp = (caltms.length >= 2 && media != null)
+        ? Math.sqrt(caltms.reduce((s, v) => s + (v - media) * (v - media), 0) / (caltms.length - 1)) : null;
+      const splits = reais.map(l => l.split).filter(s => s > 0).slice(0, 2);
+      const poss = reais.map(l => l.pos).filter(p => p > 0);
+      const pesos = reais.map(l => l.peso).filter(p => p > 0);
+
+      return {
+        n_hist: reais.length,
+        ult_pos: u.pos > 0 ? u.pos : null,
+        ult_grade: u.classe || '',
+        ult_nivel: nivelUlt,
+        // POSITIVO = desceu de categoria (corrida de hoje mais fraca). Ver o
+        // comentario no topo: o sinal e contraintuitivo de proposito.
+        degrau: (nivelHoje != null && nivelUlt != null) ? (nivelHoje - nivelUlt) : null,
+        ult_split: n2(u.split),
+        ult_caltm: n2(u.caltm),
+        ult_margem: (u.caltm > 0 && u.vencedorTm > 0) ? n2(u.caltm - u.vencedorTm) : null,
+        ult_trap: u.trap || null,
+        ult_dist: u.dist || null,
+        ult_peso: n2(u.peso),
+        ult_gng: u.gng || '',
+        ult_remarks: String(u.remarks || '').replace(/[,\n]/g, ' ').trim(),
+        ult_data: u.data || '',
+        dias_desc: dias,
+        venceu_ult: u.pos > 0 ? (u.pos === 1 ? 1 : 0) : null,
+        atrapalho_ult: ATRAPALHO.test(u.remarks || '') ? 1 : 0,
+        saw_n: reais.slice(0, 5).filter(l => SAIDA_LENTA.test(l.remarks || '')).length,
+        peso_var: (pesos.length >= 2) ? n2(pesos[0] - pesos[1]) : null,
+        mudou_dist: (u.dist && distHoje) ? (Number(u.dist) === Number(distHoje) ? 0 : 1) : null,
+        trap_dif: (u.trap && trapHoje) ? Math.abs(Number(u.trap) - Number(trapHoje)) : null,
+        split_med2: splits.length ? n3(splits.reduce((s, v) => s + v, 0) / splits.length) : null,
+        caltm_med: n2(media),
+        caltm_melhor: caltms.length ? n2(Math.min.apply(null, caltms)) : null,
+        caltm_dp: n3(dp),
+        podio_rate: poss.length ? n2(poss.filter(p => p <= 3).length / poss.length) : null
+      };
+    }
+
+    const mesmoPar = (p, t1, t2) => (Number(p.aTrap) === t1 && Number(p.bTrap) === t2)
+                                 || (Number(p.aTrap) === t2 && Number(p.bTrap) === t1);
+
+    const CAMPOS_GALGO = ['n_hist','ult_pos','ult_grade','ult_nivel','degrau','ult_split','ult_caltm',
+      'ult_margem','ult_trap','ult_dist','ult_peso','ult_gng','ult_remarks','ult_data','dias_desc',
+      'venceu_ult','atrapalho_ult','saw_n','peso_var','mudou_dist','trap_dif','split_med2','caltm_med',
+      'caltm_melhor','caltm_dp','podio_rate'];
+
+    const saida = [];
+    const cobertura = {};                 // quantas linhas tem cada campo preenchido
+    const inv = {};
+    let comPar = 0, semHist = 0, comResultado = 0;
+
+    // hist_full parseado uma vez por corrida, nao uma vez por par.
+    const cacheHist = {};
+
+    for (const L of linhas) {
+      const chave = L.data + '|' + cd.chaveCorrida(L.corrida, L.hora);
+      const pick = Number(L.pick_trap), outro = Number(L.outro_trap);
+      const par = (h2h[chave] || []).find(p => p && p.marketPct != null && mesmoPar(p, pick, outro)) || null;
+      const d = inv[L.data] || (inv[L.data] = { confrontos: 0, abriu_bw: 0, com_hist: 0, com_resultado: 0 });
+      d.confrontos++;
+      if (!par) continue;                 // so os apostaveis
+      d.abriu_bw++; comPar++;
+
+      if (!(L.race_id in cacheHist)) {
+        let hf = null; try { hf = JSON.parse(L.hist_full); } catch (e) {}
+        const porTrap = {};
+        if (Array.isArray(hf)) for (const g of hf) if (g && g.trap != null) porTrap[Number(g.trap)] = g;
+        cacheHist[L.race_id] = porTrap;
+      }
+      const porTrap = cacheHist[L.race_id];
+      const nivelHoje = reanalise.nivelCat(gradeHoje(L.corrida));
+      const fa = fatos(porTrap[pick], L.dist, pick, L.data_card || L.data, nivelHoje);
+      const fb = fatos(porTrap[outro], L.dist, outro, L.data_card || L.data, nivelHoje);
+      // Galgo PRESENTE no card mas sem nenhuma corrida nao-trial conta como sem
+      // historico. Exportar a linha com os campos vazios nao ajudaria nenhuma
+      // hipotese e ainda entraria no denominador da cobertura, fazendo parecer
+      // que a coluna falha quando o que falta e o galgo.
+      if (!fa.n_hist || !fb.n_hist) { semHist++; continue; }
+      d.com_hist++;
+
+      const aEhPick = Number(par.aTrap) === pick;
+      const mkt = aEhPick ? Number(par.marketPct) : 100 - Number(par.marketPct);
+      const oddPick = aEhPick ? Number(par.oddAvenceB) : Number(par.oddBvenceA);
+
+      const b = bateuPar(L.finishing_order_json, pick, outro);
+      if (b !== null) { comResultado++; d.com_resultado++; }
+
+      const partes = String(L.corrida || '').trim().split(/\s+/);
+      const linha = {
+        data: L.data, hora: L.hora, track: cd.pista(L.corrida),
+        categoria: partes.slice(1).join(' ') || '', nivel_hoje: nivelHoje, dist: L.dist || '',
+        race_id: L.race_id, pick: pick, outro: outro,
+        pct: L.pct, camada: cd.camadaPorRegua(L.tier), bw_provavel: L.bw_provavel ? 1 : 0,
+        indicado: L.indicado ? 1 : 0, sp_ratio: n2(L.sp_ratio),
+        na_lista: (L.nivel !== 'skip' && L.trap_fav > 0) ? 1 : 0,
+        market_pct: n2(mkt), odd_pick: n2(oddPick),
+        edge: (L.pct != null) ? n2(Number(L.pct) - mkt) : null,
+        bateu: (b === null) ? '' : (b ? 1 : 0)
+      };
+      for (const c of CAMPOS_GALGO) linha['a_' + c] = fa[c];
+      for (const c of CAMPOS_GALGO) linha['b_' + c] = fb[c];
+      for (const k of Object.keys(linha)) {
+        if (linha[k] !== null && linha[k] !== '') cobertura[k] = (cobertura[k] || 0) + 1;
+      }
+      saida.push(linha);
+    }
+
+    const dias = Object.keys(inv).sort().map(k => Object.assign({ data: k }, inv[k]));
+
+    if (fmt === 'csv') {
+      const cols = saida.length ? Object.keys(saida[0]) : [];
+      const esc = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        return /[",\n]/.test(s) ? ('"' + s.replace(/"/g, '""') + '"') : s;
+      };
+      let csv = '﻿' + cols.join(',') + '\n';
+      for (const r of saida) csv += cols.map(c => esc(r[c])).join(',') + '\n';
+      const nome = 'estudo-galgo_' + (de || 'inicio') + '_a_' + (ate || 'fim') + '.csv';
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="' + nome + '"');
+      return res.send(csv);
+    }
+
+    // Inventario = COBERTURA. A pergunta aqui nao e "quantas linhas", e' "quais
+    // colunas vem preenchidas": uma hipotese so vale se o campo dela existir na
+    // maioria das linhas, e melhor descobrir isso antes de baixar o CSV.
+    const cob = {};
+    for (const c of Object.keys(saida[0] || {})) {
+      cob[c] = saida.length ? +(100 * (cobertura[c] || 0) / saida.length).toFixed(1) : 0;
+    }
+    res.json({
+      de: de || null, ate: ate || null,
+      resumo: {
+        dias: dias.length,
+        primeiro_dia: dias.length ? dias[0].data : null,
+        ultimo_dia: dias.length ? dias[dias.length - 1].data : null,
+        confrontos_no_precalc: linhas.length,
+        que_a_bw_abriu: comPar,
+        descartados_sem_hist_dos_dois: semHist,
+        linhas_no_csv: saida.length,
+        com_resultado: comResultado
+      },
+      cobertura_pct: cob,
+      dias,
+      legenda: 'So-leitura. Uma linha por AvB que a BW abriu, com os fatos brutos dos dois galgos: '
+        + 'prefixo a_ = o pick do motor, b_ = o outro. "ultima" e sempre a corrida mais recente '
+        + 'NAO-TRIAL. degrau = nivel de hoje menos o nivel da ultima, e POSITIVO significa que o galgo '
+        + 'DESCEU de categoria (nivelCat da numero menor pra categoria mais forte). '
+        + 'ult_margem = caltm - vencedorTm, segundos atras do vencedor (~0,08s por corpo). '
+        + 'caltm_dp = desvio padrao das corridas nao-trial, a medida de regularidade. '
+        + 'dias_desc vem vazio quando a data do historico nao pode ser lida — vazio, nunca zero. '
+        + 'bateu = 1 se o pick chegou na frente, 0 se nao, vazio se um dos dois nao aparece na chegada. '
+        + 'cobertura_pct diz em quantos por cento das linhas cada coluna vem preenchida: hipotese cujo '
+        + 'campo tem cobertura baixa nao pode ser testada. Baixe as linhas com fmt=csv.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 //   GET /diag/oportunidades-bw-resultado?date=YYYY-MM-DD&teto=1.5&faixa=1.8
 router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
   try {
@@ -5781,6 +6062,8 @@ router.get('/como-nasce-um-avb', requireAdmin, (req, res) => {
 + '<a href="' + BASE + '/robot/diag/persistir-manha" target="_blank" rel="noopener">Persistir a manha (dry-run)</a></p>'
 + '<p><a href="' + BASE + '/robot/diag/estudo-avb" target="_blank" rel="noopener">Estudo do AvB (inventario)</a> &nbsp;&middot;&nbsp; '
 + '<a href="' + BASE + '/robot/diag/estudo-avb?fmt=csv" target="_blank" rel="noopener">baixar o CSV do historico</a></p>'
++ '<p><a href="' + BASE + '/robot/diag/estudo-galgo" target="_blank" rel="noopener">Estudo por galgo (cobertura)</a> &nbsp;&middot;&nbsp; '
++ '<a href="' + BASE + '/robot/diag/estudo-galgo?fmt=csv" target="_blank" rel="noopener">baixar o CSV dos fatos por galgo</a></p>'
 + '</div>'
 + '</div></body></html>');
 });
