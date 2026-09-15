@@ -135,6 +135,32 @@ ok(/avb_escolhido\s*:/.test(srcAnalisar),
 ok(/avb_escolhido\s*:/.test(srcApp),
    'app.js/_persistirEscolha (Analisar antiga) manda avb_escolhido no PUT');
 
+// ── 6) INVERTER O SENTIDO EM QUALQUER CARD ───────────────────────────────────
+// Bruno, 15/09/2026: "queria ir no 4v1 do TOP mas nao tem como inverter".
+// O botao so nascia no card PRINCIPAL, e o principal perde essa marca assim que
+// voce escolhe um par — entao, na pratica, inverter so existia antes da escolha
+// e so no par que a analise ja tinha posto na arena.
+//
+// A parte perigosa nao e o botao: e' que o inverterAvb() lia o par EM FOCO.
+// Chamado de um card alternativo ele inverteria o PRINCIPAL, sem avisar — voce
+// clicaria no 4v1 e a aposta viraria 2v1. Por isso os traps vao no onclick.
+console.log('\n[6] inverter o sentido a partir de qualquer card');
+
+ok(!/opts\.principal \? '<button type="button" onclick="inverterAvb\(\)"/.test(srcApp),
+   'o botao de inverter nao depende mais de opts.principal');
+ok(/onclick="inverterAvb\(' \+ ta \+ ',' \+ tb \+ '\)"/.test(srcApp),
+   'e leva os traps DO CARD no onclick (sem isso ele inverteria o par em foco)');
+ok(/function inverterAvb\(ta, tb\)/.test(srcApp),
+   'o inverterAvb recebe o par');
+ok(/var p=\(ta!=null && tb!=null\) \? \{ a:ta, b:tb \} : _parEmFoco\(r\);/.test(srcApp),
+   'usa o par recebido e so cai no _parEmFoco quando nao vier nada');
+
+// O sentido gravado tem que ser o INVERSO do card, e com a odd do sentido novo.
+ok(/escolherAvb\(p\.b, p\.a, novaOdd, 'inversao'\)/.test(srcApp),
+   'a inversao grava b vence a — e com a odd do sentido novo, nao a antiga');
+ok(/_confirmarNaTela\(\s*\n?\s*'Inverter o AvB\?'/.test(srcApp),
+   'e continua pedindo confirmacao: inverter e outra aposta, nao um ajuste de tela');
+
 // ── resultado ────────────────────────────────────────────────────────────────
 console.log('\n' + (falhas === 0
   ? 'TUDO OK — a entrada da aposta persiste o par escolhido.'

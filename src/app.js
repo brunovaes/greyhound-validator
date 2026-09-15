@@ -1950,7 +1950,16 @@ function _cardAvb(r, a, opts){
     +     (a.odd != null ? '' : ' style="display:none"') + '>odd <strong>'
     +     (a.odd != null ? a.odd : '-') + '</strong></span>'
     +   '<button type="button" class="alt-analisar" data-a="'+ta+'" data-b="'+tb+'">Analisar</button>'
-    +   (opts.principal ? '<button type="button" onclick="inverterAvb()" title="trocar o sentido">&#8646;</button>' : '')
+    // INVERTER EM QUALQUER CARD (Bruno, 15/09/2026): "queria ir no 4v1 do TOP
+    // mas nao tem como inverter". O botao so nascia com `opts.principal`, entao
+    // os AvBs da BW (TOP/HIGH/GOOD ao lado) nao tinham como trocar de sentido —
+    // e o principal perdia o botao assim que voce escolhia, porque escolher
+    // apaga o `principal`.
+    //
+    // Os traps vao no onclick. Antes o inverterAvb() lia o par EM FOCO: chamado
+    // de um card alternativo ele inverteria o principal, calado. Isso e' pior
+    // que nao ter o botao.
+    +   '<button type="button" onclick="inverterAvb(' + ta + ',' + tb + ')" title="trocar o sentido: T' + tb + ' vence T' + ta + '">&#8646;</button>'
     +   '<button type="button" class="alt-entrar' + (ehEscolhido ? ' on' : '') + '" data-a="'+ta+'" data-b="'+tb+'" data-odd="'+(a.odd!=null?a.odd:'')+'">'
     +     (ehEscolhido ? 'DESISTIR' : 'Entrar') + '</button>'
     + '</div>'
@@ -2192,10 +2201,12 @@ function escolherAvb(trapA, trapB, odd, origem){
 // O bateuPar devolve o oposto, e o Historico e a Banca passam a contar pelo
 // par invertido. Por isso grava como escolha pessoal (o mesmo caminho do
 // botao Entrar) e a coluna AvB do Historico marca "sua escolha" na linha.
-function inverterAvb(){
+// `ta`/`tb` sao o par do CARD que foi clicado. Sem eles vale o par em foco —
+// o comportamento antigo, mantido pra qualquer chamada que ainda passe vazio.
+function inverterAvb(ta, tb){
   var idx=focusRaceIdx, r=results[idx];
   if(!r) return;
-  var p=_parEmFoco(r);
+  var p=(ta!=null && tb!=null) ? { a:ta, b:tb } : _parEmFoco(r);
   if(!p || !p.a || !p.b) return;
   _confirmarNaTela(
     'Inverter o AvB?',
