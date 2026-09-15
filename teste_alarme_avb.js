@@ -440,45 +440,122 @@ async function cena(cfg, corridas, quantosRepiques) {
   bloco('[7] A PAGINA DE DOCUMENTACAO RENDERIZA INTEIRA');
 
   const SRC_ROBOT = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'robot.js'), 'utf8');
+
+  // O EXTRATOR VIROU FUNCAO (15/09/2026). Ele era um bloco solto aqui dentro,
+  // que servia so ao /como-nasce-um-avb. Agora existe uma segunda pagina de
+  // documentacao (/avisos-da-tela) e duas copias do mesmo casador de chaves
+  // seriam duas chances de uma delas parar de pegar defeito sem ninguem ver.
+  // O que ele faz e' exatamente o que o bloco antigo fazia: acha o corpo da
+  // rota, roda num contexto de mentira e devolve o HTML.
+  function renderRota(nome) {
+    const iR = SRC_ROBOT.indexOf("router.get('/" + nome + "'");
+    if (iR < 0) return { html: null, erro: new Error('rota /' + nome + ' nao existe') };
+    const iniR = SRC_ROBOT.indexOf('{', SRC_ROBOT.indexOf('(req, res) =>', iR));
+    let dR = 0, jR = iniR;
+    for (; jR < SRC_ROBOT.length; jR++) {
+      if (SRC_ROBOT[jR] === '{') dR++;
+      else if (SRC_ROBOT[jR] === '}') { dR--; if (!dR) break; }
+    }
+    const corpoRota = SRC_ROBOT.slice(iniR + 1, jR);
+    let out = null, erro = null;
+    try {
+      const { designTokensCSS } = require('./src/utils/designTokens');
+      const ctxR = {
+        BASE: '/greyhound', designTokensCSS, navBar: function () { return '<nav>NAV</nav>'; },
+        req: { user: { name: 'Bruno' } }, res: { send: function (h) { out = h; } }, console: console
+      };
+      vm.createContext(ctxR);
+      vm.runInContext('(function(req,res){' + corpoRota + '})(req,res)', ctxR);
+    } catch (e) { erro = e; }
+    return { html: out, erro: erro };
+  }
+
+  // Guardas comuns as duas paginas de documentacao. Elas sao montadas por
+  // concatenacao de string: uma tag aberta a mais nao derruba o node --check
+  // nem o valida-templates, so aparece torta na tela.
+  function conferePagina(rotulo, html) {
+    const abertas = (html.match(/<div/g) || []).length;
+    const fechadas = (html.match(/<\/div>/g) || []).length;
+    t(rotulo + ': as divs fecham todas (' + abertas + ' / ' + fechadas + ')', abertas === fechadas);
+    t(rotulo + ': nenhuma interpolacao vazou pro HTML final', !/\$\{/.test(html));
+    t(rotulo + ': herda a tipografia do app (designTokensCSS)', /Oswald/.test(html) && /Inter/.test(html));
+    t(rotulo + ': e o fundo do app, nao um tema proprio', /background:#0D1117/.test(html));
+    t(rotulo + ': as cores das camadas sao as combinadas',
+      html.indexOf('#3b82f6') >= 0 && html.indexOf('#f97316') >= 0 && html.indexOf('#8b5cf6') >= 0);
+  }
+
   t('a rota existe', SRC_ROBOT.indexOf("router.get('/como-nasce-um-avb'") >= 0);
   t('e esta no menu Governanca, nao no de Diagnostico',
     /data-g="gov"[\s\S]{0,700}?robot\/como-nasce-um-avb/.test(SRC_ROBOT));
   t('usa um icone que existe no icons.js (icon() devolve vazio pra nome desconhecido)',
     /como-nasce-um-avb"><span class="icon">\$\{icon\('scroll'/.test(SRC_ROBOT));
 
-  const iR = SRC_ROBOT.indexOf("router.get('/como-nasce-um-avb'");
-  const iniR = SRC_ROBOT.indexOf('{', SRC_ROBOT.indexOf('(req, res) =>', iR));
-  let dR = 0, jR = iniR;
-  for (; jR < SRC_ROBOT.length; jR++) {
-    if (SRC_ROBOT[jR] === '{') dR++;
-    else if (SRC_ROBOT[jR] === '}') { dR--; if (!dR) break; }
-  }
-  const corpoRota = SRC_ROBOT.slice(iniR + 1, jR);
-  let html = null, erroRender = null;
-  try {
-    const { designTokensCSS } = require('./src/utils/designTokens');
-    const ctxR = {
-      BASE: '/greyhound', designTokensCSS, navBar: function () { return '<nav>NAV</nav>'; },
-      req: { user: { name: 'Bruno' } }, res: { send: function (h) { html = h; } }, console: console
-    };
-    vm.createContext(ctxR);
-    vm.runInContext('(function(req,res){' + corpoRota + '})(req,res)', ctxR);
-  } catch (e) { erroRender = e; }
+  const rNasce = renderRota('como-nasce-um-avb');
+  const html = rNasce.html, erroRender = rNasce.erro;
   t('a rota renderiza sem estourar', !erroRender && !!html);
   if (erroRender) console.log('        -> ' + erroRender.message);
 
   if (html) {
-    const abertas = (html.match(/<div/g) || []).length;
-    const fechadas = (html.match(/<\/div>/g) || []).length;
-    t('as divs fecham todas (' + abertas + ' / ' + fechadas + ')', abertas === fechadas);
-    t('nenhuma interpolacao vazou pro HTML final', !/\$\{/.test(html));
-    t('herda a tipografia do app (designTokensCSS)', /Oswald/.test(html) && /Inter/.test(html));
-    t('e o fundo do app, nao um tema proprio', /background:#0D1117/.test(html));
-    t('as cores das camadas sao as combinadas',
-      html.indexOf('#3b82f6') >= 0 && html.indexOf('#f97316') >= 0 && html.indexOf('#8b5cf6') >= 0);
+    conferePagina('nasce', html);
     t('traz as tres situacoes de corrida fora da lista',
       html.indexOf('regua reprovou') >= 0 && html.indexOf('Corrida parelha') >= 0 && html.indexOf('fora do perfil') >= 0);
     t('e linka os diags de onde os numeros vieram', html.indexOf('/diag/funil-do-dia') >= 0);
+  }
+
+  // ── A PAGINA "AVISOS DA TELA" ────────────────────────────────────────────
+  // Bruno, 15/09: "consegue me informar todos os avisos que aparecem na tela e
+  // suas cores?". O catalogo virou pagina, em Painel Admin > Governanca.
+  //
+  // ELE E ESCRITO A MAO. Nao da pra o teste provar que as cores batem com o
+  // fonte sem construir um parser de CSS embutido em template literal, que
+  // seria mais fragil que a propria pagina. O que da pra travar, e esta
+  // travado aqui, e' que as cores CITADAS sao as cores CANONICAS do sistema —
+  // as mesmas constantes que o resto das suites ja defendem. Cor inventada na
+  // documentacao cai aqui.
+  bloco('[7b] O CATALOGO DE AVISOS RENDERIZA E CITA AS CORES CANONICAS');
+
+  t('a rota existe', SRC_ROBOT.indexOf("router.get('/avisos-da-tela'") >= 0);
+  t('esta no menu Governanca, ao lado do "Como nasce um AvB"',
+    /data-g="gov"[\s\S]{0,900}?robot\/avisos-da-tela/.test(SRC_ROBOT));
+  t('usa um icone que existe no icons.js',
+    /avisos-da-tela"><span class="icon">\$\{icon\('bell'/.test(SRC_ROBOT));
+
+  const rAvisos = renderRota('avisos-da-tela');
+  t('a rota renderiza sem estourar', !rAvisos.erro && !!rAvisos.html);
+  if (rAvisos.erro) console.log('        -> ' + rAvisos.erro.message);
+
+  if (rAvisos.html) {
+    const H = rAvisos.html;
+    conferePagina('avisos', H);
+    t('as tabelas fecham todas',
+      (H.match(/<table/g) || []).length === (H.match(/<\/table>/g) || []).length
+      && (H.match(/<tr>/g) || []).length === (H.match(/<\/tr>/g) || []).length
+      && (H.match(/<td/g) || []).length === (H.match(/<\/td>/g) || []).length);
+
+    // As cores canonicas, uma a uma. Se alguem trocar uma delas no sistema e
+    // esquecer da pagina, ou escrever um hex errado aqui, cai neste bloco.
+    [['#a78bfa', 'roxo do robo de Resultados'],
+     ['#60a5fa', 'azul do robo de PDF/Monitoramento'],
+     ['#ef4444', 'vermelho de "pare e confira"'],
+     ['#f59e0b', 'ambar do card suspeito'],
+     ['#1B9D40', 'verde de "esta chegando"'],
+     ['#eab308', 'amarelo da corrida atrasada'],
+     ['#9aa4b2', 'cinza do ticker']].forEach(function (c) {
+      t('cita o ' + c[1] + ' (' + c[0] + ')', H.indexOf(c[0]) >= 0);
+    });
+
+    // As cinco familias. Faltar uma e' o defeito mais provavel desta pagina:
+    // alguem adiciona um aviso no sistema e nao adiciona aqui.
+    ['Pastilhas do menu', 'Faixa de avisos', 'Ticker', 'Banners da arena',
+     'A lista de corridas', 'O que apita'].forEach(function (s) {
+      t('tem a secao "' + s + '"', H.indexOf(s) >= 0);
+    });
+
+    t('diz que o alarme toca em qualquer tela (a entrega de 15/09)',
+      H.indexOf('qualquer tela') >= 0);
+    t('e avisa que o catalogo e escrito a mao — pagina de referencia errada e pior que nenhuma',
+      H.indexOf('escrito a mao') >= 0);
+    t('linka a pagina irma', H.indexOf('/robot/como-nasce-um-avb') >= 0);
   }
 
   // ── A CASCATA MUDOU DE PORTA, NAO DE ENDERECO ────────────────────────────

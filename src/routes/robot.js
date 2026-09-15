@@ -1092,6 +1092,7 @@ ${navBar(req.user, 'robot')}
   <div class="mgrp-itens">
     <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/diagnostico-remarks"><span class="icon">${icon('list',{size:16})}</span> Catálogo de Remarks</a>
     <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/como-nasce-um-avb"><span class="icon">${icon('scroll',{size:16})}</span> Como nasce um AvB</a>
+    <a class="robot-menu-item robot-hide-mobile" href="${BASE}/robot/avisos-da-tela"><span class="icon">${icon('bell',{size:16})}</span> Avisos da tela</a>
     <!-- A Cascata saiu da barra de navegacao do topo e veio pra ca (Bruno,
          11/09/2026). Ela e' a bancada de calibragem das peneiras do motor —
          governanca da regra, nao operacao do dia —, e ficava disputando espaco
@@ -6022,6 +6023,160 @@ ${categorizados.map(l => `<tr><td>${l.token}</td><td class="cat">${l.categoria}<
 
 <p style="margin-top:20px"><a href="${BASE}/robot/diagnostico-traps" style="color:#22c55e;font-size:13px;text-decoration:none">← Voltar pro diagnóstico</a></p>
 </div></body></html>`);
+});
+
+// ── AVISOS DA TELA (admin, so-leitura) — Bruno, 15/09/2026 ─────────────────
+//
+// "consegue me informar todos os avisos que aparecem na tela e suas cores?"
+//
+// Vive em Painel Admin > Governanca pelo mesmo motivo do "Como nasce um AvB":
+// e documentacao do sistema, nao operacao. Nao le nem grava banco — e texto.
+//
+// O CATALOGO E ESCRITO A MAO, de proposito, e isso tem uma consequencia que
+// vale dizer em voz alta: se alguem mudar uma cor no fonte e nao mudar aqui,
+// esta pagina passa a mentir. Ler as cores do CSS em tempo de execucao seria
+// mais "certo" e muito pior: os avisos nascem em quatro arquivos diferentes,
+// metade em style inline dentro de template literal, e o parser viraria a
+// parte fragil de uma pagina que so precisa explicar.
+//
+// A colunma "onde" e o que evita a duvida mais comum, que e achar que o aviso
+// sumiu quando na verdade ele so nao existe naquela tela.
+router.get('/avisos-da-tela', requireAdmin, (req, res) => {
+  const C = {
+    top: '#3b82f6', high: '#f97316', good: '#8b5cf6',
+    roxo: '#a78bfa', azul: '#60a5fa', laranja: '#f97316',
+    vermelho: '#ef4444', ambar: '#f59e0b', verde: '#1B9D40',
+    amarelo: '#eab308', cinza: '#9aa4b2'
+  };
+  // Uma linha do catalogo. A bolinha e a cor DE VERDADE, nao um nome de cor:
+  // a pergunta do Bruno era sobre cor, entao a resposta tem que ser visivel.
+  const linha = (cor, nome, texto, onde, quando) =>
+    '<tr>'
+    + '<td class="c"><span class="sw" style="background:' + cor + '"></span>'
+    +   '<code>' + cor + '</code></td>'
+    + '<td class="nm">' + nome + '</td>'
+    + '<td class="tx">' + texto + '</td>'
+    + '<td class="on">' + onde + '</td>'
+    + '<td class="qd">' + quando + '</td>'
+    + '</tr>';
+  const tabela = (linhas) =>
+    '<div class="tw"><table><thead><tr>'
+    + '<th style="width:124px">Cor</th><th style="width:150px">Aviso</th>'
+    + '<th>Texto na tela</th><th style="width:120px">Onde</th><th style="width:200px">Quando aparece</th>'
+    + '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div>';
+
+  res.send('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
++ '<meta name="viewport" content="width=device-width,initial-scale=1">'
++ '<title>Avisos da tela - Greyhound Factory</title>'
++ '<link rel="stylesheet" href="' + BASE + '/static/css/shared.css">'
++ '<style>'
++ designTokensCSS()
++ 'body{background:#0D1117}'
++ 'nav{background:#0D1117 !important;border-bottom:1px solid #222 !important}'
++ '.content{padding:24px 20px 64px;max-width:1080px;margin:0 auto}'
++ 'h1{font-size:26px;font-weight:700;margin:0 0 6px}'
++ '.sub{color:#8a94a6;font-size:14px;line-height:1.6;margin:0 0 22px;max-width:74ch}'
++ '.sub b{color:#e8edf6;font-weight:600}'
+/* Mesma faixa verde do "Como nasce um AvB" e do Catalogo de Remarks: no Painel
+   Admin ela ja significa "o resumo da tela vem aqui". */
++ '.tese{background:rgba(34,197,94,.08);border-top:2px solid #22c55e;border-radius:10px;padding:16px 20px;margin-bottom:28px;font-size:14px;line-height:1.65;color:#c9d2e0}'
++ '.tese b{color:#fff}'
++ 'h2{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.9px;margin:34px 0 10px;font-weight:700}'
++ '.intro{color:#8a94a6;font-size:13px;line-height:1.6;margin:0 0 12px;max-width:74ch}'
++ '.intro b{color:#c9d2e0;font-weight:600}'
++ '.tw{overflow-x:auto}'
++ 'table{width:100%;border-collapse:collapse;background:#161B27;border:1px solid #222;border-radius:8px;overflow:hidden}'
++ 'th{padding:9px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#666;background:#0D1117;border-bottom:1px solid #222;white-space:nowrap}'
++ 'td{padding:10px 12px;border-bottom:1px solid #1e2532;font-size:13px;color:#8a94a6;vertical-align:top;line-height:1.5}'
++ 'tr:last-child td{border-bottom:none}'
++ 'td.c{white-space:nowrap}'
++ 'td.c code{font-size:11px;color:#6b7686;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}'
++ '.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px;vertical-align:-2px;border:1px solid rgba(255,255,255,.14)}'
++ 'td.nm{color:#e8edf6;font-weight:600}'
++ 'td.tx code{font-size:12px;color:#c9d2e0;background:#0D1117;border:1px solid #222;border-radius:4px;padding:1px 5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}'
++ 'td.on,td.qd{font-size:12px;color:#6b7686}'
++ '.nota{background:#161B27;border:1px solid #222;border-left:2px solid #2b3446;border-radius:6px;padding:12px 15px;margin-top:12px;font-size:13px;line-height:1.6;color:#8a94a6}'
++ '.nota b{color:#c9d2e0}'
++ '.pe{margin-top:34px;padding-top:18px;border-top:1px solid #1e2532;font-size:12.5px;color:#4b5566;line-height:1.7}'
++ '.pe b{color:#8a94a6}'
+/* Mesmo verde dos links de rodape do "Como nasce um AvB": sem esta regra o
+   link herdava o azul-roxo do navegador e destoava da pagina irma. */
++ '.pe a{color:#22c55e;text-decoration:none}'
++ '.pe a:hover{text-decoration:underline}'
++ '@media(max-width:700px){td.qd,th:nth-child(5){display:none}}'
++ '</style></head><body>'
++ navBar(req.user, 'robot')
++ '<div class="content">'
++ '<h1>Avisos da tela</h1>'
++ '<div class="sub">Catalogo de tudo que o sistema acende, pisca ou escreve pra chamar sua atencao &mdash; e a cor exata de cada coisa. Serve pra responder duas perguntas: <b>o que e aquilo?</b> e <b>por que nao estou vendo?</b></div>'
+
++ '<div class="tese">As cores nao sao decorativas: elas se repetem de proposito. <b style="color:' + C.top + '">Azul</b>, <b style="color:' + C.high + '">laranja</b> e <b style="color:' + C.good + '">roxo</b> significam sempre TOP, HIGH e GOOD, em qualquer lugar do sistema. <b style="color:' + C.vermelho + '">Vermelho</b> e sempre "pare e confira". <b style="color:' + C.verde + '">Verde</b> e sempre "esta chegando". Se voce vir uma dessas cores dizendo outra coisa, e defeito.</div>'
+
++ '<h2>Pastilhas do menu</h2>'
++ '<div class="intro">No alto a direita, ao lado do seu nome. Todas piscam e todas sao clicaveis &mdash; levam pra tela que resolve o aviso.</div>'
++ tabela([
+  linha(C.roxo, 'Resultados', '<code>Robo Resultados rodando...</code>', 'Todas as telas', 'O robo de resultados esta rodando. Leva ao Painel Admin.'),
+  linha(C.azul, 'Robo', '<code>Robo PDF: 3/12</code><br><code>Robo Monitoramento: 8 verificadas...</code>', 'Todas as telas', 'Coletor de PDF ou monitoramento de card rodando. Leva ao Painel Admin.'),
+  linha(C.top, 'AvB esperando', '<code>1 AvB TOP esperando</code><br><code>3 AvBs esperando &middot; TOP</code>', 'Todas as telas', 'Ha AvB aguardando entrada. Leva pra Analisar.'),
+  linha(C.laranja, 'Corrida chegando', '<code>Star Pelaw A7 em 2 min</code>', 'Todas as telas', 'Corrida a menos de 3 minutos (o "alerta_min_antes"). Leva pra Analisar.')
+])
++ '<div class="nota"><b>A pastilha do AvB muda de cor conforme a camada</b> &mdash; azul no TOP, laranja no HIGH, roxo no GOOD. Quando ha varios esperando, ela usa a cor do mais forte. As outras tres tem cor fixa.</div>'
++ '<div class="nota"><b>A pastilha "Robo" e uma so para dois robos.</b> Se o coletor de PDF e o monitoramento rodarem juntos, so o PDF aparece &mdash; o monitoramento fica esperando a vez.</div>'
++ '<div class="nota"><b>No celular sobra so a do AvB.</b> As outras tres estao escondidas por CSS abaixo de 768px, junto com o seu nome e o plano. Nao e defeito: e espaco.</div>'
+
++ '<h2>Faixa de avisos</h2>'
++ '<div class="intro">Barra larga no rodape da coluna de foco, com um <b>&times;</b> pra fechar. Um aviso ocupa a faixa inteira; dois ou mais dividem o espaco. Clicar no texto expande aquele aviso sozinho.</div>'
++ tabela([
+  linha(C.laranja, 'Robo de Resultados', '&#127937; <code>N resultados</code> atualizados as HH:MM', 'So na Analisar', 'A ultima rodada de resultados terminou ha menos de 35 minutos.'),
+  linha(C.azul, 'Robo de Monitoramento', '&#128270; <code>N mudanca(s) no card</code> detectada(s) as HH:MM', 'So na Analisar', 'O robo achou alteracao no card de alguma corrida.'),
+  linha(C.vermelho, 'Checagem Final', '&#9888; <code>Rodada suspeita</code> &mdash; o motivo', 'So na Analisar', 'Taxa de falha alta no robo de resultados ou no de monitoramento.'),
+  linha(C.vermelho, 'Stop de Banca', '&#128721; <code>Stop do dia atingido</code> &mdash; prejuizo e limite', 'So na Analisar', 'O prejuizo do dia bateu o limite configurado na Banca.')
+])
++ '<div class="nota"><b>Fechar e lembrado, mas cada um do seu jeito.</b> Resultados volta na proxima rodada; Checagem Final volta se o motivo mudar; Stop volta amanha. Nenhum deles reaparece no mesmo dia pela mesma causa.</div>'
++ '<div class="nota"><b>Esta faixa so existe na Analisar.</b> Sao avisos sobre o dia de corridas &mdash; no Painel Admin ou no Configuracoes nao teriam o que fazer. No celular ela some inteira.</div>'
+
++ '<h2>Ticker</h2>'
++ '<div class="intro">A faixa fina de texto rolando, logo abaixo da barra de Odd.</div>'
++ tabela([
+  linha(C.cinza, 'Ticker', 'Texto rolando, com a <span style="color:' + C.azul + '">hora em azul</span> na frente de cada item', 'So na Analisar', 'Guarda os ultimos 30 avisos do monitoramento (reanalise, skip, cio).')
+])
++ '<div class="nota"><b>O ticker some quando qualquer banner aparece</b>, e volta quando a faixa esvazia. Banner tem prioridade porque exige acao e fica ate voce fechar; texto em movimento e dificil de ler sob pressao, justo quando faltam minutos pra corrida. Passar o mouse por cima <b>pausa</b> a rolagem.</div>'
+
++ '<h2>Banners da arena</h2>'
++ '<div class="intro">No rodape da tela de disputa. <b>Nao tem &times;</b>: ficam enquanto aquela corrida estiver aberta, porque os dois dizem que o AvB na tela pode nao valer.</div>'
++ tabela([
+  linha(C.vermelho, 'Corrida antiga', '&#9888; Esta corrida e de uma data anterior a hoje (...), apenas para consulta e estudo', 'Tela de disputa', 'O card e de um dia que ja passou. Esta corrida nunca pisca nem apita.'),
+  linha(C.ambar, 'Card suspeito', '&#9888; Essa corrida sumiu da lista ao vivo antes do horario &mdash; a pista pode ter sido cancelada', 'Tela de disputa', 'A corrida saiu do ar antes da largada. Confira na casa antes de confiar no AvB.')
+])
+
++ '<h2>A lista de corridas</h2>'
++ '<div class="intro">A propria linha da corrida pisca. Uma linha tem <b>um</b> estado por vez, e a ordem de prioridade e esta, de cima pra baixo.</div>'
++ tabela([
+  linha(C.top, 'AvB confirmado', 'A linha pisca na cor do TIPO e ganha o selo da camada', 'Lista da Analisar', 'A BW confirmou um AvB. Azul TOP, laranja HIGH, roxo GOOD.'),
+  linha(C.verde, 'Corrida chegando', 'Pisca verde, mais devagar (1,6s), com barra verde na esquerda', 'Lista da Analisar', 'Falta pouco pra largada. E o unico que pisca sem apitar.'),
+  linha(C.roxo, 'Alarme do filtro', 'Pisca na cor que voce escolheu, com barra da mesma cor', 'Lista da Analisar', 'A corrida casou com o seu filtro de alarme. Cor configuravel.'),
+  linha(C.amarelo, 'Atrasada', 'Pisca amarelo e vai pro topo da fila', 'Lista da Analisar', 'Voce marcou a corrida como atrasada, esperando resultado.'),
+  linha(C.vermelho, 'Corrida antiga', 'Fundo vermelho FIXO, sem piscar, com o selo ANTIGA', 'Lista da Analisar', 'Card de um dia anterior. Nunca pisca e nunca apita.')
+])
++ '<div class="nota"><b>A cor do alarme do filtro e a unica configuravel</b> em todo o sistema: azul, roxo, laranja, rosa, verde ou dourado, em Configuracoes &gt; Alarme. Todas as outras sao fixas de proposito &mdash; se o vermelho pudesse virar verde, a leitura rapida da tela iria embora.</div>'
++ '<div class="nota"><b>Os selos da linha:</b> <span style="color:' + C.vermelho + '">ANTIGA</span> em vermelho, <span style="color:' + C.ambar + '">SUSPEITA</span> em ambar e <span style="color:#1d4ed8">REANALISE</span> em azul escuro. Eles convivem com o piscar &mdash; sao informacao sobre a corrida, nao sobre a urgencia dela.</div>'
+
++ '<h2>O que apita, e com que som</h2>'
++ '<div class="intro">Som e cor sao perguntas separadas. <b>So a promocao de camada apita</b> &mdash; o aviso de proximidade pisca verde e fica calado, de proposito.</div>'
++ tabela([
+  linha(C.top, 'TOP', 'Som <code>alarme</code> (padrao de fabrica)', 'Todas as telas', 'A BW confirmou um AvB TOP.'),
+  linha(C.high, 'HIGH', 'Som <code>sino</code> (padrao de fabrica)', 'Todas as telas', 'A BW confirmou um AvB HIGH.'),
+  linha(C.good, 'GOOD', 'Som <code>beep</code> (padrao de fabrica)', 'Todas as telas', 'A BW confirmou um AvB GOOD.')
+])
++ '<div class="nota"><b>O alarme toca em qualquer tela desde 15/09/2026</b>, e nao so na Analisar. Duas ressalvas do navegador, que nao dao pra contornar: ele so libera audio <b>depois do primeiro clique</b> naquela aba, e aba em segundo plano nao apita &mdash; o som sai quando voce volta pra ela.</div>'
++ '<div class="nota"><b>Som, cor e liga/desliga de cada camada</b> ficam em Configuracoes &gt; Alarme, junto com o repique (de minuto em minuto nos ultimos 5, com teto por AvB). OPORTUNIDADE nunca apita: e a sala de espera, e apitar nela seria alarme o dia inteiro.</div>'
+
++ '<div class="pe">'
++ '<p><b>Este catalogo e escrito a mao.</b> Mudou uma cor no fonte? Mude aqui tambem, ou esta pagina passa a mentir &mdash; e uma pagina de referencia errada e pior que nenhuma.</p>'
++ '<p>Os avisos nascem em quatro lugares: as pastilhas e a faixa no <b>navBar</b>, o ticker e os banners da arena no <b>app.js</b>, o piscar da lista no CSS do <b>app.js</b>, e o som no <b>painelDia.js</b>.</p>'
++ '<p><a href="' + BASE + '/robot/como-nasce-um-avb">Como nasce um AvB</a> explica o que decide a camada que essas cores representam.</p>'
++ '</div>'
++ '</div></body></html>');
 });
 
 // ── COMO NASCE UM AvB (admin, so-leitura) — Bruno, 11/09/2026 ───────────────
