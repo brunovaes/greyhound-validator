@@ -672,7 +672,12 @@ async function cena(cfg, corridas, quantosRepiques) {
   // propria explicacao e dava a guarda como viva.
   t('a guarda que descartava captura com o mesmo numero de pares saiu',
     !/^\s*if \(existe && existe\.n_pares >= info\.pares\.length\) return;/m.test(SRC_ROBOT2));
-  t('e no lugar dela ha uma fusao', /const fundido = info\.pares\.slice\(\);/.test(SRC_ROBOT2));
+  // Estava presa a `info.pares.slice()`. Em 15/09 a variavel virou `comVisto`
+  // (os pares do feed passaram a levar carimbo de hora) e a assertiva quebrou
+  // sem que a fusao tivesse mudado. Agora ancora na LINHA QUE FUNDE, que e o
+  // comportamento protegido — nome de variavel pode mudar de novo.
+  t('e no lugar dela ha uma fusao',
+    /for \(const velho of antigos\) if \(!novos\.has\(chave\(velho\)\)\) fundido\.push\(velho\)/.test(SRC_ROBOT2));
 
   // Roda a funcao de verdade, com o banco de mentira.
   const mGravar = SRC_ROBOT2.match(/function _gravarParesAbertos\(info\)\{[\s\S]*?\n\}/);

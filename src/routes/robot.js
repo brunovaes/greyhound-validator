@@ -535,8 +535,25 @@ function _gravarParesAbertos(info){
     // fresca, e os que sumiram do feed continuam guardados com o ultimo valor
     // conhecido. Assim a odd atualiza a cada ciclo (5s) sem perder o conjunto
     // completo, que era o motivo da guarda existir.
+    // ── CARIMBO `visto` (Bruno, 15/09/2026) ──────────────────────────────────
+    //
+    // A fusao acima resolveu a odd congelada e criou outro problema: par que
+    // SAI da BW era reinserido pra sempre, sem nada dizendo que ele tinha
+    // sumido. O painel-dia classificava e o card ficava na tela ate a largada.
+    //
+    // Agora cada par do feed ATUAL leva a hora em que foi visto. O par fundido
+    // (o que sumiu) mantem o carimbo velho, e e' por essa diferenca que a tela
+    // sabe que ele nao esta mais sendo oferecido — sem perder a ultima odd
+    // conhecida, que e o que o estudo usa.
+    //
+    // A comparacao la na frente e contra o `capturado_em` da corrida, nao
+    // contra o relogio: assim a regra le "o feed respondeu e este par nao
+    // estava nele". Se o robo cair, o capturado_em para junto e nada some da
+    // tela — cego e' diferente de informado.
+    const agoraMs = Date.now();
+    const comVisto = (info.pares || []).map(p => Object.assign({}, p, { visto: agoraMs }));
     const atual = db.prepare('SELECT pares_json FROM avb_abertos WHERE game_id=?').get(info.gameId);
-    let pares = info.pares;
+    let pares = comVisto;
     if (atual) {
       let antigos = [];
       try { antigos = JSON.parse(atual.pares_json) || []; } catch (e) {}
@@ -545,8 +562,8 @@ function _gravarParesAbertos(info){
         // duas entradas do mesmo confronto viram par duplicado na tela.
         const chave = (p) => Math.min(Number(p.aTrap), Number(p.bTrap)) + 'x' + Math.max(Number(p.aTrap), Number(p.bTrap));
         const novos = new Map();
-        for (const p of info.pares) novos.set(chave(p), p);
-        const fundido = info.pares.slice();
+        for (const p of comVisto) novos.set(chave(p), p);
+        const fundido = comVisto.slice();
         for (const velho of antigos) if (!novos.has(chave(velho))) fundido.push(velho);
         pares = fundido;
       }

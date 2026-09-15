@@ -71,6 +71,11 @@
 // GRACA_MIN  = minutos DEPOIS da largada em que o AvB continua valendo. A BW
 //   ainda aceita entrada nesse intervalo, e o robo de resultados costuma
 //   demorar mais que isso pra gravar a chegada.
+// Quanto tempo um par pode ficar fora do feed antes de sair da tela de
+// disputa. 30s = umas seis respostas do captador (ciclo de ~5s) sem ele. Nao e
+// "30 segundos de silencio": ciclo perdido nao conta, porque o capturado_em da
+// corrida so avanca quando o feed responde. (Bruno escolheu, 15/09/2026.)
+const SUMIDO_MS = 30000;
 const DIF_SP_MAX = 1.0;
 const TETO_INFO = 1.5;
 const MAX_TELA = 4;
@@ -308,10 +313,35 @@ function confrontosDaCorrida(opts) {
   // os dois: a tela comporta 4 e o tipo PODE repetir — se a BW abriu dois pares
   // que passam na regua TOP, os dois sao TOP e os dois merecem estar na tela.
   // Esconder o segundo era decidir por ele qual dos dois valia olhar.
+  // ── O PAR QUE SUMIU DA BW SAI DA TELA (Bruno, 15/09/2026) ────────────────
+  //
+  // O captador funde de volta os pares que sumiram do feed, pra nao perder a
+  // ultima odd conhecida. Sem isto, par que a BW tirou do ar ficava na tela de
+  // disputa ate a corrida largar.
+  //
+  // A regra compara o carimbo `visto` do par com o `capturado_em` da CORRIDA —
+  // nao com o relogio. Ela le "o feed respondeu e este par nao estava nele".
+  // Consequencia importante: robo caido ou BW travada param o capturado_em
+  // junto, e ai NADA some da tela. Cego nao e a mesma coisa que informado.
+  //
+  // So vale na tela ao vivo: quem quer o registro do que existiu (Historico,
+  // funil, estudo) nao passa `descartarSumidos`, e ve tudo como antes. Par sem
+  // carimbo (gravado antes desta versao) nunca e descartado.
+  const jaSumiu = (function () {
+    if (!o.descartarSumidos) return function () { return false; };
+    const janela = (o.janelaSumidoMs > 0) ? o.janelaSumidoMs : SUMIDO_MS;
+    let ref = 0;
+    for (const p of pares) if (p && p.visto > ref) ref = p.visto;
+    if (o.capturadoEm > ref) ref = o.capturadoEm;
+    if (!ref) return function () { return false; };
+    return function (p) { return p && p.visto > 0 && (ref - p.visto) > janela; };
+  })();
+
   const classificados = [];
   const vistos = new Set();
   for (const par of pares) {
     if (par.marketPct == null) continue;
+    if (jaSumiu(par)) continue;
     const ta = Number(par.aTrap), tb = Number(par.bTrap);
     const k = chaveDe(ta, tb);
     if (vistos.has(k)) continue;               // a BW as vezes repete o par no feed
@@ -380,7 +410,7 @@ function registroDoHistorico(confrontos, idEscolhido) {
 }
 
 module.exports = {
-  DIF_SP_MAX, TETO_INFO, MAX_TELA, GRACA_MIN,
+  DIF_SP_MAX, TETO_INFO, MAX_TELA, GRACA_MIN, SUMIDO_MS,
   chaveCorrida, idConfronto, mesmoPar, pista, horaBr,
   jaCorreu, expirou, minutosParaLargada,
   melhorQue, camadaPorRegua, forcaTipo, ordenaPorMerito, distanciaSp,

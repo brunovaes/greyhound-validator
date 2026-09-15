@@ -1852,6 +1852,15 @@ router.get('/painel-dia', (req, res) => {
         const bw = h2hByRace[_k(row.corrida, row.hora)] || null;
         const pares = bw ? bw.pares : [];
         const abertoEm = bw ? bw.em : null;
+        // capturado_em em ms, pra comparar com o carimbo `visto` dos pares.
+        // O SQLite grava CURRENT_TIMESTAMP em UTC no formato 'YYYY-MM-DD
+        // HH:MM:SS', que o Date.parse so entende com o T e o Z no lugar — sem
+        // isso vira NaN em silencio e o descarte nunca aconteceria.
+        const capturadoEmMs = (function () {
+          if (!abertoEm) return 0;
+          const t = Date.parse(String(abertoEm).replace(' ', 'T') + 'Z');
+          return Number.isFinite(t) ? t : 0;
+        })();
         // Classificacao das camadas: uma chamada, uma fonte. O bateuPar entra por
         // parametro pra continuar existindo UMA implementacao do 'bateu' no sistema.
         const confrontos = cd.confrontosDaCorrida({
@@ -1859,6 +1868,10 @@ router.get('/painel-dia', (req, res) => {
           corrida: row.corrida, hora: row.hora,
           finishingOrderJson: row.finishing_order_json,
           parelhoAte, difSpMax: difSpCfg, tetoInfo: tetoInfoCfg, bateuPar,
+          // ESTA e a tela ao vivo: par que a BW tirou do ar tem que sair daqui.
+          // O Historico (a outra chamada, com agora:null) NAO passa isto — o
+          // registro do passado guarda o que existiu, nao o que ainda existe.
+          descartarSumidos: true, capturadoEm: capturadoEmMs,
           // AGORA entra por parametro (o modulo e' puro). E' o relogio que tira
           // de cena a OPORTUNIDADE 1 min depois da largada, sem esperar o robo
           // de resultados gravar a chegada — ele costuma demorar bem mais.

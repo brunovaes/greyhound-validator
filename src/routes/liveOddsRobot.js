@@ -586,7 +586,14 @@ async function umCiclo(getScores) {
     catch (e) { addLog('warn', `${r.track} ${r.raceNum}: ${e.message}`); continue; }
     // Captador de calibracao: grava os pares que o betwinner ABRIU nesta corrida
     // (todos, nao so os da reanalise). Nunca derruba o ciclo.
-    if (typeof _onPairs === 'function' && snap && snap._avbsBrutos && snap._avbsBrutos.length) {
+    // SEM o `.length` de proposito (Bruno, 15/09/2026). Quando a BW fecha o
+    // mercado frente-a-frente, o feed volta com ZERO pares — e com a guarda
+    // antiga esta chamada nao acontecia, o capturado_em congelava, e a tela de
+    // disputa nao tinha como saber que o mercado tinha acabado. O par ficava
+    // la ate a corrida largar.
+    // Agora o feed vazio tambem carimba a hora: e' a diferenca entre "o mercado
+    // acabou" e "o robo esta cego", e a tela precisa das duas separadas.
+    if (typeof _onPairs === 'function' && snap && Array.isArray(snap._avbsBrutos)) {
       try { _onPairs({ gameId: r.gameId, track: r.track, corrida: (analise && analise.corrida) || null, hora: (analise && analise.hora) || null, pares: snap._avbsBrutos }); }
       catch (err) { /* silencioso — captacao nunca pode afetar o robo */ }
     }
