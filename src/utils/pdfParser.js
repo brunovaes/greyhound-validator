@@ -142,7 +142,31 @@ const isHistLine  = t => /^\d{2}[A-Za-z]{3}\d{2}\s+\w+\s+\d+m\s+\[\d\]/.test(t);
 const isBrtLine   = t => t.includes('BRT:');
 
 const GRADE_RE = /^(?:[A-Z]\d+|HP|OR\d*|B\d+|T\d*|D\d+|IV|S\d+|ON\d*|Mdn)$/;
-const COLOR_BREED_RE = /\b(?:bk|bd|be|bef|bebd|bew|wbe|wbd|wbk|bkw|dkbd|dkbe|dkbef|fawn|fw|w|f)\s+(?:b|d)\s+/i;
+// COR/SEXO: PADRAO, NAO LISTA (Bruno, 15/09/2026) ───────────────────────────
+//
+// Era uma lista fechada de codigos de cor. Ela ja falhou duas vezes, e das duas
+// o galgo perdeu o nome na tela:
+//   "Golden Lion (W) ltbd d Dorotas Wildcat-..."   -> faltava `ltbd`
+//   "Reefer Madness (W) wf b Out Of Range ASB-..." -> faltava `wf`
+// (5:57 Monmore, 15/09/2026, trap 5. Os outros cinco galgos do card saiam
+// certos — so o `wf` nao estava listado.)
+//
+// Quando a cor nao e reconhecida, o cortarNomePorCor devolve a LINHA INTEIRA
+// como se fosse o nome, da o nome por resolvido, e o fallback que leria a linha
+// certa (o pdf.js as vezes poe o nome numa linha propria, 3px acima) nunca roda.
+// Em 11/09 eu tratei isso no svLimpaNome, na EXIBICAO — o que so funciona
+// quando o nome vem antes do lixo. Quando a cor vem primeiro, o nome se perde
+// na origem e nao ha o que a tela recupere. Aquilo foi sintoma; a causa e aqui.
+//
+// O padrao troca "conhecer todas as cores" por "reconhecer a FORMA" do codigo,
+// que o card sempre respeita: um token MINUSCULO e curto, seguido de um `b` ou
+// `d` isolado (bitch/dog). Nome de galgo no card e sempre Titulo Maiusculo,
+// entao exigir minusculas ja separa os dois — e por isso o /i saiu, de
+// proposito: com ele, "Bit Of A Lad" viraria candidato.
+//
+// As letras estao restritas as que aparecem em codigo de cor ([abdefklnrtw]) em
+// vez de [a-z] pra nao casar com qualquer palavra minuscula solta.
+const COLOR_BREED_RE = /\b[abdefklnrtw]{1,6}\s+(?:b|d)\s+/;
 const RNUM_PREFIX_RE = /^\([A-Za-z][A-Za-z0-9]*\)\s*/;
 
 // (Ssn <data>) na linha do nome = data do ULTIMO cio da femea. Ex: "(Ssn 15Jun26)".
@@ -169,7 +193,8 @@ function extractSsnFromText(text) {
   return m ? parseSsnDate(m[1]) : null;
 }
 
-// Corta o nome do galgo no padrao de cor/sexo (COLOR_BREED_RE, ex.: "bk b ").
+// Corta o nome do galgo no padrao de cor/sexo (COLOR_BREED_RE, ex.: "bk b ",
+// "wf b ", "ltbd d " — e' padrao, nao lista; ver o comentario la em cima).
 //   - sem cor na string  -> a string inteira e' o nome (ex.: "Marwood Raven")
 //   - nome ANTES da cor  -> devolve so o nome ("Matts Bomber (M) bk d ..." -> "Matts Bomber (M)")
 //   - cor logo no inicio -> nao ha nome util aqui -> '' (deixa o chamador tentar a nameLine)
