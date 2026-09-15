@@ -115,8 +115,35 @@ function carregaPainel(cfg, confrontosDaVez, agoraHoraBr) {
 // payload pelo assinar/buscar seria assincrono. Mais honesto: testar a funcao
 // de janela e o teto pela API publica que existe — config() e repique() — com o
 // estado alimentado por um fetch de mentira.
+// RELOGIO CONTROLADO (15/09/2026).
+//
+// Por que passou a existir: o painelDia ganhou uma trava por TEMPO — o mesmo
+// confronto nao vira som duas vezes dentro de 20 segundos, que e' a janela em
+// que duas abas abertas veem a mesma promocao e apitam sobrepostas.
+//
+// Este arquivo chamava repique() cinco vezes no MESMO milissegundo: cinco
+// minutos de producao comprimidos num laco. A trava, corretamente, engolia
+// quatro. O teto continua sendo 3 — quem mudou foi o teste, que precisava de
+// um relogio pra representar o que ele diz representar.
+//
+// 21 segundos por volta: passa da trava de 20s e ainda cabe dentro da janela
+// de 5 minutos do repique, entao nenhuma outra assertiva muda de sentido.
+// `new Date(ano, mes, ...)` segue passando reto: so o "agora" anda.
+function fazRelogio() {
+  let desvio = 0;
+  function Relogio(a, b, c, d, e, f, g) {
+    if (arguments.length === 0) return new Date(Date.now() + desvio);
+    return new Date(a, b, c, d, e, f, g);
+  }
+  Relogio.now = function () { return Date.now() + desvio; };
+  Relogio.parse = Date.parse;
+  Relogio.UTC = Date.UTC;
+  return { Date: Relogio, avancar: function (ms) { desvio += ms; } };
+}
+
 function comPayload(cfg, corridas) {
   const tocados = [];
+  const rel = fazRelogio();
   const ctx = {
     console: console,
     document: { hidden: false },
@@ -125,7 +152,7 @@ function comPayload(cfg, corridas) {
       setItem: function (k, v) { this._d[k] = String(v); }, removeItem: function (k) { delete this._d[k]; }
     },
     setInterval: function () { return 0; }, clearInterval: function () {},
-    setTimeout: function (fn) { return 0; }, Date: Date
+    setTimeout: function (fn) { return 0; }, Date: rel.Date
   };
   ctx.window = ctx; ctx.globalThis = ctx;
   ctx.BASE = '/greyhound';
@@ -138,7 +165,7 @@ function comPayload(cfg, corridas) {
   };
   vm.createContext(ctx);
   vm.runInContext(SRC_PAINEL, ctx);
-  return { PD: ctx.PainelDia, tocados: tocados };
+  return { PD: ctx.PainelDia, tocados: tocados, avancar: rel.avancar };
 }
 
 // hora_br daqui a N minutos, no relogio de quem roda o teste
@@ -166,7 +193,11 @@ async function cena(cfg, corridas, quantosRepiques) {
   h.PD.aplicarConfig(cfg);
   await h.PD.buscar();               // popula st.dados (1a volta: so registra)
   h.tocados.length = 0;              // ignora o toque da confirmacao nesta cena
-  for (let i = 0; i < quantosRepiques; i++) h.PD.repique();
+  // 21s entre repiques, como explicado no fazRelogio: em producao eles sao de
+  // 60 em 60 segundos, e chamar cinco vezes no mesmo instante nao representa
+  // nenhum cenario real. O primeiro avanco tambem tira da frente a trava
+  // deixada pelo toque da confirmacao, que esta cena ja decidiu ignorar.
+  for (let i = 0; i < quantosRepiques; i++) { h.avancar(21000); h.PD.repique(); }
   return h;
 }
 

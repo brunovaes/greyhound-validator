@@ -74,11 +74,44 @@
     return i < 0 ? 99 : i;
   }
 
+  // ── TRAVA DE TOQUE ENTRE ABAS (Bruno, 15/09/2026) ────────────────────────
+  //
+  // A partir de hoje este modulo roda em TODAS as telas, e nao so na Analisar.
+  // O controle de "ja apitei este confronto" (st.vistas) mora no
+  // sessionStorage, que e' POR ABA: com a Analisar e o Historico abertos ao
+  // mesmo tempo, a mesma promocao apitava duas vezes, sobreposta.
+  //
+  // Esta trava NAO substitui nada: st.vistas continua decidindo o que e'
+  // promocao e st.repiques continua contando o teto. Ela so impede que o MESMO
+  // confronto vire SOM duas vezes dentro de poucos segundos — que e' exatamente
+  // o que duas abas fazem. O repique legitimo, de 60 em 60 segundos, passa
+  // folgado pela janela de 20s.
+  //
+  // Sem localStorage (janela anonima, storage bloqueado) ela DEIXA tocar:
+  // alarme mudo e' pior que alarme repetido.
+  var TRAVA_MS = 20000;
+  function podeTocar(id) {
+    if (!id) return true;
+    try {
+      var K = 'gh_alarme_toque', agora = Date.now();
+      var o = JSON.parse(localStorage.getItem(K) || '{}');
+      // Limpeza a cada leitura: sem isto a chave cresceria o dia inteiro.
+      for (var k in o) { if (!(o[k] > agora)) delete o[k]; }
+      if (o[id] > agora) { localStorage.setItem(K, JSON.stringify(o)); return false; }
+      o[id] = agora + TRAVA_MS;
+      localStorage.setItem(K, JSON.stringify(o));
+      return true;
+    } catch (e) { return true; }
+  }
+
   // UM lugar toca no modulo inteiro. Estava duplicado entre a promocao e (agora)
   // o repique; duas copias do fallback de audio e' como um dos dois fica mudo
   // numa mudanca futura sem ninguem perceber.
-  function tocar(som) {
+  //
+  // O `id` e' opcional: sem ele nao ha trava, porque nao ha o que deduplicar.
+  function tocar(som, id) {
     if (!som) return;
+    if (!podeTocar(id)) return;
     try {
       if (typeof glob.tocarSomAlertaGlobal === 'function') glob.tocarSomAlertaGlobal(som);
       else if (typeof glob.playSom === 'function') glob.playSom(som);
@@ -295,7 +328,7 @@
     // A confirmacao tambem conta no teto: sem isso um AvB que abre dentro dos 5
     // minutos apitaria 1 + CFG.vezes, e o numero da tela mentiria.
     novas.forEach(function (x) { st.repiques[x.id] = (st.repiques[x.id] || 0) + 1; });
-    tocar(camadaDe(novas[0]).som);
+    tocar(camadaDe(novas[0]).som, novas[0].id);
 
     // PISCA A LINHA NA LISTA junto com o som. A cor diz DE ONDE veio o AvB:
     // verde pro que o motor da manha levantou e a BW abriu, azul pra pescada
@@ -371,7 +404,7 @@
     // hora.
     candidatos.forEach(function (x) { st.repiques[x.id] = (st.repiques[x.id] || 0) + 1; });
     candidatos.sort(function (p, q) { return forcaDe(p) - forcaDe(q); });
-    tocar(camadaDe(candidatos[0]).som);
+    tocar(camadaDe(candidatos[0]).som, candidatos[0].id);
     try {
       if (typeof glob.pintarPromocaoNaLista === 'function') glob.pintarPromocaoNaLista([candidatos[0]]);
     } catch (e) {}

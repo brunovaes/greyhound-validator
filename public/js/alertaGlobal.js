@@ -128,6 +128,16 @@
   }
   function _playWA(nome) { try { var ctx = getCtx(); if (!ctx) return; (SONS[nome] || tocarSino)(ctx); } catch (e) {} }
 
+  // O painelDia.js procura `window.playSom` pra tocar. Na Analisar quem a
+  // define e' o app.js; nas outras telas nao existia ninguem — o alarme
+  // simplesmente nao saia som nenhum.
+  //
+  // A GUARDA importa: na Analisar o app.js ja rodou quando este arquivo
+  // executa (a tag dele e' sincrona e vem antes do defer daqui), e sobrescrever
+  // a versao de la trocaria o motor de audio de uma tela que funciona.
+  // Esta versao e' a com destravamento de iOS e WAV pre-renderizado.
+  if (typeof window.playSom !== 'function') window.playSom = playSom;
+
   /* ---- notificação de desktop + título piscando ---- */
   function notificar(r, custom) {
     try {
@@ -208,7 +218,54 @@
   async function ciclo() {
     if (souPassivo()) return;          // tela de Analise: quem avisa e o app.js
     if (!(await carregarConfig())) return; // não logado / erro
+    garantirPainelDia();
     await selosDeAvb();
+  }
+
+  // ── O ALARME SONORO PASSA A TOCAR EM TODAS AS TELAS ───────────────────────
+  // Bruno, 15/09/2026: "quando tiver uma corrida TOP, HIGH e GOOD e eu estiver
+  // em qualquer outra tela, poderia tocar o alarme sonoro tb?"
+  //
+  // NAO se escreve um segundo alarme aqui. Quem apita e' o painelDia.js — o
+  // MESMO modulo da Analisar. Ele ja sabe som e cor de cada camada, o
+  // liga/desliga de cada uma, a janela e o teto do repique, que corrida ja
+  // apostada nao chama, e que a primeira volta de uma aba so registra em vez
+  // de disparar tudo de uma vez. Uma copia disso aqui seria a mesma pergunta
+  // com duas respostas, e a divergencia so apareceria com uma corrida prestes
+  // a largar — que e' o pior momento possivel.
+  //
+  // Na Analisar isto nao roda: o ciclo() sai antes, no souPassivo(), e la a
+  // propria pagina ja carrega o painelDia.js. Carregar duas vezes criaria dois
+  // pollings e dois alarmes para a mesma promocao.
+  var _pdPedido = false, _pdFalhou = false;
+  function garantirPainelDia() {
+    if (_pdPedido) return;
+    _pdPedido = true;
+    if (window.PainelDia) { iniciarPainelDia(); return; }
+    try {
+      // O painelDia monta a URL a partir de BASE_PAINEL ou BASE. Fora da
+      // Analisar nao da pra contar com um `BASE` global, e este arquivo ja
+      // descobriu o proprio caminho pelo src do <script> — entao passa o dele.
+      // BASE_PAINEL em vez de BASE pra nao atropelar variavel de outra tela.
+      if (!window.BASE_PAINEL) window.BASE_PAINEL = BASE;
+      var s = document.createElement('script');
+      s.src = BASE + '/static/js/painelDia.js';
+      s.onload = iniciarPainelDia;
+      // Falhar aqui nao pode apagar o selo: sem o painelDia, o selo volta a se
+      // virar sozinho pelo fetch de sempre. Fica mudo, mas nao fica cego.
+      s.onerror = function () { _pdFalhou = true; };
+      document.head.appendChild(s);
+    } catch (e) { _pdFalhou = true; }
+  }
+  function iniciarPainelDia() {
+    try {
+      if (!window.PainelDia) { _pdFalhou = true; return; }
+      // O selo passa a LER os dados do painel em vez de buscar por conta: as
+      // duas pontas batiam no mesmo /api/painel-dia, cada uma no seu timer.
+      // Alem de uma busca a menos, o selo deixa de poder discordar do som.
+      window.PainelDia.assinar(function (d) { pintarSelo(d); });
+      window.PainelDia.iniciar({});
+    } catch (e) { _pdFalhou = true; }
   }
 
   // ── SELO DE AvB EM TODAS AS TELAS ─────────────────────────────────────────
@@ -221,13 +278,23 @@
   // cada aba aberta nao repesa nada.
   var CORES_CAMADA = { TOP: '#3b82f6', HIGH: '#f97316', GOOD: '#8b5cf6' };
   var ORDEM_CAMADA = ['TOP', 'HIGH', 'GOOD'];
+  // FALLBACK. Enquanto o painelDia nao subiu — ou se ele nao subir — o selo
+  // continua se virando com a busca propria, como antes. Assim que o painel
+  // esta no ar, quem pinta e' o `assinar` la de cima e esta busca sai de cena.
   async function selosDeAvb() {
+    if (window.PainelDia && !_pdFalhou) return;
+    try {
+      if (!document.getElementById('avb-badge')) return;
+      var r = await fetch(BASE + '/api/painel-dia', { credentials: 'same-origin' });
+      if (!r.ok) return;
+      pintarSelo(await r.json());
+    } catch (e) { /* selo nunca pode derrubar a tela */ }
+  }
+
+  function pintarSelo(d) {
     try {
       var el = document.getElementById('avb-badge');
       if (!el) return;
-      var r = await fetch(BASE + '/api/painel-dia', { credentials: 'same-origin' });
-      if (!r.ok) return;
-      var d = await r.json();
       var esperando = [];
       ((d && d.corridas) || []).forEach(function (c) {
         if (c.ja_correu || c.expirado) return;
