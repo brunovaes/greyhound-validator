@@ -15,6 +15,10 @@ const { icon } = require('../utils/icons');
 const BASE = process.env.BASE_PATH || '/greyhound';
 const { exigirAcesso } = require('../middleware/acesso');
 const { CANONICO } = require('../db/compartilhado');
+// A MESMA funcao que o Historico e os robos usam. Nao se reimplementa "quem
+// chegou na frente" numa quarta tela — foi pra isso que o avbResultado virou
+// fonte unica em 03/09.
+const { bateuPar } = require('../utils/avbResultado');
 
 function getBancaPadrao(userId) {
   const cfg = getUserConfig(userId);
@@ -46,15 +50,95 @@ function calcGanhoPct(bet) {
   return -u;
 }
 
+// ── A APOSTA E SUA, O PAR TAMBEM (Bruno, 16/09/2026) ───────────────────────
+//
+// O que estava acontecendo: esta consulta trazia a odd e as unidades do
+// USUARIO (race_user_data) mas o par e o resultado da CORRIDA (races.name_fav,
+// races.name_und, races.bateu) — que sao do motor da manha.
+//
+// Quando voce aposta num par que a BW abriu fora da lista da manha, as tres
+// colunas falam de duplas diferentes na mesma linha. O caso real: Vlley A6
+// 11:59, que mostrava "Hawkfield Hugo x Arrigle Buster" (o par da manha, que a
+// BW nem abriu) com a odd 1.61 (a aposta no T5 x T2) e o green calculado pro
+// par da manha. Pago pelo resultado de uma aposta que nao foi feita.
+//
+// E quando o motor perde o pick durante o dia, uma rotina zera trap_fav/
+// trap_und — entao races.bateu nunca resolve e a aposta fica Pendente pra
+// sempre. Sao as linhas com "-" no favorito.
+//
+// `rud.avb_escolhido` ja estava neste JOIN, sem ser lido. Agora e' lido.
 function getApostas(userId) {
   return db.prepare(
-    `SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.name_fav, r.name_und, rud.odd AS odd, rud.bet_unidades AS bet_unidades, r.bateu,
+    `SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.name_fav, r.name_und,
+            rud.odd AS odd, rud.bet_unidades AS bet_unidades, r.bateu,
+            rud.avb_escolhido AS avb_escolhido, r.finishing_order_json,
             date(s.created_at, '-3 hours') as dia
      FROM races r JOIN race_sessions s ON s.id = r.session_id
           LEFT JOIN race_user_data rud ON rud.race_id = r.id AND rud.user_id = ?
      WHERE r.user_id=? AND rud.odd IS NOT NULL AND rud.odd != ''
      ORDER BY s.created_at ASC, r.hora ASC`
-  ).all(userId, CANONICO);
+  ).all(userId, CANONICO).map(resolverAposta);
+}
+
+// ── A REGRA DE RESOLUCAO, NUM LUGAR SO ─────────────────────────────────────
+//
+// ESCOLHA DO BRUNO, 16/09/2026: "recalcular so os Pendente presos". Quem ja
+// esta green ou red NAO se mexe, mesmo tendo sido calculado pelo par errado —
+// numero que ele ja viu e registrou nao muda sozinho por decisao minha.
+//
+// Entao a precedencia e, nesta ordem:
+//   1) races.bateu DECIDIDO ('sim'/'nao') manda. Fim. Nao se toca.
+//   2) vazio + voce tem par escolhido + a chegada existe -> resolve pelo SEU par.
+//   3) nada disso -> Pendente de verdade, e a linha diz POR QUE.
+//
+// CONSEQUENCIA QUE FICA ABERTA, e esta escrita aqui pra ninguem se surpreender:
+// o robo continua gravando races.bateu pelo par do motor. Entao aposta NOVA em
+// par da BW vai continuar caindo no ramo (1) com o resultado da dupla errada.
+// Fechar isso exige inverter a precedencia (o seu par manda sempre), e ai
+// numeros do passado se mexem — que e' justamente o que o Bruno nao quis agora.
+function _parEscolhido(txt) {
+  if (!txt) return null;
+  try {
+    const o = typeof txt === 'string' ? JSON.parse(txt) : txt;
+    if (!o || o.aTrap == null || o.bTrap == null) return null;
+    return o;
+  } catch (e) { return null; }
+}
+
+function resolverAposta(a) {
+  const esc = _parEscolhido(a.avb_escolhido);
+  // Os NOMES seguem sempre o seu par quando ele existe: mostrar a dupla do
+  // motor na linha da sua aposta foi o que escondeu o problema por tanto tempo.
+  let nomeA = a.name_fav, nomeB = a.name_und, fonte_par = 'motor';
+  if (esc) {
+    fonte_par = 'sua_escolha';
+    nomeA = esc.aNome || ('T' + esc.aTrap);
+    nomeB = esc.bNome || ('T' + esc.bTrap);
+  }
+
+  let bateu = a.bateu, fonte_resultado = 'coluna', motivo = null;
+  const decidido = (a.bateu === 'sim' || a.bateu === 'nao');
+  if (!decidido) {
+    if (esc && a.finishing_order_json) {
+      const b = bateuPar(a.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap));
+      if (b === true) { bateu = 'sim'; fonte_resultado = 'seu_par'; }
+      else if (b === false) { bateu = 'nao'; fonte_resultado = 'seu_par'; }
+      else { motivo = 'um dos dois galgos nao aparece na chegada'; }
+    } else if (!esc) {
+      motivo = 'sem par registrado nesta aposta';
+    } else {
+      motivo = 'a corrida ainda nao tem chegada';
+    }
+  }
+
+  return Object.assign({}, a, {
+    bateu,
+    name_fav: nomeA, name_und: nomeB,
+    fonte_par, fonte_resultado, motivo_pendente: motivo,
+    // Linha contaminada: o resultado veio da coluna (par do motor) mas a sua
+    // aposta era outra dupla. Nao muda o numero — so deixa de ser invisivel.
+    par_divergente: !!(esc && decidido && fonte_resultado === 'coluna')
+  });
 }
 
 // Monta a cadeia de banca mes-a-mes: cada mes que teve >=1 aposta ganha um
@@ -503,8 +587,18 @@ function renderDay(d) {
       const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':'Pendente';
       const statusCls = 'status-'+a.status;
       const gainCls = a.ganhoReais>0?'gain-pos':a.ganhoReais<0?'gain-neg':'';
-      return '<tr><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+'</td><td>'+(a.name_fav||'-')+'</td><td>'+(a.name_und||'-')+'</td><td>'+(a.odd||'-')+'</td><td>'+a.bet_unidades+'</td>' +
-        '<td class="'+statusCls+'">'+statusLabel+'</td>' +
+      // Pendente sem explicacao e' o que fez isto passar meses despercebido: a
+      // linha ficava igual a uma corrida que so nao correu ainda.
+      const dica = a.motivo_pendente ? ' title="Pendente: '+a.motivo_pendente+'"' : '';
+      const pend = a.status==='pendente' && a.motivo_pendente
+        ? '<span style="color:#f59e0b;font-size:10px;margin-left:5px">&#9888;</span>' : '';
+      // Marca a linha cujo resultado veio do par do MOTOR enquanto a sua aposta
+      // era outra dupla. O numero fica como esta (decisao de 16/09) — o aviso
+      // existe pra ele nao ser invisivel.
+      const diverg = a.par_divergente
+        ? ' <span style="color:#f59e0b;font-size:10px" title="O resultado desta linha foi calculado pelo par do motor, nao pelo par que voce apostou.">&#9888; par</span>' : '';
+      return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td><td>'+(a.name_fav||'-')+'</td><td>'+(a.name_und||'-')+'</td><td>'+(a.odd||'-')+'</td><td>'+a.bet_unidades+'</td>' +
+        '<td class="'+statusCls+'">'+statusLabel+pend+'</td>' +
         '<td class="'+gainCls+'">'+(a.ganhoPct!=null?fmtPct(a.ganhoPct):'-')+'</td>' +
         '<td class="'+gainCls+'">'+(a.ganhoReais!=null?fmtR$(a.ganhoReais):'-')+'</td></tr>';
     }).join('') + '</tbody></table>';
