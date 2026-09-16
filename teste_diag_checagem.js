@@ -188,9 +188,37 @@ r = rodar([corrida({ id: 8, min: -30, traps: [1, 3, 5] })]);
 t('varias vazias saem todas, em ordem',
   JSON.stringify(r.lista[0].boxes_vazias) === JSON.stringify([2, 4, 6]));
 
+// ESTA ASSERCAO MUDOU EM 16/09/2026, e a mudanca e o ponto.
+// Ela dizia: 'card ausente nao estoura e nao inventa: 0 galgos, 6 boxes
+// "vazias"'. Ou seja, ela descrevia — e protegia — exatamente o defeito: a rota
+// tratava ausencia de card como seis boxes vazias, e o resumo do dia 16/09 deu
+// 55 corridas "com box vazia" quando as reais eram 25. Trinta delas eram
+// corridas sem card nenhum. Numa rota de diagnostico isso e pior que nao ter
+// rota: ela aponta pro lugar errado com cara de numero.
 r = rodar([corrida({ id: 9, min: -30, extra: { race_card: null } })]);
-t('card ausente nao estoura e nao inventa: 0 galgos, 6 boxes "vazias"',
-  r.lista[0].galgos_no_card === 0 && r.lista[0].boxes_vazias.length === 6);
+t('card ausente nao estoura', r.lista[0].galgos_no_card === 0);
+t('e NAO inventa seis boxes vazias: sem card, boxes_vazias e NULO ("nao sei")',
+  r.lista[0].boxes_vazias === null && r.lista[0].sem_card === true);
+t('nao entra em com_box_vazia_no_card', r.resumo.com_box_vazia_no_card === 0);
+t('e sim no contador proprio, sem_card_gravado', r.resumo.sem_card_gravado === 1);
+t('a lista com_box_vazia fica vazia', r.com_box_vazia.length === 0);
+
+// A outra ponta: card gravado COM os seis galgos e "conferi e nao falta
+// ninguem" — lista vazia, nao nulo. Sem esta distincao os dois casos voltam a
+// virar a mesma coisa na leitura.
+r = rodar([corrida({ id: 12, min: -30 })]);
+t('card completo: boxes_vazias e [] e sem_card e false',
+  Array.isArray(r.lista[0].boxes_vazias) && r.lista[0].boxes_vazias.length === 0
+  && r.lista[0].sem_card === false);
+t('e ele nao conta como sem card', r.resumo.sem_card_gravado === 0);
+
+// Os dois juntos, que e o cenario real do dia.
+r = rodar([
+  corrida({ id: 13, min: -30, traps: [2, 3, 4, 5, 6] }),
+  corrida({ id: 14, min: -30, extra: { race_card: null } })
+]);
+t('misturados, cada um cai no seu contador',
+  r.resumo.com_box_vazia_no_card === 1 && r.resumo.sem_card_gravado === 1);
 
 // ── [4] a janela usa a MESMA conta do robo ──────────────────────────────────
 bloco('[4] A JANELA E A DO ROBO, NAO UMA COPIA');

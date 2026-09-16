@@ -4637,6 +4637,15 @@ router.get('/diag/checagem-final', requireAdmin, (req, res) => {
       const traps = card.map(g => Number(g && g.trap)).filter(n => n >= 1 && n <= 6);
       const vazias = [];
       for (let t = 1; t <= 6; t++) if (traps.indexOf(t) < 0) vazias.push(t);
+      // CORRECAO 16/09/2026 — "nao tenho card" NAO e' "as seis boxes estao
+      // vazias". Corrida com race_card nunca gravado (skip, ou nunca analisada)
+      // caia aqui com traps=[] e saia como boxes_vazias=[1,2,3,4,5,6]: o resumo
+      // dizia 55 corridas com box vazia quando as reais eram 25. Esta rota
+      // existe justamente pra responder por que a tela nao avisou uma box
+      // vazia — inventar box vazia onde nao ha card inverte a resposta.
+      // Nulo e' "nao sei"; lista vazia e' "conferi e nao falta ninguem". Sao
+      // coisas diferentes e a partir daqui aparecem diferentes.
+      const semCard = traps.length === 0;
 
       const mCorrida = horaUkParaMinutosBrt(r.hora);
       // A MESMA janela do corridasNaJanela: faltam <= minAntes e >= minAntes-10.
@@ -4654,7 +4663,8 @@ router.get('/diag/checagem-final', requireAdmin, (req, res) => {
         elegivel,
         galgos_no_card: traps.length,
         traps_no_card: traps,
-        boxes_vazias: vazias,
+        sem_card: semCard,
+        boxes_vazias: semCard ? null : vazias,
         janela_brt: (abre == null) ? null : (hhmm(abre) + ' - ' + hhmm(fecha)),
         janela_passou: janelaPassou,
         conferida,
@@ -4669,7 +4679,8 @@ router.get('/diag/checagem-final', requireAdmin, (req, res) => {
 
     const furos = lista.filter(x => x.furo);
     const elegiveis = lista.filter(x => x.elegivel);
-    const comVazia = lista.filter(x => x.boxes_vazias.length);
+    const comVazia = lista.filter(x => x.boxes_vazias && x.boxes_vazias.length);
+    const semCardL = lista.filter(x => x.sem_card);
 
     res.json({
       date,
@@ -4685,7 +4696,9 @@ router.get('/diag/checagem-final', requireAdmin, (req, res) => {
         refeitas: elegiveis.filter(x => x.conferida && x.final_check_status !== 'ok').length,
         janela_ainda_por_vir: elegiveis.filter(x => !x.janela_passou).length,
         NUNCA_CONFERIDAS: furos.length,
-        com_box_vazia_no_card: comVazia.length
+        com_box_vazia_no_card: comVazia.length,
+        // Contado a parte de proposito: e' ausencia de dado, nao box vazia.
+        sem_card_gravado: semCardL.length
       },
       nunca_conferidas: furos.map(x => ({
         hora: x.hora, hora_br: x.hora_br, corrida: x.corrida,
@@ -4700,6 +4713,9 @@ router.get('/diag/checagem-final', requireAdmin, (req, res) => {
         + 'continua com final_check_status NULL: o robo nao chegou nela. `boxes_vazias` sai do '
         + 'race_card GRAVADO — e exatamente o que o motor usa pra decidir a nota de box vazio na '
         + 'tela Analisar, entao lista vazia aqui quer dizer que a tela nao tinha como avisar. '
+        + '`boxes_vazias` NULO (com sem_card=true) e outra coisa: nao existe race_card gravado, '
+        + 'entao nao da pra saber quais boxes estavam vazias. Nulo e "nao sei", [] e "conferi e '
+        + 'nao falta ninguem" — sao contados separados em com_box_vazia_no_card e sem_card_gravado. '
         + '`reescrita_pelo_robo` conta as linhas do race_audit_log com source=final_check_robot: '
         + '>0 quer dizer que o robo achou mudanca e refez a analise daquela corrida. '
         + 'CUIDADO ao ler `conferida`: o robo confere cada corrida UMA VEZ SO '
