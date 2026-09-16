@@ -122,11 +122,21 @@ function emNegrito(s) {
   return out;
 }
 
-// corrida: { horaBr, pista, classe, trapFav, trapUnd, nivel, pct, dist, minutos, url }
+// corrida: { horaBr, pista, classe, minutos, url, tag }
 //
 // Layout:
-//   titulo:  🏁 10:24 🐕 𝟱𝘃𝟯
+//   titulo:  🏁 10:24 🐕
 //   corpo:   📍 Kinsley A6 ⏰ 3 min
+//
+// O AvB SAIU DO TITULO (Bruno, 16/09/2026): "o avb nao precisa, pois se tiver
+// mais de um eu escolherei na hora". E' coerente com o criterio novo do
+// agendador — ele avisa que a CORRIDA entrou em TOP/HIGH/GOOD, e uma corrida
+// pode ter varios pares abertos. Mandar um par escolhido pelo servidor seria
+// dar como decidido o que quem decide e' voce, na tela.
+//
+// Com o par fora, o negrito passou pra hora, que virou o unico dado variavel do
+// titulo. O botao de teste continua mandando as duas versoes pra comparar no
+// aparelho, que segue sendo o unico juiz de como o iOS desenha esses glifos.
 //
 // O iOS anexa " from <nome do app>" ao titulo e quebra a linha quando nao
 // cabe — nao ha como impedir pelo payload. Tentamos encurtar o titulo e ainda
@@ -139,9 +149,8 @@ function montarPayloadCorrida(c, opts) {
   const destaque = o.negrito ? emNegrito : (x) => x;
 
   const local = [c.pista, c.classe].filter(Boolean).join(' ');
-  const avb = (c.trapFav != null && c.trapUnd != null) ? destaque(c.trapFav + 'v' + c.trapUnd) : null;
 
-  const titulo = ['🏁 ' + (c.horaBr || '--:--'), avb ? '🐕 ' + avb : null].filter(Boolean).join(' ');
+  const titulo = '🏁 ' + destaque(c.horaBr || '--:--') + ' 🐕';
   const corpo = [
     local ? '📍 ' + local : null,
     c.minutos != null ? '⏰ ' + c.minutos + ' min' : null

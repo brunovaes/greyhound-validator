@@ -1858,23 +1858,31 @@ router.delete('/session/:id', (req, res) => {
 // Mesma logica do /robot/diag/oportunidades-bw-resultado (numeros batem com o placar aprovado).
 // Contrato: CONTRATO_PAINEL_DO_DIA. So-leitura; a entrada segue pelo PUT /api/race/:id de sempre.
 let _painelDiaCache = { date: null, ts: 0, corridas: null };
-router.get('/painel-dia', (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
-    const mm = require('../utils/motorManha');
-    const { bateuPar } = require('../utils/avbResultado');
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
-      ? req.query.date
-      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
-    // A regra de camadas (OPORTUNIDADE/TOP/HIGH/GOOD) mora no camadasDoDia.js.
-    // Estava inteira aqui dentro ate set/2026; saiu porque o Historico passou a
-    // precisar da MESMA classificacao, e duas copias da regua divergem em silencio
-    // no dia em que alguem afina um corte. Mesmo motivo do avbResultado.js.
-    const cd = require('../utils/camadasDoDia');
-    const _k = cd.chaveCorrida;
-    const _idc = cd.idConfronto;
-    const _pista = cd.pista;
-    const _horaBr = cd.horaBr;
+// ── A BASE DO DIA, SEM NADA PESSOAL (extraida da rota em 16/09/2026) ────────
+//
+// Por que virou funcao: o agendador do push precisa saber quais corridas estao
+// em TOP/HIGH/GOOD AGORA, e essa e' exatamente a conta que o /painel-dia ja
+// fazia. Refazer a conta la seria uma SEGUNDA implementacao da regua de
+// camadas — a doenca de sempre: dois lugares respondendo a mesma pergunta, que
+// divergem em silencio no dia em que alguem afina um corte.
+//
+// Aqui e uma conta so, um cache so (12s), dois consumidores. Nada de usuario
+// entra: entrada, escolhido e odd sao overlay, aplicados DEPOIS pelo chamador —
+// e e' justamente isso que deixa o cache ser compartilhado entre os dois.
+//
+// O corpo abaixo e' o mesmo que estava dentro da rota, sem uma linha de
+// diferenca. Mudou de casa, nao de comportamento.
+function baseDoDia(date) {
+  const mm = require('../utils/motorManha');
+  const { bateuPar } = require('../utils/avbResultado');
+  // A regra de camadas (OPORTUNIDADE/TOP/HIGH/GOOD) mora no camadasDoDia.js.
+  // Estava inteira aqui dentro ate set/2026; saiu porque o Historico passou a
+  // precisar da MESMA classificacao, e duas copias da regua divergem em silencio
+  // no dia em que alguem afina um corte. Mesmo motivo do avbResultado.js.
+  const cd = require('../utils/camadasDoDia');
+  const _k = cd.chaveCorrida;
+  const _pista = cd.pista;
+  const _horaBr = cd.horaBr;
 
     // BASE PESADA (nao-pessoal): recalcula o motor de todas as corridas + cruza com a BW.
     // Cache curto por data (12s) pra aguentar polling de 15-20s sem repesar o servidor.
@@ -1951,6 +1959,18 @@ router.get('/painel-dia', (req, res) => {
       }
       _painelDiaCache = { date, ts: Date.now(), corridas: corridasBase };
     }
+  return corridasBase;
+}
+
+router.get('/painel-dia', (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+    const cd = require('../utils/camadasDoDia');
+    const _idc = cd.idConfronto;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+      ? req.query.date
+      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const corridasBase = baseDoDia(date);
 
     // OVERLAY PESSOAL (por usuario, sem cache): entrada/escolhido/aguardando_entrada.
     const overlay = corridasBase.map(c => ({ id: c.race_id }));
@@ -2002,3 +2022,5 @@ module.exports = router;
 module.exports.processarCorrida = processarCorrida;
 module.exports.mapHistLinhas = mapHistLinhas;
 module.exports.rodarAnaliseAutomatica = rodarAnaliseAutomatica;
+// O agendador do push le as camadas do dia daqui — mesma conta, mesmo cache.
+module.exports.baseDoDia = baseDoDia;
