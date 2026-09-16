@@ -1084,6 +1084,7 @@ ${navBar(req.user, 'robot')}
     <a class="robot-menu-item mi-json" href="${BASE}/robot/odds/diag/probe" target="_blank" rel="noopener">Probe da BetWinner</a>
     <a class="robot-menu-item mi-json" href="${BASE}/robot/odds/diag/uso" target="_blank" rel="noopener">Uso do proxy</a>
     <a class="robot-menu-item mi-json" href="${BASE}/robot/diag/pdfs" target="_blank" rel="noopener">PDFs coletados</a>
+    <a class="robot-menu-item mi-json" href="${BASE}/robot/diag/checagem-final" target="_blank" rel="noopener">Checagem final — cobertura</a>
   </div>
 </div>
 
@@ -4572,6 +4573,138 @@ router.get('/diag/estudo-galgo', requireAdmin, (req, res) => {
         + 'bateu = 1 se o pick chegou na frente, 0 se nao, vazio se um dos dois nao aparece na chegada. '
         + 'cobertura_pct diz em quantos por cento das linhas cada coluna vem preenchida: hipotese cujo '
         + 'campo tem cobertura baixa nao pode ser testada. Baixe as linhas com fmt=csv.'
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ── COBERTURA DA CHECAGEM FINAL (admin, so-leitura) — Bruno, 16/09/2026 ────
+//
+// De onde veio: "a trap 1 esta vazia e nao foi avisado na tela analisar". O
+// motor nao sabia — o race_card ainda tinha os seis. Quem deveria ter pego a
+// retirada e' o robo de Checagem Final, e nao deu pra saber POR QUE ele nao
+// pegou: o log dele vive numa linha so da robot_logs, reescrita a cada rodada
+// (ON CONFLICT DO UPDATE), e ele roda de 5 em 5 minutos. O log da rodada que
+// interessava ja tinha sido sobrescrito dezenas de vezes.
+//
+// O que NAO e' sobrescrito: races.final_check_status e races.final_check_at,
+// que ficam na propria corrida. Esta rota le esses dois e responde a unica
+// pergunta que importa depois do fato: quais corridas do dia passaram da
+// janela de checagem SEM serem conferidas.
+//
+// As contas de janela usam as MESMAS funcoes do robo (horaUkParaMinutosBrt e
+// agoraMinutosBrt, do cardMonitorRobot). Reimplementar aqui seria criar um
+// diagnostico que pode discordar do diagnosticado — e ai ele nao serve pra
+// nada.
+//
+// NAO GRAVA NADA.
+//   GET /diag/checagem-final
+//   GET /diag/checagem-final?date=2026-09-16
+router.get('/diag/checagem-final', requireAdmin, (req, res) => {
+  try {
+    const { db } = require('../db/database');
+    const { horaUkParaMinutosBrt, agoraMinutosBrt } = require('./cardMonitorRobot');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : getTodayDate();
+
+    let minAntes = 15;
+    try {
+      const cfg = db.prepare('SELECT final_check_min_antes FROM analysis_config WHERE user_id=1').get();
+      if (cfg && cfg.final_check_min_antes) minAntes = parseInt(cfg.final_check_min_antes);
+    } catch (e) {}
+
+    const rows = db.prepare(
+      "SELECT r.id, r.hora, r.hora_br, r.corrida, r.nivel, r.tier, r.race_card, "
+      + "r.final_check_status, r.final_check_at, r.finishing_order_json "
+      + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? ORDER BY r.hora"
+    ).all(date);
+
+    // Quantas vezes o robo reescreveu cada corrida (o ramo "card mudou").
+    const auditPorRace = {};
+    try {
+      for (const a of db.prepare(
+        "SELECT race_id, COUNT(*) n FROM race_audit_log WHERE source='final_check_robot' GROUP BY race_id"
+      ).all()) auditPorRace[a.race_id] = a.n;
+    } catch (e) {}
+
+    const agora = agoraMinutosBrt();
+    const hhmm = (m) => (m == null) ? null
+      : String(Math.floor(((m % 1440) + 1440) % 1440 / 60)).padStart(2, '0')
+        + ':' + String(((m % 1440) + 1440) % 1440 % 60).padStart(2, '0');
+
+    const lista = rows.map(r => {
+      let card = [];
+      try { card = JSON.parse(r.race_card || '[]') || []; } catch (e) {}
+      const traps = card.map(g => Number(g && g.trap)).filter(n => n >= 1 && n <= 6);
+      const vazias = [];
+      for (let t = 1; t <= 6; t++) if (traps.indexOf(t) < 0) vazias.push(t);
+
+      const mCorrida = horaUkParaMinutosBrt(r.hora);
+      // A MESMA janela do corridasNaJanela: faltam <= minAntes e >= minAntes-10.
+      const abre = (mCorrida == null) ? null : mCorrida - minAntes;
+      const fecha = (mCorrida == null) ? null : mCorrida - (minAntes - 10);
+      const faltam = (mCorrida == null) ? null : mCorrida - agora;
+      const janelaPassou = (faltam != null) && faltam < (minAntes - 10);
+      const conferida = !!r.final_check_status;
+      // `nivel='skip'` nunca entra no SELECT do robo — nao e' furo, e regra.
+      const elegivel = String(r.nivel || '') !== 'skip';
+
+      return {
+        race_id: r.id, hora: r.hora, hora_br: r.hora_br || hhmm(mCorrida), corrida: r.corrida,
+        nivel: r.nivel || null, tier: r.tier || null,
+        elegivel,
+        galgos_no_card: traps.length,
+        traps_no_card: traps,
+        boxes_vazias: vazias,
+        janela_brt: (abre == null) ? null : (hhmm(abre) + ' - ' + hhmm(fecha)),
+        janela_passou: janelaPassou,
+        conferida,
+        final_check_status: r.final_check_status || null,
+        final_check_at: r.final_check_at || null,
+        reescrita_pelo_robo: auditPorRace[r.id] || 0,
+        ja_correu: !!r.finishing_order_json,
+        // A linha que responde a pergunta do dia.
+        furo: elegivel && janelaPassou && !conferida
+      };
+    });
+
+    const furos = lista.filter(x => x.furo);
+    const elegiveis = lista.filter(x => x.elegivel);
+    const comVazia = lista.filter(x => x.boxes_vazias.length);
+
+    res.json({
+      date,
+      agora_brt: hhmm(agora),
+      min_antes: minAntes,
+      janela_regra: 'de ' + minAntes + ' a ' + (minAntes - 10) + ' minutos antes da largada (BRT)',
+      resumo: {
+        corridas: lista.length,
+        elegiveis: elegiveis.length,
+        skip_fora_da_regra: lista.length - elegiveis.length,
+        conferidas: elegiveis.filter(x => x.conferida).length,
+        card_intacto: elegiveis.filter(x => x.final_check_status === 'ok').length,
+        refeitas: elegiveis.filter(x => x.conferida && x.final_check_status !== 'ok').length,
+        janela_ainda_por_vir: elegiveis.filter(x => !x.janela_passou).length,
+        NUNCA_CONFERIDAS: furos.length,
+        com_box_vazia_no_card: comVazia.length
+      },
+      nunca_conferidas: furos.map(x => ({
+        hora: x.hora, hora_br: x.hora_br, corrida: x.corrida,
+        janela_brt: x.janela_brt, galgos_no_card: x.galgos_no_card, boxes_vazias: x.boxes_vazias
+      })),
+      com_box_vazia: comVazia.map(x => ({
+        hora: x.hora, corrida: x.corrida, boxes_vazias: x.boxes_vazias,
+        conferida: x.conferida, final_check_status: x.final_check_status
+      })),
+      lista,
+      legenda: 'So-leitura. `furo` = corrida elegivel cuja janela de checagem JA PASSOU e que '
+        + 'continua com final_check_status NULL: o robo nao chegou nela. `boxes_vazias` sai do '
+        + 'race_card GRAVADO — e exatamente o que o motor usa pra decidir a nota de box vazio na '
+        + 'tela Analisar, entao lista vazia aqui quer dizer que a tela nao tinha como avisar. '
+        + '`reescrita_pelo_robo` conta as linhas do race_audit_log com source=final_check_robot: '
+        + '>0 quer dizer que o robo achou mudanca e refez a analise daquela corrida. '
+        + 'CUIDADO ao ler `conferida`: o robo confere cada corrida UMA VEZ SO '
+        + '(final_check_status IS NULL no SELECT dele), entao "conferida" com card de 6 galgos '
+        + 'significa "estava intacto NA HORA da checagem", nao "esta intacto agora".'
     });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
