@@ -6177,7 +6177,7 @@ ${categorizados.map(l => `<tr><td>${l.token}</td><td class="cat">${l.categoria}<
 router.get('/avisos-da-tela', requireAdmin, (req, res) => {
   const C = {
     top: '#3b82f6', high: '#f97316', good: '#8b5cf6',
-    roxo: '#a78bfa', azul: '#60a5fa', laranja: '#f97316',
+    roxo: '#a78bfa', azul: '#60a5fa', laranja: '#f97316', reverse: '#14b8a6',
     vermelho: '#ef4444', ambar: '#f59e0b', verde: '#1B9D40',
     amarelo: '#eab308', cinza: '#9aa4b2'
   };
@@ -6286,6 +6286,7 @@ router.get('/avisos-da-tela', requireAdmin, (req, res) => {
 + '<div class="intro">A propria linha da corrida pisca. Uma linha tem <b>um</b> estado por vez, e a ordem de prioridade e esta, de cima pra baixo.</div>'
 + tabela([
   linha(C.top, 'AvB confirmado', 'A linha pisca na cor do TIPO e ganha o selo da camada', 'Lista da Analisar', 'A BW confirmou um AvB. Azul TOP, laranja HIGH, roxo GOOD.'),
+  linha(C.reverse, 'REVERSE', 'Selo no lugar de TOP/HIGH/GOOD, na coluna Tipo', 'Historico', 'Voce inverteu o sentido: o registro conta pelo par que VOCE apostou, nao pelo do motor. Cor propria de proposito — REVERSE nao e um grau das tres camadas, e outra coisa.'),
   linha(C.verde, 'Corrida chegando', 'Pisca verde, mais devagar (1,6s), com barra verde na esquerda', 'Lista da Analisar', 'Falta pouco pra largada. E o unico que pisca sem apitar.'),
   linha(C.roxo, 'Alarme do filtro', 'Pisca na cor que voce escolheu, com barra da mesma cor', 'Lista da Analisar', 'A corrida casou com o seu filtro de alarme. Cor configuravel.'),
   linha(C.amarelo, 'Atrasada', 'Pisca amarelo e vai pro topo da fila', 'Lista da Analisar', 'Voce marcou a corrida como atrasada, esperando resultado.'),

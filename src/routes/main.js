@@ -2232,7 +2232,12 @@ function _celulaCamada(cf){
     // roxo. Uma camada nao pode ter uma cor no Historico e outra na Analisar.
     TOP:  ['#3b82f6', 'TOP',  'passou na regua firme: categoria, CalTm, split e podio'],
     HIGH: ['#f97316', 'HIGH', 'passou na regua mais frouxa (CalTm menor, aceita empate em split e podio)'],
-    GOOD: ['#8b5cf6', 'GOOD', 'so conviccao: nao passou em nenhuma das duas reguas']
+    GOOD: ['#8b5cf6', 'GOOD', 'so conviccao: nao passou em nenhuma das duas reguas'],
+    // Voce inverteu o sentido: a aposta deixou de ser a do motor. Cor propria
+    // (nenhuma outra tela usa este verde-azulado) justamente pra nao se
+    // confundir com as tres camadas — REVERSE nao e' um grau delas, e outra
+    // coisa. O tooltip lembra o que o motor tinha dito.
+    REVERSE: ['#14b8a6', 'REVERSE', 'voce inverteu o sentido: o registro conta pelo par que voce apostou, nao pelo do motor']
   };
   var v = mapa[cf.camada];
   if (!v) {
@@ -2246,6 +2251,8 @@ function _celulaCamada(cf){
       + cru + '</span></td>';
   }
   var extra = (cf.tier_motor ? ' &middot; tier ' + cf.tier_motor : '');
+  // Na linha invertida, diz de onde ela veio: "o motor tinha chamado de TOP".
+  if (cf.invertido && cf.camada_motor) extra += ' &middot; o motor chamou de ' + cf.camada_motor;
   return '<td style="text-align:center;vertical-align:middle" title="' + v[2] + extra.replace(/&middot;/g, '·') + '">'
     + '<span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 7px;'
     + 'border-radius:10px;border:1px solid ' + v[0] + '55;color:' + v[0] + ';white-space:nowrap">' + v[1] + '</span></td>';
@@ -2422,7 +2429,15 @@ function _abriuDaLinha(r, cf){
     var x = Number(c.pick_trap), y = Number(c.outro_trap);
     return (p[0] === x && p[1] === y) || (p[0] === y && p[1] === x);
   };
-  if (c.camada === 'TOP' || c.camada === 'HIGH' || c.camada === 'GOOD') {
+  // LINHA INVERTIDA: o par ABRIU na BW — so que no outro sentido. A odd que
+  // temos guardada e' a de la, entao ela some. O `mesmoPar` abaixo nao serve
+  // aqui: ele e' sem direcao de proposito e devolveria justamente a odd do
+  // sentido contrario.
+  if (c.invertido) return { abriu: 1, odd: null, par: c.par || null };
+  // O REVERSE nao e' uma camada de qualidade: quem responde pela plumbing
+  // continua sendo o que o motor tinha dito.
+  var cam = (c.camada === 'REVERSE' && c.camada_motor) ? c.camada_motor : c.camada;
+  if (cam === 'TOP' || cam === 'HIGH' || cam === 'GOOD') {
     var odd = (c.odd_bw != null) ? c.odd_bw : null;
     // So cai no odd_abertura se for o MESMO par — senao a coluna mostraria a
     // odd de um confronto que nao e o da linha.
@@ -2813,7 +2828,12 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
             pick_trap: Number(esc.aTrap), pick_nome: esc.aNome || null,
             outro_trap: Number(esc.bTrap), outro_nome: esc.bNome || null,
             pct: (esc.pct != null ? esc.pct : null),
-            camada: String(esc.origem || esc.origem_pick || 'FORA').toUpperCase(),
+            // 'inversao' vira REVERSE: e' a MESMA coisa que o bloco de baixo
+            // marca quando o par existe entre os confrontos. Dois rotulos pro
+            // mesmo conceito e' como o filtro e os cartoes passam a discordar.
+            camada: (String(esc.origem || '') === 'inversao')
+              ? 'REVERSE'
+              : String(esc.origem || esc.origem_pick || 'FORA').toUpperCase(),
             odd_bw: (esc.odd != null ? esc.odd : null),
             razao_mercado: (esc.razao_mercado != null ? esc.razao_mercado : null),
             bateu: bateuPar(r.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap)),
@@ -2824,7 +2844,46 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       // AQUI o funil fecha em UM. `registroDoHistorico` e' a mesma funcao que
       // decide isso em qualquer lugar do sistema: a aposta, se houve; senao o
       // mais bem avaliado.
-      const reg = cd.registroDoHistorico(confs, escId);
+      let reg = cd.registroDoHistorico(confs, escId);
+
+      // ── O REGISTRO SEGUE A DIRECAO QUE VOCE APOSTOU (Bruno, 15/09/2026) ──
+      //
+      // "quando inverto mudo a logica e meio que descarto a analise do motor,
+      // prevalecendo a minha... quando o resultado rodar, tem que entender que
+      // eu inverti e ganhando ou perdendo devera colocar o resultado correto."
+      //
+      // O DEFEITO: o `idConfronto` e' SEM DIRECAO (min x max), de proposito —
+      // e' assim que a sua aposta acha o confronto mesmo invertida. So que o
+      // confronto achado vem na direcao do MOTOR, e o `bateu` dele responde
+      // "o pick do motor chegou na frente?". Apostando 1 vence 4 num confronto
+      // que o motor montou como 4 vence 1, o Historico desenhava 4 vs 1 e
+      // contava o resultado ao contrario. Green virava red, calado.
+      //
+      // Aqui a linha e' virada pra SUA direcao e o `bateu` e' recalculado com a
+      // MESMA funcao de sempre — nao ha regra nova de resultado, so o par certo
+      // entrando nela.
+      //
+      // `camada` vira REVERSE porque a aposta deixou de ser a do motor: contar
+      // isto no cartao TOP sujaria justamente a taxa que mede o motor. E
+      // `camada_motor` guarda o que ele tinha dito, que a tabela ainda precisa.
+      if (reg && escId != null && reg.id === escId && esc
+          && (String(reg.pick_trap) !== String(esc.aTrap) || String(reg.outro_trap) !== String(esc.bTrap))) {
+        reg = Object.assign({}, reg, {
+          par: 'T' + esc.aTrap + 'xT' + esc.bTrap,
+          pick_trap: Number(esc.aTrap), pick_nome: esc.aNome || reg.outro_nome,
+          outro_trap: Number(esc.bTrap), outro_nome: esc.bNome || reg.pick_nome,
+          // A conviccao do motor era na direcao dele; na sua e o complemento.
+          // Deixar os 90% de "4 vence 1" numa linha que diz "1 vence 4" seria
+          // mostrar a favor o numero que era contra.
+          pct: (reg.pct != null ? 100 - Number(reg.pct) : null),
+          bateu: bateuPar(r.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap)),
+          // A odd da BW e' do sentido do motor e NAO vale aqui. Campo vazio e'
+          // honesto; numero do outro lado passa despercebido.
+          odd_bw: null, razao_mercado: null, market_pct: null,
+          camada: 'REVERSE', camada_motor: reg.camada, invertido: true
+        });
+      }
+
       if (reg) {
         // `primeira` continua true sempre: com uma linha por corrida, toda linha
         // e' a primeira da sua corrida. O template usa isso pra decidir quais
@@ -3072,7 +3131,7 @@ ${KPIS.map(function(K){
 </div>
 </div>
 
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="" selected>Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="" selected>Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option><option value="REVERSE">REVERSE</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
 ${linhasAvb.map(function(Lx){
   var r = Lx.r, cf = Lx.cf, pri = Lx.primeira, esc = Lx.escolhido;
   var horaUk = r.hora || '';
