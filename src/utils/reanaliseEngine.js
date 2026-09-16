@@ -213,8 +213,30 @@ function montarObs(A, B, R, Rb, vantTempoAbs, flags) {
   if (vantTempoAbs > 0.02) partes.push(`mais rapido (~${vantTempoAbs.toFixed(2)}s aj. categoria)`);
   if (R.splitEf != null && Rb.splitEf != null && R.splitEf < Rb.splitEf - 0.03) partes.push('arranca melhor');
   if (R.bendEf != null && Rb.bendEf != null && R.bendEf < Rb.bendEf - 0.5) partes.push('corre mais na frente');
-  // trap vazia — AVISA dos DOIS lados, dizendo de quem e' o box (favorito vs rival).
-  // Bruno ago/2026: so aviso, nao descarta. vaziaBoxPorTrap = { trap: [boxes vazios ao lado] }.
+  // ── BOX VAZIA (Bruno, 16/09/2026) ─────────────────────────────────────────
+  //
+  // De onde veio: "percebi que a trap 1 esta vazia e nao foi avisado na tela
+  // analisar". O card GRAVADO sabia (5 galgos, box 1 fora) e mesmo assim a nota
+  // nao disse nada — porque ela so falava de box vazia VIZINHA ao par analisado,
+  // e a trap 1 nao era vizinha de nenhum dos dois.
+  //
+  // Bruno: "poderia so vir indicando qual a box esta vazia na corrida,
+  // independente de quem esta ao lado". Entao agora sao duas coisas separadas:
+  //
+  //   1. o FATO da corrida: quais boxes estao vazias. Nao depende de par nenhum,
+  //      entao nao tem como o par analisado esconder o aviso.
+  //   2. a VANTAGEM: box vazia COLADA num dos dois galgos. Essa continua
+  //      valendo, porque e' a que mexe na conta (bonusTrapVazia) e a que diz de
+  //      quem e' o lado.
+  //
+  // As duas aparecem. Quando coincidem, a segunda linha repete um numero da
+  // primeira — repeticao que se le certo e' melhor que economia que engana.
+  const vaziasCorrida = flags.boxesVaziasCorrida || [];
+  if (vaziasCorrida.length) {
+    partes.push(vaziasCorrida.length > 1
+      ? `boxes vazias na corrida: ${vaziasCorrida.join(',')}`
+      : `box vazia na corrida: ${vaziasCorrida[0]}`);
+  }
   const vpt = flags.vaziaBoxPorTrap || {};
   const boxesPick = vpt[A.trap] || [], boxesRival = vpt[B.trap] || [];
   if (boxesPick.length) partes.push(`box vazio ao lado do favorito (${boxesPick.join(',')})`);
@@ -257,8 +279,12 @@ function avaliarPar(d1, d2, ctx) {
   if (r1.trialSuperior) net += 0.10;
   if (r2.trialSuperior) net -= 0.10;
 
-  const flags = { trapVazia: [], trapVaziaBox: [], vaziaBoxPorTrap: {}, cioRecente: null, trialPromovido: !!(r1.trialSuperior || r2.trialSuperior) };
+  const flags = { trapVazia: [], trapVaziaBox: [], vaziaBoxPorTrap: {}, boxesVaziasCorrida: [], cioRecente: null, trialPromovido: !!(r1.trialSuperior || r2.trialSuperior) };
   const vazias = (ctx && ctx.trapsVazias) || [];
+  // O GRID INTEIRO, sem olhar par nenhum. Puramente informativo: NAO entra no
+  // `net`. Quem mexe na conta continua sendo so a box colada num dos galgos —
+  // mudar isso mudaria o percentual de todo AvB do sistema, e nao foi pedido.
+  flags.boxesVaziasCorrida = vazias.slice().map(Number).filter(n => n >= 1 && n <= 6).sort((a, b) => a - b);
   // flags.trapVazia = trap do GALGO com box vazio ao lado (retrocompat). flags.trapVaziaBox
   // = o BOX vazio em si (retrocompat, merge dos dois). flags.vaziaBoxPorTrap = { trap: [boxes] }
   // POR galgo, pra a obs avisar de quem e' o lado (favorito vs rival) — Bruno pediu os dois.
