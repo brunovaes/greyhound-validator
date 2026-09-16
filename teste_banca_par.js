@@ -173,5 +173,79 @@ t('o comentario declara que aposta nova em par da BW ainda cai no par do motor',
 t('e diz qual e o preco de fechar (numeros do passado se mexem)',
   /numeros do passado se mexem/.test(SRC));
 
+// ── [8] BANCA FIXA E AS TRES BANCAS (Bruno, 16/09/2026) ────────────────────
+// O encadeamento mes-a-mes saiu: a unidade valia coisas diferentes em meses
+// diferentes, entao 2,5 unidades num mes de banca 623 nao era a mesma aposta
+// que 2,5 unidades num mes de banca 1000, e as taxas nao eram comparaveis.
+bloco('[8] A BANCA E FIXA, E A BASE E UMA SO');
+
+t('o encadeamento mes-a-mes nao existe mais',
+  !/saldoAnterior/.test(SRC) && !/const inicial = overrides\[ym\]/.test(SRC));
+t('a bankroll_months deixou de ser lida no calculo',
+  !/SELECT year_month, banca_inicial FROM bankroll_months/.test(SRC));
+t('todo mes usa a mesma base', /inicial: fixa,/.test(SRC));
+t('e o ganho em R\$ sai dela', /\(ganhoPct \/ 100\) \* fixa/.test(SRC));
+
+// As tres bancas, rodando.
+const ctxB = { console: console, Object: Object, Number: Number };
+vm.createContext(ctxB);
+vm.runInContext(arranca('getBancas')
+  + '\nthis.g = function(cfg, cadeia, fixa){'
+  + '  getUserConfig = function(){ return cfg; };'
+  + '  getBancaPadrao = function(){ return fixa; };'
+  + '  return getBancas(1, cadeia);'
+  + '};'
+  + '\nvar getUserConfig, getBancaPadrao;', ctxB);
+
+const CADEIA = { '2026-09': { apostas: [
+  { dia: '2026-09-10', ganhoReais: 25 },
+  { dia: '2026-09-14', ganhoReais: -25 },
+  { dia: '2026-09-16', ganhoReais: 40 },
+  { dia: '2026-09-16', ganhoReais: null }   // pendente: nao entra
+]}};
+
+let b = ctxB.g({ banca_valor_inicial: 1000 }, CADEIA, 1000);
+t('sem reset nenhum, a acumulada conta desde a primeira aposta (1000 + 40)',
+  b.bancaAcumulada === 1040);
+t('aposta pendente (ganhoReais null) nao entra na conta', b.bancaAcumulada === 1040);
+t('a fixa nao se mexe', b.bancaFixa === 1000);
+// Sem marco de reset nao ha de quando contar. Somar o historico em cima de
+// zero mostraria um numero com cara de saldo real da casa.
+t('a BW nunca ancorada devolve null, e a tela desenha um traco', b.bancaBw === null);
+
+b = ctxB.g({ banca_valor_inicial: 1000, banca_fixa_reset_em: '2026-09-15' }, CADEIA, 1000);
+t('com reset em 15/09, a acumulada conta so o que veio depois (1000 + 40)',
+  b.bancaAcumulada === 1040);
+b = ctxB.g({ banca_valor_inicial: 1000, banca_fixa_reset_em: '2026-09-12' }, CADEIA, 1000);
+t('reset em 12/09 pega o red do dia 14 tambem (1000 - 25 + 40)',
+  b.bancaAcumulada === 1015);
+b = ctxB.g({ banca_valor_inicial: 1000, banca_fixa_reset_em: '2026-09-17' }, CADEIA, 1000);
+t('reset no futuro deixa a acumulada igual a fixa', b.bancaAcumulada === 1000);
+
+b = ctxB.g({ banca_valor_inicial: 1000, banca_bw_valor: 300, banca_bw_reset_em: '2026-09-14' }, CADEIA, 1000);
+t('a BW soma a partir do PROPRIO reset, independente da fixa (300 - 25 + 40)',
+  b.bancaBw === 315);
+t('e guarda o valor informado, pra tela poder explicar de onde saiu', b.bancaBwBase === 300);
+
+t('a rota de reset existe e aceita fixa ou bw', /router\.post\('\/reset-banca'/.test(SRC)
+  && /qual === 'fixa'/.test(SRC) && /qual === 'bw'/.test(SRC));
+t('e da pra DESFAZER um reset (marco volta a null)', /desfazer \? null : hoje/.test(SRC));
+t('resetar nao apaga aposta nenhuma — so move o marco',
+  !/DELETE FROM races|DELETE FROM race_user_data/.test(SRC));
+
+// ── [9] os cartoes do dia ──────────────────────────────────────────────────
+bloco('[9] OITO CARTOES, UMA LINHA, SEM PENDENTES');
+
+t('o cartao Pendentes saiu', !/lbl">Pendentes</.test(SRC));
+t('entraram Banca fixa, acumulada e BW',
+  /lbl">Banca fixa</.test(SRC) && /lbl">Banca acumulada</.test(SRC) && /lbl">Banca BW</.test(SRC));
+t('a BW e amarela', /\.card \.val\.bw\{color:#eab308\}/.test(SRC) && /class="val bw"/.test(SRC));
+t('o dia usa a linha de oito', /cardsEl\.className = 'cards l8'/.test(SRC));
+t('com fonte e respiro menores so nela', /\.cards\.l8 \.val\{font-size:16px/.test(SRC));
+t('e Mes e Ano voltam pro grid normal (senao herdam o l8 ao trocar de aba)',
+  (SRC.match(/cardsEl\.className = 'cards';/g) || []).length === 2);
+t('abaixo de 1180px a linha quebra sozinha',
+  /@media\(max-width:1180px\)\{\.cards\.l8/.test(SRC));
+
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);

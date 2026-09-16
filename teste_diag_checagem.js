@@ -78,8 +78,22 @@ function corrida(o) {
   // UK que resulta no minuto BRT que o cenario quer.
   let hUk = Math.floor(((alvo % 1440) + 1440) % 1440 / 60) + 4;
   if (hUk >= 24) hUk -= 24;
-  if (hUk >= 13) hUk -= 12;          // a volta do "1-9 = PM"
+  // A volta do "1-9 = PM" do horaUkParaMinutosBrt. So vale de 13 a 21, que sao
+  // as horas que ele mapeia; 22, 23, 0 e 10-12 ele le direto.
+  //
+  // ESTE BUG ERA MEU, e no proprio teste: eu subtraia 12 de QUALQUER hora >= 13,
+  // entao 22h UK virava "10" e voltava como 6h BRT. So aparecia em certos
+  // horarios do dia — o teste passou de sorte quando eu o escrevi a tarde.
+  // Dai o round-trip obrigatorio logo abaixo: um helper que converte tem que
+  // provar que converteu.
+  if (hUk >= 13 && hUk <= 21) hUk -= 12;
   const hora = hUk + ':' + String(((alvo % 1440) + 1440) % 1440 % 60).padStart(2, '0');
+  const volta = horaUkParaMinutosBrt(hora);
+  if (volta !== ((alvo % 1440) + 1440) % 1440) {
+    console.error('ERRO no proprio teste: "' + hora + '" volta como ' + volta
+      + ' e o cenario pediu ' + (((alvo % 1440) + 1440) % 1440));
+    process.exit(1);
+  }
   return Object.assign({
     id: o.id, hora: hora, hora_br: null, corrida: o.corrida || ('Pista A' + o.id),
     nivel: 'media', tier: 'TOP',

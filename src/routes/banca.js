@@ -141,51 +141,131 @@ function resolverAposta(a) {
   });
 }
 
-// Monta a cadeia de banca mes-a-mes: cada mes que teve >=1 aposta ganha um
-// banca_inicial (override manual OU herdado do saldo final do mes anterior OU
-// o padrao 1000 se for o primeiro mes de todos) e um banca_final calculado.
+// ── BANCA FIXA (Bruno, 16/09/2026) ─────────────────────────────────────────
+//
+// O ENCADEAMENTO MES-A-MES SAIU. Antes cada mes herdava o saldo final do mes
+// anterior (com override manual na bankroll_months por cima), entao a unidade
+// valia coisas diferentes em meses diferentes e as taxas nao eram comparaveis
+// entre si: 2,5 unidades num mes de banca 623 nao e a mesma aposta que 2,5
+// unidades num mes de banca 1000.
+//
+// Agora a base e' UMA SO — a banca fixa —, e ela nao se mexe sozinha. Uma
+// unidade vale 1% dela sempre. A tabela bankroll_months continua no banco
+// (nada foi apagado), mas deixou de ser lida: os overrides por mes nao valem
+// mais. Decisao do Bruno em 16/09, com essa consequencia declarada antes.
+//
+// O nome da coluna continua `banca_valor_inicial` de proposito: criar uma
+// coluna nova pro mesmo conceito deixaria duas fontes pro mesmo numero, e
+// migrar valor entre elas e' risco sem ganho. Na tela ela se chama Banca fixa.
 function getCadeiaBanca(userId) {
   const apostas = getApostas(userId);
+  const fixa = getBancaPadrao(userId);
   const porMes = {};
   apostas.forEach(a => {
     const ym = a.dia.slice(0, 7);
     (porMes[ym] = porMes[ym] || []).push(a);
   });
-  const meses = Object.keys(porMes).sort();
-  const overrides = {};
-  db.prepare('SELECT year_month, banca_inicial FROM bankroll_months WHERE user_id=?').all(userId)
-    .forEach(r => { overrides[r.year_month] = r.banca_inicial; });
-
   const cadeia = {};
-  let saldoAnterior = null;
-  meses.forEach(ym => {
-    const inicial = overrides[ym] != null ? overrides[ym] : (saldoAnterior != null ? saldoAnterior : getBancaPadrao(userId));
+  Object.keys(porMes).sort().forEach(ym => {
     const apostasDoMes = porMes[ym].map(a => {
       const ganhoPct = calcGanhoPct(a);
       return Object.assign({}, a, {
         ganhoPct,
-        ganhoReais: ganhoPct != null ? (ganhoPct / 100) * inicial : null,
+        ganhoReais: ganhoPct != null ? (ganhoPct / 100) * fixa : null,
         status: a.bateu === 'sim' ? 'green' : a.bateu === 'nao' ? 'red' : 'pendente'
       });
     });
     const somaGanhoPct = apostasDoMes.reduce((s, a) => s + (a.ganhoPct || 0), 0);
-    const final = inicial + (somaGanhoPct / 100) * inicial;
-    cadeia[ym] = { inicial, final, apostas: apostasDoMes, temOverride: overrides[ym] != null };
-    saldoAnterior = final;
+    cadeia[ym] = {
+      inicial: fixa,
+      final: fixa + (somaGanhoPct / 100) * fixa,
+      apostas: apostasDoMes,
+      temOverride: false
+    };
   });
   return cadeia;
 }
 
+// ── AS TRES BANCAS ─────────────────────────────────────────────────────────
+//
+//   fixa       = a base da unidade. Nao se mexe sozinha; so voce muda.
+//   acumulada  = fixa + lucro/prejuizo desde o ultimo reset DELA.
+//   bw         = o dinheiro real na casa: o valor informado no ultimo reset
+//                mais o lucro/prejuizo desde entao. Reset separado de proposito
+//                — a conta na BW tambem se mexe por deposito e saque, que o
+//                sistema nao tem como saber.
+//
+// SEM RESET NENHUM, acumula desde a primeira aposta. Assim quem nunca resetou
+// ve o historico inteiro, e o primeiro reset e' que cria o marco — ninguem
+// perde passado por eu ter escolhido uma data de corte.
+function getBancas(userId, cadeia) {
+  const cfg = getUserConfig(userId) || {};
+  const fixa = getBancaPadrao(userId);
+  const todas = [];
+  Object.keys(cadeia || {}).forEach(ym => {
+    (cadeia[ym].apostas || []).forEach(a => todas.push(a));
+  });
+  const somaDesde = (marco) => todas
+    .filter(a => a.ganhoReais != null && (!marco || a.dia >= marco))
+    .reduce((s, a) => s + a.ganhoReais, 0);
+
+  const bwBase = (cfg.banca_bw_valor != null) ? Number(cfg.banca_bw_valor) : 0;
+  const fixaDesde = cfg.banca_fixa_reset_em || null;
+  const bwDesde = cfg.banca_bw_reset_em || null;
+  return {
+    bancaFixa: fixa,
+    bancaAcumulada: fixa + somaDesde(fixaDesde),
+    // NULL enquanto a BW nunca foi ancorada. Sem o marco eu nao sei de quando
+    // contar, e somar o historico inteiro em cima de zero mostraria um numero
+    // com cara de saldo real da casa — o tipo de mentira que ninguem confere.
+    // A tela desenha um traco e o titulo explica como configurar.
+    bancaBw: bwDesde ? (bwBase + somaDesde(bwDesde)) : null,
+    bancaBwBase: bwBase,
+    bancaFixaResetEm: fixaDesde,
+    bancaBwResetEm: bwDesde
+  };
+}
+
+// Com a banca fixa isto virou uma linha. Ficou como funcao porque varios
+// pontos do arquivo chamam por este nome.
 function getBancaAtualPadrao(userId) {
-  const cadeia = getCadeiaBanca(userId);
-  const meses = Object.keys(cadeia).sort();
-  if (!meses.length) return getBancaPadrao(userId);
-  const ymAtual = new Date().toISOString().slice(0, 7);
-  if (cadeia[ymAtual]) return cadeia[ymAtual].inicial;
-  return cadeia[meses[meses.length - 1]].final;
+  return getBancaPadrao(userId);
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
+// ── RESET DE BANCA (Bruno, 16/09/2026) ─────────────────────────────────────
+//
+// Resetar NAO apaga aposta nenhuma: so move o marco a partir do qual a banca
+// acumula. O historico continua inteiro na tabela e nas abas Mes e Ano.
+//
+//   qual=fixa -> a Banca acumulada volta a ser igual a fixa e passa a contar
+//                de hoje.
+//   qual=bw   -> grava o valor que voce informou como o saldo real na casa e
+//                passa a contar de hoje. Serve pra depois de um deposito, um
+//                saque, ou simplesmente pra recomecar a medir.
+//
+// `desfazer=1` limpa o marco e volta a acumular desde a primeira aposta — sem
+// isso, um reset por engano nao teria volta a nao ser mexendo no banco.
+router.post('/reset-banca', express.json(), (req, res) => {
+  try {
+    const userId = req.user.id;
+    const qual = String((req.body && req.body.qual) || '');
+    const desfazer = !!(req.body && req.body.desfazer);
+    const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    if (qual === 'fixa') {
+      db.prepare('UPDATE analysis_config SET banca_fixa_reset_em=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?')
+        .run(desfazer ? null : hoje, userId);
+    } else if (qual === 'bw') {
+      const valor = parseFloat(req.body && req.body.valor);
+      db.prepare('UPDATE analysis_config SET banca_bw_valor=?, banca_bw_reset_em=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?')
+        .run(Number.isFinite(valor) ? valor : 0, desfazer ? null : hoje, userId);
+    } else {
+      return res.status(400).json({ error: 'qual deve ser "fixa" ou "bw"' });
+    }
+    res.json({ ok: true, em: desfazer ? null : hoje });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/data', (req, res) => {
   const userId = req.user.id;
   const view = req.query.view || 'day';
@@ -209,13 +289,13 @@ router.get('/data', (req, res) => {
       const cfg = getUserConfig(userId);
       const pctStop = cfg && cfg.banca_pct_stop != null ? cfg.banca_pct_stop : 20;
       const stopHit = pctDia < 0 && Math.abs(pctDia) >= pctStop;
-      res.json({
+      res.json(Object.assign({
         ok: true, view: 'day', date: dateParam, bancaInicialMes: mes.inicial,
         apostas: apostasDoDia, lucros, prejuizos, saldoDia, pctDia, dinheiroTransitado,
         pendentes: apostasDoDia.length - resolvidas.length,
         stopHit, pctStop,
         avisoStop: cfg && cfg.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'
-      });
+      }, getBancas(userId, cadeia)));
     } else if (view === 'month') {
       const ym = dateParam.slice(0, 7);
       const mes = cadeia[ym] || { inicial: getBancaAtualPadrao(userId), final: getBancaAtualPadrao(userId), apostas: [] };
@@ -280,12 +360,17 @@ router.post('/save-config', express.json(), (req, res) => {
     const d = req.body || {};
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_unidade_padrao REAL DEFAULT 2.5").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000").run(); } catch(e) {}
+    // 16/09/2026 — banca da BW (dinheiro real na casa) e os marcos de reset.
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_bw_valor REAL DEFAULT 0").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_bw_reset_em TEXT").run(); } catch(e) {}
+    try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_fixa_reset_em TEXT").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT").run(); } catch(e) {}
     getUserConfig(userId); // garante que a linha de config do usuario existe
-    db.prepare(`UPDATE analysis_config SET banca_unidade_padrao=?, banca_valor_inicial=?, banca_pct_stop=?, banca_aviso_stop=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    db.prepare(`UPDATE analysis_config SET banca_unidade_padrao=?, banca_valor_inicial=?, banca_bw_valor=?, banca_pct_stop=?, banca_aviso_stop=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       parseFloat(d.banca_unidade_padrao) || 2.5,
       parseFloat(d.banca_valor_inicial) || 1000,
+      parseFloat(d.banca_bw_valor) || 0,
       (d.banca_pct_stop != null && d.banca_pct_stop !== '') ? parseFloat(d.banca_pct_stop) : 20,
       d.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
       userId
@@ -325,6 +410,16 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px;display:flex;align-items:cen
 .navbtn{background:#161B27;border:1px solid #222;color:#ccc;width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
 .navbtn:hover{border-color:#22c55e;color:#22c55e}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+/* Linha unica do DIA (Bruno, 16/09): oito cartoes lado a lado. A fonte e o
+   respiro encolhem so aqui — as abas Mes e Ano seguem com o tamanho de antes,
+   porque la sao seis e cabem folgados. Abaixo de 1180px volta a quebrar
+   sozinho: oito colunas num notebook estreito viram oito colunas ilegiveis. */
+.cards.l8{grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.cards.l8 .card{padding:11px 10px}
+.cards.l8 .lbl{font-size:9px;letter-spacing:.3px;margin-bottom:4px}
+.cards.l8 .val{font-size:16px;white-space:nowrap}
+.card .val.bw{color:#eab308}
+@media(max-width:1180px){.cards.l8{grid-template-columns:repeat(auto-fit,minmax(125px,1fr))}}
 .card{background:#161B27;border:1px solid #222;border-radius:10px;padding:16px}
 .card .lbl{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;font-weight:700}
 .card .val{font-size:22px;font-weight:700}
@@ -393,9 +488,18 @@ ${navBar(req.user, 'banca')}
         <div style="font-size:11px;color:#666;margin-top:4px">1 unidade entra automaticamente quando você marca "Apostei" (1 unidade = 1% da banca do mês).</div>
       </div>
       <div>
-        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Valor da banca inicial (R$)</label>
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Banca fixa (R$)</label>
         <input id="cfg_inicial" type="number" step="1" min="0" value="${cfg.banca_valor_inicial||1000}" style="width:100%;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">
-        <div style="font-size:11px;color:#666;margin-top:4px">Padrão do primeiro mês (ou enquanto você não iniciar um mês na aba Mês).</div>
+        <div style="font-size:11px;color:#666;margin-top:4px">A base da unidade: 1 unidade = 1% dela. Não se mexe sozinha — vale igual em todos os meses.</div>
+        <button type="button" onclick="resetarBanca('fixa')" style="margin-top:8px;background:#161B27;border:1px solid #333;color:#cbd5e1;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer">Resetar acumulada (começa hoje)</button>
+        <span style="font-size:11px;color:#666;margin-left:8px">${cfg.banca_fixa_reset_em ? 'acumulando desde ' + cfg.banca_fixa_reset_em : 'acumulando desde a primeira aposta'}</span>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Banca BW — saldo real na casa (R$)</label>
+        <input id="cfg_bw" type="number" step="0.01" min="0" value="${cfg.banca_bw_valor||0}" style="width:100%;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">
+        <div style="font-size:11px;color:#666;margin-top:4px">O que está de fato na BetWinner. Resete depois de depósito ou saque — o sistema não tem como saber que eles aconteceram.</div>
+        <button type="button" onclick="resetarBanca('bw')" style="margin-top:8px;background:#161B27;border:1px solid #333;color:#eab308;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer">Resetar BW com este valor</button>
+        <span style="font-size:11px;color:#666;margin-left:8px">${cfg.banca_bw_reset_em ? 'contando desde ' + cfg.banca_bw_reset_em : 'nunca resetada'}</span>
       </div>
       <div>
         <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Percentual de stop do dia (%)</label>
@@ -556,14 +660,22 @@ function renderDay(d) {
   document.getElementById('table-title').textContent = 'Apostas do dia';
   document.getElementById('chart-title').textContent = 'Lucros x Prejuízos e evolução do dia';
   const cardsEl = document.getElementById('banca-cards');
+  // l8 = os oito numa linha so. O cartao Pendentes saiu (16/09): o motivo de
+  // cada pendencia passou a aparecer na propria linha da tabela, entao contar
+  // quantas eram em cima so ocupava a vaga de um numero que importa mais.
+  cardsEl.className = 'cards l8';
+  var dicaFixa = d.bancaFixaResetEm ? 'Base da unidade. Acumulando desde o reset de ' + d.bancaFixaResetEm : 'Base da unidade: 1 unidade = 1% dela. Nao se mexe sozinha.';
+  var dicaAcum = d.bancaFixaResetEm ? 'Banca fixa + resultado desde ' + d.bancaFixaResetEm : 'Banca fixa + resultado de todas as apostas';
+  var dicaBw = d.bancaBwResetEm ? 'Saldo informado em ' + d.bancaBwResetEm + ' (' + fmtR$(d.bancaBwBase) + ') + resultado desde entao' : 'Informe o saldo real da casa em Configuracoes e resete pra comecar a medir';
   cardsEl.innerHTML =
-    '<div class="card"><div class="lbl">Banca inicial (mês)</div><div class="val">'+fmtR$(d.bancaInicialMes)+'</div></div>' +
+    '<div class="card" title="'+dicaFixa+'"><div class="lbl">Banca fixa</div><div class="val">'+fmtR$(d.bancaFixa)+'</div></div>' +
+    '<div class="card" title="'+dicaAcum+'"><div class="lbl">Banca acumulada</div><div class="val '+(d.bancaAcumulada>=d.bancaFixa?'pos':'neg')+'">'+fmtR$(d.bancaAcumulada)+'</div></div>' +
+    '<div class="card" title="'+dicaBw+'"><div class="lbl">Banca BW</div><div class="val bw">'+(d.bancaBw==null?'&mdash;':fmtR$(d.bancaBw))+'</div></div>' +
     '<div class="card"><div class="lbl">Dinheiro transitado</div><div class="val" style="color:#3B82F7">'+fmtR$(d.dinheiroTransitado)+'</div></div>' +
     '<div class="card"><div class="lbl">Lucros do dia</div><div class="val pos">'+fmtR$(d.lucros)+'</div></div>' +
     '<div class="card"><div class="lbl">Prejuízos do dia</div><div class="val neg">'+fmtR$(-d.prejuizos)+'</div></div>' +
     '<div class="card"><div class="lbl">Saldo do dia</div><div class="val '+(d.saldoDia>=0?'pos':'neg')+'">'+fmtR$(d.saldoDia)+'</div></div>' +
-    '<div class="card"><div class="lbl">% do dia</div><div class="val '+(d.pctDia>=0?'pos':'neg')+'">'+fmtPct(d.pctDia)+'</div></div>' +
-    (d.pendentes ? '<div class="card"><div class="lbl">Pendentes</div><div class="val">'+d.pendentes+'</div></div>' : '');
+    '<div class="card"><div class="lbl">% do dia</div><div class="val '+(d.pctDia>=0?'pos':'neg')+'">'+fmtPct(d.pctDia)+'</div></div>';
 
   const chartSection = document.getElementById('banca-chart-section');
   if (d.lucros || d.prejuizos) {
@@ -608,8 +720,11 @@ function renderMonth(d) {
   document.getElementById('table-title').textContent = 'Dias do mês';
   document.getElementById('chart-title').textContent = 'Evolução da banca no mês';
   const cardsEl = document.getElementById('banca-cards');
+  // Tira o l8 do dia: sem isto, trocar de aba deixava seis cartoes espremidos
+  // em oito colunas.
+  cardsEl.className = 'cards';
   cardsEl.innerHTML =
-    '<div class="card"><div class="lbl">Banca inicial</div><div class="val">'+fmtR$(d.bancaInicial)+'</div></div>' +
+    '<div class="card"><div class="lbl">Banca fixa</div><div class="val">'+fmtR$(d.bancaInicial)+'</div></div>' +
     '<div class="card"><div class="lbl">Banca final</div><div class="val">'+fmtR$(d.bancaFinal)+'</div></div>' +
     '<div class="card"><div class="lbl">Ganho do mês</div><div class="val '+(d.totalGanho>=0?'pos':'neg')+'">'+fmtR$(d.totalGanho)+'</div></div>' +
     '<div class="card"><div class="lbl">% do mês</div><div class="val '+(d.pctMes>=0?'pos':'neg')+'">'+fmtPct(d.pctMes)+'</div></div>' +
@@ -649,6 +764,7 @@ function renderYear(d) {
   document.getElementById('table-title').textContent = 'Meses do ano';
   document.getElementById('chart-title').textContent = 'Evolução da banca no ano';
   const cardsEl = document.getElementById('banca-cards');
+  cardsEl.className = 'cards';   // tira o l8 do dia
   cardsEl.innerHTML =
     '<div class="card"><div class="lbl">Banca início do ano</div><div class="val">'+fmtR$(d.bancaInicioAno)+'</div></div>' +
     '<div class="card"><div class="lbl">Banca fim do ano</div><div class="val">'+fmtR$(d.bancaFimAno)+'</div></div>' +
@@ -685,10 +801,27 @@ async function salvarBancaInicial(yearMonth) {
 }
 
 carregarDados();
+// Resetar NAO apaga aposta nenhuma: so move o marco a partir do qual a banca
+// acumula. O historico continua inteiro nas abas Mes e Ano.
+async function resetarBanca(qual){
+  var corpo = { qual: qual };
+  if (qual === 'bw') {
+    corpo.valor = document.getElementById('cfg_bw').value;
+    if (!confirm('Resetar a Banca BW para R$ ' + (corpo.valor || '0') + ' e passar a contar o resultado a partir de hoje?')) return;
+  } else {
+    if (!confirm('A Banca acumulada volta a ser igual a banca fixa e passa a contar a partir de hoje. Nenhuma aposta e apagada. Confirma?')) return;
+  }
+  try {
+    var r = await fetch(BASE+'/banca/reset-banca', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(corpo)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    location.reload();
+  } catch(e){ alert('Erro ao resetar: '+e.message); }
+}
 async function salvarConfigBanca(){
   var body = {
     banca_unidade_padrao: document.getElementById('cfg_unidade').value,
     banca_valor_inicial: document.getElementById('cfg_inicial').value,
+    banca_bw_valor: document.getElementById('cfg_bw').value,
     banca_pct_stop: document.getElementById('cfg_pctstop').value,
     banca_aviso_stop: document.getElementById('cfg_aviso').value
   };

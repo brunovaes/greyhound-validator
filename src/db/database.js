@@ -293,6 +293,12 @@ const migrations = [
   "ALTER TABLE analysis_config ADD COLUMN monitor_window_end TEXT DEFAULT '20:00'",
   "ALTER TABLE analysis_config ADD COLUMN banca_unidade_padrao REAL DEFAULT 2.5",
   "ALTER TABLE analysis_config ADD COLUMN banca_valor_inicial REAL DEFAULT 1000",
+  // 16/09/2026 — banca fixa + banca da BW. A `banca_valor_inicial` passou a ser
+  // a BANCA FIXA (a base da unidade, que nao se mexe sozinha); o nome da coluna
+  // ficou pra nao existirem duas fontes pro mesmo numero.
+  "ALTER TABLE analysis_config ADD COLUMN banca_bw_valor REAL DEFAULT 0",
+  "ALTER TABLE analysis_config ADD COLUMN banca_bw_reset_em TEXT",
+  "ALTER TABLE analysis_config ADD COLUMN banca_fixa_reset_em TEXT",
   "ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20",
   "ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT DEFAULT 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'",
   "ALTER TABLE analysis_config ADD COLUMN bloco_pesos_ativo INTEGER DEFAULT 1",
@@ -554,7 +560,8 @@ const CONFIG_GLOBAL_ID = 1;
 // inicial, percentual de stop e a mensagem do aviso continuam por usuario,
 // sobrepostos por cima da configuracao global. Quem grava esses quatro e' a
 // rota /banca/save-config, sempre na linha do proprio usuario.
-const CAMPOS_BANCA_PESSOAIS = ['banca_unidade_padrao', 'banca_valor_inicial', 'banca_pct_stop', 'banca_aviso_stop'];
+const CAMPOS_BANCA_PESSOAIS = ['banca_unidade_padrao', 'banca_valor_inicial', 'banca_pct_stop', 'banca_aviso_stop',
+  'banca_bw_valor', 'banca_bw_reset_em', 'banca_fixa_reset_em'];
 
 function getUserConfig(userId, aplicaBlocos) {
   if (aplicaBlocos === undefined) aplicaBlocos = true;
