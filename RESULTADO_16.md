@@ -164,8 +164,12 @@ não significou nada.
 ### O teste que decide
 
 Conforme o pré-registro: a CANDIDATA acima roda **uma única vez** nos dados de **15/09 em
-diante**, com odd viva, quando houver ~2.000 AvBs novos (3 a 4 semanas). Só o que
-sobreviver a essa passagem entra na configuração do motor.
+diante**, com odd viva, quando houver ~2.000 AvBs novos. Só o que sobreviver a essa
+passagem entra na configuração do motor.
+
+**Data para rodar: a partir de 06/10/2026.** No ritmo de 26/08 a 14/09 (~115 AvBs
+resolvidos por dia) são as ~3 semanas necessárias para juntar os ~2.000. Antes disso a
+amostra não fecha, e o teste só pode ser feito uma vez.
 
 Se na hora do teste alguém ajustar o corte `0.19`, o `0.15` ou o `0.01`, **o teste morreu**
 e vira treino. Os números estão escritos aqui de propósito.
