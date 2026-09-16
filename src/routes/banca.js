@@ -438,7 +438,12 @@ table.betstbl td{padding:8px 10px;border-bottom:1px solid #1c1c1c}
 .empty-msg{padding:30px;text-align:center;color:#555;font-size:13px}
 .monthinit-form{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #222}
 .btn-mini{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
-</style></head><body>
+</style>
+<!-- Caixas de dialogo no visual do app. Substitui confirm()/alert(), que no
+     Railway aparecem com o dominio no titulo e fonte do sistema — num momento
+     de decisao (resetar banca) parece dialogo de outro site. -->
+<script src="${BASE}/static/js/dialogo.js"></script>
+</head><body>
 <div class="hero"><img src="${logoB64}" alt="Greyhound Validator"></div>
 ${navBar(req.user, 'banca')}
 <div class="content">
@@ -797,7 +802,7 @@ async function salvarBancaInicial(yearMonth) {
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'erro');
     carregarDados();
-  } catch(e) { alert('Erro ao salvar: ' + e.message); }
+  } catch(e) { ghErro('Nao consegui salvar. ' + e.message); }
 }
 
 carregarDados();
@@ -805,17 +810,29 @@ carregarDados();
 // acumula. O historico continua inteiro nas abas Mes e Ano.
 async function resetarBanca(qual){
   var corpo = { qual: qual };
+  var ok;
   if (qual === 'bw') {
     corpo.valor = document.getElementById('cfg_bw').value;
-    if (!confirm('Resetar a Banca BW para R$ ' + (corpo.valor || '0') + ' e passar a contar o resultado a partir de hoje?')) return;
+    ok = await ghConfirmar({
+      titulo: 'Resetar a Banca BW?',
+      texto: 'O saldo passa a ser R$ ' + (corpo.valor || '0') + ' e o resultado volta a contar a partir de hoje.\\n\\n'
+        + 'Nenhuma aposta e apagada — o historico continua inteiro nas abas Mes e Ano.',
+      ok: 'Resetar'
+    });
   } else {
-    if (!confirm('A Banca acumulada volta a ser igual a banca fixa e passa a contar a partir de hoje. Nenhuma aposta e apagada. Confirma?')) return;
+    ok = await ghConfirmar({
+      titulo: 'Resetar a Banca acumulada?',
+      texto: 'Ela volta a ser igual a banca fixa e passa a contar a partir de hoje.\\n\\n'
+        + 'Nenhuma aposta e apagada — o historico continua inteiro nas abas Mes e Ano.',
+      ok: 'Resetar'
+    });
   }
+  if (!ok) return;
   try {
     var r = await fetch(BASE+'/banca/reset-banca', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(corpo)});
     if(!r.ok) throw new Error('HTTP '+r.status);
     location.reload();
-  } catch(e){ alert('Erro ao resetar: '+e.message); }
+  } catch(e){ ghErro('Nao consegui resetar a banca. ' + e.message); }
 }
 async function salvarConfigBanca(){
   var body = {
@@ -829,7 +846,7 @@ async function salvarConfigBanca(){
     var r = await fetch(BASE+'/banca/save-config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok) throw new Error('HTTP '+r.status);
     var m=document.getElementById('cfg-msg'); if(m){ m.style.display='inline'; setTimeout(function(){m.style.display='none';},2200); }
-  } catch(e){ alert('Erro ao salvar: '+e.message); }
+  } catch(e){ ghErro('Nao consegui salvar as configuracoes. ' + e.message); }
 }
 </script>
 </body></html>`);
