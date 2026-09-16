@@ -121,6 +121,10 @@ function extractFinishingOrder(text) {
     for (const word of words) {
       // Parar em palavras de cor/raça: bk, bd, be, bef, bew, wbe, w, f, dkbd, etc.
       if (/^(bk|bd|be|bef|bebd|bew|wbe|wbd|dkbd|dkbe|fawn|fw|DNF)$/i.test(word)) break;
+      // Distancias pro colocado de tras ("shd" = short head, "nk" = neck, "hd",
+      // "dh" = dead heat). Sem elas na lista, "Blue Danube shd" virava o NOME do
+      // galgo e nao casava com o race_card. Achado no print do Bruno, 16/09.
+      if (/^(shd|hd|nk|dh|dis)$/i.test(word)) break;
       // Parar se palavra é muito curta e minúscula (provavelmente não é nome)
       if (word.length <= 2 && word === word.toLowerCase()) break;
       // Parar se é número (ex: 29.41)
@@ -134,6 +138,43 @@ function extractFinishingOrder(text) {
     }
   }
   return results;
+}
+
+// ── Quem NAO completou a prova (Bruno, 16/09/2026) ──────────────────────────
+//
+// O Racing Post marca o cao que nao terminou como "0th", antes do 1st. Os dois
+// extratores daqui sempre descartaram a posicao 0 (guarda `pos >= 1`), e com
+// razao: 0 nao e' colocacao. So que junto com o numero ia embora o FATO — e
+// depois disso ninguem conseguia distinguir "a trap 5 nao terminou" de "a trap
+// 5 nao estava nesta corrida".
+//
+// Consequencia real: quando um dos dois galgos do AvB era o que nao terminou, o
+// bateuPar nao achava os DOIS na chegada e devolvia indefinido. A aposta ficava
+// Pendente pra sempre, sem explicacao nenhuma na tela.
+//
+// Esta funcao e' SEPARADA da extractFinishingOrder de proposito. Misturar a
+// posicao 0 na lista de colocacoes contaminaria o posFav/posUnd logo abaixo, e
+// ali posicao MENOR e' melhor: um DNF entraria como pos 0 e pareceria ter
+// ganhado a corrida. O pior defeito possivel, e silencioso.
+function extractDnf(text) {
+  const nomes = [];
+  // Mesma forma da extractFinishingOrder, ancorada no "0 th".
+  const parts = text.split(/\b(\d)\s*(?:st|nd|rd|th)\s+/);
+  for (let i = 1; i < parts.length - 1; i += 2) {
+    if (parseInt(parts[i]) !== 0) continue;
+    const words = (parts[i + 1] || '').split(/\s+/);
+    const nameWords = [];
+    for (const word of words) {
+      if (/^(bk|bd|be|bef|bebd|bew|wbe|wbd|dkbd|dkbe|fawn|fw|DNF)$/i.test(word)) break;
+      if (word.length <= 2 && word === word.toLowerCase()) break;
+      if (/^\d/.test(word)) break;
+      nameWords.push(word);
+      if (nameWords.length >= 4) break;
+    }
+    const name = nameWords.join(' ').trim();
+    if (name.length > 1 && nomes.indexOf(name) < 0) nomes.push(name);
+  }
+  return nomes;
 }
 
 // ── Robô principal ────────────────────────────────────────────────────────────
@@ -219,6 +260,7 @@ async function runResultsRobot(targetDate) {
           
           // Tentar extrair trap numbers do HTML (elementos visuais)
           const trapOrder = []; // [{pos, trap}]
+          const dnfTraps = [];  // traps marcadas como 0th (nao completaram)
           // Procurar elementos de resultado com posição e trap
           const runners = document.querySelectorAll(
             '[class*="runner"],[class*="result"],[class*="rp-horse"],[class*="card-row"]'
@@ -233,12 +275,17 @@ async function runResultsRobot(targetDate) {
                 trapOrder.push({ pos: pos, trap: trap });
               }
             }
+            // pos 0 = "0th" = nao completou. O trap continua valendo.
+            if (pos === 0 && trap >= 1 && trap <= 6 && dnfTraps.indexOf(trap) < 0) {
+              dnfTraps.push(trap);
+            }
           });
           
           return {
             text: (document.body.innerText || '').slice(0, 5000),
             videoUrl: videoUrl,
-            trapOrder: trapOrder
+            trapOrder: trapOrder,
+            dnfTraps: dnfTraps
           };
         });
 
@@ -362,6 +409,40 @@ async function runResultsRobot(targetDate) {
             const trap = nameToTrap(porNome.name);
             if (trap && /^\d+$/.test(trap)) finishingOrderCompleto.push({ pos: pos, trap: parseInt(trap) });
           }
+        }
+
+        // ── QUEM NAO TERMINOU ENTRA NO FIM (Bruno, 16/09/2026) ────────────────
+        //
+        // Regra escolhida pelo Bruno: quem completou a prova ganha o par. Entao
+        // o cao que nao terminou entra na chegada DEPOIS de todos os que
+        // terminaram, e o bateuPar resolve sozinho — sem precisar de um ramo
+        // especial dentro dele, que e' fonte unica e usada por meia duzia de
+        // telas.
+        //
+        // TODOS os DNF recebem a MESMA posicao, de proposito. Se dois caos nao
+        // terminam e o AvB era justo entre eles, nao ha quem tenha ganhado: com
+        // a posicao igual, o bateuPar cai no `pa === pb -> null` que ele ja tem
+        // e devolve INDEFINIDO. Numerar 6 e 7 faria o primeiro da lista "ganhar"
+        // por ordem de raspagem, que e' sorteio disfarcado de resultado.
+        //
+        // O `dnf: true` fica gravado pra tela poder dizer o que aconteceu, em
+        // vez de mostrar uma bolinha igual a de quem chegou.
+        const dnfNomes = extractDnf(pageText.text);
+        const dnfTraps = (pageText.dnfTraps || []).slice();
+        for (const nm of dnfNomes) {
+          const t = nameToTrap(nm);
+          const n = (t && /^\d+$/.test(t)) ? parseInt(t) : null;
+          if (n && dnfTraps.indexOf(n) < 0) dnfTraps.push(n);
+        }
+        if (dnfTraps.length) {
+          const posDnf = finishingOrderCompleto.length + 1;
+          for (const t of dnfTraps) {
+            if (!finishingOrderCompleto.find(function(x){ return x.trap === t; })) {
+              finishingOrderCompleto.push({ pos: posDnf, trap: t, dnf: true });
+            }
+          }
+          addLog('info', 'Nao completaram: ' + dnfTraps.map(function(t){ return 'T'+t; }).join(', ')
+            + ' — entram na posicao ' + posDnf + ' (quem terminou ganha o par)');
         }
 
         // AvB: fav bateu = chegou na frente do und (posicao menor = melhor).
