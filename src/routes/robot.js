@@ -2277,6 +2277,82 @@ router.get('/status', requireAdmin, (req, res) => {
   res.json(robotStatus);
 });
 
+// ── RESUMO DOS TRES ROBOS, NUM PEDIDO SO (Bruno, 16/09/2026) ───────────────
+//
+// A barra de navegacao perguntava tres vezes a cada 4 segundos: /robot/status,
+// /robot/results/status e /robot/monitor/status. Cada uma passa pelo
+// requireAdmin, que faz um SELECT em users — 2.700 consultas por hora, POR ABA
+// ABERTA, so pra decidir se desenha uma bolinha. E o /robot/status devolvia o
+// `log` e a lista de `pdfs` inteiros junto, a cada 4 segundos, sem que a barra
+// lesse nenhum dos dois.
+//
+// Esta rota devolve SO o que aquela barra usa. As tres originais continuam de
+// pe: elas alimentam a aba Robo, que mostra o log e precisa dele.
+//
+// So-leitura, tudo de memoria. NAO substitui /robot/odds/live, que e outro
+// caminho e continua no ritmo de 5s — e' por ele que a odd da BW aparece.
+router.get('/status/resumo', requireAdmin, (req, res) => {
+  try {
+    let pdf = robotStatus;
+    if (!pdf.running && !pdf.log.length) pdf = loadRobotLog('pdf') || robotStatus;
+    const rs = getResultsStatus() || {};
+    let mon = getMonitorStatus() || {};
+    if (!mon.running && !(mon.logs || []).length) mon = loadRobotLog('monitor') || mon;
+    res.json({
+      pdf: { running: !!pdf.running, progress: pdf.progress || 0, total: pdf.total || 0 },
+      res: {
+        running: !!rs.running, suspicious: !!rs.suspicious,
+        suspiciousReason: rs.suspiciousReason || null,
+        lastRun: rs.lastRun || null, updated: rs.updated || 0
+      },
+      mon: {
+        running: !!mon.running, processed: mon.processed || 0,
+        suspicious: !!mon.suspicious, suspiciousReason: mon.suspiciousReason || null,
+        lastRun: mon.lastRun || null, changed: mon.changed || 0,
+        reanalyzed: mon.reanalyzed || 0
+      }
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ── RESUMO DOS TRES ROBOS, NUM PEDIDO SO (Bruno, 16/09/2026) ───────────────
+//
+// A barra de navegacao perguntava tres vezes a cada 4 segundos: /robot/status,
+// /robot/results/status e /robot/monitor/status. Cada uma passa pelo
+// requireAdmin, que faz um SELECT em users — 2.700 consultas por hora, POR ABA
+// ABERTA, so pra decidir se desenha uma bolinha. E o /robot/status devolvia o
+// `log` e a lista de `pdfs` inteiros junto, a cada 4 segundos, sem que a barra
+// lesse nenhum dos dois.
+//
+// Esta rota devolve SO o que aquela barra usa. As tres originais continuam de
+// pe: elas alimentam a aba Robo, que mostra o log e precisa dele.
+//
+// So-leitura, tudo de memoria. NAO substitui /robot/odds/live, que e outro
+// caminho e continua no ritmo de 5s — e' por ele que a odd da BW aparece.
+router.get('/status/resumo', requireAdmin, (req, res) => {
+  try {
+    let pdf = robotStatus;
+    if (!pdf.running && !pdf.log.length) pdf = loadRobotLog('pdf') || robotStatus;
+    const rs = getResultsStatus() || {};
+    let mon = getMonitorStatus() || {};
+    if (!mon.running && !(mon.logs || []).length) mon = loadRobotLog('monitor') || mon;
+    res.json({
+      pdf: { running: !!pdf.running, progress: pdf.progress || 0, total: pdf.total || 0 },
+      res: {
+        running: !!rs.running, suspicious: !!rs.suspicious,
+        suspiciousReason: rs.suspiciousReason || null,
+        lastRun: rs.lastRun || null, updated: rs.updated || 0
+      },
+      mon: {
+        running: !!mon.running, processed: mon.processed || 0,
+        suspicious: !!mon.suspicious, suspiciousReason: mon.suspiciousReason || null,
+        lastRun: mon.lastRun || null, changed: mon.changed || 0,
+        reanalyzed: mon.reanalyzed || 0
+      }
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // ─── STOP ───
 router.post('/stop', requireAdmin, (req, res) => {
   robotStatus.running = false;

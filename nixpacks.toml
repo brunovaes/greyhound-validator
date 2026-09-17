@@ -1,8 +1,32 @@
+# ── O CHROME NAO RODA AQUI (conferido em 16/09/2026) ────────────────────────
+#
+# Todos os robos (PDF, Resultados, Monitoramento, Checagem Final) fazem
+#     puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS })
+# no servico `chromium` do Railway. NAO existe um unico puppeteer.launch() no
+# codigo — foram conferidos os seis pontos que chamam puppeteer.
+#
+# Por isso sairam daqui:
+#   - "chromium" do nixPkgs: baixado todo build, nunca executado. E nao ha
+#     PUPPETEER_EXECUTABLE_PATH nas variaveis do Railway apontando pra ele.
+#   - `npx playwright install chromium`: playwright nem e dependencia do
+#     projeto. Baixava um segundo navegador que nada no codigo conhece.
+#
+# As bibliotecas abaixo (nss, atk, xorg.*, pango, cairo...) FICAM. Elas sao as
+# dependencias de sistema de um Chrome local. Hoje nenhum Chrome local roda,
+# entao em tese tambem sairiam — mas tirar vinte pacotes de uma vez, junto com
+# a mudanca que importa, e a forma conhecida de nao saber qual delas quebrou.
+# Se depois de um deploy limpo voce quiser, elas saem numa segunda passada.
 [phases.setup]
-nixPkgs = ["nodejs", "chromium", "nss", "atk", "cups", "libdrm", "dbus", "libxkbcommon", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "mesa", "expat", "xorg.libxcb", "libxshmfence", "pango", "cairo", "glib", "nspr"]
+nixPkgs = ["nodejs", "nss", "atk", "cups", "libdrm", "dbus", "libxkbcommon", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "mesa", "expat", "xorg.libxcb", "libxshmfence", "pango", "cairo", "glib", "nspr"]
 
 [phases.install]
-cmds = ["npm install", "npx playwright install chromium 2>/dev/null || true"]
+cmds = ["npm install"]
+
+# O pacote `puppeteer` baixa um Chrome proprio na instalacao. Como ninguem o
+# executa (so o connect remoto), e download e disco jogados fora todo deploy.
+# O connect NAO precisa de binario local.
+[variables]
+PUPPETEER_SKIP_DOWNLOAD = "true"
 
 [start]
 cmd = "node src/server.js"

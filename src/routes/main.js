@@ -268,13 +268,50 @@ function navBar(user, active, extra) {
         banner.style.display = 'flex';
       }).catch(function(){});
     }
+    // ── UM PEDIDO, NAO TRES (Bruno, 16/09/2026) ────────────────────────────
+    //
+    // Esta barra perguntava ao servidor TRES vezes a cada 4 segundos se os
+    // robos estavam rodando. Cada pedido passa pelo requireAdmin, que faz um
+    // SELECT em users: 2.700 consultas por hora POR ABA ABERTA, so pra decidir
+    // se desenha uma bolinha. E os banners de baixo pediam de novo os MESMOS
+    // dois enderecos no ciclo de 60s.
+    //
+    // Agora e um endereco so (/robot/status/resumo), que devolve so os campos
+    // que esta barra le — sem o log do robo, que ia junto a cada 4 segundos sem
+    // ninguem olhar.
+    //
+    // E o ritmo virou adaptativo:
+    //   algum robo rodando -> 4s, igual antes (e' quando o numero muda na tela)
+    //   nada rodando       -> 30s
+    //   aba escondida      -> nao pergunta nada
+    //
+    // O ALARME NAO ENTRA NESSA CONTA. Ele mora no alertaGlobal.js e continua
+    // rodando com a aba escondida e com o site em segundo plano — e' exatamente
+    // pra isso que ele existe, e mexer no ritmo dele seria desfazer o pedido de
+    // hoje de manha. O mesmo vale pro /robot/odds/live da tela Analisar, que
+    // segue nos 5s: e' por ele que a odd da BW chega.
+    var LENTO = 30000, RAPIDO = 4000;
+    var _robTimer = null, _robMs = 0;
+    function _ritmoRobots(ms) {
+      if (_robMs === ms && _robTimer) return;
+      _robMs = ms;
+      if (_robTimer) clearInterval(_robTimer);
+      _robTimer = setInterval(checkRobots, ms);
+    }
     function checkRobots() {
-      Promise.all([
-        fetch(BASE + '/robot/status').then(function(r){return r.json();}).catch(function(){return {};}),
-        fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).catch(function(){return {};}),
-        fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).catch(function(){return {};})
-      ]).then(function(results) {
-        var pdf = results[0]; var res = results[1]; var mon = results[2];
+      // Aba escondida nao tem badge pra pintar. Voltando pra ela, o
+      // visibilitychange la embaixo pede na hora — entao nao fica velho.
+      if (document.hidden) return;
+      fetch(BASE + '/robot/status/resumo')
+        .then(function(r){return r.json();})
+        .catch(function(){return {};})
+        .then(function(d) {
+        var pdf = (d && d.pdf) || {}, res = (d && d.res) || {}, mon = (d && d.mon) || {};
+        // Os dois banners de baixo eram dois fetch a mais dos MESMOS enderecos.
+        // Agora sao pintados com o que ja veio neste pedido.
+        pintaResultsBanner(res);
+        pintaMonitorBanner(mon);
+        _ritmoRobots((pdf.running || res.running || mon.running) ? RAPIDO : LENTO);
         var resultsBadge = document.getElementById('results-badge');
         if (resultsBadge) resultsBadge.style.display = res.running ? 'flex' : 'none';
         if (pdf.running) {
@@ -305,6 +342,9 @@ function navBar(user, active, extra) {
         }
       });
     }
+    document.addEventListener('visibilitychange', function(){
+      if (!document.hidden) checkRobots();
+    });
     function checkPdfBanner() {
       fetch(BASE + '/api/pdfs/hoje').then(function(r){return r.json();}).then(function(d){
         if (d.count > 0 && pdfBanner) {
@@ -317,9 +357,10 @@ function navBar(user, active, extra) {
         }
       }).catch(function(){});
     }
-    function checkResultsBanner() {
-      fetch(BASE + '/robot/results/status').then(function(r){return r.json();}).then(function(d){
-        if (!d.lastRun || !d.updated) return;
+    // Recebe o que o checkRobots ja buscou, em vez de buscar de novo.
+    function pintaResultsBanner(d) {
+      try {
+        if (!d || !d.lastRun || !d.updated) return;
         var resBanner = document.getElementById('res-banner');
         if (!resBanner) return;
         var dismissed = false;
@@ -335,11 +376,11 @@ function navBar(user, active, extra) {
           resBanner.dataset.lastRun = d.lastRun;
           resBanner.style.display = 'flex';
         }
-      }).catch(function(){});
+      } catch(e) {}
     }
-    function checkMonitorBanner() {
-      fetch(BASE + '/robot/monitor/status').then(function(r){return r.json();}).then(function(d){
-        if (!d.lastRun || !d.changed) return;
+    function pintaMonitorBanner(d) {
+      try {
+        if (!d || !d.lastRun || !d.changed) return;
         var monBanner = document.getElementById('mon-banner');
         if (!monBanner) return;
         var dismissed = false;
@@ -356,15 +397,15 @@ function navBar(user, active, extra) {
           monBanner.dataset.lastRun = d.lastRun;
           monBanner.style.display = 'flex';
         }
-      }).catch(function(){});
+      } catch(e) {}
     }
     checkRobots();
     checkPdfBanner();
-    checkResultsBanner();
-    checkMonitorBanner();
     checkStopBanner();
-    setInterval(function(){ checkRobots(); checkResultsBanner(); checkMonitorBanner(); checkStopBanner(); }, 60000);
-    setInterval(checkRobots, 4000);
+    // Os dois banners saem daqui: quem os pinta agora e o proprio checkRobots,
+    // com os dados do pedido unico. Sobrou o stop, que le outro endereco.
+    setInterval(checkStopBanner, 60000);
+    _ritmoRobots(LENTO);
 
     // ── Alerta de corrida proxima, em QUALQUER pagina do site (nao so na
     // Analisar) — pedido do Bruno em 14/07/2026. Usa sessionStorage pra nao
