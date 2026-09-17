@@ -70,6 +70,7 @@ function calcGanhoPct(bet) {
 function getApostas(userId) {
   return db.prepare(
     `SELECT r.id, r.hora, r.hora_br, r.corrida, r.dist, r.name_fav, r.name_und,
+            r.trap_fav, r.trap_und,
             rud.odd AS odd, rud.bet_unidades AS bet_unidades, r.bateu,
             rud.avb_escolhido AS avb_escolhido, r.finishing_order_json,
             date(s.created_at, '-3 hours') as dia
@@ -82,20 +83,29 @@ function getApostas(userId) {
 
 // ── A REGRA DE RESOLUCAO, NUM LUGAR SO ─────────────────────────────────────
 //
-// ESCOLHA DO BRUNO, 16/09/2026: "recalcular so os Pendente presos". Quem ja
-// esta green ou red NAO se mexe, mesmo tendo sido calculado pelo par errado —
-// numero que ele ja viu e registrou nao muda sozinho por decisao minha.
+// A PRECEDENCIA INVERTEU EM 17/09/2026 ("pode corrigir geral"), e o motivo foi
+// uma linha de dinheiro contada errado: Wtrfd A6 das 9:12, marcada Green, com
+// R$ 16,75 creditados numa aposta que perdeu.
 //
-// Entao a precedencia e, nesta ordem:
-//   1) races.bateu DECIDIDO ('sim'/'nao') manda. Fim. Nao se toca.
-//   2) vazio + voce tem par escolhido + a chegada existe -> resolve pelo SEU par.
-//   3) nada disso -> Pendente de verdade, e a linha diz POR QUE.
+// A REGRA ANTIGA era: `races.bateu` decidido manda, fim. Ela existia pra nao
+// mexer em numero que o Bruno ja tinha visto. So que `races.bateu` responde
+// "o pick do MOTOR chegou na frente?" — e quem apostou noutro par esta fazendo
+// OUTRA pergunta. A linha vinha com os nomes da dupla dele e o resultado da
+// dupla do motor: parecia coerente e estava errada, que e' o pior dos casos.
+// Eu tinha deixado isso declarado aqui como buraco aberto. Ele fechou hoje.
 //
-// CONSEQUENCIA QUE FICA ABERTA, e esta escrita aqui pra ninguem se surpreender:
-// o robo continua gravando races.bateu pelo par do motor. Entao aposta NOVA em
-// par da BW vai continuar caindo no ramo (1) com o resultado da dupla errada.
-// Fechar isso exige inverter a precedencia (o seu par manda sempre), e ai
-// numeros do passado se mexem — que e' justamente o que o Bruno nao quis agora.
+// A REGRA AGORA:
+//   1) voce tem par + a corrida tem chegada -> resolve pelo SEU par. Sempre.
+//      Nao importa o que a coluna diz: ela e' de outra dupla.
+//   2) voce tem par, sem chegada -> a coluna so vale se voce apostou no MESMO
+//      sentido do motor (ai as duas perguntas sao a mesma). Senao, Pendente.
+//   3) sem par registrado -> a coluna, que e' tudo que existe.
+//   4) nada disso -> Pendente de verdade, e a linha diz POR QUE.
+//
+// O PRECO, declarado: numeros do passado se corrigem sozinhos. Green que era
+// red vira red e a banca acumulada muda. E tambem: linha cujo galgo nao aparece
+// na chegada deixa de ser green/red e volta a ser Pendente — porque nesse caso
+// ninguem sabe se a SUA aposta ganhou, e fingir que sabe foi o defeito.
 function _parEscolhido(txt) {
   if (!txt) return null;
   try {
@@ -116,28 +126,50 @@ function resolverAposta(a) {
     nomeB = esc.bNome || ('T' + esc.bTrap);
   }
 
-  let bateu = a.bateu, fonte_resultado = 'coluna', motivo = null;
-  const decidido = (a.bateu === 'sim' || a.bateu === 'nao');
-  if (!decidido) {
-    if (esc && a.finishing_order_json) {
-      const b = bateuPar(a.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap));
-      if (b === true) { bateu = 'sim'; fonte_resultado = 'seu_par'; }
-      else if (b === false) { bateu = 'nao'; fonte_resultado = 'seu_par'; }
-      else { motivo = 'um dos dois galgos nao aparece na chegada'; }
-    } else if (!esc) {
-      motivo = 'sem par registrado nesta aposta';
-    } else {
-      motivo = 'a corrida ainda nao tem chegada';
-    }
+  // O par do motor existe mesmo? Corrida que perdeu o tier tem trap_fav/und
+  // zerados, e ai nao ha com o que comparar — "nao sei" nao e "e diferente".
+  const temParMotor = (a.trap_fav != null && a.trap_und != null
+    && Number(a.trap_fav) > 0 && Number(a.trap_und) > 0);
+  // A comparacao e COM DIRECAO. "T4 bate T1" e "T1 bate T4" sao perguntas
+  // opostas, e responder uma pela outra e' o defeito inteiro desta rotina.
+  const mesmoSentido = !!(esc && temParMotor
+    && String(esc.aTrap) === String(a.trap_fav)
+    && String(esc.bTrap) === String(a.trap_und));
+
+  let bateu = null, fonte_resultado = null, motivo = null;
+  const colunaDecidida = (a.bateu === 'sim' || a.bateu === 'nao');
+
+  if (esc && a.finishing_order_json) {
+    // O SEU par manda. A coluna nem e consultada: ela responde outra pergunta.
+    const b = bateuPar(a.finishing_order_json, Number(esc.aTrap), Number(esc.bTrap));
+    if (b === true) { bateu = 'sim'; fonte_resultado = 'seu_par'; }
+    else if (b === false) { bateu = 'nao'; fonte_resultado = 'seu_par'; }
+    // Galgo seu fora da chegada: ninguem sabe se VOCE ganhou. Cair na coluna
+    // aqui seria voltar a responder pela dupla do motor, com outra roupagem.
+    else motivo = 'um dos dois galgos da SUA dupla nao aparece na chegada';
+  } else if (esc) {
+    // Tem par, nao tem chegada. A coluna so serve se as duas perguntas forem a
+    // mesma — ou seja, se voce apostou no sentido que o motor montou.
+    if (colunaDecidida && mesmoSentido) { bateu = a.bateu; fonte_resultado = 'coluna'; }
+    else motivo = 'a corrida ainda nao tem chegada registrada';
+  } else if (colunaDecidida) {
+    bateu = a.bateu; fonte_resultado = 'coluna';
+  } else {
+    motivo = 'sem par registrado nesta aposta';
   }
 
   return Object.assign({}, a, {
     bateu,
     name_fav: nomeA, name_und: nomeB,
     fonte_par, fonte_resultado, motivo_pendente: motivo,
-    // Linha contaminada: o resultado veio da coluna (par do motor) mas a sua
-    // aposta era outra dupla. Nao muda o numero — so deixa de ser invisivel.
-    par_divergente: !!(esc && decidido && fonte_resultado === 'coluna')
+    // AGORA e' informacao, nao alerta: diz que voce apostou num sentido
+    // diferente do que o motor montou. O resultado ja vem certo.
+    //
+    // A versao antiga disto era `esc && decidido && fonte_resultado ===
+    // 'coluna'`, e como `fonte_resultado` so mudava dentro do `if (!decidido)`,
+    // ela acendia em TODA aposta resolvida com par escolhido — inclusive nas
+    // que estavam certas. Marcador que acende sempre e' marcador que ninguem le.
+    par_divergente: !!(esc && temParMotor && !mesmoSentido)
   });
 }
 
@@ -709,11 +741,13 @@ function renderDay(d) {
       const dica = a.motivo_pendente ? ' title="Pendente: '+a.motivo_pendente+'"' : '';
       const pend = a.status==='pendente' && a.motivo_pendente
         ? '<span style="color:#f59e0b;font-size:10px;margin-left:5px">&#9888;</span>' : '';
-      // Marca a linha cujo resultado veio do par do MOTOR enquanto a sua aposta
-      // era outra dupla. O numero fica como esta (decisao de 16/09) — o aviso
-      // existe pra ele nao ser invisivel.
+      // Voce apostou num sentido diferente do que o motor montou. Desde 17/09
+      // isso NAO e mais um defeito: o resultado ja vem calculado pelo seu par.
+      // O selo virou informacao, entao saiu do ambar de alerta e foi pro mesmo
+      // verde-azulado que o Historico usa no REVERSE — e a mesma ideia nas duas
+      // telas tem que ter a mesma cor.
       const diverg = a.par_divergente
-        ? ' <span style="color:#f59e0b;font-size:10px" title="O resultado desta linha foi calculado pelo par do motor, nao pelo par que voce apostou.">&#9888; par</span>' : '';
+        ? ' <span style="color:#14b8a6;font-size:10px" title="Voce apostou num sentido diferente do que o motor montou. O resultado desta linha e calculado pelo SEU par.">&#8644; seu par</span>' : '';
       return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td><td>'+(a.name_fav||'-')+'</td><td>'+(a.name_und||'-')+'</td><td>'+(a.odd||'-')+'</td><td>'+a.bet_unidades+'</td>' +
         '<td class="'+statusCls+'">'+statusLabel+pend+'</td>' +
         '<td class="'+gainCls+'">'+(a.ganhoPct!=null?fmtPct(a.ganhoPct):'-')+'</td>' +
