@@ -23,6 +23,113 @@ function getLogo() {
 // Nasceu pra navegacao por dia do Historico, que ocupava uma linha inteira da
 // tela. E' opcional de proposito: quem chama com dois argumentos — todas as
 // outras telas — recebe string vazia e nao muda em nada.
+// ── A FAIXA LATERAL DA ANALISAR, NAS OUTRAS TELAS (Bruno, 17/09/2026) ──────
+//
+// "sera que da pra colocar essa parte da tela analisar em todas as demais, com
+// excecao da Live?"
+//
+// O QUE ENTRA: o bloco "Analisar corridas" com o link Historicos, a lista de
+// Sessoes recentes e os dois cartoes de Acertos. Escolha do Bruno: so a parte
+// informativa.
+//
+// O QUE NAO ENTRA, e por que:
+//   - "Carregar PDF": o <input type=file> e' so a casca. Quem recebe o arquivo,
+//     dispara o robo e acompanha o progresso e' o src/app.js, que so a Analisar
+//     carrega. Levar isso pra ca exigiria arrancar o fluxo de upload de um
+//     arquivo de 240 KB — entrega propria, com teste proprio.
+//   - "Restaurado: N AvBs": conta a analise viva NA Analisar. Fora dela nao ha
+//     o que restaurar, e o numero nao quereria dizer nada.
+//
+// AUTOSSUFICIENTE DE PROPOSITO: leva o proprio <style> com as cores escritas
+// por extenso, em vez de depender das variaveis do shared.css. Banca,
+// Configuracoes e Painel Admin NAO carregam o shared.css, e um bloco que so
+// funciona em pagina que carregou outro arquivo e' uma armadilha silenciosa.
+//
+// A Analisar NAO passa por aqui. A faixa dela continua sendo a dela, com o
+// Carregar PDF e o estado que o app.js manipula; mexer na tela onde o Bruno
+// passa o dia pra economizar duplicacao de marcacao seria trocar risco por
+// elegancia. O que se repete aqui e' desenho, nao regra: os numeros vem todos
+// do mesmo /api/acertos-resumo.
+function sidebarInfo(user) {
+  const sessions = db.prepare(
+    'SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7'
+  ).all(CANONICO);
+  const linhas = sessions.map(s =>
+    '<a href="' + BASE + '/sessao/' + s.id + '" class="gf-sess">'
+    + (s.name || 'Sessao ' + s.id) + '<span>' + (s.total_avbs || 0) + ' AvBs</span></a>'
+  ).join('');
+
+  return `<style>
+/* A faixa e' irma do .content dentro do .gf-row. Sticky, nao fixed: fixed
+   ancora na janela e precisaria saber a altura da faixa da logo, que varia
+   com o 15vh. Sticky resolve sozinho. */
+.gf-row{display:flex;gap:18px;align-items:flex-start}
+.gf-row > .content{flex:1 1 auto;min-width:0}
+.gf-side{width:250px;flex:0 0 250px;background:#161b27;border:1px solid #222;
+  border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:11px;
+  align-self:flex-start;position:sticky;top:16px;margin:16px 0 16px 24px}
+.gf-side h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:#666;margin-bottom:8px}
+.gf-tabnav{background:#0f141c;border:1px solid #222;border-radius:10px;padding:8px}
+.gf-tab{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;color:#888;
+  font-size:12px;font-weight:600;border-radius:6px;text-decoration:none}
+.gf-tab:hover{background:#18212d;color:#22c55e}
+.gf-dv{height:1px;background:#323a4a}
+.gf-sess{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#888;
+  text-decoration:none;padding:3px 0;border-bottom:1px solid #2a3142}
+.gf-sess:hover{color:#22c55e}
+.gf-sess span{color:#666}
+.gf-ac{display:flex;gap:8px;margin-top:8px}
+.gf-ac > div{flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;
+  padding:10px 8px;text-align:center}
+.gf-ac-l{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.gf-ac-v{font-size:20px;font-weight:700;color:#666}
+/* No celular a faixa some, igual a Analisar faz abaixo de 900px. Escolha do
+   Bruno: a tela pequena continua exatamente como esta hoje. */
+@media(max-width:900px){.gf-side{display:none}.gf-row{display:block}}
+</style>
+<aside class="gf-side">
+  <div>
+    <h2>Analisar corridas</h2>
+    <div class="gf-tabnav">
+      <a href="${BASE}/historico" class="gf-tab">&#128220; Históricos</a>
+    </div>
+  </div>
+  <div class="gf-dv"></div>
+  <div>
+    <h2 style="margin-bottom:6px">Sessoes recentes</h2>
+    ${linhas}
+  </div>
+  <div class="gf-ac">
+    <div><div class="gf-ac-l">Acertos do dia</div><div class="gf-ac-v" id="gf-acertos-dia">-</div></div>
+    <div><div class="gf-ac-l">Acertos do mês</div><div class="gf-ac-v" id="gf-acertos-mes">-</div></div>
+  </div>
+</aside>
+<script>
+(function(){
+  // UMA chamada, no carregamento, sem intervalo. O /api/acertos-resumo roda o
+  // motor corrida a corrida (tem cache proprio), e estes dois numeros mudam
+  // devagar — poll aqui desfaria a economia de ontem na barra de navegacao.
+  function pinta(el, bloco){
+    if(!el || !bloco) return;
+    var t = bloco.tres;
+    var o = (t && t.geral) ? t.geral : bloco;
+    var pct = (o && o.pct != null) ? o.pct : null;
+    el.textContent = pct == null ? '-' : pct + '%';
+    el.style.color = pct == null ? '#666' : (pct >= 50 ? '#22c55e' : '#ef4444');
+    el.title = (o && o.tot) ? (o.ok + ' de ' + o.tot + ' corridas resolvidas') : '';
+  }
+  fetch('${BASE}/api/acertos-resumo')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      pinta(document.getElementById('gf-acertos-dia'), d.dia);
+      pinta(document.getElementById('gf-acertos-mes'), d.mes);
+    })
+    .catch(function(){});
+})();
+</script>`;
+}
+
 function navBar(user, active, extra) {
   const isAdmin = user.role === 'admin';
   return `<nav id="topnav" style="position:relative;background:#111;border-bottom:1px solid #333;padding:0 20px;display:flex;align-items:center;justify-content:space-between">
@@ -3661,3 +3768,5 @@ document.addEventListener('DOMContentLoaded', aplicarFiltroHist);
 
 module.exports = router;
 module.exports.navBar = navBar;
+// A faixa lateral informativa, usada por Banca, Configuracoes e Painel Admin.
+module.exports.sidebarInfo = sidebarInfo;

@@ -4,7 +4,7 @@ const { requireAdmin } = require('../middleware/auth');
 const { getUserConfig, saveRobotLog, loadRobotLog, getTrapBadgeColors, saveTrapBadgeColors } = require('../db/database');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
 const { logChanges } = require('../utils/auditLog');
-const { navBar } = require('./main');
+const { navBar, sidebarInfo } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
 const path = require('path');
@@ -1090,6 +1090,17 @@ ${navBar(req.user, 'robot')}
          nao tem nada de errado. O que mudou e' de onde se chega nela. -->
     <a class="robot-menu-item robot-hide-mobile" href="${BASE}/cascata"><span class="icon">${icon('sliders',{size:16})}</span> Cascata de Cortes</a>
   </div>
+  <!-- A faixa informativa da Analisar (Bruno, 17/09/2026). Aqui ela entra
+       DENTRO da lateral que ja existe, embaixo do menu, e nao como uma segunda
+       coluna: duas faixas de menu lado a lado brigariam pela mesma leitura. O
+       CSS abaixo desfaz a moldura e o sticky do bloco, que nesta tela quem ja
+       faz e' a .robot-sidebar. -->
+  <style>
+    .robot-sidebar .gf-side{width:auto;flex:none;margin:12px 0 0;padding:8px 4px 4px;
+      background:none;border:none;border-top:1px solid #222;border-radius:0;position:static}
+    @media(max-width:900px){.robot-sidebar .gf-side{display:none}}
+  </style>
+  ${sidebarInfo(req.user)}
 </div>
 </div>
 <div class="robot-content">

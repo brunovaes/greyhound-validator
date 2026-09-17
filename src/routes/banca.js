@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { db, getUserConfig } = require('../db/database');
-const { navBar } = require('./main');
+const { navBar, sidebarInfo } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
 
@@ -487,6 +487,8 @@ table.betstbl td{padding:8px 10px;border-bottom:1px solid #1c1c1c}
 </head><body>
 <div class="hero"><img src="${logoB64}" alt="Greyhound Validator"></div>
 ${navBar(req.user, 'banca')}
+<div class="gf-row">
+${sidebarInfo(req.user)}
 <div class="content">
   <h1>${icon('trophy', {size:22, color:'#22c55e'})} Gestão de Banca</h1>
   <p class="sub">Acompanhamento real das apostas feitas em cima dos AvBs — 1 unidade = 1% da banca inicial do mês.</p>
@@ -562,6 +564,7 @@ ${navBar(req.user, 'banca')}
       <span id="cfg-msg" style="font-size:12px;color:#22c55e;display:none">Configurações salvas!</span>
     </div>
   </div>
+</div>
 </div>
 
 <script>

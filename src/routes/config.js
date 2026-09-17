@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getUserConfig, CONFIG_GLOBAL_ID } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
-const { navBar } = require('./main');
+const { navBar, sidebarInfo } = require('./main');
 const { designTokensCSS } = require('../utils/designTokens');
 const { icon } = require('../utils/icons');
 const { NOMES_PISTAS } = require('../utils/nomesPistas');
@@ -117,6 +117,8 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px}.sub{font-size:13px;color:#8
 </style></head><body>
 <div class="hero">${logoB64 ? `<img src="${logoB64}" alt="Greyhound Validator">` : ''}</div>
 ${navBar(user, 'config')}
+<div class="gf-row">
+${sidebarInfo(user)}
 <div class="content">
 <h1>Configurações de Análise</h1>
 <p class="sub">Estas configurações são únicas do sistema: valem para todos os usuários e para os robôs automáticos. Qualquer admin que alterar aqui, altera para todos.</p>
@@ -435,6 +437,7 @@ ${[
 </div>
 </div>
 </form>
+</div>
 </div>
 
 <div class="toast-bg" id="toast-bg">
