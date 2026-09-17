@@ -426,10 +426,18 @@ router.get('/', exigirAcesso('screen.banca'), (req, res) => {
 <style>
 ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0D1117;color:#f0f0f0;font-size:14px}
+/* ── MESMA ESCALA DA ANALISAR (Bruno, 17/09/2026) ───────────────────────────
+   "quero que fique da mesma visualizacao de zoom da analisar".
+   Nao havia zoom nenhum no codigo: a diferenca eram DUAS coisas, e as duas
+   viviam aqui. A Analisar nunca declarou font-size no body, entao ela herda os
+   16px do navegador, e o layout dela ocupa a janela inteira. Estas telas
+   pediam 14px e prendiam o conteudo num max-width. Resultado: fonte menor e
+   faixa mais estreita, que e' o que se le como "zoom diferente".
+   O padding fica: largura livre nao e' encostar na borda. */
+body{background:#0D1117;color:#f0f0f0}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}
 .hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
-.content{padding:24px;max-width:1200px;margin:0 auto}
+.content{padding:24px;max-width:none;margin:0}
 h1{font-size:22px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:10px}
 .sub{color:#888;font-size:13px;margin-bottom:20px}
 .viewtabs{display:flex;gap:6px;background:#161B27;border:1px solid #222;border-radius:10px;padding:6px;margin-bottom:16px;width:fit-content}

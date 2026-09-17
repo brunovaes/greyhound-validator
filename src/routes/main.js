@@ -1322,9 +1322,19 @@ router.get('/live', exigirAcesso('screen.live'), (req, res) => {
 <style>
 ${designTokensCSS()}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0D1117;color:#f0f0f0;font-size:14px}
+/* ── MESMA ESCALA DA ANALISAR (Bruno, 17/09/2026) ───────────────────────────
+   "quero que fique da mesma visualizacao de zoom da analisar".
+   Nao havia zoom nenhum no codigo: a diferenca eram DUAS coisas, e as duas
+   viviam aqui. A Analisar nunca declarou font-size no body, entao ela herda os
+   16px do navegador, e o layout dela ocupa a janela inteira. Estas telas
+   pediam 14px e prendiam o conteudo num max-width. Resultado: fonte menor e
+   faixa mais estreita, que e' o que se le como "zoom diferente".
+   O padding fica: largura livre nao e' encostar na borda.
+   A /live/calibrar3, mais abaixo neste arquivo, NAO entra: e' ferramenta de
+   calibragem de recorte de video, onde mudar a escala muda a medida. */
+body{background:#0D1117;color:#f0f0f0}
 .hero{width:100%;background:#000;border-bottom:2px solid #22c55e;overflow:hidden}.hero img{width:100%;height:auto;max-height:160px;object-fit:contain;object-position:center;display:block;background:#000}
-.content{padding:16px 20px;max-width:1900px;margin:0 auto}
+.content{padding:16px 20px;max-width:none;margin:0}
 h1{font-size:18px;font-weight:700;margin-bottom:12px}
 .live-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 @media(max-width:1200px){.live-grid{grid-template-columns:1fr 1fr}}
