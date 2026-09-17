@@ -65,20 +65,27 @@ function sidebarInfo(user) {
    com o 15vh. Sticky resolve sozinho. */
 .gf-row{display:flex;gap:18px;align-items:flex-start}
 .gf-row > .content{flex:1 1 auto;min-width:0}
-.gf-side{width:250px;flex:0 0 250px;background:#161b27;border:1px solid #222;
-  border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:11px;
-  align-self:flex-start;position:sticky;top:16px;margin:16px 0 16px 24px}
+/* IGUAL A .sidebar DA ANALISAR, propriedade por propriedade (Bruno, 17/09):
+   "so nao ficou igual". Eu tinha feito um cartao flutuante — borda inteira,
+   cantos arredondados, margem e sticky. A da Analisar e' uma COLUNA rente:
+   fundo #161b27, borda SO a direita, canto vivo, sem margem, colada na esquerda
+   e da altura da linha. Consequencia assumida: como estas telas rolam a pagina
+   inteira (a Analisar nao rola, ela tem scroll interno), a faixa rola junto. */
+.gf-side{width:250px;flex:0 0 250px;background:#161b27;
+  border-right:1px solid #323a4a;padding:16px;display:flex;flex-direction:column;
+  gap:11px;align-self:stretch;overflow-y:auto}
 .gf-side h2{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
   color:#666;margin-bottom:8px}
-.gf-tabnav{background:#0f141c;border:1px solid #222;border-radius:10px;padding:8px}
-.gf-tab{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;color:#888;
-  font-size:12px;font-weight:600;border-radius:6px;text-decoration:none}
-.gf-tab:hover{background:#18212d;color:#22c55e}
+.gf-tabnav{background:#161B27;border:1px solid #222;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:2px}
+.gf-tab{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;
+  background:none;border:none;color:#888;font-size:12px;font-weight:600;border-radius:6px;
+  cursor:pointer;transition:all .15s;text-decoration:none}
+.gf-tab:hover{background:rgba(34,197,94,.08);color:#ccc}
 .gf-dv{height:1px;background:#323a4a}
-.gf-sess{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#888;
-  text-decoration:none;padding:3px 0;border-bottom:1px solid #2a3142}
+.gf-sess{display:block;font-size:11px;color:#888;text-decoration:none;padding:3px 0;
+  border-bottom:1px solid #2a3142}
 .gf-sess:hover{color:#22c55e}
-.gf-sess span{color:#666}
+.gf-sess span{float:right;color:#666}
 .gf-ac{display:flex;gap:8px;margin-top:8px}
 .gf-ac > div{flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;
   padding:10px 8px;text-align:center}

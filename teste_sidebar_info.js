@@ -132,5 +132,82 @@ t('a Configuracoes tambem',
 t('o Painel Admin NAO abre gf-row: a faixa entra na lateral que ele ja tem',
   !/gf-row">/.test(ROBOT) && /\$\{sidebarInfo\(req\.user\)\}\s*<\/div>/.test(ROBOT));
 
+
+// ── [7] IGUAL A DA ANALISAR, PROPRIEDADE POR PROPRIEDADE ────────────────────
+// Bruno, depois da primeira versao: "ficou quase perfeito, so nao ficou igual".
+// Eu tinha feito um cartao flutuante (borda inteira, cantos arredondados,
+// margem, sticky) enquanto a da Analisar e' uma coluna rente com borda so a
+// direita. Eram cinco diferencas, e "parecido" nao era o pedido.
+//
+// Este bloco NAO compara com valores que eu digitei aqui: ele LE as regras da
+// Analisar do proprio main.js e compara com as da faixa compartilhada. Se um
+// dia alguem mexer no visual da Analisar, e este teste que avisa que as duas
+// deixaram de ser iguais.
+bloco('[7] AS DUAS FAIXAS TEM AS MESMAS PROPRIEDADES');
+
+// As regras da Analisar usam as variaveis do shared.css; a faixa compartilhada
+// nao pode usa-las (aquelas telas nao carregam o arquivo), entao escreve o
+// valor. Aqui as duas sao trazidas pro mesmo alfabeto antes de comparar.
+const VARS = { '--sur': '#161b27', '--sur2': '#1e2433', '--bdr': '#2a3142',
+               '--bdr2': '#323a4a', '--grn': '#22c55e', '--mut': '#666',
+               '--mut2': '#888', '--txt': '#f0f0f0' };
+function resolve(v) {
+  return String(v).replace(/var\((--[a-z0-9]+)\)/gi, function (_, n) { return VARS[n] || _; })
+    .replace(/\s+/g, '').toLowerCase();
+}
+// O MESMO SELETOR APARECE VARIAS VEZES: a Analisar tem tres regras .sidebar —
+// a base e duas dentro de @media pro celular. Pegar a primeira me devolveu a do
+// celular (.sidebar{border-right:none}) e reprovou o arquivo certo. Entao aqui
+// se juntam TODAS as ocorrencias e fica a mais completa, que e' sempre a base.
+function regra(src, seletor) {
+  const re = new RegExp(seletor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}', 'g');
+  let m, melhor = null, n = -1;
+  while ((m = re.exec(src)) !== null) {
+    const out = {};
+    m[1].split(';').forEach(function (d) {
+      const i = d.indexOf(':');
+      if (i > 0) out[d.slice(0, i).trim().replace(/\s+/g, '')] = resolve(d.slice(i + 1));
+    });
+    const q = Object.keys(out).length;
+    if (q > n) { n = q; melhor = out; }
+  }
+  return melhor;
+}
+function comparar(nome, a, b, props) {
+  if (!a || !b) { t(nome + ': as duas regras existem', false); return; }
+  props.forEach(function (p) {
+    t(nome + ' — ' + p + ': ' + (a[p] === undefined ? '(ausente)' : a[p]), a[p] === b[p]);
+  });
+}
+
+const A_SIDE = regra(ANALISAR, '.sidebar');
+const G_SIDE = regra(FN, '.gf-side');
+comparar('faixa', A_SIDE, G_SIDE, ['background', 'border-right', 'padding', 'gap', 'flex-direction', 'overflow-y']);
+t('faixa: a da Analisar nao tem canto arredondado, a compartilhada tambem nao',
+  !('border-radius' in A_SIDE) && !('border-radius' in G_SIDE));
+t('faixa: nem margem', !('margin' in A_SIDE) && !('margin' in G_SIDE));
+t('faixa: a largura da coluna e a mesma (250px no grid da Analisar)',
+  /grid-template-columns:250px/.test(ANALISAR) && G_SIDE['width'] === '250px');
+
+comparar('caixa do menu', regra(ANALISAR, '.tabnav'), regra(FN, '.gf-tabnav'),
+  ['background', 'border', 'border-radius', 'padding', 'gap', 'display', 'flex-direction']);
+
+comparar('item do menu', regra(ANALISAR, '.tabbtn'), regra(FN, '.gf-tab'),
+  ['display', 'padding', 'color', 'font-size', 'font-weight', 'border-radius', 'gap', 'background']);
+
+comparar('item no hover', regra(ANALISAR, '.tabbtn:hover'), regra(FN, '.gf-tab:hover'),
+  ['background', 'color']);
+
+comparar('linha da sessao', regra(ANALISAR, '.sess-link'), regra(FN, '.gf-sess'),
+  ['display', 'font-size', 'color', 'padding', 'border-bottom', 'text-decoration']);
+
+comparar('contagem de AvBs', regra(ANALISAR, '.sess-link span'), regra(FN, '.gf-sess span'),
+  ['float', 'color']);
+
+comparar('titulo de secao', regra(ANALISAR, '.sidebar h2'), regra(FN, '.gf-side h2'),
+  ['font-size', 'font-weight', 'letter-spacing', 'text-transform', 'color']);
+
+comparar('divisoria', regra(ANALISAR, '.dv'), regra(FN, '.gf-dv'), ['height', 'background']);
+
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);

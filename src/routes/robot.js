@@ -1097,7 +1097,8 @@ ${navBar(req.user, 'robot')}
        faz e' a .robot-sidebar. -->
   <style>
     .robot-sidebar .gf-side{width:auto;flex:none;margin:12px 0 0;padding:8px 4px 4px;
-      background:none;border:none;border-top:1px solid #222;border-radius:0;position:static}
+      background:none;border:none;border-top:1px solid #222;border-radius:0;
+      position:static;align-self:auto;overflow:visible}
     @media(max-width:900px){.robot-sidebar .gf-side{display:none}}
   </style>
   ${sidebarInfo(req.user)}
