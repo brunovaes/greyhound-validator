@@ -78,8 +78,11 @@ t('e sao odd e bet_unidades',
 // Sem a largura exata: ela mudou de 34 pra 62 quando a lixeira entrou ao lado
 // do lapis, e a assercao reprovou o arquivo por isso. Medida exata e' retrato,
 // nao propriedade — o que importa e' que existe UMA coluna vazia no fim.
+// Mesma coisa aqui: os <th> ganharam class="bc-..." em 18/09. A pergunta
+// continua sendo "existe UMA coluna vazia logo depois do R$", e nao quais
+// atributos os dois <th> carregam.
 t('a coluna dos icones entrou no fim do cabecalho da tabela do dia',
-  /<th>R\$<\/th><th style="width:\d+px"><\/th>/.test(BANCA));
+  /<th[^>]*>R\$<\/th><th[^>]*style="width:\d+px"[^>]*><\/th>/.test(BANCA));
 
 // ── [5] o Enter nao pode estar no atributo ──────────────────────────────────
 // Esta tela e' montada dentro de um template literal. A barra de um \' some na

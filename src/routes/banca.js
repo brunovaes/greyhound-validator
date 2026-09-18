@@ -520,6 +520,22 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px;display:flex;align-items:cen
 .card .val.neg{color:#ef4444}
 .section{background:#161B27;border:1px solid #222;border-radius:10px;padding:18px;margin-bottom:16px}
 .section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#22c55e;margin-bottom:14px}
+/* A linha do grafico, que antes vivia em style="" dentro do JS. Mudou de
+   lugar porque min-width em atributo nao ha regra de celular que relaxe sem
+   !important — e o tal min-width:320px, somado ao respiro da pagina, sozinho
+   ja empurrava a tela pra fora do aparelho. */
+.bnc-chartrow{display:flex;gap:24px;align-items:stretch;flex-wrap:wrap}
+.bnc-eq{flex:1;min-width:320px;border-left:1px solid #222;padding-left:24px}
+/* ── A COLUNA AvB DO CELULAR (Bruno, 18/09/2026) ────────────────────────────
+   "podemos colocar HORA, CORRIDA, AVB (badge v badge), STATUS e R$".
+   No computador Favorito e Desafiado sao duas colunas com nome; no celular
+   viram UMA com as duas bolinhas. A celula existe sempre no HTML e quem
+   decide qual das duas versoes aparece e' o CSS — assim nao ha um segundo
+   estado em JS pra desencontrar do primeiro. */
+.bc-avb{display:none}
+.bnc-avb{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.bnc-avb-v{font-size:9px;color:#555}
+.bnc-semtrap{color:#444}
 table.betstbl{width:100%;border-collapse:collapse;font-size:12px}
 table.betstbl th{text-align:left;padding:8px 10px;color:#666;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #2a2a2a}
 table.betstbl td{padding:8px 10px;border-bottom:1px solid #1c1c1c}
@@ -531,6 +547,39 @@ table.betstbl td{padding:8px 10px;border-bottom:1px solid #1c1c1c}
 .empty-msg{padding:30px;text-align:center;color:#555;font-size:13px}
 .monthinit-form{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #222}
 .btn-mini{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+/* ── A BANCA NO CELULAR (Bruno, 18/09/2026) ─────────────────────────────────
+
+   "consegue deixar tambem slim a tela de banca no mobile... podemos colocar
+   HORA, CORRIDA, AVB (badge v badge), STATUS e R$."
+
+   MEDIDO ANTES, num navegador de verdade: a pagina pedia 872px em QUALQUER
+   aparelho (a tabela sozinha, 829). Dois culpados: a tabela de dez colunas
+   com nome de galgo inteiro, e o min-width:320px da coluna do grafico, que
+   com o respiro da pagina ja passava de 390px sozinho.
+
+   O QUE VOCE PERDE NO CELULAR, dito na cara: Favorito e Desafiado por
+   extenso (viram as duas bolinhas), a Odd, as Unidades, o %Gain/Loss e a
+   coluna dos icones — ou seja, o LAPIS e a LIXEIRA. No celular da pra ler;
+   editar odd/unidades e excluir aposta continua sendo no computador.
+
+   Acima de 768px nada muda: as dez colunas, os nomes e os dois icones
+   continuam exatamente como estao. */
+@media(max-width:768px){
+  .content{padding:12px 10px}
+  /* O grafico deixa de exigir 320px e passa a empilhar embaixo das barras,
+     com um risco em cima no lugar da borda lateral. */
+  .bnc-eq{min-width:0;border-left:none;border-top:1px solid #222;padding-left:0;padding-top:14px}
+  .bnc-chartrow{gap:12px}
+  .section{padding:12px 10px}
+  table.betstbl{font-size:10px}
+  table.betstbl th{padding:5px 3px;font-size:9px;letter-spacing:.2px}
+  table.betstbl td{padding:6px 3px}
+  .bc-fav,.bc-und,.bc-odd,.bc-unid,.bc-pct,.bc-acoes{display:none}
+  .bc-avb{display:table-cell}
+  /* O nome da pista pode quebrar em duas linhas; e' mais barato que rolar a
+     pagina inteira pro lado. */
+  .bc-corrida{white-space:normal}
+}
 </style>
 <!-- Caixas de dialogo no visual do app. Substitui confirm()/alert(), que no
      Railway aparecem com o dominio no titulo e fonte do sistema — num momento
@@ -898,12 +947,12 @@ function renderDay(d) {
   if (d.lucros || d.prejuizos) {
     chartSection.style.display = 'block';
     document.getElementById('banca-chart').innerHTML =
-      '<div style="display:flex;gap:24px;align-items:stretch;flex-wrap:wrap">' +
+      '<div class="bnc-chartrow">' +
       '<div style="flex-shrink:0">' + barChart([
         { label: 'Lucros', value: d.lucros, color: '#22c55e' },
         { label: 'Prejuízos', value: -d.prejuizos, color: '#ef4444' }
       ]) + '</div>' +
-      '<div style="flex:1;min-width:320px;border-left:1px solid #222;padding-left:24px">' +
+      '<div class="bnc-eq">' +
       '<div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:8px">Evolução do saldo — bet a bet</div>' +
       intradayEquityChart(d.apostas) +
       '</div></div>';
@@ -912,7 +961,7 @@ function renderDay(d) {
   const tblEl = document.getElementById('banca-table');
   APOSTAS_DO_DIA = d.apostas || [];
   if (!d.apostas.length) { tblEl.innerHTML = '<div class="empty-msg">Nenhuma aposta registrada nesse dia.</div>'; return; }
-  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Desafiado</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th><th style="width:62px"></th></tr></thead><tbody>' +
+  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th class="bc-hora">Hora</th><th class="bc-corrida">Corrida</th><th class="bc-avb">AvB</th><th class="bc-fav">Favorito</th><th class="bc-und">Desafiado</th><th class="bc-odd">Odd</th><th class="bc-unid">Unid.</th><th class="bc-status">Status</th><th class="bc-pct">%Gain/Loss</th><th class="bc-rs">R$</th><th class="bc-acoes" style="width:62px"></th></tr></thead><tbody>' +
     d.apostas.map(function(a) {
       const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':'Pendente';
       const statusCls = 'status-'+a.status;
@@ -946,6 +995,19 @@ function renderDay(d) {
           : '';
         return '<span class="bnc-galgo">' + bola + (nome || '-') + '</span>';
       };
+      // A mesma dupla, escrita curta: so as duas bolinhas, pro celular, onde
+      // Favorito e Desafiado nao cabem como colunas separadas. Os traps sao os
+      // MESMOS do galgo() acima (o par efetivo desta aposta) — se saissem de
+      // outro lugar, a tela pequena e a grande poderiam discordar sobre quem
+      // voce apostou, que e' exatamente o defeito de 16/09.
+      const bola = function(trap) {
+        const t = Number(trap) > 0 ? Number(trap) : null;
+        return t
+          ? '<span class="trap-badge t' + t + '" style="width:18px;height:18px;font-size:10px">' + t + '</span>'
+          : '<span class="bnc-semtrap">-</span>';
+      };
+      const avbCurto = '<span class="bnc-avb">' + bola(a.trap_a)
+        + '<span class="bnc-avb-v">v</span>' + bola(a.trap_b) + '</span>';
       const inp = function(campo, valor, largura) {
         return '<input type="text" class="bnc-inp" value="' + _at(valor) + '" placeholder="-"'
           + ' data-id="' + a.id + '" data-f="' + campo + '" disabled'
@@ -957,15 +1019,19 @@ function renderDay(d) {
           // embaixo, que nao tem esse problema e ainda vale pras linhas
           // redesenhadas.
       };
-      return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td>' +
-        '<td>'+galgo(a.trap_a, a.name_fav)+'</td>' +
-        '<td>'+galgo(a.trap_b, a.name_und)+'</td>' +
-        '<td style="text-align:center">'+inp('odd', a.odd, 46)+'</td>' +
-        '<td style="text-align:center">'+inp('bet_unidades', a.bet_unidades, 42)+'</td>' +
-        '<td class="'+statusCls+'">'+statusLabel+pend+'</td>' +
-        '<td class="'+gainCls+'">'+(a.ganhoPct!=null?fmtPct(a.ganhoPct):'-')+'</td>' +
-        '<td class="'+gainCls+'">'+(a.ganhoReais!=null?fmtR$(a.ganhoReais):'-')+'</td>' +
-        '<td style="text-align:center;white-space:nowrap">'
+      // Cada celula leva o NOME da sua coluna. No celular o que some e' escolhido
+      // por esse nome, nunca por posicao: numero de coluna anda sozinho quando
+      // alguem acrescenta uma, e foi assim que o Bateu sumiu do Historico.
+      return '<tr'+dica+'><td class="bc-hora">'+(a.hora_br||a.hora||'')+'</td><td class="bc-corrida">'+a.corrida+diverg+'</td>' +
+        '<td class="bc-avb">'+avbCurto+'</td>' +
+        '<td class="bc-fav">'+galgo(a.trap_a, a.name_fav)+'</td>' +
+        '<td class="bc-und">'+galgo(a.trap_b, a.name_und)+'</td>' +
+        '<td class="bc-odd" style="text-align:center">'+inp('odd', a.odd, 46)+'</td>' +
+        '<td class="bc-unid" style="text-align:center">'+inp('bet_unidades', a.bet_unidades, 42)+'</td>' +
+        '<td class="bc-status '+statusCls+'">'+statusLabel+pend+'</td>' +
+        '<td class="bc-pct '+gainCls+'">'+(a.ganhoPct!=null?fmtPct(a.ganhoPct):'-')+'</td>' +
+        '<td class="bc-rs '+gainCls+'">'+(a.ganhoReais!=null?fmtR$(a.ganhoReais):'-')+'</td>' +
+        '<td class="bc-acoes" style="text-align:center;white-space:nowrap">'
         +   '<span class="bnc-pencil" data-row="'+a.id+'" onclick="toggleRowEditBanca(this)" title="Editar Odd e Unidades">&#9998;</span>'
         +   '<span class="bnc-del" data-row="'+a.id+'" onclick="excluirAposta(this)" title="Excluir esta aposta">'+ICONE_LIXO+'</span>'
         + '</td></tr>';

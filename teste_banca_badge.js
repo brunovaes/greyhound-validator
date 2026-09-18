@@ -118,9 +118,13 @@ t('a celula do desafiado passa pelo helper com o trap_b', /galgo\(a\.trap_b,\s*a
 t('o helper monta a classe trap-badge t<N>', /class="trap-badge t'\s*\+\s*t/.test(LIMPO));
 t('sem trap conhecido o helper nao desenha bolinha nenhuma',
   /const t = Number\(trap\) > 0 \? Number\(trap\) : null/.test(LIMPO));
-t('cabecalho diz Desafiado', /<th>Desafiado<\/th>/.test(LIMPO));
+// <th[^>]*>: em 18/09 cada coluna ganhou o NOME dela no cabecalho
+// (class="bc-..."), pra o celular poder esconder coluna por nome. A assertiva
+// buscava o <th> sem atributo nenhum e reprovou codigo certo. O que ela quer
+// travar e' o TEXTO da coluna, nao os atributos dela.
+t('cabecalho diz Desafiado', /<th[^>]*>Desafiado<\/th>/.test(LIMPO));
 t('e Underdog nao sobrou em nenhum lugar da tela', !/Underdog/.test(LIMPO));
-t('Favorito continua do outro lado', /<th>Favorito<\/th>/.test(LIMPO));
+t('Favorito continua do outro lado', /<th[^>]*>Favorito<\/th>/.test(LIMPO));
 
 // ═══════════════════════════════════════════════════════════════════════════
 bloco('[3] A COR VIAJA COM A TELA (a Banca nao carrega o shared.css)');
