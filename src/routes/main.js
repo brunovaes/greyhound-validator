@@ -1195,7 +1195,12 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
      pra rolagem horizontal comecar mostrando o inicio (nome do galgo) */
   #val-body > *{margin-left:0!important;margin-right:0!important}
   .val-dog{overflow-x:visible!important}
-  .val-tbl{table-layout:auto!important;width:auto!important;min-width:560px!important}
+  /* ERA min-width:560px!important, e era ESTA a regra que valia: ela vence a
+     do app.js (que pedia 640) justamente pelo !important. Com 560px minimos a
+     tabela nao cabia em aparelho nenhum — medido de 360 a 430px, arrastava em
+     todos. Agora a tabela tem a largura da tela, e quem decide quais colunas
+     aparecem e' o bloco do app.js, onde as .val-* moram. */
+  .val-tbl{table-layout:auto!important;width:100%!important;min-width:0!important}
 }
 
 /* ── A tela inteira cabe na altura da janela, em qualquer notebook ─────────

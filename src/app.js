@@ -3229,13 +3229,42 @@ function injectValModal(){
 @media(max-width:768px){
   #val-box{width:96vw;max-width:96vw;max-height:90vh;overflow:hidden}
   #val-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
-  .val-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .val-tbl{table-layout:auto;width:auto;min-width:640px}
+  /* ── O CARD CABE NA TELA (Bruno, 18/09/2026) ─────────────────────────
+     "consegue fazer a mesma coisa no botao analisar da tela Analisar?" — o
+     mesmo que foi feito no "ver historico" da tela Historico: Track e Dis
+     somem e a fonte encolhe, pra acabar o arrasta-pro-lado.
+
+     O QUE SAIU DAQUI:
+         .val-dog{overflow-x:auto}
+         .val-tbl{table-layout:auto;width:auto;min-width:640px}
+         #val-body.val-compact .val-tbl{min-width:640px}
+     Detalhe que vale registrar: estes 640px NAO eram quem mandava. O
+     @media do main.js sobrescreve esta mesma regra com min-width:560px
+     !important, e era o 560 que valia. Ou seja, havia uma regra morta aqui
+     contradizendo a viva de la — o tipo de coisa que faz a proxima pessoa
+     (eu, semana que vem) mexer no numero errado e nao entender por que a
+     tela nao mudou. Os dois foram corrigidos.
+
+     Vale pros DOIS modos: o "Analisar disputa" (dois galgos) e o card
+     completo (val-compact, os seis). A tabela e a mesma; so o tamanho da
+     letra difere. */
+  .val-dog{overflow-x:visible}
+  .val-tbl{table-layout:auto;width:100%;min-width:0}
+  /* As larguras do colgroup foram desenhadas pras dez colunas numa janela de
+     920px. Aqui sao oito numa de 350: viram palpite ruim, entao saem. */
+  .val-tbl col{width:auto}
+  .val-tbl .c-track,.val-tbl .c-dis{display:none}
+  .val-tbl th{padding:4px 2px;font-size:8px;letter-spacing:0}
+  .val-tbl td{padding:4px 2px;font-size:10px}
+  .val-badge-grade{padding:1px 3px;font-size:9px}
+  /* A Remarks perde o teto: e' o unico texto de tamanho variavel da tabela,
+     entao e' ela quem fica com a sobra de largura. */
+  .val-td-rem{max-width:none;font-size:9px}
   #val-body.val-compact{max-height:90vh}
-  #val-body.val-compact .val-tbl{min-width:640px}
-  #val-body.val-compact .val-tbl th{font-size:11px;padding:3px 4px;line-height:1.2}
-  #val-body.val-compact .val-tbl td{font-size:11px;padding:3px 4px;line-height:1.2}
-  #val-body.val-compact .val-td-rem{font-size:10px;max-width:140px}
+  #val-body.val-compact .val-tbl{min-width:0}
+  #val-body.val-compact .val-tbl th{font-size:8px;padding:3px 2px;line-height:1.2}
+  #val-body.val-compact .val-tbl td{font-size:10px;padding:3px 2px;line-height:1.2}
+  #val-body.val-compact .val-td-rem{font-size:9px;max-width:none}
   #val-body.val-compact .val-dog-hdr .trap-badge{width:22px;height:22px;font-size:11px}
   #val-body.val-compact .val-name{font-size:12px}
 }
@@ -3492,16 +3521,16 @@ function buildDogCard(trap,nome,perfil,hist,compact){
     var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
     var isBestCl=classRank(h.classe)===bestClass&&bestClass<999;
     return'<tr>'
-      +'<td class="val-td-date">'+h.data+'</td>'
-      +'<td class="val-td-track">'+h.pista+'</td>'
-      +'<td class="val-td-muted" style="text-align:center">'+h.dist+'m</td>'
-      +'<td class="val-td-muted" style="text-align:center">['+h.trap+']</td>'
-      +'<td class="val-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
-      +'<td class="val-td-bends">'+(h.bends||'')+'</td>'
-      +'<td class="val-td-muted" style="text-align:center">'+(h.pos||'-')+'</td>'
-      +'<td class="val-td-rem">'+rem+'</td>'
-      +'<td style="text-align:center"><span class="val-badge-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
-      +'<td class="val-td-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
+      +'<td class="val-td-date c-date">'+h.data+'</td>'
+      +'<td class="val-td-track c-track">'+h.pista+'</td>'
+      +'<td class="val-td-muted c-dis" style="text-align:center">'+h.dist+'m</td>'
+      +'<td class="val-td-muted c-trp" style="text-align:center">['+h.trap+']</td>'
+      +'<td class="val-td-muted c-split" style="text-align:center">'+(h.split||'')+'</td>'
+      +'<td class="val-td-bends c-bends">'+(h.bends||'')+'</td>'
+      +'<td class="val-td-muted c-fin" style="text-align:center">'+(h.pos||'-')+'</td>'
+      +'<td class="val-td-rem c-rem">'+rem+'</td>'
+      +'<td class="c-grade" style="text-align:center"><span class="val-badge-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
+      +'<td class="val-td-caltm c-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
       +'</tr>';
   }).join('');
   var cw=compact?['32','32','28','20','28','24','18','44','20','30']:['40','40','40','30','40','35','25','60','30','40'];
@@ -3513,13 +3542,13 @@ function buildDogCard(trap,nome,perfil,hist,compact){
     +'</div>'
     +'<table class="val-tbl">'
     +'<colgroup>'
-    +'<col style="width:'+cw[0]+'px"><col style="width:'+cw[1]+'px"><col style="width:'+cw[2]+'px">'
-    +'<col style="width:'+cw[3]+'px"><col style="width:'+cw[4]+'px"><col style="width:'+cw[5]+'px">'
-    +'<col style="width:'+cw[6]+'px"><col style="width:'+cw[7]+'px"><col style="width:'+cw[8]+'px"><col style="width:'+cw[9]+'px">'
+    +'<col class="c-date" style="width:'+cw[0]+'px"><col class="c-track" style="width:'+cw[1]+'px"><col class="c-dis" style="width:'+cw[2]+'px">'
+    +'<col class="c-trp" style="width:'+cw[3]+'px"><col class="c-split" style="width:'+cw[4]+'px"><col class="c-bends" style="width:'+cw[5]+'px">'
+    +'<col class="c-fin" style="width:'+cw[6]+'px"><col class="c-rem" style="width:'+cw[7]+'px"><col class="c-grade" style="width:'+cw[8]+'px"><col class="c-caltm" style="width:'+cw[9]+'px">'
     +'</colgroup>'
     +'<thead><tr>'
-    +'<th>Date</th><th>Track</th><th>Dis</th><th>Trp</th>'
-    +'<th>Split</th><th>Bends</th><th>Fin</th><th>Remarks</th><th>Grade</th><th>CalTm</th>'
+    +'<th class="c-date">Date</th><th class="c-track">Track</th><th class="c-dis">Dis</th><th class="c-trp">Trp</th>'
+    +'<th class="c-split">Split</th><th class="c-bends">Bends</th><th class="c-fin">Fin</th><th class="c-rem">Remarks</th><th class="c-grade">Grade</th><th class="c-caltm">CalTm</th>'
     +'</tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'</div>';
