@@ -120,10 +120,17 @@ function resolverAposta(a) {
   // Os NOMES seguem sempre o seu par quando ele existe: mostrar a dupla do
   // motor na linha da sua aposta foi o que escondeu o problema por tanto tempo.
   let nomeA = a.name_fav, nomeB = a.name_und, fonte_par = 'motor';
+  // Os TRAPS andam junto com os nomes, pela mesma razao. A tela mostra uma
+  // bolinha colorida antes de cada nome desde 18/09, e bolinha do par do motor
+  // ao lado do nome do SEU par seria a divergencia de ontem redesenhada: o
+  // numero e o nome tem que sair do mesmo lugar.
+  let trapA = a.trap_fav, trapB = a.trap_und;
   if (esc) {
     fonte_par = 'sua_escolha';
     nomeA = esc.aNome || ('T' + esc.aTrap);
     nomeB = esc.bNome || ('T' + esc.bTrap);
+    trapA = esc.aTrap;
+    trapB = esc.bTrap;
   }
 
   // O par do motor existe mesmo? Corrida que perdeu o tier tem trap_fav/und
@@ -161,6 +168,11 @@ function resolverAposta(a) {
   return Object.assign({}, a, {
     bateu,
     name_fav: nomeA, name_und: nomeB,
+    // trap_a/trap_b sao os traps DESTA aposta. Nao sobrescrevem trap_fav/
+    // trap_und (que continuam sendo os do motor, e o mesmoSentido acima depende
+    // deles) — sao um campo a mais, com nome proprio, pra ninguem confundir os
+    // dois pares de novo.
+    trap_a: trapA, trap_b: trapB,
     fonte_par, fonte_resultado, motivo_pendente: motivo,
     // AGORA e' informacao, nao alerta: diz que voce apostou num sentido
     // diferente do que o motor montou. O resultado ja vem certo.
@@ -471,6 +483,25 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px;display:flex;align-items:cen
 .bnc-inp{background:transparent;border:1px solid transparent;color:#ccc;font-family:inherit}
 .bnc-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff}
 .bnc-inp:focus{outline:1px solid #22c55e;outline-offset:-1px}
+/* ── BOLINHA DO TRAP ANTES DO NOME (Bruno, 18/09/2026) ──────────────────────
+   "consegue colocar o badge a bolinha antes do nome de cada galgo na banca?"
+   As regras abaixo sao COPIA do public/css/shared.css (.trap-badge e .t1..t6),
+   com as cores por extenso. Estao repetidas aqui pelo mesmo motivo do lapis: a
+   Banca nao carrega o shared.css, e bolinha que so pinta na tela que carregou
+   outro arquivo apareceria aqui como um circulo cinza sem cor nenhuma.
+   O que se repete e' desenho, nao regra — quem decide QUAL trap mostrar e' o
+   resolverAposta, no servidor, um lugar so. */
+.trap-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:50%;font-weight:700;font-size:13px;
+  border:2px solid transparent}
+.t1{background:radial-gradient(circle at 35% 35%, #ff4444, #c00 60%, #8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
+.t2{background:radial-gradient(circle at 35% 35%, #4488ff, #1a3db5 60%, #0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3),0 2px 4px rgba(0,0,0,.3)}
+.t3{background:radial-gradient(circle at 35% 35%, #fff, #d0d0d0 60%, #a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8),0 2px 4px rgba(0,0,0,.25)}
+.t4{background:radial-gradient(circle at 35% 35%, #444, #1a1a1a 60%, #000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15),0 2px 4px rgba(0,0,0,.4)}
+.t5{background:radial-gradient(circle at 35% 35%, #ffaa00, #e07000 60%, #a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4),0 2px 4px rgba(0,0,0,.3)}
+.t6{background:radial-gradient(circle at 50% 50%, #cc0000 0%, #cc0000 38%, transparent 38%),repeating-linear-gradient(90deg, #111 0%, #111 50%, #f0f0f0 50%, #f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2),0 2px 4px rgba(0,0,0,.4)}
+/* A celula segura bolinha e nome na mesma linha de base sem quebrar o nome. */
+.bnc-galgo{display:inline-flex;align-items:center;white-space:nowrap}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
 /* Linha unica do DIA (Bruno, 16/09): oito cartoes lado a lado. A fonte e o
    respiro encolhem so aqui — as abas Mes e Ano seguem com o tamanho de antes,
@@ -881,7 +912,7 @@ function renderDay(d) {
   const tblEl = document.getElementById('banca-table');
   APOSTAS_DO_DIA = d.apostas || [];
   if (!d.apostas.length) { tblEl.innerHTML = '<div class="empty-msg">Nenhuma aposta registrada nesse dia.</div>'; return; }
-  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Underdog</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th><th style="width:62px"></th></tr></thead><tbody>' +
+  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Desafiado</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th><th style="width:62px"></th></tr></thead><tbody>' +
     d.apostas.map(function(a) {
       const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':'Pendente';
       const statusCls = 'status-'+a.status;
@@ -903,6 +934,18 @@ function renderDay(d) {
       // nas linhas que ja tem chegada — voce editaria, a tela nao mudaria e nao
       // haveria erro nenhum pra explicar. Decisao do Bruno em 18/09: "status
       // nao precisa, so ODD e UND".
+      // Bolinha do trap antes do nome, no mesmo desenho e no mesmo tamanho da
+      // celula de AvB da tela Analisar (20px / 11px): a mesma coisa nas duas
+      // telas tem que ter a mesma cara, senao viram dois desenhos do mesmo dado.
+      // Sem trap conhecido a bolinha simplesmente nao aparece — inventar um
+      // numero aqui seria pintar de vermelho um galgo que talvez corra na 4.
+      const galgo = function(trap, nome) {
+        const t = Number(trap) > 0 ? Number(trap) : null;
+        const bola = t
+          ? '<span class="trap-badge t' + t + '" style="width:20px;height:20px;font-size:11px;margin-right:7px">' + t + '</span>'
+          : '';
+        return '<span class="bnc-galgo">' + bola + (nome || '-') + '</span>';
+      };
       const inp = function(campo, valor, largura) {
         return '<input type="text" class="bnc-inp" value="' + _at(valor) + '" placeholder="-"'
           + ' data-id="' + a.id + '" data-f="' + campo + '" disabled'
@@ -914,7 +957,9 @@ function renderDay(d) {
           // embaixo, que nao tem esse problema e ainda vale pras linhas
           // redesenhadas.
       };
-      return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td><td>'+(a.name_fav||'-')+'</td><td>'+(a.name_und||'-')+'</td>' +
+      return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td>' +
+        '<td>'+galgo(a.trap_a, a.name_fav)+'</td>' +
+        '<td>'+galgo(a.trap_b, a.name_und)+'</td>' +
         '<td style="text-align:center">'+inp('odd', a.odd, 46)+'</td>' +
         '<td style="text-align:center">'+inp('bet_unidades', a.bet_unidades, 42)+'</td>' +
         '<td class="'+statusCls+'">'+statusLabel+pend+'</td>' +
