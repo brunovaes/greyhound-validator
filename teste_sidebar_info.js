@@ -76,8 +76,13 @@ t('a regra de cor e a mesma do app.js (verde a partir de 50%)',
   /pct >= 50 \? '#22c55e' : '#ef4444'/.test(FN)
   && /pct >= 50 \? '#22c55e' : '#ef4444'/.test(ler('src/app.js')));
 
+// Sem comentario: o comentario do lapis da Banca CITA o shared.css justamente
+// pra dizer que a tela nao o carrega, e era esse texto que derrubava a linha.
+const semCom2 = s2 => s2.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+                        .replace(/^\s*\/\/.*$/gm, '');
 t('o bloco leva o proprio <style>: nao depende do shared.css, que estas telas nao carregam',
-  /<style>/.test(FN) && !BANCA.includes('shared.css') && !CONFIG.includes('shared.css'));
+  /<style>/.test(FN) && !semCom2(BANCA).includes('shared.css')
+  && !semCom2(CONFIG).includes('shared.css'));
 
 // ── [3] a Analisar nao foi tocada ───────────────────────────────────────────
 bloco('[3] A ANALISAR CONTINUA COM A FAIXA DELA');

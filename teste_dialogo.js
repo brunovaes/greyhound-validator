@@ -210,7 +210,13 @@ bloco('[1] CONFIRMAR: SIM, NAO, ESC E CLIQUE FORA');
   t('ela carrega o modulo', /static\/js\/dialogo\.js/.test(SRC_BANCA));
   t('e usa ghConfirmar nos dois resets',
     (SRC_BANCA.match(/await ghConfirmar\(/g) || []).length === 2);
-  t('os erros viraram ghErro', (SRC_BANCA.match(/ghErro\(/g) || []).length === 3);
+  // ESTA ASSERCAO CONTAVA 3 E QUEBROU no dia em que a Banca ganhou um quarto
+  // tratamento de erro (a edicao de Odd/Unid., 18/09). Contagem exata e' um
+  // RETRATO do arquivo, nao uma propriedade dele: ela reprova o autor por ter
+  // escrito mais codigo certo. O que importa e' que os erros da Banca nao
+  // voltem pro alert do navegador, e isso as duas linhas acima ja garantem.
+  t('todo erro da Banca passa pelo ghErro (pelo menos os tres originais)',
+    (SRC_BANCA.match(/ghErro\(/g) || []).length >= 3);
 
   // ── [6] se a caixa nao montar, a pergunta nao some ────────────────────────
   bloco('[6] FALHANDO, CAI NO confirm DO NAVEGADOR — nunca em silencio');

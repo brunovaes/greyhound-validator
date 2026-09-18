@@ -450,6 +450,21 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px;display:flex;align-items:cen
 .datepick input,.datepick select{background:#161B27;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px}
 .navbtn{background:#161B27;border:1px solid #222;color:#ccc;width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
 .navbtn:hover{border-color:#22c55e;color:#22c55e}
+/* ── LAPIS DE EDICAO, COMO O DO HISTORICO (Bruno, 18/09/2026) ───────────────
+   "no menu banca, teria como colocar um lapis de edicao igual da tela historico
+   para eu editar as informacoes de Odd e UNID".
+   As regras abaixo sao as MESMAS do Historico (.edit-pencil e .hist-inp). Elas
+   estao repetidas aqui porque a Banca nao carrega o shared.css nem o <style> do
+   Historico — e um lapis que so funciona na tela que carregou outro arquivo e'
+   armadilha silenciosa. O que se repete e' desenho, nao regra.
+   Campo desabilitado por padrao: sem isso da pra apagar a odd de uma aposta
+   passando o dedo na tabela. */
+.bnc-pencil{cursor:pointer;font-size:13px;opacity:.55;transition:opacity .15s}
+.bnc-pencil:hover{opacity:1}
+.bnc-pencil.editing{opacity:1;color:#22c55e}
+.bnc-inp{background:transparent;border:1px solid transparent;color:#ccc;font-family:inherit}
+.bnc-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff}
+.bnc-inp:focus{outline:1px solid #22c55e;outline-offset:-1px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
 /* Linha unica do DIA (Bruno, 16/09): oito cartoes lado a lado. A fonte e o
    respiro encolhem so aqui — as abas Mes e Ano seguem com o tamanho de antes,
@@ -691,6 +706,62 @@ function lineChart(pontos) {
   '</svg>';
 }
 
+// ── EDICAO DE Odd E Unid. NA BANCA (Bruno, 18/09/2026) ─────────────────────
+//
+// Mesmo mecanismo do Historico, de proposito: o lapis liga a linha, o campo
+// grava no MESMO endereco (PUT /api/race/:id), e os dois campos ja estavam na
+// lista de permitidos de la. Nao ha rota nova nem regra nova.
+//
+// Depois de gravar, a tela RECARREGA em vez de recalcular no navegador. Odd e
+// unidades entram no ganho, no saldo do dia, no percentual, nos oito cartoes e
+// no grafico — refazer essas contas aqui seria uma segunda implementacao de
+// tudo isso, divergindo da do servidor no dia em que alguem afinar uma delas.
+// Uma ida a mais no servidor e' barata; dois numeros pra mesma pergunta, nao.
+function _at(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+function setRowEditBanca(id, editando) {
+  var lapis = document.querySelector('.bnc-pencil[data-row="' + id + '"]');
+  if (lapis) {
+    lapis.classList.toggle('editing', editando);
+    lapis.innerHTML = editando ? '&#10003;' : '&#9998;';
+  }
+  document.querySelectorAll('.bnc-inp[data-id="' + id + '"]').forEach(function (el) {
+    el.disabled = !editando;
+  });
+}
+function toggleRowEditBanca(lapis) {
+  var id = lapis.getAttribute('data-row');
+  setRowEditBanca(id, !lapis.classList.contains('editing'));
+}
+// Delegado no documento: a tabela e' redesenhada a cada carregarDados(), entao
+// ouvinte presa no elemento morreria no primeiro salvamento.
+document.addEventListener('keydown', function (ev) {
+  var el = ev.target;
+  if (ev.key === 'Enter' && el && el.classList && el.classList.contains('bnc-inp')) el.blur();
+});
+document.addEventListener('change', async function (ev) {
+  var el = ev.target;
+  if (!el || !el.classList || !el.classList.contains('bnc-inp') || el.disabled) return;
+  var id = el.getAttribute('data-id'), campo = el.getAttribute('data-f');
+  var valor = String(el.value || '').trim().replace(',', '.');
+  // Campo vazio APAGA o valor, e isso e' proposital: aposta registrada por
+  // engano volta a nao ter odd e sai da conta, sem precisar mexer no banco.
+  var corpo = {}; corpo[campo] = (valor === '' ? null : valor);
+  el.disabled = true;
+  try {
+    var r = await fetch(BASE + '/api/race/' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo)
+    });
+    if (!r.ok) throw new Error('o servidor respondeu ' + r.status);
+    await carregarDados();
+  } catch (e) {
+    el.disabled = false;
+    ghErro('Não consegui salvar: ' + e.message);
+  }
+});
+
 async function carregarDados() {
   const dateParam = getCurrentDateParam();
   try {
@@ -743,7 +814,7 @@ function renderDay(d) {
 
   const tblEl = document.getElementById('banca-table');
   if (!d.apostas.length) { tblEl.innerHTML = '<div class="empty-msg">Nenhuma aposta registrada nesse dia.</div>'; return; }
-  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Underdog</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th></tr></thead><tbody>' +
+  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Underdog</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th><th style="width:34px"></th></tr></thead><tbody>' +
     d.apostas.map(function(a) {
       const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':'Pendente';
       const statusCls = 'status-'+a.status;
@@ -760,10 +831,29 @@ function renderDay(d) {
       // telas tem que ter a mesma cor.
       const diverg = a.par_divergente
         ? ' <span style="color:#14b8a6;font-size:10px" title="Voce apostou num sentido diferente do que o motor montou. O resultado desta linha e calculado pelo SEU par.">&#8644; seu par</span>' : '';
-      return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td><td>'+(a.name_fav||'-')+'</td><td>'+(a.name_und||'-')+'</td><td>'+(a.odd||'-')+'</td><td>'+a.bet_unidades+'</td>' +
+      // Odd e Unid. viram campo. O Status NAO: ele e' derivado da chegada pelo
+      // SEU par, e um campo que grava em races.bateu seria ignorado justamente
+      // nas linhas que ja tem chegada — voce editaria, a tela nao mudaria e nao
+      // haveria erro nenhum pra explicar. Decisao do Bruno em 18/09: "status
+      // nao precisa, so ODD e UND".
+      const inp = function(campo, valor, largura) {
+        return '<input type="text" class="bnc-inp" value="' + _at(valor) + '" placeholder="-"'
+          + ' data-id="' + a.id + '" data-f="' + campo + '" disabled'
+          + ' style="width:' + largura + 'px;text-align:center;border-radius:4px;padding:4px;font-size:11px">';
+          // SEM onkeydown inline aqui. Esta tela e' montada dentro de um
+          // template literal, e a barra de um \' some na avaliacao: o atributo
+          // chegava ao navegador como if(event.key==='Enter'), que fecha a
+          // string JS que o envolve. O Enter e' tratado no ouvinte delegado la
+          // embaixo, que nao tem esse problema e ainda vale pras linhas
+          // redesenhadas.
+      };
+      return '<tr'+dica+'><td>'+(a.hora_br||a.hora||'')+'</td><td>'+a.corrida+diverg+'</td><td>'+(a.name_fav||'-')+'</td><td>'+(a.name_und||'-')+'</td>' +
+        '<td style="text-align:center">'+inp('odd', a.odd, 46)+'</td>' +
+        '<td style="text-align:center">'+inp('bet_unidades', a.bet_unidades, 42)+'</td>' +
         '<td class="'+statusCls+'">'+statusLabel+pend+'</td>' +
         '<td class="'+gainCls+'">'+(a.ganhoPct!=null?fmtPct(a.ganhoPct):'-')+'</td>' +
-        '<td class="'+gainCls+'">'+(a.ganhoReais!=null?fmtR$(a.ganhoReais):'-')+'</td></tr>';
+        '<td class="'+gainCls+'">'+(a.ganhoReais!=null?fmtR$(a.ganhoReais):'-')+'</td>' +
+        '<td style="text-align:center"><span class="bnc-pencil" data-row="'+a.id+'" onclick="toggleRowEditBanca(this)" title="Editar Odd e Unidades">&#9998;</span></td></tr>';
     }).join('') + '</tbody></table>';
 }
 
