@@ -30,6 +30,10 @@ const PATHS = {
   message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/>',
   // Config — relogio (Automacao)
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  // Banca — lixeira (excluir aposta). Entrou em 18/09/2026. Vive aqui, e nao
+  // solto na Banca, porque icone repetido em arquivo diferente vira dois
+  // desenhos da mesma coisa no dia em que alguem ajustar um deles.
+  trash: '<path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>',
   // Estatisticas / status
   chart: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
   // Alerta / atencao

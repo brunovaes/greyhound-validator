@@ -462,6 +462,12 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px;display:flex;align-items:cen
 .bnc-pencil{cursor:pointer;font-size:13px;opacity:.55;transition:opacity .15s}
 .bnc-pencil:hover{opacity:1}
 .bnc-pencil.editing{opacity:1;color:#22c55e}
+/* A lixeira nasce apagada como o lapis e so fica vermelha no hover: acao
+   destrutiva nao precisa gritar na tabela inteira o tempo todo, mas precisa
+   deixar claro o que e' quando o dedo chega nela. */
+.bnc-del{cursor:pointer;opacity:.45;transition:opacity .15s,color .15s;color:#888;
+  display:inline-flex;vertical-align:middle;margin-left:10px}
+.bnc-del:hover{opacity:1;color:#ef4444}
 .bnc-inp{background:transparent;border:1px solid transparent;color:#ccc;font-family:inherit}
 .bnc-inp:not([disabled]){background:#0D1117;border:1px solid #333;color:#fff}
 .bnc-inp:focus{outline:1px solid #22c55e;outline-offset:-1px}
@@ -720,6 +726,66 @@ function lineChart(pontos) {
 function _at(v) {
   return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
+// O SVG da lixeira vem do conjunto compartilhado (icons.js), montado pelo
+// servidor e guardado aqui como texto. Aspas SIMPLES na string: o icon() so
+// usa aspas duplas no SVG, entao nao ha o que escapar, e escapar dentro de um
+// template literal e' justamente onde este arquivo ja me pegou.
+const ICONE_LIXO = '${icon('trash', {size: 13})}';
+// As apostas do dia ficam guardadas pra caixa de confirmacao poder dizer QUAL
+// aposta vai sair. Perguntar "deseja excluir?" sem dizer o que se apaga e'
+// convite pra apagar a linha errada.
+var APOSTAS_DO_DIA = [];
+
+// ── EXCLUIR UMA APOSTA (Bruno, 18/09/2026) ─────────────────────────────────
+//
+// "uma lixeirinha tb pois serve pra quando eu clicar em entrei e nao entrar ou
+// dar cash na BW".
+//
+// O QUE ELA APAGA: a APOSTA, nao a corrida. Zera a odd, as unidades e o ENTREI
+// na race_user_data. A corrida, a analise, a chegada e o registro do Historico
+// continuam inteiros — o que sai e' o dinheiro.
+//
+// Como a Banca so lista linha com odd preenchida (o WHERE do getApostas), zerar
+// a odd tira a linha da tela, dos oito cartoes e do grafico de uma vez. Nao ha
+// exclusao fisica de nada: da pra registrar a aposta de novo a hora que quiser.
+//
+// O campo avb_escolhido FICA de proposito (SEM CRASE AQUI: crase dentro de
+// comentario, dentro deste template literal, FECHA a string e derruba a
+// pagina inteira). Ele guarda em qual par voce tinha entrado, e o Historico
+// continua mostrando esse par. Sozinho ele nao faz a aposta voltar: a
+// tela Analisar so marca o AvB como escolhido quando ha par
+// E odd, e a odd acabou de sair.
+function excluirAposta(el) {
+  var id = el.getAttribute('data-row');
+  var linha = (APOSTAS_DO_DIA || []).find(function (a) { return String(a.id) === String(id); }) || {};
+  var quem = (linha.name_fav || '?') + ' vs ' + (linha.name_und || '?');
+  var quanto = (linha.odd ? 'odd ' + linha.odd : 'sem odd')
+    + (linha.bet_unidades ? ', ' + linha.bet_unidades + ' un.' : '');
+  ghConfirmar({
+    titulo: 'Excluir esta aposta?',
+    // \\n com DUAS barras: esta tela e' montada dentro de um template literal,
+    // e um \\n de uma barra so vira quebra de linha DE VERDADE ali, partindo a
+    // string ao meio. O tools/valida.js pegou; e' a mesma pegadinha do dialogo.
+    texto: (linha.hora_br || linha.hora || '') + '  ' + (linha.corrida || '') + '\\n'
+      + quem + '\\n' + quanto + '\\n\\n'
+      + 'A aposta sai da Banca e o ENTREI e desmarcado. A corrida e a analise '
+      + 'continuam no Historico, e voce pode registrar de novo depois.',
+    ok: 'Excluir',
+    perigo: true
+  }).then(async function (sim) {
+    if (!sim) return;
+    try {
+      var r = await fetch(BASE + '/api/race/' + id, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ odd: null, bet_unidades: null, bet_entrou: 0 })
+      });
+      if (!r.ok) throw new Error('o servidor respondeu ' + r.status);
+      await carregarDados();
+    } catch (e) {
+      ghErro('Não consegui excluir: ' + e.message);
+    }
+  });
+}
 function setRowEditBanca(id, editando) {
   var lapis = document.querySelector('.bnc-pencil[data-row="' + id + '"]');
   if (lapis) {
@@ -813,8 +879,9 @@ function renderDay(d) {
   } else { chartSection.style.display = 'none'; }
 
   const tblEl = document.getElementById('banca-table');
+  APOSTAS_DO_DIA = d.apostas || [];
   if (!d.apostas.length) { tblEl.innerHTML = '<div class="empty-msg">Nenhuma aposta registrada nesse dia.</div>'; return; }
-  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Underdog</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th><th style="width:34px"></th></tr></thead><tbody>' +
+  tblEl.innerHTML = '<table class="betstbl"><thead><tr><th>Hora</th><th>Corrida</th><th>Favorito</th><th>Underdog</th><th>Odd</th><th>Unid.</th><th>Status</th><th>%Gain/Loss</th><th>R$</th><th style="width:62px"></th></tr></thead><tbody>' +
     d.apostas.map(function(a) {
       const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':'Pendente';
       const statusCls = 'status-'+a.status;
@@ -853,7 +920,10 @@ function renderDay(d) {
         '<td class="'+statusCls+'">'+statusLabel+pend+'</td>' +
         '<td class="'+gainCls+'">'+(a.ganhoPct!=null?fmtPct(a.ganhoPct):'-')+'</td>' +
         '<td class="'+gainCls+'">'+(a.ganhoReais!=null?fmtR$(a.ganhoReais):'-')+'</td>' +
-        '<td style="text-align:center"><span class="bnc-pencil" data-row="'+a.id+'" onclick="toggleRowEditBanca(this)" title="Editar Odd e Unidades">&#9998;</span></td></tr>';
+        '<td style="text-align:center;white-space:nowrap">'
+        +   '<span class="bnc-pencil" data-row="'+a.id+'" onclick="toggleRowEditBanca(this)" title="Editar Odd e Unidades">&#9998;</span>'
+        +   '<span class="bnc-del" data-row="'+a.id+'" onclick="excluirAposta(this)" title="Excluir esta aposta">'+ICONE_LIXO+'</span>'
+        + '</td></tr>';
     }).join('') + '</tbody></table>';
 }
 

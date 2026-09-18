@@ -75,8 +75,11 @@ const campos = (BANCA.match(/inp\('([a-z_]+)'/g) || []).map(s => s.slice(5, -1))
 t('exatamente dois campos editaveis', campos.length === 2);
 t('e sao odd e bet_unidades',
   campos.indexOf('odd') >= 0 && campos.indexOf('bet_unidades') >= 0);
-t('a coluna do lapis entrou no cabecalho da tabela do dia',
-  /<th>R\$<\/th><th style="width:34px"><\/th>/.test(BANCA));
+// Sem a largura exata: ela mudou de 34 pra 62 quando a lixeira entrou ao lado
+// do lapis, e a assercao reprovou o arquivo por isso. Medida exata e' retrato,
+// nao propriedade — o que importa e' que existe UMA coluna vazia no fim.
+t('a coluna dos icones entrou no fim do cabecalho da tabela do dia',
+  /<th>R\$<\/th><th style="width:\d+px"><\/th>/.test(BANCA));
 
 // ── [5] o Enter nao pode estar no atributo ──────────────────────────────────
 // Esta tela e' montada dentro de um template literal. A barra de um \' some na
@@ -98,6 +101,71 @@ t('virgula vira ponto: 2,5 digitado salva como 2.5', /replace\(',', '\.'\)/.test
 t('campo vazio APAGA o valor, de proposito', /valor === '' \? null : valor/.test(BANCA));
 t('o texto e escapado antes de ir pro atributo value', /function _at\(v\)/.test(BANCA)
   && /value="' \+ _at\(valor\) \+ '"/.test(BANCA));
+
+
+// ── [7] A LIXEIRA ───────────────────────────────────────────────────────────
+// Bruno, 18/09: "ao lado do lapis uma lixeirinha tb pois serve pra quando eu
+// clicar em entrei e nao entrar ou dar cash na BW. Coloca uma perguntinha se
+// deseja excluir mesmo no padrao do App".
+//
+// O QUE ELA APAGA e o ponto que este bloco protege: a APOSTA, nao a corrida.
+// Zera odd, unidades e o ENTREI. A corrida, a analise e a chegada continuam
+// inteiras. Se um dia alguem trocar isso por um DELETE de verdade, a suite grita.
+bloco('[7] A LIXEIRA APAGA A APOSTA, NAO A CORRIDA');
+
+t('a linha tem a lixeira ao lado do lapis',
+  /class="bnc-del" data-row=[\s\S]{0,80}?excluirAposta\(this\)/.test(BANCA));
+t('e o icone vem do conjunto compartilhado, nao desenhado solto aqui',
+  /ICONE_LIXO/.test(BANCA) && /trash: '<path/.test(ler('src/utils/icons.js')));
+
+const FN_DEL = BANCA.slice(BANCA.indexOf('function excluirAposta(el)'),
+                           BANCA.indexOf('function setRowEditBanca'));
+t('ela zera a odd, as unidades e o ENTREI',
+  /odd: null, bet_unidades: null, bet_entrou: 0/.test(FN_DEL));
+t('e NAO manda apagar mais nada: sem DELETE, sem mexer na corrida',
+  !/DELETE/i.test(FN_DEL) && !/finishing_order_json/.test(FN_DEL)
+  && !/bateu/.test(FN_DEL));
+t('o par escolhido FICA — o Historico continua sabendo em que par voce entrou',
+  !/avb_escolhido/.test(FN_DEL));
+t('usa o mesmo PUT de sempre, sem rota nova', /'\/api\/race\/' \+ id/.test(FN_DEL));
+t('e recarrega a tela depois, como a edicao faz', /await carregarDados\(\)/.test(FN_DEL));
+
+bloco('[8] A PERGUNTA, NO PADRAO DO APP');
+
+t('pergunta antes, pela caixa do app', /ghConfirmar\(\{/.test(FN_DEL));
+t('e nao pelo confirm do navegador', !/[^h]\bconfirm\(/.test(FN_DEL));
+t('o botao e marcado como destrutivo (fica vermelho)', /perigo: true/.test(FN_DEL));
+t('e diz Excluir, nao Confirmar', /ok: 'Excluir'/.test(FN_DEL));
+t('a caixa DIZ qual aposta vai sair — hora, corrida e os dois galgos',
+  /linha\.hora_br/.test(FN_DEL) && /linha\.corrida/.test(FN_DEL)
+  && /linha\.name_fav/.test(FN_DEL) && /linha\.name_und/.test(FN_DEL));
+t('e explica que da pra registrar de novo', /registrar de novo/.test(FN_DEL));
+t('as apostas do dia ficam guardadas pra caixa poder dizer isso',
+  /APOSTAS_DO_DIA = d\.apostas/.test(BANCA));
+t('clicar em Cancelar nao faz nada', /if \(!sim\) return;/.test(FN_DEL));
+
+// ── [9] AS DUAS PEGADINHAS DO TEMPLATE LITERAL ──────────────────────────────
+// As duas me pegaram NESTA entrega, e as duas ja tinham me pegado antes:
+//   1. crase dentro de comentario FECHA o template e derruba a tela inteira.
+//   2. \n de uma barra so vira quebra de linha de verdade e parte a string.
+// O node --check nao pega nenhuma das duas (pro Node o <script> e' so texto);
+// quem pega e' o tools/valida.js. Esta assercao roda ele dentro da suite, pra
+// nao depender de eu lembrar.
+bloco('[9] O TEMPLATE LITERAL DA BANCA CONTINUA INTEIRO');
+
+const { execFileSync } = require('child_process');
+let okValida = true, saida = '';
+try {
+  saida = execFileSync(process.execPath,
+    [path.join(__dirname, 'tools', 'valida.js'), path.join(__dirname, 'src', 'routes', 'banca.js')],
+    { encoding: 'utf8' });
+} catch (e) { okValida = false; saida = (e.stdout || '') + (e.stderr || ''); }
+t('o tools/valida.js aprova o <script> da Banca', okValida && /Tudo certo/.test(saida));
+if (!okValida) console.log(saida.split('\n').slice(0, 5).join('\n'));
+
+t('nenhuma crase dentro dos comentarios da funcao de excluir', !/`/.test(FN_DEL));
+t('e as quebras de linha da caixa estao escapadas com duas barras',
+  /\\\\n/.test(FN_DEL));
 
 console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK — ' + ok + ' verificacoes') + '\n');
 process.exit(fail ? 1 : 0);
