@@ -2371,21 +2371,21 @@ function _celulaAvbConf(r, cf, escolhido){
   var lado = function(trap, nome){
     return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px">'
       + '<div class="trap-badge t'+trap+'" style="width:20px;height:20px;font-size:11px">'+trap+'</div>'
-      + '<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
+      + '<div class="hh-avb-nome" style="font-size:9px;font-weight:600;color:rgba(255,255,255,.85);text-align:center;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+String(nome||'').split(' ')[0]+'</div>'
       + '</div>';
   };
   return '<td style="text-align:center;vertical-align:middle">'
     + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px">'
     +   lado(cf.pick_trap, cf.pick_nome)
-    +   '<div style="font-size:10px;color:#555;padding-top:6px">vs</div>'
+    +   '<div class="hh-avb-vs" style="font-size:10px;color:#555;padding-top:6px">vs</div>'
     +   lado(cf.outro_trap, cf.outro_nome)
     + '</div>'
     // De onde o AvB veio. "manha" = o motor levantou no PDF e a BW confirmou;
     // "BW" = a pescada, o mercado achou o que o PDF nao tinha proposto.
-    + '<div style="font-size:8px;color:#555;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">'
+    + '<div class="hh-avb-org" style="font-size:8px;color:#555;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">'
     +   (cf.fora_da_lista ? '<span style="color:#60a5fa">fora da lista</span>' : (cf.da_manha ? 'manhã' : 'BW'))
     + '</div>'
-    + '<a style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ',' + Number(cf.pick_trap||0) + ',' + Number(cf.outro_trap||0) + ')">&#128269; ver historico</a>'
+    + '<a class="hh-avb-link" style="font-size:9px;color:rgba(96,165,250,.7);cursor:pointer;display:block;text-align:center;margin-top:3px" onclick="openSessValModal(' + r.id + ',' + Number(cf.pick_trap||0) + ',' + Number(cf.outro_trap||0) + ')">&#128269; ver historico</a>'
     + '</td>';
 }
 
@@ -2448,6 +2448,10 @@ function _celulaEntreiConf(r, cf, escolhido){
     +   ' data-an="' + _attrTxt(cf.pick_nome) + '" data-bn="' + _attrTxt(cf.outro_nome) + '"'
     +   ' title="Marcar que a aposta foi neste par">'
     + '<span class="entrei-tag">ENTREI</span>'
+    // O mesmo "sim" escrito de outro jeito: no celular a tarja ENTREI ocupa
+    // uma coluna inteira pra dizer o que um check diz. Quem escolhe qual
+    // aparece e' o CSS — nao ha um segundo estado pra desencontrar do primeiro.
+    + '<span class="entrei-cel">&#10003;</span>'
     + '<span class="entrei-vazio">&mdash;</span>'
     + '</td>';
 }
@@ -2457,9 +2461,15 @@ function _celulaEntreiConf(r, cf, escolhido){
 // passa a dizer o que cada par fez.
 function _celulaBateuConf(cf){
   var v = cf.bateu;
-  var txt = v === true ? '<span style="color:#22c55e;font-weight:700">✓ Sim</span>'
-    : (v === false ? '<span style="color:#ef4444;font-weight:700">✗ Não</span>'
-    : '<span style="color:#666">aguarda</span>');
+  // Uma decisao so, escrita de dois tamanhos: o CSS mostra a longa no
+  // computador e a letra no celular (Bruno, 18/09/2026). Calcular isto duas
+  // vezes, ou decidir no navegador, seria abrir espaco pras duas discordarem.
+  var par = v === true ? ['#22c55e', '✓ Sim', 'S']
+    : (v === false ? ['#ef4444', '✗ Não', 'N']
+    : ['#666', 'aguarda', '·']);
+  var txt = '<span style="color:' + par[0] + ';font-weight:700">'
+    + '<span class="bat-pc">' + par[1] + '</span>'
+    + '<span class="bat-cel">' + par[2] + '</span></span>';
   return '<td style="text-align:center;font-size:11px">' + txt + '</td>';
 }
 
@@ -3246,7 +3256,10 @@ table{width:100%;border-collapse:collapse;background:#111;min-width:900px}
   .content{padding:12px 10px}
   .kpis{grid-template-columns:repeat(3,1fr)}
   table{min-width:660px}
-  .tw table th:nth-child(7), .tw table td:nth-child(7){display:none} /* Observacoes some no mobile */
+  /* A regra que morava aqui escondia a coluna 7 dizendo esconder Observacoes.
+     Colunas entraram no meio depois que ela foi escrita: a 7 virou o BATEU, e
+     era ELE que sumia no celular. Trocada pelo bloco do fim deste arquivo, que
+     esconde coluna por NOME. */
 }
 th{padding:10px 8px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#888;background:#1a1a1a;border-bottom:1px solid #333;vertical-align:top}
 td{padding:10px 8px;border-bottom:1px solid var(--sur2);font-size:12px;vertical-align:middle;text-align:center}
@@ -3264,7 +3277,7 @@ ${KPIS.map(function(K){
   // acerta menos que cara ou coroa. Sem resultado ainda fica cinza, que nao e
   // desempenho ruim, e sim desempenho nenhum.
   var corTaxa = K.k.pct == null ? '#555' : (K.k.pct >= 50 ? '#22C65E' : '#ef4444');
-  return '<div class="kc" title="' + K.rot + ': ' + K.k.qtd + ' registro(s), '
+  return '<div class="kc kcid-' + K.id + '" title="' + K.rot + ': ' + K.k.qtd + ' registro(s), '
        + K.k.ok + ' acerto(s), ' + K.k.err + ' derrota(s)">'
     + '<div class="kc-top">'
     +   '<span class="kc-nome" style="color:' + K.cor + '">' + K.rot + '</span>'
@@ -3281,7 +3294,7 @@ ${KPIS.map(function(K){
     + '</div>';
 }).join('')}
 <div class="kc kc-graf">
-  <div class="kc-titg">Gráfico de Evolução</div>
+  <div class="kc-titg"><span class="kc-titg-pre">Gráfico de </span>Evolução</div>
   ${KPIS.filter(function(K){ return K.id !== 'geral'; }).map(function(K){
     // A barra e' a TAXA daquele tipo. Sem resultado ainda, fica vazia — melhor
     // que uma barra cheia que mediria zero.
@@ -3295,7 +3308,7 @@ ${KPIS.map(function(K){
 </div>
 </div>
 
-<div class="tw"><table><thead><tr><th style="width:70px">Hora BR<br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th style="width:110px">Corrida<br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th style="width:60px">AvB</th><th style="width:44px">%</th><th style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="" selected>Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option><option value="REVERSE">REVERSE</option></select></th><th style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th style="width:142px">Resultado</th><th style="width:50px">🚩</th><th style="width:250px">Observações</th><th style="width:45px">Odd</th><th style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th style="width:24px"></th></tr></thead><tbody>
+<div class="tw"><table><thead><tr><th class="hc-hora" style="width:70px"><span class="hc-lbl-pc">Hora BR</span><span class="hc-lbl-cel">Hora</span><br><select id="fh-turno" onchange="aplicarFiltroHist()" style="width:100%;margin-top:5px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="Manhã">Manhã</option><option value="Tarde">Tarde</option></select></th><th class="hc-pista" style="width:110px"><span class="hc-lbl-pc">Corrida</span><span class="hc-lbl-cel">Pista</span><br><select id="fh-corrida" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option>${pistaOpts}</select></th><th class="hc-avb" style="width:60px">AvB</th><th class="hc-pct" style="width:44px">%</th><th class="hc-tipo" style="width:104px">Tipo<br><select id="fh-motor" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="" selected>Todas</option><option value="TOP">TOP</option><option value="HIGH">HIGH</option><option value="GOOD">GOOD</option><option value="REVERSE">REVERSE</option></select></th><th class="hc-entrei" style="width:78px">Entrei<br><select id="fh-entrei" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Entrei</option><option value="nao">Nao entrei</option></select></th><th class="hc-bateu" style="width:74px">Bateu<br><select id="fh-bateu" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option><option value="pend">Pendente</option></select></th><th class="hc-res" style="width:142px">Resultado</th><th class="hc-flag" style="width:50px">🚩</th><th class="hc-obs" style="width:250px">Observações</th><th class="hc-odd" style="width:45px">Odd</th><th class="hc-bw" style="width:80px">AvB na BW<br><select id="fh-aberto" onchange="aplicarFiltroHist()" style="width:100%;margin-top:4px;padding:3px;font-size:10px;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#ccc;text-transform:none;letter-spacing:normal;font-weight:400"><option value="">Todas</option><option value="sim">Abriu</option><option value="nao">Não abriu</option><option value="semdado">Não monitorada</option><option value="manual">Marquei na mão</option></select></th><th class="hc-lapis" style="width:24px"></th></tr></thead><tbody>
 ${linhasAvb.map(function(Lx){
   var r = Lx.r, cf = Lx.cf, pri = Lx.primeira, esc = Lx.escolhido;
   var horaUk = r.hora || '';
@@ -3309,6 +3322,14 @@ ${linhasAvb.map(function(Lx){
   // aparecem na PRIMEIRA linha dela: repetir a chegada em tres linhas nao
   // acrescenta nada e tira a leitura de qual AvB e' qual.
   var vazia = '<td></td>';
+  // Cada celula sai daqui com o NOME da sua coluna. Antes o celular escondia
+  // coluna por POSICAO, e a unica regra que existia — "nth-child(7) /*
+  // Observacoes */" — escondia o BATEU: colunas entraram no meio depois que
+  // ela foi escrita, o numero 7 andou, e no celular a coluna errada sumiu sem
+  // ninguem perceber. Posicao muda sozinha; nome nao.
+  // O replace pega o PRIMEIRO '<td' da celula, que e' sempre o de abertura —
+  // nenhuma destas funcoes devolve mais de uma celula.
+  var col = function(cls, html){ return String(html).replace('<td', '<td class="' + cls + '"'); };
   // Calculado UMA vez: a mesma resposta vai pro data-abriu (que o filtro le) e
   // pra celula (que voce ve). Duas contas separadas foi o que deixou o filtro
   // discordar da tela sem ninguem notar.
@@ -3324,22 +3345,26 @@ ${linhasAvb.map(function(Lx){
     + ' data-entrei="' + (esc ? 'sim' : 'nao') + '"'
     + ' data-primeira="' + (pri ? '1' : '') + '">'
     + (pri
-        ? '<td style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">'+(horaUk||'-')+'</div><div style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">'+(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)+'</div></td>'
-        : '<td style="text-align:center;color:#2a2a2a;font-size:11px">&#8942;</td>')
+        ? '<td class="hc-hora" style="text-align:center;white-space:nowrap"><div style="font-size:15px;font-weight:700;color:#22c55e;letter-spacing:.5px">'+(horaUk||'-')+'</div><div class="hh-br" style="font-size:10px;color:rgba(34,197,94,.45);margin-top:1px">'+(function(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];})(horaUk)+'</div></td>'
+        : '<td class="hc-hora" style="text-align:center;color:#2a2a2a;font-size:11px">&#8942;</td>')
     + (pri
-        ? '<td style="text-align:center"><div style="font-weight:700;font-size:12px">'+(nomeCorridaCompleto(r.corrida)||'-')+'</div><div style="font-size:10px;color:#666">'+(r.dist||'')+'</div>'+(r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':'')+'</td>'
-        : vazia)
-    + _celulaAvbConf(r, cf, esc)
-    + '<td style="text-align:center"><span style="font-weight:700;font-size:12px;color:'+(cf.pct>=90?'#22c55e':cf.pct>=75?'#eab308':'#888')+'">'+(cf.pct?cf.pct+'%':'-')+'</span></td>'
-    + _celulaCamada(cf)
-    + _celulaEntreiConf(r, cf, esc)
-    + _celulaBateuConf(cf)
-    + (pri ? _celulaResultado(r) : vazia)
-    + (pri ? '<td style="text-align:center">'+(!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':''))+'</td>' : vazia)
-    + (pri ? _celulaObs(r) : vazia)
-    + _celulaOddConf(r, esc)
-    + (pri ? _celulaAberto(r, stAberto) : vazia)
-    + (pri ? '<td style="text-align:center"><span class="edit-pencil" data-row="'+r.id+'" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>' : vazia)
+        // Duas escritas do mesmo nome: por extenso no computador, o codigo do
+        // Racing Post no celular. "Shelbourne Park A2" quebra em duas linhas
+        // num celular e empurra a tabela inteira pra rolagem lateral, que e'
+        // justamente o que o Bruno pediu pra acabar.
+        ? '<td class="hc-pista" style="text-align:center"><div class="hh-pista-pc" style="font-weight:700;font-size:12px">'+(nomeCorridaCompleto(r.corrida)||'-')+'</div><div class="hh-pista-cel" style="font-weight:700;font-size:12px">'+(r.corrida||'-')+'</div><div class="hh-dist" style="font-size:10px;color:#666">'+(r.dist||'')+'</div>'+(r.top3?'<div class="top3-tag">&#127942; '+r.top3+'</div>':'')+'</td>'
+        : col('hc-pista', vazia))
+    + col('hc-avb', _celulaAvbConf(r, cf, esc))
+    + col('hc-pct', '<td style="text-align:center"><span style="font-weight:700;font-size:12px;color:'+(cf.pct>=90?'#22c55e':cf.pct>=75?'#eab308':'#888')+'">'+(cf.pct?cf.pct+'%':'-')+'</span></td>')
+    + col('hc-tipo', _celulaCamada(cf))
+    + col('hc-entrei', _celulaEntreiConf(r, cf, esc))
+    + col('hc-bateu', _celulaBateuConf(cf))
+    + col('hc-res', pri ? _celulaResultado(r) : vazia)
+    + (pri ? '<td class="hc-flag" style="text-align:center">'+(!r.resultado_1?'<label style="cursor:pointer" title="Marcar corrida atrasada — fica piscando ate ter resultado"><input type="checkbox" class="hist-inp" '+(r.flag_atrasada?'checked':'')+' data-id="'+r.id+'" data-f="flag_atrasada" style="cursor:pointer"></label>':(r.flag_atrasada?'🚩':''))+'</td>' : col('hc-flag', vazia))
+    + col('hc-obs', pri ? _celulaObs(r) : vazia)
+    + col('hc-odd', _celulaOddConf(r, esc))
+    + col('hc-bw', pri ? _celulaAberto(r, stAberto) : vazia)
+    + col('hc-lapis', pri ? '<td style="text-align:center"><span class="edit-pencil" data-row="'+r.id+'" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>' : vazia)
     + '</tr>';
 }).join('')}
 ${!linhasAvb.length?'<tr><td colspan="13" style="text-align:center;color:#666;padding:20px">Nenhum AvB confirmado pela BW nesta sessao</td></tr>':''}
@@ -3378,6 +3403,73 @@ tr[data-entrei="nao"] .odd-inp[disabled]{display:none}
 .edit-pencil{cursor:pointer;font-size:13px;opacity:.55;transition:opacity .15s}
 .edit-pencil:hover{opacity:1}
 .edit-pencil.editing{opacity:1;color:#22c55e}
+/* ── O HISTORICO NO CELULAR (Bruno, 18/09/2026) ─────────────────────────────
+
+   "queria alterar no mobile a tela historico com somente as seguintes
+   informacoes... tentar colocar tudo com fonte menor, pois quero na mesma
+   tela."
+
+   TUDO daqui pra baixo vale SO no celular (ate 768px). Acima disso a tela
+   continua exatamente a de hoje, com as treze colunas, os quatro cartoes e os
+   seis filtros. Nada foi APAGADO do HTML: as colunas escondidas continuam
+   sendo montadas e voltam inteiras no computador — e por isso os filtros que
+   moram nelas (Tipo, AvB na BW) continuam funcionando la.
+
+   O QUE VOCE PERDE NO CELULAR, dito na cara: o filtro de Tipo
+   (TOP/HIGH/GOOD), o de AvB na BW, a chegada, as observacoes, a odd, o % e o
+   LAPIS — ou seja, no celular da pra LER e marcar nada; editar odd, bateu e
+   aberto continua sendo no computador.
+
+   Este bloco fica AQUI de proposito, e nao la em cima junto com as outras
+   regras da tabela: este <style> vem depois daquele, entao ganha dele por
+   ordem, sem precisar de !important em cada linha. */
+.hh-pista-cel{display:none}
+.entrei-cel{display:none;color:#60a5fa;font-weight:800;font-size:13px}
+.bat-cel{display:none}
+.hc-lbl-cel{display:none}
+@media(max-width:768px){
+  /* Em cima: so o AvBs Geral e o grafico, lado a lado. */
+  .kpis{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  .kcid-top,.kcid-high,.kcid-good{display:none}
+  .kc{padding:9px 11px}
+  .kc-nome{font-size:12px}.kc-qtd{font-size:14px}.kc-reg{margin:6px 0 5px}
+  .kc-rot{font-size:9px}.kc-num{font-size:11px}.kc-taxa{font-size:11px}
+  .kc-titg{font-size:11px;margin-bottom:7px}
+  .kc-titg-pre{display:none}
+  .kg-rot{font-size:9px;width:30px}.kg-tri{height:11px}.kg-lin{margin-bottom:6px}
+
+  /* As cinco colunas cabem na largura do aparelho. Sem min-width nao ha
+     rolagem lateral — e sem max-height quem rola e' a pagina, que e' o gesto
+     natural no celular. O cabecalho deixa de ser grudado por isso mesmo. */
+  table{min-width:0}
+  .tw{max-height:none;border-radius:6px}
+  .tw thead th{position:static}
+  th{padding:5px 2px;font-size:9px;letter-spacing:.2px}
+  td{padding:6px 2px;font-size:10px}
+  th select{font-size:9px!important;padding:2px!important;margin-top:3px!important}
+  .hc-pct,.hc-tipo,.hc-res,.hc-flag,.hc-obs,.hc-odd,.hc-bw,.hc-lapis{display:none}
+
+  /* HORA: so a de la. E' a hora que o card da BW mostra, e a que voce usa pra
+     achar a corrida. A conversao pro Brasil continua no computador. */
+  .hh-br{display:none}
+  /* PISTA: codigo + categoria, sem distancia e sem podio. */
+  .hh-pista-pc,.hh-dist,.top3-tag{display:none}
+  .hh-pista-cel{display:block}
+  /* AvB: so as duas bolinhas. */
+  .hh-avb-nome,.hh-avb-org,.hh-avb-link{display:none}
+  .hh-avb-vs{font-size:9px;padding-top:4px!important}
+  .trap-badge{width:18px!important;height:18px!important;font-size:10px!important;border-width:1px}
+  /* ENTREI: o check azul no lugar da tarja. O traco de "nao entrei" fica:
+     coluna em branco nao diz se e' nao, se e' ainda nao, ou se e' defeito. */
+  .entrei-tag{display:none}
+  .entrei-chk:checked ~ .entrei-cel{display:inline}
+  /* BATEU: S e N. */
+  .bat-pc{display:none}
+  .bat-cel{display:inline}
+  /* Cabecalho curto: HORA e PISTA. */
+  .hc-lbl-pc{display:none}
+  .hc-lbl-cel{display:inline}
+}
 #sv-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:9000}#sv-modal.open{display:flex}
 #sv-box{background:#12172a;border:1px solid rgba(255,255,255,.1);border-radius:12px;width:88vw;max-width:920px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7)}
 #sv-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#161b2e}

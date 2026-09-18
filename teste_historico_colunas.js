@@ -29,7 +29,12 @@ function ok(cond, msg) {
 }
 
 // ── 1) cabecalho ─────────────────────────────────────────────────────────────
-const linhaCab = src.split(/\r?\n/).find(l => l.indexOf('<th style="width:60px">AvB</th>') !== -1);
+// A ancora era o <th> da coluna AvB escrito por inteiro. Em 18/09/2026 cada
+// <th> ganhou o NOME da sua coluna (class="hc-...") pra o celular poder
+// esconder coluna por nome em vez de por posicao, e a ancora deixou de casar.
+// Trocada pelo id do primeiro filtro do cabecalho, que identifica a linha do
+// mesmo jeito e nao muda quando uma coluna ganha ou perde atributo.
+const linhaCab = src.split(/\r?\n/).find(l => l.indexOf('id="fh-turno"') !== -1);
 if (!linhaCab) { console.error('ERRO: nao achei o cabecalho da tabela do Historico.'); process.exit(1); }
 const nTh = (linhaCab.match(/<th[\s>]/g) || []).length;
 
@@ -261,7 +266,14 @@ ok(/\.kc-num\{[^}]*color:#dfe5ee/.test(src),
 
 // O GRAFICO DE EVOLUCAO: uma barra por tipo, do tamanho da taxa.
 console.log('\n[4b] O GRAFICO DE EVOLUCAO\n');
-ok(src.indexOf('Gráfico de Evolução') !== -1, 'o cartao do grafico existe');
+// O titulo deixou de ser um texto corrido em 18/09/2026: o "Gráfico de " virou
+// um <span> proprio pra sumir no celular, onde o cartao so cabe como
+// "Evolução". A assertiva passa a olhar o titulo SEM as tags — e o que a tela
+// mostra no computador, que e o que ela sempre quis travar.
+const titGraf = (src.match(/<div class="kc-titg">([\s\S]*?)<\/div>/) || ['', ''])[1]
+  .replace(/<[^>]+>/g, '');
+ok(titGraf === 'Gráfico de Evolução',
+   'o cartao do grafico existe e continua se chamando "Gráfico de Evolução" no computador');
 ok(src.indexOf("KPIS.filter(function(K){ return K.id !== 'geral'; })") !== -1,
    'e ele traz so os TRES tipos — o geral nao e uma barra, e a soma delas');
 ok(src.indexOf("var w = (K.k.pct == null ? 0 : Math.max(0, Math.min(100, K.k.pct)));") !== -1,
