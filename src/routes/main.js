@@ -3485,8 +3485,44 @@ ${cssCardGalgo()}
   #sv-box{width:100%;max-width:100%;height:100%;max-height:100%;overflow:hidden}
   #sv-hdr{flex-shrink:0}
   #sv-body{flex:1 1 auto;min-height:0;height:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 8px}
-  .sv-dog{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .sv-tbl{table-layout:auto;width:auto;min-width:640px}
+  /* ── O CARD CABE NA TELA (Bruno, 18/09/2026) ──────────────────────────
+     "no mobile queria que tudo se encaixasse na tela sem ter que jogar para
+     o lado."
+
+     O QUE SAIU DAQUI, e por que: as duas linhas anteriores eram
+         .sv-dog{overflow-x:auto}
+         .sv-tbl{table-layout:auto;width:auto;min-width:640px}
+     ou seja, a tabela era OBRIGADA a ter 640px e o card rolava pro lado.
+     Nenhum celular tem 640px uteis dentro do modal (a conta e' a largura do
+     aparelho menos 38px de bordas e respiros): medido num navegador de
+     verdade, de 360 a 430px, rolava em todos.
+
+     O QUE ENTROU: Track e Dis somem, a fonte encolhe, e a tabela passa a ter
+     a largura da tela. Medido depois: cabe de 360px pra cima.
+
+     O QUE VOCE PERDE: a pista e a distancia de CADA corrida do historico. O
+     titulo da janela diz de que corrida e o confronto ("Hove A4 · 500m"), mas
+     uma linha do historico pode ser de outra pista ou outra distancia, e no
+     celular isso deixa de aparecer. No computador continua tudo.
+
+     Coluna some por NOME (.c-track/.c-dis, postos no cardGalgo.js), nunca por
+     posicao: a tabela tem um <colgroup> com largura fixa por posicao, e
+     numero de coluna e' exatamente o tipo de regra que anda sozinha quando
+     alguem mexe na tabela — ja aconteceu nesta tela, no Historico. */
+  .sv-dog{overflow-x:visible}
+  .sv-tbl{table-layout:auto;width:100%;min-width:0}
+  /* As larguras do <colgroup> foram desenhadas pra dez colunas numa janela de
+     920px. Aqui sao oito numa de 340: viram palpite ruim, entao saem. */
+  .sv-tbl col{width:auto}
+  .sv-tbl .c-track,.sv-tbl .c-dis{display:none}
+  .sv-tbl th{padding:4px 2px;font-size:8px;letter-spacing:0}
+  .sv-tbl td{padding:4px 2px;font-size:10px}
+  /* O espaco entre os numeros do Bends custa 4px por linha e nao se le melhor
+     por causa dele num celular. A Remarks perde o teto de 150px: e' ela quem
+     fica com a sobra, e e' o unico texto de tamanho variavel da tabela. */
+  .sv-bends{letter-spacing:.5px}
+  .sv-grade{padding:1px 3px;font-size:8px}
+  .sv-td-rem{max-width:none}
 }
 </style>
 <style>

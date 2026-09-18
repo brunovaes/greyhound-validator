@@ -75,16 +75,16 @@ function svCard(trap,nome,perfil,hist){
     var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
     var isBestCl=svClassRank(h.classe)===bestClass&&bestClass<999;
     return'<tr>'
-      +'<td class="sv-td-date">'+h.data+'</td>'
-      +'<td class="sv-td-track">'+h.pista+'</td>'
-      +'<td class="sv-td-muted" style="text-align:center">'+h.dist+'m</td>'
-      +'<td class="sv-td-muted" style="text-align:center">['+h.trap+']</td>'
-      +'<td class="sv-td-muted" style="text-align:center">'+(h.split||'')+'</td>'
-      +'<td class="sv-bends">'+(h.bends||'')+'</td>'
-      +'<td class="sv-td-muted" style="text-align:center">'+(h.pos||'-')+'</td>'
-      +'<td class="sv-td-rem">'+rem+'</td>'
-      +'<td style="text-align:center"><span class="sv-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
-      +'<td class="sv-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
+      +'<td class="sv-td-date c-date">'+h.data+'</td>'
+      +'<td class="sv-td-track c-track">'+h.pista+'</td>'
+      +'<td class="sv-td-muted c-dis" style="text-align:center">'+h.dist+'m</td>'
+      +'<td class="sv-td-muted c-trp" style="text-align:center">['+h.trap+']</td>'
+      +'<td class="sv-td-muted c-split" style="text-align:center">'+(h.split||'')+'</td>'
+      +'<td class="sv-bends c-bends">'+(h.bends||'')+'</td>'
+      +'<td class="sv-td-muted c-fin" style="text-align:center">'+(h.pos||'-')+'</td>'
+      +'<td class="sv-td-rem c-rem">'+rem+'</td>'
+      +'<td class="c-grade" style="text-align:center"><span class="sv-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
+      +'<td class="sv-caltm c-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
       +'</tr>';
   }).join('');
   return'<div class="sv-dog">'
@@ -95,11 +95,11 @@ function svCard(trap,nome,perfil,hist){
     +'</div>'
     +'<table class="sv-tbl">'
     +'<colgroup>'
-    +'<col style="width:40px"><col style="width:40px"><col style="width:40px">'
-    +'<col style="width:30px"><col style="width:40px"><col style="width:35px">'
-    +'<col style="width:25px"><col style="width:60px"><col style="width:30px"><col style="width:40px">'
+    +'<col class="c-date" style="width:40px"><col class="c-track" style="width:40px"><col class="c-dis" style="width:40px">'
+    +'<col class="c-trp" style="width:30px"><col class="c-split" style="width:40px"><col class="c-bends" style="width:35px">'
+    +'<col class="c-fin" style="width:25px"><col class="c-rem" style="width:60px"><col class="c-grade" style="width:30px"><col class="c-caltm" style="width:40px">'
     +'</colgroup>'
-    +'<thead><tr><th>Date</th><th>Track</th><th>Dis</th><th>Trp</th><th>Split</th><th>Bends</th><th>Fin</th><th>Remarks</th><th>Grade</th><th>CalTm</th></tr></thead>'
+    +'<thead><tr><th class="c-date">Date</th><th class="c-track">Track</th><th class="c-dis">Dis</th><th class="c-trp">Trp</th><th class="c-split">Split</th><th class="c-bends">Bends</th><th class="c-fin">Fin</th><th class="c-rem">Remarks</th><th class="c-grade">Grade</th><th class="c-caltm">CalTm</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'</div>';
 }
