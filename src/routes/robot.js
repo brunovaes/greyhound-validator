@@ -5929,6 +5929,55 @@ router.get('/diag/apostas-dia', requireAdmin, (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ── O PDF COMPLETO DE UMA CORRIDA, SOB DEMANDA (Bruno, 19/09/2026) ──────────
+// O icone de PDF da Analisar pede isto. Se a corrida ja tem o PDF completo
+// gravado, devolve. Se nao tem — foi analisada antes desta versao — le o PDF
+// da pasta do dia AGORA, uma vez, grava e devolve. Os PDFs ficam 7 dias no
+// servidor; depois disso a tela cai no recorte antigo e diz por que.
+//
+// Mora aqui, e nao no api.js, porque e' aqui que ja estao as pecas que acham
+// o PDF de uma corrida na pasta (getPdfDir, formatTime, encontrarPdfDaCorrida)
+// — as mesmas do reprocessamento do dia. Uma segunda copia dessa busca seria
+// uma segunda regra pra mesma pergunta.
+//
+// Nao recalibra a paleta de traps (o reprocessamento faz isso; aqui nao):
+// abrir uma janela na tela nao pode mudar como o robo le os PDFs de amanha.
+router.get('/pdf-completo/:id', async (req, res) => {
+  if (!req.user) return res.status(401).json({ ok: false, motivo: 'nao autorizado' });
+  const { db } = require('../db/database');
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ ok: false, motivo: 'id invalido' });
+  const row = db.prepare(
+    "SELECT r.id, r.hora, r.corrida, r.pdf_completo, date(s.created_at,'-3 hours') AS dia " +
+    "FROM races r JOIN race_sessions s ON s.id = r.session_id WHERE r.id = ?"
+  ).get(id);
+  if (!row) return res.status(404).json({ ok: false, motivo: 'corrida nao encontrada' });
+
+  if (row.pdf_completo) {
+    try { return res.json({ ok: true, fonte: 'banco', galgos: JSON.parse(row.pdf_completo) }); }
+    catch (e) { /* gravado torto: cai pra leitura do disco, que refaz */ }
+  }
+
+  const dir = getPdfDir(row.dia);
+  let arquivos = [];
+  try { arquivos = fs.readdirSync(dir); }
+  catch (e) { return res.json({ ok: false, motivo: 'os PDFs desse dia nao estao mais no servidor' }); }
+  const trackAbbr = String(row.corrida || '').split(' ')[0].toLowerCase();
+  const arquivo = encontrarPdfDaCorrida(arquivos, formatTime(row.hora), trackAbbr);
+  if (!arquivo) return res.json({ ok: false, motivo: 'nao achei o PDF desta corrida na pasta do dia' });
+  try {
+    const lido = await parseRacingPostPDF(fs.readFileSync(path.join(dir, arquivo)), getTrapBadgeColors() || undefined);
+    if (!lido || !Array.isArray(lido.galgos) || !lido.galgos.length) {
+      return res.json({ ok: false, motivo: 'o PDF nao pode ser lido' });
+    }
+    const galgos = require('./api').pdfCompletoDe(lido.galgos);
+    db.prepare('UPDATE races SET pdf_completo=? WHERE id=?').run(JSON.stringify(galgos), id);
+    res.json({ ok: true, fonte: 'pdf', arquivo: arquivo, galgos: galgos });
+  } catch (e) {
+    res.json({ ok: false, motivo: 'erro ao ler o PDF: ' + e.message });
+  }
+});
+
 // ── Auditoria: lista as alteracoes registradas em race_audit_log pra uma data
 router.get('/audit/list', requireAdmin, (req, res) => {
   const { db } = require('../db/database');

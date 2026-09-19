@@ -1,7 +1,12 @@
 var raceFiles=[],capFiles=[],results=[],capModalFilesList=[];
 var filterState={pista:'',horaMin:'',horaMax:'',confianca:'',mostrarSkip:false};
 var SS_KEY='ghf_results_v1';
-function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})}));}catch(e){}}
+// O pdfCompleto fica FORA do sessionStorage: ele e' grande (todas as linhas de
+// todos os galgos de todas as corridas) e o armazenamento do navegador tem
+// teto. Estourado o teto, o setItem falha calado no catch abaixo e a Analisar
+// perde o estado inteiro no proximo recarregar. Sem ele no cache, o icone de
+// PDF so busca de novo no servidor (Bruno, 19/09/2026).
+function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})},function(k,v){return k==='pdfCompleto'?undefined:v;}));}catch(e){}}
 function clearSessionState(){try{sessionStorage.removeItem(SS_KEY);}catch(e){}}
 function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!raw)return false;var data=JSON.parse(raw);if(data&&Array.isArray(data.results)&&data.results.length){results=data.results;return true;}}catch(e){}return false;}
 
@@ -3268,6 +3273,8 @@ function injectValModal(){
   #val-body.val-compact .val-dog-hdr .trap-badge{width:22px;height:22px;font-size:11px}
   #val-body.val-compact .val-name{font-size:12px}
 }
+.vf-nota{font-size:11px;color:rgba(255,255,255,.45);margin:0 0 8px}
+.vf-aviso{font-size:11px;color:#f59e0b;background:rgba(245,158,11,.08);border-left:2px solid #f59e0b;border-radius:4px;padding:6px 10px;margin:0 0 10px}
 .val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
 .val-link:hover{color:#60a5fa}.t1{background:radial-gradient(circle at 35% 35%,#ff4444,#c00 60%,#8b0000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.4)}.t2{background:radial-gradient(circle at 35% 35%,#4488ff,#1a3db5 60%,#0a1f6b);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.3)}.t3{background:radial-gradient(circle at 35% 35%,#fff,#d0d0d0 60%,#a0a0a0);color:#111;box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),inset 1px 1px 3px rgba(255,255,255,.8)}.t4{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a 60%,#000);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.6),inset 1px 1px 3px rgba(255,255,255,.15)}.t5{background:radial-gradient(circle at 35% 35%,#ffaa00,#e07000 60%,#a04800);color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.3),inset 1px 1px 3px rgba(255,255,255,.4)}.t6{background:radial-gradient(circle at 50% 50%,#cc0000 0%,#cc0000 38%,transparent 38%),repeating-linear-gradient(90deg,#111 0%,#111 50%,#f0f0f0 50%,#f0f0f0 100%) 0/10px;color:#fff;box-shadow:inset -2px -2px 4px rgba(0,0,0,.4),inset 1px 1px 3px rgba(255,255,255,.2)}
 `;
@@ -3282,7 +3289,105 @@ function openValModal(key){
   document.getElementById('val-body').innerHTML=buildDogCard(r.trapFav,r.nameFav,r.perfilFav,r.histFav)+'<div class="val-sep"></div>'+buildDogCard(r.trapUnd,r.nameUnd,r.perfilUnd,r.histUnd);
   document.getElementById('val-modal').classList.add('open');
 }
+// ── TODOS OS GALGOS DO PDF NA JANELA DA CORRIDA (Bruno, 19/09/2026) ─────────
+// "quero todos os dados do PDF baixado, sem restricao ou filtro mais", e na
+// correcao do mesmo dia: "trazer todos os galgos, mas manter somente as mesmas
+// colunas".
+//
+// A janela era o RECORTE da analise: os galgos que o motor pontuou, so as
+// linhas da mesma pista e distancia, ate 5. Os descartados apareciam sem
+// historico nenhum. Agora cada galgo traz TODAS as linhas que o PDF tem, de
+// qualquer pista e distancia, e o descartado traz as dele tambem.
+//
+// O desenho NAO mudou: e' o mesmo buildDogCard, com as mesmas dez colunas, a
+// mesma ordem (quem esta no calculo primeiro, depois a faixa dos descartados
+// com o motivo). So o que entra nele e' que deixou de ser filtrado.
+//
+// Nada disto alimenta o motor. E' so leitura.
+var _pdfPedidoAtual = null;
+function _escPdf(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _pintaPdfCompleto(r, galgos){
+  var porTrap = {};
+  (galgos||[]).forEach(function(g){ if (g && g.trap != null) porTrap[Number(g.trap)] = g; });
+  var elim = (r.eliminados||[]).filter(function(e){ return e && e.trap; });
+  var traposFora = elim.map(function(e){ return Number(e.trap); });
+  // Quem esta no calculo, na ordem que a janela sempre usou (a do histAll).
+  // Galgo que o PDF trouxe e que nao esta nem no calculo nem nos descartados
+  // entra no fim desse grupo: sumir com ele seria o filtro que acabou de sair.
+  var noCalculo = (r.histAll||[]).map(function(g){ return Number(g.trap); })
+    .filter(function(t){ return traposFora.indexOf(t) < 0; });
+  (galgos||[]).forEach(function(g){
+    var t = Number(g.trap);
+    if (noCalculo.indexOf(t) < 0 && traposFora.indexOf(t) < 0) noCalculo.push(t);
+  });
+  var prova = { pista: String(r.corrida || '').split(' ')[0], dist: r.dist };
+  var cartao = function(t, nomeReserva){
+    var g = porTrap[t] || {};
+    return buildDogCard(t, g.nome || nomeReserva || '', '', g.historico || [], true, prova);
+  };
+
+  document.getElementById('val-title').textContent = 'Corrida completa — ' + corridaDisplay(r)
+    + '  \u00b7  ' + noCalculo.length + ' no cálculo'
+    + (elim.length ? ' + ' + elim.length + ' descartado' + (elim.length > 1 ? 's' : '') : '');
+  var body = document.getElementById('val-body');
+  body.classList.add('val-compact');
+  var html = noCalculo.map(function(t, i){
+    return cartao(t) + ((i < noCalculo.length-1 || elim.length) ? '<div class="val-sep"></div>' : '');
+  }).join('');
+  if (elim.length) {
+    // A mesma faixa de antes. Sem ela o descartado pareceria mais um do grid.
+    html += '<div style="margin:4px 0 10px;padding:6px 10px;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;border-radius:4px;'
+      + 'font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.3px">DESCARTADOS DO CÁLCULO'
+      + '<span style="font-weight:400;color:#c88;margin-left:6px">correm a prova do mesmo jeito</span></div>';
+    html += elim.map(function(e, i){
+      var motivo = '<div style="font-size:11px;color:#fca5a5;padding:2px 0 6px 2px">motivo: ' + _escPdf(e.motivo || 'não informado') + '</div>';
+      return cartao(Number(e.trap), e.nome) + motivo + (i < elim.length-1 ? '<div class="val-sep"></div>' : '');
+    }).join('');
+  }
+  body.innerHTML = html;
+}
 function openAllDogsModal(key){
+  var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
+  if(!r){console.warn('[ALLDOGS] nao achou:',key);return;}
+  // Analise feita agora ja traz o PDF completo na memoria.
+  if (r.pdfCompleto && r.pdfCompleto.length) {
+    _pdfPedidoAtual = null;
+    _pintaPdfCompleto(r, r.pdfCompleto);
+    document.getElementById('val-modal').classList.add('open');
+    return;
+  }
+  if (!r.id) { _abrirRecorteAntigo(key, 'a corrida ainda não foi salva no Histórico'); return; }
+  // Corrida carregada do banco: o PDF completo vem sob demanda (ele nao viaja
+  // na lista de corridas, que a tela busca de tempos em tempos).
+  document.getElementById('val-title').textContent = 'Corrida completa — ' + corridaDisplay(r);
+  var body = document.getElementById('val-body');
+  body.classList.add('val-compact');
+  body.innerHTML = '<div class="vf-nota" style="text-align:center;padding:24px">Lendo o PDF da corrida…</div>';
+  document.getElementById('val-modal').classList.add('open');
+  var pedido = r.id;
+  _pdfPedidoAtual = pedido;
+  fetch(BASE+'/robot/pdf-completo/'+pedido)
+    .then(function(resp){ return resp.json(); })
+    .then(function(d){
+      // Fechou a janela ou abriu outra corrida enquanto o PDF era lido: nao
+      // pinta uma corrida por cima da outra.
+      if (_pdfPedidoAtual !== pedido || !document.getElementById('val-modal').classList.contains('open')) return;
+      if (d && d.ok && Array.isArray(d.galgos) && d.galgos.length) {
+        r.pdfCompleto = d.galgos;
+        _pintaPdfCompleto(r, d.galgos);
+      } else {
+        _abrirRecorteAntigo(key, (d && d.motivo) || 'o servidor não devolveu o PDF');
+      }
+    })
+    .catch(function(e){
+      if (_pdfPedidoAtual !== pedido) return;
+      _abrirRecorteAntigo(key, 'falha ao buscar o PDF (' + e.message + ')');
+    });
+}
+// O recorte antigo continua existindo como PLANO B: corrida cujo PDF ja saiu do
+// servidor (7 dias) ou que ainda nao foi salva. E ele se anuncia como recorte,
+// pra ninguem achar que o PDF so tinha aquilo.
+function _abrirRecorteAntigo(key, aviso){
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[ALLDOGS] nao achou:',key);return;}
   var all=r.histAll&&r.histAll.length?r.histAll:[];
@@ -3327,6 +3432,11 @@ function openAllDogsModal(key){
       }).join('');
     }
     document.getElementById('val-body').innerHTML = html;
+  }
+  if (aviso) {
+    document.getElementById('val-body').insertAdjacentHTML('afterbegin',
+      '<div class="vf-aviso">Não consegui o PDF completo desta corrida (' + _escPdf(aviso) + '). '
+      + 'Abaixo, o recorte da análise: só os galgos e as linhas que o motor usou.</div>');
   }
   document.getElementById('val-modal').classList.add('open');
 }
@@ -3509,16 +3619,23 @@ function extrairRemarks(mixed){
   for(var i=tokens.length-1;i>=0;i--){if(/^[A-Z]/.test(tokens[i]))return tokens.slice(i).join(' ');}
   return mixed;
 }
-function buildDogCard(trap,nome,perfil,hist,compact){
+// `prova` (opcional, 19/09/2026): {pista, dist} da corrida em tela. Quando vem,
+// o CalTm amarelo so compara corridas da MESMA pista e distancia. Sem ela, o
+// card faz exatamente o que sempre fez — a disputa de dois galgos ja recebe
+// so linhas da mesma prova e nao passa este parametro. Quem passa e' a janela
+// da corrida completa, que agora traz linha de qualquer pista: la, um 24.30 em
+// 400m ficaria "melhor" que um 29.69 em 491m, e essa comparacao nao existe.
+function buildDogCard(trap,nome,perfil,hist,compact,prova){
   var tc=['','t1','t2','t3','t4','t5','t6'];
   function classRank(c){var m=(c||'').match(/A(\d+)/i);return m?parseInt(m[1]):999;}
-  var caltms=(hist||[]).filter(function(h){return h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
+  var mesmaProva=function(h){return !prova||(String(h.pista)===String(prova.pista)&&parseInt(h.dist,10)===parseInt(prova.dist,10));};
+  var caltms=(hist||[]).filter(function(h){return mesmaProva(h)&&h.caltm!=null&&parseFloat(h.caltm)>0;}).map(function(h){return parseFloat(h.caltm);});
   var bestCaltm=caltms.length?Math.min.apply(null,caltms):null;
   var bestClass=Math.min.apply(null,(hist||[]).map(function(h){return classRank(h.classe);}));
   var rows=(hist||[]).map(function(h){
     var rem=extrairRemarks(h.remarks||'');
     var ct=(h.caltm!=null&&h.caltm!==''&&parseFloat(h.caltm)>0)?parseFloat(h.caltm).toFixed(2):'-';
-    var isBestCt=bestCaltm&&ct!=='-'&&parseFloat(ct)===bestCaltm;
+    var isBestCt=bestCaltm&&ct!=='-'&&mesmaProva(h)&&parseFloat(ct)===bestCaltm;
     var isBestCl=classRank(h.classe)===bestClass&&bestClass<999;
     return'<tr>'
       +'<td class="val-td-date c-date">'+h.data+'</td>'

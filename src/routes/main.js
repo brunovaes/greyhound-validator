@@ -3575,7 +3575,7 @@ document.addEventListener('click', function(ev){
   a.textContent = aberto ? 'leia mais' : 'leia menos';
 });
 
-var ALL_RACES=${JSON.stringify(races.filter(naTela).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida)}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
+var ALL_RACES=${JSON.stringify(races.filter(naTela).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida),/* o PDF completo e' so da Analisar; aqui pesaria a pagina a toa */pdf_completo:undefined}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
 // pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)

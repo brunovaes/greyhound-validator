@@ -336,6 +336,7 @@ const migrations = [
   // Vazio/nulo = cai no filtro antigo, entao nada quebra em quem ja usava.
   "ALTER TABLE analysis_config ADD COLUMN alarme_filtro_regras TEXT",
   "ALTER TABLE races ADD COLUMN hist_full TEXT", // 11/08 — historico dos 6 galgos (nao so os elegiveis), p/ a reanalise par-a-par ao vivo
+  "ALTER TABLE races ADD COLUMN pdf_completo TEXT", // 19/09 — o PDF inteiro (todos os galgos, todas as linhas, todos os campos) SO pra tela; o motor nao le
   "ALTER TABLE races ADD COLUMN avb_fechamento TEXT", // 11/08 — foto da principal (pos 1) da reanalise no instante da largada, gravada pelo robo (objetivo, compartilhado)
   "ALTER TABLE races ADD COLUMN avb_inicial TEXT", // foto da principal na PRIMEIRA análise (congelada, escondida da tela) — só p/ medir se o recálculo near-post ajuda
   "ALTER TABLE races ADD COLUMN vip_plus INTEGER DEFAULT 0", // 1 = corrida entrou na VIP Plus (funil de valor)

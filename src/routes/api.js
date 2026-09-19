@@ -652,6 +652,28 @@ function mapHistLinhas(linhasValidas) {
   return (linhasValidas||[]).slice(0,5).map(h=>({data:h.data,pista:h.pista,dist:h.dist,trap:h.trap,split:h.split,bends:h.bends,pos:h.pos,classe:h.classe,caltm:h.caltm,sp:h.sp,gng:h.gng,peso:h.peso,vencedorTm:h.vencedorTm,remarks:(h.remarks||'').substring(0,60)}));
 }
 
+// ── O PDF INTEIRO, SO PRA TELA (Bruno, 19/09/2026) ───────────────────────────
+// "quero todos os dados do PDF baixado, sem restricao ou filtro mais".
+//
+// Por que NAO e' o hist_full: o hist_full e' o que o MOTOR le (reanalise e
+// motor da manha), e ele passa pelo mapHistLinhas, que corta em 5 linhas por
+// galgo e 60 caracteres de remark. Mais linhas ali mudariam a conta do motor
+// sem ninguem ter pedido isso. Entao o motor segue lendo exatamente o que lia,
+// e a tela ganha um campo separado, com TUDO: todo galgo que o parser leu,
+// toda linha, sem corte de quantidade nem de pista/distancia.
+function pdfCompletoDe(galgos) {
+  return (galgos || []).map(g => ({
+    trap: g.trap, nome: g.nome, brt: g.brt || null, brtClasse: g.brtClasse || '',
+    ssnDate: g.ssnDate || null, ssnSupp: !!g.ssnSupp,
+    historico: (g.historico || []).map(h => ({
+      data: h.data, pista: h.pista, dist: h.dist, trap: h.trap,
+      split: h.split, bends: h.bends, pos: h.pos, remarks: h.remarks || '',
+      vencedorTm: h.vencedorTm, gng: h.gng, peso: h.peso, sp: h.sp,
+      classe: h.classe, caltm: h.caltm
+    }))
+  }));
+}
+
 // Odd MEDIA (decimal) das 2 ultimas SPs na pista/dist — mesma fonte do pareamento
 // parelho. Ex.: 2/1 e 3/1 -> (3.0 + 4.0)/2 = 3.5. Serve pra coluna do Relatorio
 // e pra mostrar a odd de cada galgo no par escolhido. null se nao houver SP.
@@ -954,6 +976,8 @@ function processarCorrida(corridaRaw, config) {
     scores:comScores.map(g=>({trap:g.trap,nome:g.nome,score:g.scoreFinal,perfil:g.perfil,oddMedia:oddMediaUltimas2(g.linhasValidas),scores:g.scores})),
     raceCard:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,ssnDate:g.ssnDate||null,ssnSupp:!!g.ssnSupp})),
     histFull:(galgos||[]).map(g=>({trap:g.trap,nome:g.nome,brtClasse:g.brtClasse,ssnDate:g.ssnDate||null,ssnSupp:!!g.ssnSupp,historico:mapHistLinhas(g.historico||[])})),
+    // So pra tela do icone de PDF da Analisar. O motor continua no histFull acima.
+    pdfCompleto: pdfCompletoDe(galgos),
     eliminados,
     postPick:postPick||'',
     dataCard,
@@ -1229,7 +1253,10 @@ async function rodarAnaliseAutomatica(date, userId) {
     h = h-4; if (h<0) h+=24;
     const horaBr = p.length>=2 ? h+':'+p[1] : '';
     const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-    ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null,r.histFull?JSON.stringify(r.histFull):null);
+    const infoAuto = ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null,r.histFull?JSON.stringify(r.histFull):null);
+    // O PDF completo vai numa coluna propria, depois do INSERT, pra nao mexer
+    // na lista de colunas (longa) que o resto do sistema ja confere.
+    if (r.pdfCompleto) db.prepare('UPDATE races SET pdf_completo=? WHERE id=?').run(JSON.stringify(r.pdfCompleto), Number(infoAuto.lastInsertRowid));
   }
   db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(userId);
 
@@ -1384,6 +1411,9 @@ router.post('/session', express.json(), (req, res) => {
       // Os campos pessoais NAO vao mais na races (que agora e' compartilhada):
       // vao pra race_user_data, amarrados ao usuario que salvou a sessao.
       const novoId = Number(info && info.lastInsertRowid);
+      // O PDF completo que a analise do navegador trouxe (so existe em analise
+      // feita depois de 19/09/2026).
+      if (novoId && r.pdfCompleto) db.prepare('UPDATE races SET pdf_completo=? WHERE id=?').run(JSON.stringify(r.pdfCompleto), novoId);
       if (novoId) {
         if (r.odd != null && r.odd !== '') salvarPessoal(db, novoId, user.id, 'odd', r.odd);
         if (r.valor != null && r.valor !== '') salvarPessoal(db, novoId, user.id, 'valor', r.valor);
@@ -1507,6 +1537,11 @@ router.get('/session/:id/races', (req, res) => {
     const races = db.prepare('SELECT * FROM races WHERE session_id=? ORDER BY hora').all(id);
     // odd/valor/aposta/atrasada sao de cada usuario, nao da corrida
     aplicarPessoais(db, races, req.user.id);
+    // O PDF completo NAO viaja na lista. A Analisar busca esta lista de tempos
+    // em tempos, e mandar o PDF inteiro de cada corrida a cada busca seria
+    // megabyte de trafego pra nada. Ele vem sob demanda, so quando voce clica
+    // no icone (GET /robot/pdf-completo/:id).
+    races.forEach(r => { delete r.pdf_completo; });
     // Reconstroi 'scores' (usado pelo Relatorio de Analise) a partir da coluna
     // scores_json — o cliente sempre espera esse campo como array, nunca como
     // a string JSON crua salva no banco.
@@ -2021,6 +2056,7 @@ module.exports = router;
 // parcial de uma corrida so, sem duplicar a engine de pontuacao)
 module.exports.processarCorrida = processarCorrida;
 module.exports.mapHistLinhas = mapHistLinhas;
+module.exports.pdfCompletoDe = pdfCompletoDe;
 module.exports.rodarAnaliseAutomatica = rodarAnaliseAutomatica;
 // O agendador do push le as camadas do dia daqui — mesma conta, mesmo cache.
 module.exports.baseDoDia = baseDoDia;
