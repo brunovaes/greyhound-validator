@@ -186,21 +186,19 @@ const px = ['date', 'track', 'dis', 'trp', 'split', 'bends', 'fin', 'grade', 'ca
   return m ? Number(m[1]) : NaN;
 });
 t('as nove colunas curtas com largura justa, em px: ' + px.join('+'), px.every(isFinite) && px.every(function (x) { return x <= 70; }));
-// Em tela larga (19/09): as larguras que o Bruno escolheu, coluna por coluna.
-const larga = (CSSJ.match(/@media\(min-width:1560px\)\{([\s\S]*?)\n\}/) || ['', ''])[1];
-const BRUNO = { date: 100, track: 120, dis: 80, trp: 50, split: 80, bends: 70, fin: 25, grade: 50, caltm: 55 };
-const lidas = Object.keys(BRUNO).map(function (c) {
-  const m = larga.match(new RegExp('col\\.c-' + c + '\\{width:(\\d+)px!important\\}'));
+// Tela larga (19/09): o desenho do Bruno, em PORCENTAGEM do card, a partir
+// de 1400px. Antes era px a partir de 1560, e a tela dele (1600 no print,
+// ~1536 pro navegador por causa da escala do Windows) nunca entrava no bloco.
+const larga = (CSSJ.match(/@media\(min-width:1400px\)\{([\s\S]*?)\n\}/) || ['', ''])[1];
+const PCT = { date: 10, track: 11, dis: 7, trp: 6, split: 7, bends: 8, fin: 5, rem: 22, grade: 13, caltm: 11 };
+const lidas = Object.keys(PCT).map(function (c) {
+  const m = larga.match(new RegExp('col\\.c-' + c + '\\{width:(\\d+)%!important\\}'));
   return m ? Number(m[1]) : NaN;
 });
-t('tela larga: as larguras do Bruno (' + lidas.join(',') + ')',
-  Object.keys(BRUNO).every(function (c, k) { return lidas[k] === BRUNO[c]; }));
-t('e o Remarks segue automatico nela', !/c-rem/.test(larga));
-// "Tem que ficar com no maximo 140": teto da tabela = soma das nove + 140.
-const soma = lidas.reduce(function (a, b) { return a + b; }, 0);
-t('e com no maximo 140px: a tabela tem teto de ' + (soma + 140) + 'px',
-  new RegExp('\\.vf-grade \\.val-tbl\\{max-width:' + (soma + 140) + 'px\\}').test(larga));
-t('e o Remarks fica com o resto da linha', /\.vf-grade \.val-tbl col\.c-rem\{width:auto!important\}/.test(CSSJ));
+t('tela larga: as colunas do desenho (' + lidas.join('+') + ' = 100%)',
+  Object.keys(PCT).every(function (c, k) { return lidas[k] === PCT[c]; }) && lidas.reduce(function (a, b) { return a + b; }, 0) === 100);
+t('e o bloco de 1560px, que nunca valia na tela dele, saiu', !/@media\(min-width:1560px\)/.test(CSSJ));
+t('abaixo de 1400px o Remarks fica com o resto da linha', /\.vf-grade \.val-tbl col\.c-rem\{width:auto!important\}/.test(CSSJ));
 t('um card nunca desenha por cima do vizinho', /\.vf-grade \.vf-cel\{overflow:hidden\}/.test(CSSJ));
 t('celula que nao couber corta dentro dela, nao por cima do vizinho',
   /\.vf-grade \.val-tbl td\{[^}]*overflow:hidden/.test(CSSJ));
@@ -248,7 +246,8 @@ if (chromium) {
       + '<script>' + js + '\n_pintaPdfCompleto(' + JSON.stringify({ corrida: 'Hove A5', dist: '500', trackFull: 'Hove' }) + ',' + JSON.stringify(seis) + ');</script></body></html>';
     const browser = await chromium.launch();
     try {
-      for (const [w, h] of [[1920, 1080], [1600, 900], [1600, 700], [1536, 864], [1366, 768], [1366, 650], [1280, 600]]) {
+      // 1536x730: a tela do Bruno como o navegador a ve (1920 com escala 125%).
+      for (const [w, h] of [[1920, 1080], [1600, 700], [1536, 730], [1536, 650], [1440, 700], [1400, 700], [1366, 650], [1280, 600]]) {
         const page = await browser.newPage({ viewport: { width: w, height: h } });
         await page.setContent(pag);
         const r = await page.evaluate(function () {

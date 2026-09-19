@@ -3340,32 +3340,30 @@ function injectValModal(){
   /* E um card nunca desenha por cima do vizinho, aconteca o que acontecer. */
   .vf-grade .vf-cel{overflow:hidden}
 }
-/* Tela larga (a do Bruno, 1600px): "reduzir a largura do remarks e aumentar
-   um pouquinho Date, Track, Dis, Trp, Split, Bends e Fin; o que diminuir em
-   remarks, distribui entre esses" (19/09/2026), e depois "pode tirar mais".
-   Os numeros abaixo sao os que o proprio Bruno escolheu, coluna por coluna
-   (19/09/2026, segunda rodada). As nove somam 630px; o Remarks fica com o
-   resto e, a pedido dele, com NO MAXIMO 140px: por isso a tabela tem teto
-   de 770px (630 + 140). Em tela mais larga sobra espaco a direita do card
-   em vez de o Remarks crescer. Remark mais comprido que o espaco quebra
-   depois da virgula. So a partir de 1560px. */
-@media(min-width:1560px){
-  .vf-grade .val-tbl{max-width:770px}
-  /* Com o Remarks estreito, os remarks longos passam a ocupar duas linhas e a
-     janela, com seis galgos em 1600x700, pedia ~40px a mais que a tela.
-     Linha mais baixa (1px em cima e embaixo) e o remark em 12px devolvem
-     esse espaco, e com 12px menos remarks quebram. */
-  .vf-grade .val-tbl td{padding-top:1px;padding-bottom:1px}
-  .vf-grade .val-tbl td.val-td-rem{font-size:12px;line-height:1.1}
-  .vf-grade .val-tbl col.c-date{width:100px!important}
-  .vf-grade .val-tbl col.c-track{width:120px!important}
-  .vf-grade .val-tbl col.c-dis{width:80px!important}
-  .vf-grade .val-tbl col.c-trp{width:50px!important}
-  .vf-grade .val-tbl col.c-split{width:80px!important}
-  .vf-grade .val-tbl col.c-bends{width:70px!important}
-  .vf-grade .val-tbl col.c-fin{width:25px!important}
-  .vf-grade .val-tbl col.c-grade{width:50px!important}
-  .vf-grade .val-tbl col.c-caltm{width:55px!important}
+/* TELA LARGA — AS COLUNAS DO DESENHO DO BRUNO (19/09/2026).
+   Ele mandou a tela como esta e a tela como quer (desenhada no Paint): as
+   dez colunas espalhadas pela largura do card, o Remarks com ~22% em vez de
+   engolir o que sobra, Grade e CalTm com folga na ponta.
+
+   A TRAVA que fazia "nao adiantar": as rodadas anteriores punham as larguras
+   em px so a partir de 1560px de tela. A tela do Bruno parece 1600 no print,
+   mas o Windows dele escala (125%): pro navegador ela tem ~1536px. O bloco
+   nunca valia na maquina dele, e por isso nenhum numero que ele pedia
+   aparecia. Agora e' em PORCENTAGEM do card e vale a partir de 1400px: o
+   desenho acompanha a largura da tela, sem numero magico de monitor.
+   Abaixo de 1400 o card fica estreito demais pra porcentagem (a Date
+   cortaria) e valem as larguras em px do bloco de cima. */
+@media(min-width:1400px){
+  .vf-grade .val-tbl col.c-date{width:10%!important}
+  .vf-grade .val-tbl col.c-track{width:11%!important}
+  .vf-grade .val-tbl col.c-dis{width:7%!important}
+  .vf-grade .val-tbl col.c-trp{width:6%!important}
+  .vf-grade .val-tbl col.c-split{width:7%!important}
+  .vf-grade .val-tbl col.c-bends{width:8%!important}
+  .vf-grade .val-tbl col.c-fin{width:5%!important}
+  .vf-grade .val-tbl col.c-rem{width:22%!important}
+  .vf-grade .val-tbl col.c-grade{width:13%!important}
+  .vf-grade .val-tbl col.c-caltm{width:11%!important}
 }
 /* Notebook (ate ~1450px de largura): mais um ponto a menos. */
 @media(min-width:1201px) and (max-width:1450px){
