@@ -3718,7 +3718,20 @@ document.querySelectorAll('table [data-f]').forEach(function(el){
   // (que ja da blur() via onkeydown inline no input)
   if (el.getAttribute('data-f')==='odd') {
     el.addEventListener('blur', function(){
-      setRowEdit(this.getAttribute('data-id'), false);
+      // ODD SEM PAR NAO EXISTE (Bruno, 19/09/2026). A Hove A10 das 15:46 foi
+      // pra Banca com odd 1.45 e sem dupla: a odd foi digitada aqui, sem o
+      // ENTREI, entao so a odd era gravada — e a Banca, sem saber em QUAL par
+      // voce entrou, deixava a aposta Pendente pra sempre, enquanto o
+      // Historico mostrava o par e o resultado. Digitar a odd numa linha e'
+      // entrar no par DESSA linha: marca o ENTREI dela, pelo mesmo caminho do
+      // clique (grava par, nomes, odd e bet_entrou num PUT so).
+      var idO = this.getAttribute('data-id');
+      var chk = document.querySelector('.entrei-chk[data-id="'+idO+'"]');
+      if (this.value.trim() !== '' && chk && !chk.checked) {
+        chk.checked = true;
+        chk.dispatchEvent(new Event('change'));
+      }
+      setRowEdit(idO, false);
     });
   }
 });
