@@ -1065,6 +1065,72 @@ router.get('/pdfs/hoje/zip', (req, res) => {
 });
 
 
+// ── DIAG: PDFs DA PASTA x CORRIDAS NO BANCO (Bruno, 19/09/2026) ─────────────
+// 140 PDFs na pasta de 19/09 e so 55 corridas no banco. A sessao do dia e' a
+// da analise automatica (id 164, 06:19 BRT) e nao foi regravada pela tela —
+// entao as 82 que faltam se perderam em outro lugar. Esta rota diz ONDE, por
+// arquivo, sem mudar nada:
+//   no_banco        -> a corrida do PDF esta no banco (pista + hora)
+//   chegou_depois   -> o PDF foi gravado na pasta DEPOIS da sessao ser criada:
+//                      a analise da manha nunca o viu
+//   parser_falhou   -> o parser le o PDF agora e nao devolve corrida (ou erra)
+//   lido_nao_gravado-> o parser le, o PDF ja existia na hora da analise, e
+//                      mesmo assim a corrida nao esta no banco
+// So-leitura. So admin. Le e parseia os PDFs que faltam (sem API, o parser e'
+// deterministico), entao demora alguns segundos.
+//   GET /greyhound/api/diag/pdfs-x-corridas?date=2026-09-19
+router.get('/diag/pdfs-x-corridas', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Somente admin.' });
+  try {
+    const pathM = require('path');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date
+      : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const folder = getPdfFolder(date);
+    const sess = db.prepare("SELECT id, name, created_at, total_races, total_avbs FROM race_sessions WHERE user_id=? AND date(created_at,'-3 hours')=? ORDER BY id").all(CANONICO, date);
+    const sessMs = sess.length ? Date.parse(String(sess[0].created_at).replace(' ', 'T') + 'Z') : null;
+    const rows = db.prepare(
+      "SELECT r.id, r.hora, r.corrida, r.track_full, r.nivel FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=?"
+    ).all(date, CANONICO);
+    const norm = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+    // "9.42PM_Romford_refeito.pdf" -> hora "9:42", pista "romford"
+    const doArquivo = nome => {
+      const m = String(nome).match(/^(\d{1,2})\.(\d{2})(AM|PM)_([^_.]+)/i);
+      return m ? { hora: parseInt(m[1], 10) + ':' + m[2], pista: norm(m[4]) } : null;
+    };
+    const achaNoBanco = a => rows.find(r => {
+      const h = String(r.hora || '').trim().replace(/^0/, '');
+      if (h !== a.hora) return false;
+      const tf = norm(r.track_full), ab = norm(String(r.corrida || '').split(' ')[0]);
+      return (tf && (tf.indexOf(a.pista) === 0 || a.pista.indexOf(tf) === 0)) || (ab && a.pista.indexOf(ab.slice(0, 3)) === 0);
+    });
+    const arquivos = fs.existsSync(folder) ? fs.readdirSync(folder).filter(f => f.toLowerCase().endsWith('.pdf')).sort() : [];
+    const out = [];
+    for (const nome of arquivos) {
+      const st = fs.statSync(pathM.join(folder, nome));
+      const a = doArquivo(nome);
+      const linha = { arquivo: nome, gravado_em: new Date(st.mtimeMs).toISOString() };
+      const r = a ? achaNoBanco(a) : null;
+      if (r) { linha.situacao = 'no_banco'; linha.race_id = r.id; linha.corrida = r.corrida; linha.nivel = r.nivel; out.push(linha); continue; }
+      if (sessMs && st.mtimeMs > sessMs) linha.situacao = 'chegou_depois';
+      try {
+        const p = await parseRacingPostPDF(fs.readFileSync(pathM.join(folder, nome)));
+        if (!p) { linha.situacao = linha.situacao || 'parser_falhou'; linha.parser = 'nao devolveu corrida'; }
+        else { linha.parser = p.corrida + ' ' + p.hora + ' ' + p.dist + 'm'; if (!linha.situacao) linha.situacao = 'lido_nao_gravado'; }
+      } catch (e) { linha.situacao = linha.situacao || 'parser_falhou'; linha.parser = 'erro: ' + e.message; }
+      out.push(linha);
+    }
+    const conta = {};
+    out.forEach(l => { conta[l.situacao] = (conta[l.situacao] || 0) + 1; });
+    res.json({ date, folder, sessoes: sess, corridas_no_banco: rows.length, pdfs: arquivos.length, resumo: conta,
+      faltando: out.filter(l => l.situacao !== 'no_banco'), no_banco: out.filter(l => l.situacao === 'no_banco') });
+  } catch (e) {
+    console.error('[diag pdfs-x-corridas]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/pdfs/hoje', (req, res) => {
   const folder = getPdfFolder();
   const files = readFolderPdfs(folder);
