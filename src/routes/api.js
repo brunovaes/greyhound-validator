@@ -1367,9 +1367,16 @@ async function completarDia(date) {
   if (!sess) return { ok: false, semSessao: true, inseridas: [] };
   const folder = getPdfFolder(date);
   if (!fs.existsSync(folder)) return { ok: true, sessionId: sess.id, inseridas: [], pdfs: 0 };
-  const jaTem = new Set(db.prepare(
-    "SELECT r.corrida, r.hora FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.user_id=?"
-  ).all(date, CANONICO).map(r => chave(r.corrida, r.hora)));
+  const _linhasDia = db.prepare(
+    "SELECT r.corrida, r.hora, r.track_full FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.user_id=?"
+  ).all(date, CANONICO);
+  const jaTem = new Set(_linhasDia.map(r => chave(r.corrida, r.hora)));
+  // Segunda chave: nome da pista do CABECALHO + hora. Corrida gravada antes de
+  // 19/09 pode ter a abreviacao errada no `corrida` (o parser antigo tirava da
+  // linha do primeiro galgo); pelo nome do cabecalho ela ainda e' reconhecida
+  // e nao entra de novo em dobro.
+  const _normP = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  const jaTemPista = new Set(_linhasDia.filter(r => r.track_full).map(r => _normP(r.track_full) + '|' + String(r.hora || '').trim()));
 
   // O mais novo primeiro: entre o PDF da manha e o "_refeito", vale o refeito.
   const arquivos = fs.readdirSync(folder).filter(f => f.toLowerCase().endsWith('.pdf'))
@@ -1385,6 +1392,7 @@ async function completarDia(date) {
     if (!p) { falhas.push(a.nome + ': parser nao devolveu corrida'); continue; }
     const k = chave(p.corrida, p.hora);
     if (jaTem.has(k) || vistas.has(k)) continue;
+    if (p.trackFull && jaTemPista.has(_normP(p.trackFull) + '|' + String(p.hora || '').trim())) continue;
     vistas.add(k);
     let r = null;
     try { r = processarCorrida(p, config); } catch (e) { falhas.push(a.nome + ': motor: ' + e.message); continue; }

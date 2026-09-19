@@ -14,7 +14,7 @@ const NOMES_PISTAS = {
   Kinsly: 'Kinsley', Lffrd: 'Lifford', Limrk: 'Limerick', Monmr: 'Monmore',
   Mulgr: 'Mullingar', Newc: 'Newcastle', Notts: 'Nottingham', Pelaw: 'Star Pelaw',
   Romfd: 'Romford', Sheff: 'Sheffield', ShelPk: 'Shelbourne Park', Sland: 'Sunderland',
-  Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley', Wtrfd: 'Waterford',
+  Thurl: 'Thurles', Towc: 'Towcester', Trlee: 'Tralee', Vlley: 'Valley', Wtrfd: 'Waterford',
   Yrmth: 'Yarmouth', Youghl: 'Youghal'
 };
 

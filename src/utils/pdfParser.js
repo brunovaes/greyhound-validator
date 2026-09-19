@@ -136,6 +136,41 @@ function parseHeader(text) {
   };
 }
 
+// ── ABREVIACAO DA PISTA PELO CABECALHO (Bruno, 19/09/2026) ──────────────────
+// "Dunstall Park" -> "DunPk", na ordem:
+//   1) entre as pistas que aparecem no historico dos galgos DESTE card, a que
+//      e' abreviacao do nome do cabecalho (mesma letra inicial e letras na
+//      mesma ordem: "Romfd" em "romford", "ShelPk" em "shelbournepark");
+//      empate vai pra mais frequente. Vem primeiro porque e' o codigo que o
+//      proprio Racing Post usa nas linhas — o mesmo que o motor vai comparar.
+//   2) a tabela de nomes do sistema (nomesPistas.js), ao contrario — pra
+//      pista em que nenhum galgo do card correu ainda
+//   3) as 5 primeiras letras do nome, como o codigo ja fazia quando o card nao
+//      tinha historico
+// A pista do historico do primeiro galgo so' e' usada se ela mesma passar
+// pelo 1 — nunca mais por ser a primeira.
+function abreviacaoPista(nomeCabecalho, pistasHistorico) {
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  const alvo = norm(nomeCabecalho);
+  if (!alvo) return '';
+  const ehAbrev = cod => {
+    const c = norm(cod);
+    if (!c || c[0] !== alvo[0]) return false;
+    let i = 0;
+    for (const ch of alvo) { if (ch === c[i]) i++; if (i === c.length) return true; }
+    return false;
+  };
+  const conta = {};
+  (pistasHistorico || []).forEach(p => { if (ehAbrev(p)) conta[p] = (conta[p] || 0) + 1; });
+  const melhor = Object.keys(conta).sort((a, b) => conta[b] - conta[a])[0];
+  if (melhor) return melhor;
+  try {
+    const { NOMES_PISTAS } = require('./nomesPistas');
+    for (const cod of Object.keys(NOMES_PISTAS)) if (norm(NOMES_PISTAS[cod]) === alvo) return cod;
+  } catch (e) {}
+  return String(nomeCabecalho).replace(/\s+/g, '').substring(0, 5);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const isColHeader = t => /^Date\s+Track\s+Dis\s+Trp/.test(t);
 const isHistLine  = t => /^\d{2}[A-Za-z]{3}\d{2}\s+\w+\s+\d+m\s+\[\d\]/.test(t);
@@ -360,8 +395,17 @@ async function parseRacingPostPDF(buffer, trapPalette) {
     return extractBrtInfo(brtRow.text, nameRow?.text);
   });
 
-  // Abreviação do track via primeira linha de histórico
-  const trackAbbr = dogSections[0]?.[0] ? parseHistoryLine(dogSections[0][0].text)?.pista : header.track.replace(/\s+/g,'').substring(0,5);
+  // Abreviação do track. ANTES vinha da primeira linha de historico do
+  // primeiro galgo — ou seja, da pista onde ele correu da ULTIMA vez, que so e'
+  // a pista de hoje quando ele corre sempre no mesmo lugar. Em prova aberta (OR)
+  // e na Irlanda isso quase nunca e' verdade: em 19/09 "Doncaster 7:24" virou
+  // "Monmr OR", "Shelbourne 8:03" virou "Nwbrdg A1", "Thurles 7:45" virou
+  // "Clnml ON2". E a pista errada nao era so o nome na tela: o motor filtra o
+  // historico pela pista da corrida, entao lia as linhas da pista errada.
+  // Agora a abreviacao sai do NOME DA PISTA NO CABECALHO (ver abreviacaoPista).
+  const pistasHist = [];
+  dogSections.forEach(sec => sec.forEach(r => { const p = parseHistoryLine(r.text); if (p && p.pista) pistasHist.push(p.pista); }));
+  const trackAbbr = abreviacaoPista(header.track, pistasHist);
 
   // ── Trap real via badge de imagem ──────────────────────────────────────────
   // O card imprime uma imagem 16x16 por galgo com o numero do trap — nunca
@@ -422,6 +466,7 @@ async function parseRacingPostPDF(buffer, trapPalette) {
 
 module.exports = {
   parseRacingPostPDF,
+  abreviacaoPista,
   // Exportados a mais pra reaproveitar no robo de monitoramento de card (que
   // le texto raspado do navegador, nao de um PDF, mas no mesmo formato de linha)
   parseHistoryLine,

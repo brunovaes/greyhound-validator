@@ -45,7 +45,9 @@ console.log = _log; console.warn = _warn;
 
   const sess = db.prepare("INSERT INTO race_sessions (user_id, name, created_at, total_races, total_avbs) VALUES (1, 'Races 19/09/2026', '2026-09-19 09:19:38', 1, 1)").run().lastInsertRowid;
   // A Dunstall ja esta no dia, com aposta: tem que continuar IGUAL, mesmo id.
-  const idDun = db.prepare("INSERT INTO races (session_id, user_id, hora, corrida, nivel) VALUES (?,1,'9:54','DunPk OR3','media')").run(sess).lastInsertRowid;
+  // Gravada com a abreviacao ERRADA (o parser antigo tirava da linha do 1o
+  // galgo): tem que ser reconhecida pelo nome do cabecalho e nao entrar em dobro.
+  const idDun = db.prepare("INSERT INTO races (session_id, user_id, hora, corrida, track_full, nivel) VALUES (?,1,'9:54','Monmr OR3','Dunstall Park','media')").run(sess).lastInsertRowid;
   db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet_entrou) VALUES (?,1,1.9,2.5,1)').run(idDun);
 
   if (!temPdfs) {
