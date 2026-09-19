@@ -5818,6 +5818,117 @@ router.post('/monitor/force-test', requireAdmin, express.json(), (req, res) => {
   res.json({ ok: true, msg: 'Trap ' + card[0].trap + ' revertido de "' + trapOriginal + '" pra nome de teste. Roda o monitor agora pra disparar a deteccao.' });
 });
 
+// ── DIAG (SOMENTE LEITURA): AS APOSTAS DE UM DIA, E AS QUE FICARAM ORFAS ────
+// (Bruno, 19/09/2026)
+//
+// "ate umas 18:00 tava tudo certinho e fechado... fui ver agora tem corrida
+// que sumiu o ENTREI e esta desatualizada na banca."
+//
+// O par da aposta (avb_escolhido), as unidades e o "entrou" moram na
+// race_user_data, presos ao ID da corrida. Existe UM caminho no sistema que
+// apaga as corridas do dia inteiro e cria de novo com IDs novos: sobrescrever a
+// sessao do dia na Analisar (autoSaveSession: DELETE da sessao + POST de uma
+// nova). Nessa recriacao so a odd, o valor, os resultados, o bateu, o "aberto"
+// e o video vao junto. O par, as unidades e o "entrou" ficam para tras, em
+// linhas da race_user_data cujo race_id nao existe mais — orfas, mas NAO
+// apagadas.
+//
+// Esta rota nao altera nada. Ela responde tres perguntas, sem adivinhar:
+//   1) a sessao do dia foi criada DEPOIS das apostas? (criada_em_br)
+//   2) quais corridas do dia tem odd e nao tem par?
+//   3) existem linhas orfas com par dentro, e de quando elas sao?
+// Se a resposta de (3) for sim, os pares nao se perderam: estao ali, com o
+// nome dos dois galgos e a odd no snapshot, e da pra devolver cada um pra sua
+// corrida.
+//
+//   GET /robot/diag/apostas-dia?dia=2026-09-18
+router.get('/diag/apostas-dia', requireAdmin, (req, res) => {
+  const { db } = require('../db/database');
+  const dia = String(req.query.dia || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+    return res.status(400).json({ erro: 'passe ?dia=AAAA-MM-DD (ex.: ?dia=2026-09-18)' });
+  }
+  const uid = req.user.id;
+  // O snapshot do par pode vir como texto JSON ou vazio. Nada aqui pode
+  // estourar por causa de uma linha torta: o objetivo e' ver o banco como esta.
+  const par = function (txt) {
+    if (txt == null || txt === '') return null;
+    try {
+      const o = typeof txt === 'string' ? JSON.parse(txt) : txt;
+      if (!o || o.aTrap == null) return { cru: String(txt).slice(0, 200) };
+      return {
+        a: o.aTrap, aNome: o.aNome || null, b: o.bTrap, bNome: o.bNome || null,
+        odd: o.odd != null ? o.odd : null, origem: o.origem || null,
+        // ts do snapshot: quando o "Entrei !" foi dado. Hora do Brasil.
+        gravado_em_br: o.ts ? new Date((Number(o.ts) - 3 * 3600) * 1000).toISOString().replace('T', ' ').slice(0, 19) : null
+      };
+    } catch (e) { return { cru: String(txt).slice(0, 200) }; }
+  };
+  try {
+    const sessoes = db.prepare(
+      "SELECT id, name, datetime(created_at,'-3 hours') AS criada_em_br " +
+      "FROM race_sessions WHERE date(created_at,'-3 hours') = ? ORDER BY id"
+    ).all(dia);
+
+    const corridas = db.prepare(
+      "SELECT r.id, r.session_id, r.hora AS hora_uk, r.hora_br, r.corrida, r.nivel, r.tier, " +
+      "       r.trap_fav, r.trap_und, r.bateu, " +
+      "       (r.finishing_order_json IS NOT NULL AND r.finishing_order_json <> '') AS tem_chegada, " +
+      "       rud.odd, rud.bet_unidades, rud.bet_entrou, rud.avb_escolhido, " +
+      "       datetime(rud.updated_at,'-3 hours') AS aposta_mexida_em_br " +
+      "FROM races r JOIN race_sessions s ON s.id = r.session_id " +
+      "LEFT JOIN race_user_data rud ON rud.race_id = r.id AND rud.user_id = ? " +
+      "WHERE date(s.created_at,'-3 hours') = ? ORDER BY r.hora_br, r.id"
+    ).all(uid, dia).map(function (c) {
+      const temAposta = c.odd != null && String(c.odd) !== '';
+      return {
+        id: c.id, session_id: c.session_id, hora_uk: c.hora_uk, hora_br: c.hora_br,
+        corrida: c.corrida, nivel: c.nivel, tier: c.tier,
+        par_do_motor: (c.trap_fav || c.trap_und) ? ('T' + c.trap_fav + 'xT' + c.trap_und) : 'zerado',
+        tem_chegada: !!c.tem_chegada, bateu_coluna: c.bateu,
+        aposta: temAposta || c.avb_escolhido || c.bet_entrou ? {
+          odd: c.odd, unidades: c.bet_unidades, entrou: c.bet_entrou,
+          par: par(c.avb_escolhido), mexida_em_br: c.aposta_mexida_em_br
+        } : null
+      };
+    });
+
+    // Orfas: dado pessoal preso a um race_id que nao existe mais em races. A
+    // janela de um dia pra cada lado pega o que foi gravado naquele dia sem
+    // arrastar o historico inteiro de orfas antigas.
+    const orfas = db.prepare(
+      "SELECT rud.race_id, rud.odd, rud.bet_unidades, rud.bet_entrou, rud.avb_escolhido, " +
+      "       datetime(rud.updated_at,'-3 hours') AS mexida_em_br " +
+      "FROM race_user_data rud LEFT JOIN races r ON r.id = rud.race_id " +
+      "WHERE r.id IS NULL AND rud.user_id = ? " +
+      "  AND date(rud.updated_at,'-3 hours') BETWEEN date(?,'-1 day') AND date(?,'+1 day') " +
+      "ORDER BY rud.updated_at LIMIT 300"
+    ).all(uid, dia, dia).map(function (o) {
+      return {
+        race_id_que_sumiu: o.race_id, odd: o.odd, unidades: o.bet_unidades,
+        entrou: o.bet_entrou, par: par(o.avb_escolhido), mexida_em_br: o.mexida_em_br
+      };
+    });
+
+    const comOdd = corridas.filter(function (c) { return c.aposta && c.aposta.odd != null && String(c.aposta.odd) !== ''; });
+    res.json({
+      dia: dia,
+      resumo: {
+        sessoes_do_dia: sessoes.length,
+        corridas: corridas.length,
+        apostas_com_odd: comOdd.length,
+        apostas_com_odd_sem_par: comOdd.filter(function (c) { return !c.aposta.par; }).length,
+        apostas_com_odd_sem_unidades: comOdd.filter(function (c) { return c.aposta.unidades == null || c.aposta.unidades === ''; }).length,
+        orfas: orfas.length,
+        orfas_com_par: orfas.filter(function (o) { return o.par && o.par.a != null; }).length
+      },
+      sessoes: sessoes,
+      corridas: corridas,
+      orfas: orfas
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
 // ── Auditoria: lista as alteracoes registradas em race_audit_log pra uma data
 router.get('/audit/list', requireAdmin, (req, res) => {
   const { db } = require('../db/database');
