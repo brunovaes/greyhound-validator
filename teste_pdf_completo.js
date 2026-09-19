@@ -186,6 +186,15 @@ const px = ['date', 'track', 'dis', 'trp', 'split', 'bends', 'fin', 'grade', 'ca
   return m ? Number(m[1]) : NaN;
 });
 t('as nove colunas curtas com largura justa, em px: ' + px.join('+'), px.every(isFinite) && px.every(function (x) { return x <= 70; }));
+// Em tela larga (19/09): o Remarks cede 158px pras sete colunas da esquerda.
+const larga = (CSSJ.match(/@media\(min-width:1560px\)\{([\s\S]*?)\n\}/) || ['', ''])[1];
+const ganho = [['date', 68], ['track', 50], ['dis', 44], ['trp', 30], ['split', 38], ['bends', 44], ['fin', 28]].map(function (p) {
+  const m = larga.match(new RegExp('col\\.c-' + p[0] + '\\{width:(\\d+)px!important\\}'));
+  return m ? Number(m[1]) - p[1] : NaN;
+});
+t('tela larga: as sete colunas da esquerda ganham ' + ganho.join('+') + ' = 158px',
+  ganho.every(function (g) { return g > 0; }) && ganho.reduce(function (a, b) { return a + b; }, 0) === 158);
+t('e Grade/CalTm nao mudam nela', !/c-grade|c-caltm|c-rem/.test(larga));
 t('e o Remarks fica com o resto da linha', /\.vf-grade \.val-tbl col\.c-rem\{width:auto!important\}/.test(CSSJ));
 t('um card nunca desenha por cima do vizinho', /\.vf-grade \.vf-cel\{overflow:hidden\}/.test(CSSJ));
 t('celula que nao couber corta dentro dela, nao por cima do vizinho',

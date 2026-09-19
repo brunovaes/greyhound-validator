@@ -3337,6 +3337,23 @@ function injectValModal(){
   /* E um card nunca desenha por cima do vizinho, aconteca o que acontecer. */
   .vf-grade .vf-cel{overflow:hidden}
 }
+/* Tela larga (a do Bruno, 1600px): "reduzir a largura do remarks e aumentar
+   um pouquinho Date, Track, Dis, Trp, Split, Bends e Fin; o que diminuir em
+   remarks, distribui entre esses" (19/09/2026), e depois "pode tirar mais".
+   Sao +158px nas sete colunas, que saem do Remarks: em 1600 ele cai de ~310
+   pra ~180px, o justo pro remark mais comprido ("Rls-Mid,Eased&BdCrd1&1/4"
+   pede ~165px); um maior que isso quebra depois da virgula. So a partir de
+   1560px: abaixo disso tirar 158px deixaria quase todo remark em duas
+   linhas. Grade e CalTm nao mudam. */
+@media(min-width:1560px){
+  .vf-grade .val-tbl col.c-date{width:95px!important}
+  .vf-grade .val-tbl col.c-track{width:72px!important}
+  .vf-grade .val-tbl col.c-dis{width:66px!important}
+  .vf-grade .val-tbl col.c-trp{width:51px!important}
+  .vf-grade .val-tbl col.c-split{width:60px!important}
+  .vf-grade .val-tbl col.c-bends{width:66px!important}
+  .vf-grade .val-tbl col.c-fin{width:50px!important}
+}
 /* Notebook (ate ~1450px de largura): mais um ponto a menos. */
 @media(min-width:1201px) and (max-width:1450px){
   .vf-grade .val-tbl td,.vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:13px;padding:2px 2px}
