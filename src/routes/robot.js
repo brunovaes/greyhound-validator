@@ -116,6 +116,11 @@ async function executarColeta() {
     console.log('[CRON] 🤖 Iniciando coleta automática para ' + date);
     resetStatus();
     robotStatus.running = true;
+    // Sinal pra tela Analisar nao criar o dia no meio da coleta (19/09/2026):
+    // fica ligado ate o fim da analise automatica e do completarDia abaixo.
+    const estadoColeta = require('../utils/estadoColeta');
+    estadoColeta.ligar();
+    try {
     addLog('info', '🌙 Coleta automática iniciada — ' + date);
     try {
       await runRobot(date, 400, 575, '', '');
@@ -136,6 +141,17 @@ async function executarColeta() {
           console.log('[CRON] Analise automatica concluida: ' + resultado.avbs + ' AvBs');
         } else if (resultado.jaExistia) {
           addLog('info', 'ℹ️ Sessao de ' + date + ' ja existia, analise automatica pulada.');
+          // ...mas o dia pode ter nascido pela metade (19/09/2026: 56 de 137).
+          // Completa com o que esta na pasta, sem mexer no que ja existe.
+          try {
+            const { completarDia } = require('./api');
+            const c = await completarDia(date);
+            addLog(c.inseridas && c.inseridas.length ? 'ok' : 'info',
+              '🧩 Completar o dia: ' + ((c.inseridas || []).length) + ' corrida(s) acrescentada(s)'
+              + ((c.falhas || []).length ? ' | ' + c.falhas.length + ' PDF(s) nao lidos' : ''));
+          } catch (errC) {
+            addLog('err', '❌ Completar o dia falhou: ' + errC.message);
+          }
         } else {
           addLog('err', '❌ Analise automatica falhou: ' + resultado.erro);
           console.error('[CRON] Analise automatica falhou:', resultado.erro);
@@ -149,6 +165,9 @@ async function executarColeta() {
       console.error('[CRON] Erro:', e.message);
       robotStatus.running = false;
       robotStatus.error = e.message;
+    }
+    } finally {
+      estadoColeta.desligar();
     }
 }
 
@@ -346,6 +365,12 @@ function scheduleMonitorCron() {
           console.log('[CRON-MONITOR] ✅ Concluído — ' + s.processed + ' verificadas, ' + s.changed + ' com mudança, ' + s.reanalyzed + ' reanalisadas');
         }).catch(function(e) {
           console.error('[CRON-MONITOR] ❌ Erro:', e.message);
+        }).then(function() {
+          // Depois do monitor (nunca junto: os dois usam o mesmo Browserless),
+          // pega corrida que entrou na programacao depois da coleta da manha.
+          return coletaComplementar(date);
+        }).catch(function(e) {
+          console.error('[COMPLEMENTAR] ❌ Erro:', e.message);
         });
       } else {
         console.log('[CRON-MONITOR] Robô de monitoramento já rodando, pulando.');
@@ -2413,7 +2438,13 @@ router.post('/start', requireAdmin, async (req, res) => {
 });
 
 // ─── ROBÔ via Browserless.io ───
-async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
+// opts.soNovas (19/09/2026): so visita a corrida da lista que AINDA NAO tem PDF
+// na pasta do dia (mesma hora e pista no nome do arquivo). E' o que o monitor
+// usa de hora em hora pra pegar corrida que entrou na programacao depois da
+// coleta da manha, sem baixar tudo de novo. Nesse modo o log do robo nao e'
+// regravado (o da coleta da manha continua sendo o que o Painel mostra).
+async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
+  opts = opts || {};
   let browser = null;
   const PDF_DIR = getPdfDir(DATE);
   if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
@@ -2571,6 +2602,11 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
       const race = races.races[i];
       robotStatus.progress = i + 1;
       robotStatus.current = `[${i+1}/${races.count}] ${race.track} ${race.time}`;
+
+      // So as novas: ja tem PDF desta hora com esta pista na pasta? Pula sem
+      // visitar. A pista do arquivo vem do cabecalho da pagina e a da lista pode
+      // vir mais longa ("Central Park" x "Central"), por isso compara o comeco.
+      if (opts.soNovas && jaTemPdf(PDF_DIR, race.time, race.track)) { skipped++; continue; }
 
       // Filtro de horário antecipado — usa horário da lista sem visitar a página
       if (!inTimeRange(race.time, TIME_FROM, TIME_TO)) {
@@ -2750,7 +2786,49 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO) {
     }
     robotStatus.running = false;
     robotStatus.current = 'Concluido';
-    saveRobotLog('pdf', robotStatus);
+    if (!opts.soNovas) saveRobotLog('pdf', robotStatus);
+  }
+}
+
+// A pasta ja tem o PDF desta corrida? "9:42" + "Romford" casa "9.42PM_Romford.pdf"
+// e "9.42PM_Romford_refeito.pdf".
+function jaTemPdf(dir, hora, pistaLista) {
+  try {
+    const pref = formatTime(String(hora || '')) + '_';
+    const p = String(pistaLista || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!p) return false;
+    return fs.readdirSync(dir).some(function (f) {
+      if (f.indexOf(pref) !== 0 || !/\.pdf$/i.test(f)) return false;
+      const t = f.slice(pref.length).replace(/_refeito/i, '').replace(/\.pdf$/i, '').toLowerCase().replace(/[^a-z]/g, '');
+      return !!t && (p.indexOf(t) === 0 || t.indexOf(p) === 0);
+    });
+  } catch (e) { return false; }
+}
+
+// ── CORRIDA QUE ENTROU DEPOIS DA COLETA (Bruno, 19/09/2026) ─────────────────
+// Roda depois de cada volta do monitor de card (de hora em hora, na janela
+// dele): baixa so os PDFs que ainda nao existem na pasta e completa o dia com
+// eles. Sem aviso, a pedido do Bruno. Se a coleta ou o robo de PDF estiver
+// rodando, pula (a proxima volta pega).
+async function coletaComplementar(date) {
+  if (robotStatus.running) { console.log('[COMPLEMENTAR] robo de PDF ja rodando, pulando.'); return; }
+  const antes = (function () { try { return fs.readdirSync(getPdfDir(date)).length; } catch (e) { return 0; } })();
+  robotStatus.running = true;
+  try {
+    await runRobot(date, 400, 575, '', '', { soNovas: true });
+  } catch (e) {
+    console.error('[COMPLEMENTAR] coleta falhou:', e.message);
+  } finally {
+    robotStatus.running = false;
+  }
+  const depois = (function () { try { return fs.readdirSync(getPdfDir(date)).length; } catch (e) { return 0; } })();
+  try {
+    const { completarDia } = require('./api');
+    const c = await completarDia(date);
+    console.log('[COMPLEMENTAR] ' + (depois - antes) + ' PDF(s) novo(s), ' + (c.inseridas || []).length + ' corrida(s) acrescentada(s)'
+      + ((c.inseridas || []).length ? ': ' + c.inseridas.join(', ') : ''));
+  } catch (e) {
+    console.error('[COMPLEMENTAR] completar o dia falhou:', e.message);
   }
 }
 

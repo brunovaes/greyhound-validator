@@ -319,6 +319,27 @@ async function runCardMonitorRobot(targetDate) {
     ).all(DATE, 'skip');
     addLog('info', dbRaces.length + ' corridas no banco para ' + DATE);
 
+    // ── CORRIDA QUE SUMIU DA LISTA E' ANULADA (Bruno, 19/09/2026) ────────────
+    // "Corrida que some da lista: pode anular direto, tirar do app... se ela
+    // sumiu, e' porque nao vai ter." Antes ela so virava suspeita (skip) e
+    // continuava no Historico e na Banca como pendente.
+    //
+    // TRAVA: "sumiu" tambem pode ser a LISTA que nao carregou direito. Lista
+    // vazia, ou muita corrida futura sumindo de uma vez, e' pagina quebrada e
+    // nao cancelamento: nessa volta nada e' anulado, so registrado no log.
+    // A anulacao feita aqui leva motivo "monitor:" — se o robo de resultados
+    // achar resultado dela depois, ele mesmo desfaz (resultsRobot.js).
+    const _anul = require('../utils/anuladas');
+    // O dia da marca e' o mesmo DATE da consulta acima (a data BRT da sessao).
+    const _diaAnul = DATE;
+    const _futuras = dbRaces.filter(function (r) { const m = horaUkParaMinutosBrt(r.hora); return m !== null && m >= agoraMinutosBrt(); });
+    const _sumidas = _futuras.filter(function (r) { return !races.some(function (x) { return x.time === r.hora; }); });
+    const podeAnular = races.length > 0 && _sumidas.length <= Math.max(3, Math.floor(_futuras.length * 0.3));
+    if (_sumidas.length && !podeAnular) {
+      addLog('warn', '⚠️ ' + _sumidas.length + ' de ' + _futuras.length + ' corridas futuras sumiram da lista de uma vez (lista com ' + races.length
+        + ') — parece pagina quebrada, NAO anulando nada nesta volta.');
+    }
+
     const retryCount = {}; // raceId -> quantas vezes ja tentou de novo (max 1)
     for (let dbRaceIdx = 0; dbRaceIdx < dbRaces.length; dbRaceIdx++) {
       const dbRace = dbRaces[dbRaceIdx];
@@ -349,6 +370,12 @@ async function runCardMonitorRobot(targetDate) {
           } else {
             logChanges(dbRace.id, 'monitor_robot', dbRace, { nivel: 'skip' }, ['nivel']);
             db.prepare('UPDATE races SET card_suspect=1, nivel_pre_suspeita=?, nivel=? WHERE id=?').run(dbRace.nivel, 'skip', dbRace.id);
+          }
+          if (podeAnular) {
+            try {
+              _anul.anular(db, { data: _diaAnul, corrida: dbRace.corrida, hora: dbRace.hora, motivo: 'monitor: sumiu da lista do Racing Post', por: null });
+              addLog('warn', '🗑 ' + dbRace.corrida + ' ' + dbRace.hora + ' — anulada (sumiu da lista).');
+            } catch (eA) { addLog('err', 'Nao consegui anular ' + dbRace.corrida + ': ' + eA.message); }
           }
         } else {
           addLog('info', dbRace.corrida + ' ' + dbRace.hora + ' — nao esta mais na lista (ja rodou ou nao encontrada)');

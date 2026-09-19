@@ -520,6 +520,15 @@ async function runResultsRobot(targetDate) {
         );
         updateStmt.run(bateu, r1, r2, r3, pageText.videoUrl || null, finishingOrderCompleto.length ? JSON.stringify(finishingOrderCompleto) : null, dbRace.id);
         status.updated++;
+        // A corrida CORREU. Se o monitor tinha anulado ela por ter sumido da
+        // lista (motivo "monitor:"), a anulacao estava errada: desfaz. A que o
+        // Bruno anulou na mao (lixeira) nao e' tocada — e' decisao dele.
+        try {
+          const _an = require('../utils/anuladas');
+          const _d = db.prepare('DELETE FROM corridas_anuladas WHERE data=? AND chave=? AND motivo LIKE ?')
+            .run(DATE, _an.chave(dbRace.corrida, dbRace.hora), 'monitor:%');
+          if (_d.changes) addLog('info', '  ' + dbRace.corrida + ' tinha sido anulada pelo monitor, mas correu — anulacao desfeita.');
+        } catch (eAn) {}
         // Se essa corrida estava marcada como suspeita (provavel cancelamento)
         // e agora achou resultado de verdade, desfaz a marcacao
         if (dbRace.card_suspect) {

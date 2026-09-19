@@ -375,6 +375,19 @@ async function autoCheckAndAnalyze() {
     var r = await fetch(BASE+'/api/pdfs/hoje');
     var d = await r.json();
     if (!d.count) { setFocusEmpty(); return; }
+    // O ROBO AINDA ESTA BAIXANDO OS PDFs (Bruno, 19/09/2026). Em 19/09 esta
+    // tela criou o dia as 06:19, no meio da coleta: viu so os PDFs que ja
+    // existiam, gravou so as corridas nao skip, e o dia ficou com 56 de 137.
+    // Agora ela espera o robo terminar — quem cria o dia e' a analise
+    // automatica do servidor — e tenta de novo em 1 minuto.
+    if (d.coletando) {
+      var mainElC = document.getElementById('main-layout');
+      if (mainElC) mainElC.classList.add('focus-mode');
+      setFocusLoading('Baixando os PDFs do dia... a análise sai assim que o robô terminar.');
+      setSt('Aguardando o robô terminar a coleta de hoje.');
+      setTimeout(function(){ autoCheckAndAnalyze(); }, 60000);
+      return;
+    }
     var parts = (d.date||'').split('-');
     autoDateLabel = parts.length===3 ? parts[2]+'/'+parts[1]+'/'+parts[0] : d.date;
     var mainEl = document.getElementById('main-layout');

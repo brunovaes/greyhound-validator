@@ -1135,7 +1135,11 @@ router.get('/pdfs/hoje', (req, res) => {
   const folder = getPdfFolder();
   const files = readFolderPdfs(folder);
   const dateFound = require('path').basename(folder);
-  res.json({ count: files.length, folder, date: dateFound, files: files.map(f=>f.name) });
+  // `coletando`: o robo ainda esta baixando os PDFs (ou rodando a analise
+  // automatica). A tela Analisar espera em vez de criar o dia pela metade —
+  // foi o que aconteceu em 19/09 (ver src/utils/estadoColeta.js).
+  res.json({ count: files.length, folder, date: dateFound, files: files.map(f=>f.name),
+             coletando: require('../utils/estadoColeta').rodando() });
 });
 
 
@@ -1311,22 +1315,93 @@ async function rodarAnaliseAutomatica(date, userId) {
 
   const result = db.prepare('INSERT INTO race_sessions (user_id,name,total_races,total_avbs) VALUES (?,?,?,?)').run(CANONICO, sessionName, allRaces.length, allRaces.filter(r=>r.nivel!=='skip').length);
   const sessionId = result.lastInsertRowid;
-  const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json,hist_full) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-  for (const r of allRaces) {
-    const p = (r.hora||'').split(':');
-    let h = parseInt(p[0]||0);
-    if (h>=1 && h<=9) h+=12;
-    h = h-4; if (h<0) h+=24;
-    const horaBr = p.length>=2 ? h+':'+p[1] : '';
-    const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
-    const infoAuto = ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null,r.histFull?JSON.stringify(r.histFull):null);
-    // O PDF completo vai numa coluna propria, depois do INSERT, pra nao mexer
-    // na lista de colunas (longa) que o resto do sistema ja confere.
-    if (r.pdfCompleto) db.prepare('UPDATE races SET pdf_completo=? WHERE id=?').run(JSON.stringify(r.pdfCompleto), Number(infoAuto.lastInsertRowid));
-  }
+  // O INSERT saiu daqui pra inserirCorridaAuto(), logo abaixo, sem mudar uma
+  // coluna: o completarDia() precisa gravar a corrida EXATAMENTE do mesmo jeito.
+  for (const r of allRaces) inserirCorridaAuto(sessionId, r);
   db.prepare('UPDATE users SET analyses_used=analyses_used+1 WHERE id=?').run(userId);
 
   return { ok: true, sessionId, total: allRaces.length, avbs: allRaces.filter(r=>r.nivel!=='skip').length, errors: errors.length ? errors : undefined };
+}
+
+// Grava UMA corrida processada numa sessao. E' o corpo do laco que estava no
+// rodarAnaliseAutomatica, sem mudanca: mesma lista de colunas, mesma hora BR,
+// mesmo pdf_completo depois do INSERT.
+function inserirCorridaAuto(sessionId, r) {
+  const ins = db.prepare(`INSERT INTO races (session_id,user_id,hora,hora_br,corrida,dist,trap_fav,name_fav,trap_und,name_und,pct,nivel,perfil_fav,perfil_und,obs,need_cap,odd,valor,resultado_1,resultado_2,resultado_3,bateu,hist_fav,hist_und,race_card,top3,avb_nao_aberto,hist_all,video_url,data_card,track_full,eliminados,post_pick,scores_json,hist_full) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const p = (r.hora||'').split(':');
+  let h = parseInt(p[0]||0);
+  if (h>=1 && h<=9) h+=12;
+  h = h-4; if (h<0) h+=24;
+  const horaBr = p.length>=2 ? h+':'+p[1] : '';
+  const top3Str = r.top3 ? (Array.isArray(r.top3) ? r.top3.filter(x=>x>0).join('-') : String(r.top3)) : null;
+  const infoAuto = ins.run(sessionId,CANONICO,r.hora||'',horaBr,r.corrida||'',r.dist||'',r.trapFav||0,r.nameFav||'',r.trapUnd||0,r.nameUnd||'',r.pct||0,r.nivel||'',r.perfilFav||'',r.perfilUnd||'',r.obs||'',0,null,null,null,null,null,null,r.histFav?JSON.stringify(r.histFav):null,r.histUnd?JSON.stringify(r.histUnd):null,r.raceCard?JSON.stringify(r.raceCard):null,top3Str,0,r.histAll?JSON.stringify(r.histAll):null,null,r.dataCard||null,r.trackFull||null,r.eliminados?JSON.stringify(r.eliminados):null,r.postPick||null,r.scores?JSON.stringify(r.scores):null,r.histFull?JSON.stringify(r.histFull):null);
+  // O PDF completo vai numa coluna propria, depois do INSERT, pra nao mexer
+  // na lista de colunas (longa) que o resto do sistema ja confere.
+  if (r.pdfCompleto) db.prepare('UPDATE races SET pdf_completo=? WHERE id=?').run(JSON.stringify(r.pdfCompleto), Number(infoAuto.lastInsertRowid));
+  return Number(infoAuto.lastInsertRowid);
+}
+
+// ── COMPLETAR O DIA (Bruno, 19/09/2026) ────────────────────────────────────
+// Le os PDFs da pasta do dia e ACRESCENTA a sessao do dia as corridas que ainda
+// nao estao nela. Nao apaga, nao regrava, nao troca id: o que ja existe (com
+// ENTREI, odd, aposta, resultado) fica exatamente como esta.
+//
+// Existe porque em 19/09 o dia nasceu pela metade (56 de 137 corridas): uma aba
+// da Analisar criou a sessao no meio da coleta e gravou so as nao skip, e a
+// analise automatica pulou porque "a sessao ja existe". Roda:
+//   - no fim da coleta da manha, quando a sessao ja existia (robot.js)
+//   - a cada volta do monitor de card, depois de baixar os PDFs novos do dia
+//
+// A corrida e' reconhecida pela MESMA chave do resto do sistema (corrida + hora,
+// ver src/utils/anuladas.js), lida pelo MESMO parser: o que ja entrou nunca
+// entra de novo. Dois PDFs da mesma corrida (o "_refeito") viram uma so, a do
+// arquivo mais novo. Skip entra tambem: e' corrida do dia, e o "fecha na ultima
+// nao skip" precisa enxergar o dia inteiro.
+//
+// Sem sessao do dia nao faz nada: criar o dia e' papel do rodarAnaliseAutomatica.
+// Nao usa a API do Claude (o parser e' deterministico).
+async function completarDia(date) {
+  const pathM = require('path');
+  const { chave } = require('../utils/anuladas');
+  const sess = db.prepare("SELECT id FROM race_sessions WHERE user_id=? AND date(created_at,'-3 hours')=? ORDER BY id LIMIT 1").get(CANONICO, date);
+  if (!sess) return { ok: false, semSessao: true, inseridas: [] };
+  const folder = getPdfFolder(date);
+  if (!fs.existsSync(folder)) return { ok: true, sessionId: sess.id, inseridas: [], pdfs: 0 };
+  const jaTem = new Set(db.prepare(
+    "SELECT r.corrida, r.hora FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE date(s.created_at,'-3 hours')=? AND r.user_id=?"
+  ).all(date, CANONICO).map(r => chave(r.corrida, r.hora)));
+
+  // O mais novo primeiro: entre o PDF da manha e o "_refeito", vale o refeito.
+  const arquivos = fs.readdirSync(folder).filter(f => f.toLowerCase().endsWith('.pdf'))
+    .map(f => ({ nome: f, mt: fs.statSync(pathM.join(folder, f)).mtimeMs }))
+    .sort((a, b) => b.mt - a.mt);
+  const config = getUserConfig(CANONICO);
+  let palette = getTrapBadgeColors() || undefined;
+  const novas = [], vistas = new Set(), falhas = [];
+  for (const a of arquivos) {
+    let p = null;
+    try { p = await parseRacingPostPDF(fs.readFileSync(pathM.join(folder, a.nome)), palette); }
+    catch (e) { falhas.push(a.nome + ': ' + e.message); continue; }
+    if (!p) { falhas.push(a.nome + ': parser nao devolveu corrida'); continue; }
+    const k = chave(p.corrida, p.hora);
+    if (jaTem.has(k) || vistas.has(k)) continue;
+    vistas.add(k);
+    let r = null;
+    try { r = processarCorrida(p, config); } catch (e) { falhas.push(a.nome + ': motor: ' + e.message); continue; }
+    if (r) novas.push(r);
+  }
+  const prontas = sanitizeEliminatedTraps(novas);
+  const inseridas = [];
+  for (const r of prontas) { inserirCorridaAuto(sess.id, r); inseridas.push(r.corrida + ' ' + r.hora + (r.nivel === 'skip' ? ' (skip)' : '')); }
+  if (inseridas.length) {
+    // Os totais da sessao passam a contar o dia inteiro.
+    const t = db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN nivel!='skip' THEN 1 ELSE 0 END) AS a FROM races WHERE session_id=?").get(sess.id);
+    db.prepare('UPDATE race_sessions SET total_races=?, total_avbs=? WHERE id=?').run(t.n || 0, t.a || 0, sess.id);
+    // A camada e o resumo do dia tem que ver as corridas novas ja.
+    _painelDiaCache = { date: null, ts: 0, corridas: null };
+    _resumoDiaCache = { date: null, ts: 0, v: null };
+  }
+  return { ok: true, sessionId: sess.id, pdfs: arquivos.length, inseridas, falhas };
 }
 
 // ── ANULAR / DESANULAR CORRIDA (Bruno, 19/09/2026) ─────────────────────────
@@ -2224,5 +2299,6 @@ module.exports.processarCorrida = processarCorrida;
 module.exports.mapHistLinhas = mapHistLinhas;
 module.exports.pdfCompletoDe = pdfCompletoDe;
 module.exports.rodarAnaliseAutomatica = rodarAnaliseAutomatica;
+module.exports.completarDia = completarDia;
 // O agendador do push le as camadas do dia daqui — mesma conta, mesmo cache.
 module.exports.baseDoDia = baseDoDia;
