@@ -211,7 +211,11 @@ bloco('[6] E O COMPUTADOR TAMBEM NAO MUDOU NA ANALISAR');
 
 t('Track e Dis continuam sendo montados',
   /<th class="c-track">Track<\/th>/.test(A) && /<th class="c-dis">Dis<\/th>/.test(A));
-t('e o que os esconde so existe dentro do @media', !/\.c-track/.test(VAL_APP_FORA));
+// Olha o que ESCONDE (display:none), nao qualquer mencao a .c-track: desde
+// 19/09 a janela da corrida completa da' largura fixa ao col.c-track no
+// computador, e isso nao esconde nada.
+t('e o que os esconde so existe dentro do @media',
+  !/\.c-track[^{}]*\{[^}]*display:none/.test(VAL_APP_FORA));
 t('a tabela grande continua com largura fixa por coluna',
   /\.val-tbl\{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed/.test(A));
 t('a fonte menor so vale no celular', !/\.val-tbl th\{padding:4px 2px/.test(VAL_APP_FORA));

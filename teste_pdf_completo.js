@@ -173,13 +173,27 @@ t('e fechar devolve o tamanho de sempre (a disputa usa a mesma caixa)', !doc.els
 t('o plano B tambem volta ao tamanho normal', /function _abrirRecorteAntigo\(key, aviso\)\{\r?\n\s*\/\/[^\n]*\r?\n\s*_janelaGrande\(false\);/.test(APP));
 t('remark inteiro: sem reticencias na janela', /\.vf-grade \.val-td-rem\{[^}]*text-overflow:clip/.test(APP));
 t('e ele so quebra depois de virgula', html.indexOf(',<wbr>') >= 0);
-t('as larguras fixas do colgroup cedem (o !important vence o style do <col>)',
-  /\.vf-grade \.val-tbl col\{width:auto!important\}/.test(APP));
-t('letra maior so no computador: no celular valem as regras dos cards',
-  /@media\(min-width:769px\)\{[\s\S]*?\.vf-grade \.val-tbl td\{font-size:15px/.test(APP));
+// "As colunas nao ficaram no mesmo tamanho" (19/09): com table-layout:auto
+// cada card media as colunas pelo proprio texto e a tabela invadia o vizinho.
+const CSSJ = semComentarios(APP);
+t('a tabela da janela e\' de largura fixa (nao mede pelo texto)',
+  /\.vf-grade \.val-tbl\{table-layout:fixed;width:100%\}/.test(CSSJ) && !/\.vf-grade \.val-tbl\{table-layout:auto/.test(CSSJ));
+const pct = ['date', 'track', 'dis', 'trp', 'split', 'bends', 'fin', 'rem', 'grade', 'caltm'].map(function (c) {
+  const m = CSSJ.match(new RegExp('\\.vf-grade \\.val-tbl col\\.c-' + c + '\\{width:(\\d+)%!important\\}'));
+  return m ? Number(m[1]) : NaN;
+});
+t('as dez colunas com porcentagem fixa, somando 100%: ' + pct.join('+'), pct.every(isFinite) && pct.reduce(function (a, b) { return a + b; }, 0) === 100);
+t('celula que nao couber corta dentro dela, nao por cima do vizinho',
+  /\.vf-grade \.val-tbl td\{[^}]*overflow:hidden/.test(CSSJ));
+t('a letra desceu um ponto (15 -> 14) so no computador',
+  /@media\(min-width:769px\)\{[\s\S]*?\.vf-grade \.val-tbl td\{font-size:14px/.test(CSSJ) && !/\.vf-grade \.val-tbl td\{font-size:15px/.test(CSSJ));
+t('e a janela nao ganha barra pro lado', /#val-box\.vf-grande #val-body\{overflow-x:hidden\}/.test(CSSJ));
 
 // A MEDIDA: seis galgos de cinco linhas cabem numa tela so? Num Chromium de
-// verdade, com o zoom .9 do app e os remarks mais longos da tela do Bruno.
+// verdade, com o zoom .9 do app e dados como os do print do Bruno de 19/09
+// (Hove A5): split vazio, bends "4-3-", linha de 285m, grade T3/D3/T, e os
+// remarks compridos de verdade. O dado sintetico uniforme da primeira versao
+// passou aqui e estourou na tela dele.
 let chromium = null;
 try { chromium = require('playwright').chromium; } catch (e) { chromium = null; }
 const medidas = [];
@@ -188,29 +202,42 @@ if (chromium) {
     const { designTokensCSS } = require('./src/utils/designTokens');
     const css = (APP.match(/vs\.textContent=`([\s\S]*?)`;/) || [])[1];
     const js = ['_escPdf', '_janelaGrande', 'buildDogCard', 'extrairRemarks', '_pintaPdfCompleto', 'corridaDisplay', 'getRaceClass'].map(fn).join('\n');
-    const REM = ['Mid,QAw,SnLd-2,CmAgnNrLn', 'Rls-Mid,Eased&BdCrd1&1/4', 'Mid,EP,Fcd-Ck1/4', 'Rls-Mid,Bmp1/4,Crd3', 'Mid-W,Ld-Crd1/4'];
-    const seis = pdfDe([1, 2, 3, 4, 5, 6].map(function (tp) {
-      return { trap: tp, nome: 'Roseville Comet ' + tp, historico: [0, 1, 2, 3, 4].map(function (k) {
-        return L(String(14 - k * 3).padStart(2, '0') + 'Sep26 CPark 491m [' + tp + '] 3.1' + k + ' 4444 4th 5 Some Dog ' + REM[k] + ' 29.85 N 30.4 7/2 A3 30.1' + k);
+    const REM = ['Rls-Mid,HitRls1,W&Blk4', 'SAw,EP,Crd1,Imp1/4', 'Mid,CrdRnUp&1&1/4', 'EP,Crd1&1/4&3&4', 'Blk1&1/4,Ld3-3/4',
+      'QAw,Mid,ALd,HldOn', 'Mid,Crd&CkdW1', 'Rls-Mid,Eased&BdCrd1&1/4', 'MsdBrk,Crd1&3,RnOn'];
+    const GR = ['A5', 'T3', 'D3', 'T2', 'T', 'A4', 'A6'];
+    const NOMES = ['Sly Big Bird', 'Slingshot Coisty', 'Pips Gamble', 'Ballymac Rocketman', 'Swift Hazel Queen', 'Droopys Nightingale'];
+    const seis = [1, 2, 3, 4, 5, 6].map(function (tp, i) {
+      return { trap: tp, nome: NOMES[i], historico: [0, 1, 2, 3, 4].map(function (k) {
+        const dist = (k + i) % 3 === 0 ? 285 : (k === 2 ? 695 : 500);
+        return { data: (28 - k * 5) + (k % 2 ? 'Aug26' : 'Sep26'), pista: k === 3 ? 'Towcs' : 'Hove', dist: dist, trap: (k + tp) % 6 + 1,
+          split: (k + i) % 4 === 0 ? '' : (4.1 + k / 10).toFixed(2), bends: dist === 285 ? '4-3-' : (k % 2 ? '1-1-' : '4444'),
+          pos: ((k + i) % 6) + 1 + 'th', remarks: REM[(i * 2 + k) % REM.length], classe: GR[(k + i) % GR.length],
+          caltm: dist === 285 ? 16.87 : (30.23 + k / 7).toFixed(2) };
       }) };
-    }));
+    });
     const pag = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box;margin:0;padding:0}'
       + designTokensCSS() + '.trap-badge{display:inline-flex;border-radius:50%}' + css + '#val-modal{display:flex}</style></head><body>'
       + '<div id="val-modal" class="open"><div id="val-box"><div id="val-hdr"><h3 id="val-title"></h3></div><div id="val-body"></div></div></div>'
-      + '<script>' + js + '\n_pintaPdfCompleto(' + JSON.stringify({ corrida: 'CPark A3', dist: '491', trackFull: 'Central Park' }) + ',' + JSON.stringify(seis) + ');</script></body></html>';
+      + '<script>' + js + '\n_pintaPdfCompleto(' + JSON.stringify({ corrida: 'Hove A5', dist: '500', trackFull: 'Hove' }) + ',' + JSON.stringify(seis) + ');</script></body></html>';
     const browser = await chromium.launch();
     try {
-      for (const [w, h] of [[1920, 1080], [1600, 900], [1536, 864], [1366, 768]]) {
+      for (const [w, h] of [[1920, 1080], [1600, 900], [1600, 700], [1536, 864], [1366, 768], [1366, 650], [1280, 600]]) {
         const page = await browser.newPage({ viewport: { width: w, height: h } });
         await page.setContent(pag);
         const r = await page.evaluate(function () {
           const body = document.getElementById('val-body');
+          const dogs = [].slice.call(document.querySelectorAll('.val-dog'));
+          const larg = dogs.map(function (d) {
+            return [].slice.call(d.querySelectorAll('thead th')).map(function (th) { return Math.round(th.getBoundingClientRect().width); }).join(',');
+          });
           return {
             rola: body.scrollHeight > body.clientHeight + 1,
-            lado: [].slice.call(document.querySelectorAll('.val-dog')).some(function (d) { return d.scrollWidth > d.clientWidth + 1; })
+            lado: body.scrollWidth > body.clientWidth + 1 || dogs.some(function (d) { return d.scrollWidth > d.clientWidth + 1; }),
+            iguais: larg.every(function (x) { return x === larg[0]; })
           };
         });
-        t('6 galgos x 5 linhas cabem numa tela so em ' + w + 'x' + h, !r.rola && !r.lado);
+        t('6 galgos x 5 linhas cabem numa tela so em ' + w + 'x' + h + ', sem rolar pra baixo nem pro lado', !r.rola && !r.lado);
+        t('  e as colunas tem a mesma largura nos seis cards', r.iguais);
         await page.close();
       }
     } finally { await browser.close(); }

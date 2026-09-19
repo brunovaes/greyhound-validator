@@ -3278,35 +3278,65 @@ function injectValModal(){
 .vf-grade{display:grid;grid-template-columns:1fr 1fr;gap:10px 28px;align-items:start}
 .vf-cel{min-width:0}
 @media(min-width:769px){
-  /* Medido num navegador com o zoom .9 do app: seis galgos de cinco linhas
-     nesta medida pedem ~690px de altura e cabem ate num notebook de 1366x768.
-     Maior que isto, a tela de notebook ja passa a rolar. */
-  .vf-grade .val-dog-hdr{margin-bottom:5px}
-  .vf-grade .val-dog-hdr .trap-badge{width:30px;height:30px;font-size:15px}
-  .vf-grade .val-name{font-size:17px}
-  .vf-grade .val-tbl th{font-size:12px;padding:3px 4px}
-  .vf-grade .val-tbl td{font-size:15px;padding:4px 4px}
-  .vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:15px}
-  /* Remarks inteiro, sem reticencias: "todos os dados". A tabela passa a
-     distribuir a largura pelo conteudo — as colunas de numero curto (Trp,
-     Fin, Dis) cedem espaco pro Remarks. Em tela estreita, remark muito longo
-     quebra depois de uma virgula (o <wbr> que o buildDogCard poe so nesta
-     janela), em vez de estourar a tabela pro lado. O !important no col e'
-     obrigatorio: a largura do colgroup vem em style="" no proprio <col>, e
-     estilo em atributo ganha de qualquer regra sem ele. */
-  .vf-grade .val-tbl{table-layout:auto}
-  .vf-grade .val-tbl col{width:auto!important}
-  .vf-grade .val-td-rem{font-size:14px;max-width:none;white-space:normal;overflow:visible;text-overflow:clip}
-  #val-box.vf-grande #val-hdr h3{font-size:15px}
-  .vf-grade .val-badge-grade{font-size:14px}
-}
-/* Notebook (ate ~1450px): um ponto a menos na letra. Medido num navegador com
-   o zoom .9 do app e os remarks mais longos da tela do Bruno: em 1366x768 a
-   janela pedia 784px de 768 com a letra cheia; assim pede ~710px e cabe. */
-@media(min-width:1201px) and (max-width:1450px){
-  .vf-grade .val-tbl td,.vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:14px;padding:2px 3px}
-  .vf-grade .val-td-rem{font-size:13px}
+  /* COLUNAS IGUAIS EM TODOS OS CARDS, E NADA SAI DO CARD (Bruno, 19/09/2026:
+     "trepou as palavras... as colunas nao ficaram no mesmo tamanho e ainda
+     sim estou rolando para baixo e agora para o lado").
+
+     Antes a tabela era table-layout:auto: cada card media as proprias colunas
+     pelo proprio conteudo. Resultado: um card com remark comprido tinha outra
+     grade que o vizinho, e com a letra do tamanho que estava a tabela ficava
+     mais larga que a metade da janela e invadia o card do lado ("A505Sep26"
+     era o Grade de um colado na Date do outro).
+
+     Agora e' table-layout:fixed com a MESMA porcentagem em todos os cards: a
+     largura de cada coluna nao depende do que esta escrito nela, entao os seis
+     cards ficam alinhados, e a tabela nunca passa de 100% do card. O que nao
+     couber numa celula e' cortado dentro dela (overflow:hidden), nunca por
+     cima do vizinho. O Remarks e' o unico que quebra linha — depois de virgula,
+     no <wbr> que o buildDogCard poe so nesta janela — pra continuar inteiro.
+     O !important e' obrigatorio: a largura do colgroup vem em style="" no
+     proprio <col>, e estilo em atributo ganha de regra sem ele. */
+  .vf-grade .val-tbl{table-layout:fixed;width:100%}
+  .vf-grade .val-tbl col.c-date{width:11%!important}
+  .vf-grade .val-tbl col.c-track{width:9%!important}
+  .vf-grade .val-tbl col.c-dis{width:8%!important}
+  .vf-grade .val-tbl col.c-trp{width:6%!important}
+  .vf-grade .val-tbl col.c-split{width:7%!important}
+  .vf-grade .val-tbl col.c-bends{width:8%!important}
+  .vf-grade .val-tbl col.c-fin{width:6%!important}
+  .vf-grade .val-tbl col.c-rem{width:27%!important}
+  .vf-grade .val-tbl col.c-grade{width:8%!important}
+  .vf-grade .val-tbl col.c-caltm{width:10%!important}
+  .vf-grade .val-dog-hdr{margin-bottom:3px}
+  .vf-grade .val-dog-hdr .trap-badge{width:26px;height:26px;font-size:13px}
   .vf-grade .val-name{font-size:16px}
+  .vf-grade .val-tbl th{font-size:11px;padding:2px 3px;overflow:hidden;text-overflow:clip}
+  /* Um ponto a menos que a versao anterior (15 -> 14), como o Bruno pediu. */
+  .vf-grade .val-tbl td{font-size:14px;padding:3px 3px;white-space:nowrap;overflow:hidden;text-overflow:clip}
+  .vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:14px}
+  .vf-grade .val-td-rem{font-size:13px;max-width:none;white-space:normal;overflow:hidden;text-overflow:clip;line-height:1.2}
+  #val-box.vf-grande #val-hdr h3{font-size:14px}
+  .vf-grade .val-badge-grade{font-size:12px;padding:0 3px}
+  /* Rede de seguranca: se um dia algo ainda passar da largura, a janela nao
+     ganha barra de rolar pro lado. */
+  #val-box.vf-grande #val-body{overflow-x:hidden}
+}
+/* Notebook (ate ~1450px de largura): mais um ponto a menos. */
+@media(min-width:1201px) and (max-width:1450px){
+  .vf-grade .val-tbl td,.vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:13px;padding:2px 2px}
+  .vf-grade .val-td-rem{font-size:12px}
+  .vf-grade .val-name{font-size:15px}
+  .vf-grade .val-tbl th{font-size:10px}
+}
+/* Tela muito baixa (notebook com a escala do Windows em 150%, ou janela do
+   navegador sem maximizar): as linhas encolhem pra caber em altura. Medido:
+   com a letra acima os seis galgos pedem ~550px, e 1280x600 ja' cabe sem
+   isto; aqui e' so a folga pra telas ainda menores. */
+@media(min-width:1201px) and (max-height:600px){
+  .vf-grade{gap:4px 24px}
+  .vf-grade .val-tbl td{padding-top:1px;padding-bottom:1px}
+  .vf-grade .val-dog-hdr .trap-badge{width:22px;height:22px;font-size:12px}
+  #val-box.vf-grande #val-body{padding:6px 14px}
 }
 @media(max-width:1200px){.vf-grade{grid-template-columns:1fr}}
 .vf-nota{font-size:11px;color:rgba(255,255,255,.45);margin:0 0 8px}
