@@ -2057,24 +2057,41 @@ function resumoDoDia(date) {
   let v = null;
   try {
     const cd = require('../utils/camadasDoDia');
+    // DUAS CONTAS (19/09/2026):
+    //   corridas  = toda corrida do dia que ainda nao largou (skip inclusive).
+    //               So informativa.
+    //   restantes = dessas, as que o motor leu (hist_full) — as NAO skip, as
+    //               unicas que podem virar TOP/HIGH/GOOD.
+    // O dia FECHA quando acabam as `restantes`, e o horario de fechamento e' o
+    // da ultima corrida NAO skip, de qualquer categoria (decisao do Bruno: "tem
+    // que ver a ultima corrida nao skipada... e marcar esse horario. E ai depois
+    // desse horario ai sim encerramos"). Skip que sobra depois dela (as OR das
+    // 9:54 PM de 19/09) nao segura o dia aberto: nao tem oportunidade possivel.
     const rows = db.prepare(
-      "SELECT r.corrida, r.hora FROM races r JOIN race_sessions s ON s.id=r.session_id "
-      + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.hist_full IS NOT NULL "
+      "SELECT r.corrida, r.hora, (r.hist_full IS NOT NULL) AS lida FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? "
       + "AND " + require('../utils/anuladas').SQL_NAO_ANULADA
     ).all(date, CANONICO);
+    // A mesma corrida em dois lotes do dia conta uma vez; se qualquer copia foi
+    // lida pelo motor, ela conta como lida.
     const vistas = {};
-    rows.forEach(r => { vistas[cd.chaveCorrida(r.corrida, r.hora)] = r; });
+    rows.forEach(r => {
+      const k = cd.chaveCorrida(r.corrida, r.hora);
+      if (!vistas[k] || (r.lida && !vistas[k].lida)) vistas[k] = r;
+    });
     const unicas = Object.keys(vistas).map(k => vistas[k]);
     const agora = Date.now();
     const faltam = unicas.filter(r => !cd.expirou(r.hora, agora));
-    // A ultima a largar, em hora de Brasilia, pra tela poder dizer "ate quando".
+    // A ultima NAO skip a largar, em hora de Brasilia: e' o horario em que o
+    // dia fecha, e e' o que a tela mostra.
     let ultima = null, ultimaMin = -1;
-    faltam.forEach(r => {
+    faltam.filter(r => r.lida).forEach(r => {
       const hb = cd.horaBr(r.hora);
       const m = hb ? (parseInt(hb.split(':')[0], 10) * 60 + parseInt(hb.split(':')[1], 10)) : -1;
       if (m > ultimaMin) { ultimaMin = m; ultima = hb; }
     });
-    v = { total: unicas.length, restantes: faltam.length, ultima_hora_br: ultima };
+    v = { total: unicas.length, corridas: faltam.length,
+          restantes: faltam.filter(r => r.lida).length, ultima_hora_br: ultima };
   } catch (e) { v = null; }
   _resumoDiaCache = { date, ts: Date.now(), v };
   return v;

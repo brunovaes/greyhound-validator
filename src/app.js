@@ -960,6 +960,11 @@ function _resumoDiaPainel() {
     return (d && d.dia) ? d.dia : null;
   } catch (e) { return null; }
 }
+// O DIA FECHA NA ULTIMA CORRIDA NAO SKIP (Bruno, 19/09/2026): "tem que ver a
+// ultima corrida nao skipada... e marcar esse horario. E ai depois desse
+// horario ai sim encerramos". `dia.restantes` conta so as nao skip (as que
+// podem abrir AvB) e `dia.ultima_hora_br` e' o horario da ultima delas. Skip
+// que sobra depois disso nao segura o dia aberto.
 function showAllExpiredMsg() {
   var focusCol = document.getElementById('focus-col');
   var dia = _resumoDiaPainel();
@@ -971,7 +976,7 @@ function showAllExpiredMsg() {
     : 'Favor aguardar o próximo turno.';
   var detalhe = aindaTem
     ? '<div style="font-size:12px;color:var(--mut)">' + dia.restantes + (dia.restantes === 1 ? ' corrida ainda pode abrir AvB hoje' : ' corridas ainda podem abrir AvB hoje')
-      + (dia.ultima_hora_br ? ', a última às ' + dia.ultima_hora_br : '') + '.</div>'
+      + (dia.ultima_hora_br ? '. Encerramos às ' + dia.ultima_hora_br : '') + '.</div>'
     : '';
   if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px;margin-left:-85px"><div style="font-size:64px">' + (aindaTem ? '&#128064;' : '&#9200;') + '</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">' + titulo + '</div><div style="font-size:13px">' + texto + '</div>' + detalhe + '</div>';
   var col = document.getElementById('race-list-col');

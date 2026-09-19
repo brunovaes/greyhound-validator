@@ -68,6 +68,9 @@ const sess = db.prepare('INSERT INTO race_sessions (user_id, name, created_at) V
 const insRace = db.prepare('INSERT INTO races (session_id, user_id, hora, corrida, dist, nivel, trap_fav, trap_und, name_fav, name_und, hist_full) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
 const idMonmore = insRace.run(sess, 1, '12:42', 'Monmore A4', '480', 'media', 1, 6, 'Cabra Rambo', 'Mumbai Pickle', '[]').lastInsertRowid;
 const idHove = insRace.run(sess, 1, '3:10', 'Hove A5', '500', 'media', 2, 3, 'Never Let Go', 'Yougo Jenny', '[]').lastInsertRowid;
+// Uma skip: o motor nao liberou AvB, entao nao tem hist_full. Ela acontece do
+// mesmo jeito, e desde 19/09 conta pro "ainda nao fechamos" (mas nao pra camada).
+insRace.run(sess, 1, '9:54', 'Towcs A7', '500', 'skip', 0, 0, '', '', null);
 // A aposta do Bruno na corrida que nao vai acontecer.
 db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet_entrou) VALUES (?,?,?,?,1)').run(idMonmore, 1, 1.8, 2.5);
 
@@ -77,7 +80,10 @@ let idNovoGlobal = null;
   try {
     bloco('[1] ANULAR: SO ADMIN, E A MARCA E\' POR DIA + CORRIDA + HORA');
     const antes = await pedir(srv, 'GET', '/api/painel-dia');
-    t('antes: o dia tem 2 corridas que podem virar camada', antes.json && antes.json.dia && antes.json.dia.total === 2);
+    t('antes: o dia tem 3 corridas (a skip inclusive)', antes.json && antes.json.dia && antes.json.dia.total === 3);
+    t('e a skip nunca conta como "pode abrir AvB"', antes.json.dia.restantes <= antes.json.dia.corridas && antes.json.dia.restantes <= 2);
+    // A skip e' a das 9:54 (17:54 BR); a hora de fechar vem so das nao skip.
+    t('a hora de encerrar nunca e\' a da skip', antes.json.dia.ultima_hora_br !== '17:54');
     const semPerm = await pedir(srv, 'POST', '/api/race/' + idMonmore + '/anular', {}, 'comum');
     t('usuario comum nao anula (403)', semPerm.status === 403);
     const r1 = await pedir(srv, 'POST', '/api/race/' + idMonmore + '/anular', { motivo: 'abandonada' });
@@ -116,7 +122,7 @@ let idNovoGlobal = null;
     const all2 = (h2.texto.match(/var ALL_RACES=(\[[\s\S]*?\]);\r?\n/) || [])[1] || '[]';
     t('a corrida recriada continua fora do Historico', all2.indexOf('Monmore A4') < 0);
     const p2 = await pedir(srv, 'GET', '/api/painel-dia');
-    t('e fora do resumo do dia do painel (so a Hove conta)', p2.json && p2.json.dia && p2.json.dia.total === 1);
+    t('e fora do resumo do dia do painel (so a Hove e a skip contam)', p2.json && p2.json.dia && p2.json.dia.total === 2);
 
     bloco('[5] DESFAZER VOLTA TUDO');
     const semPerm2 = await pedir(srv, 'POST', '/api/anuladas/desanular', { data: DIA, chave: 'monmore a4|12:42' }, 'comum');
@@ -127,7 +133,7 @@ let idNovoGlobal = null;
     const all3 = (h3.texto.match(/var ALL_RACES=(\[[\s\S]*?\]);\r?\n/) || [])[1] || '[]';
     t('a corrida volta pro Historico', all3.indexOf('Monmore A4') >= 0 && !/Corridas anuladas neste dia/.test(h3.texto));
     const p3 = await pedir(srv, 'GET', '/api/painel-dia');
-    t('e pro resumo do dia', p3.json && p3.json.dia && p3.json.dia.total === 2);
+    t('e pro resumo do dia', p3.json && p3.json.dia && p3.json.dia.total === 3);
     // A aposta estava presa ao id antigo, que a recriacao do [4] apagou; aqui
     // ela volta presa ao novo, como faz o autoSaveSession (que leva a odd junto).
     db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet_entrou) VALUES (?,?,?,?,1)').run(idNovoGlobal, 1, 1.8, 2.5);
@@ -162,14 +168,18 @@ let idNovoGlobal = null;
     ctx.window.PainelDia = { dados: function () { return dia === undefined ? null : { dia: dia }; } };
     foco.innerHTML = ''; ctx.showAllExpiredMsg(); return foco.innerHTML;
   };
-  const a = tela({ total: 12, restantes: 3, ultima_hora_br: '17:45' });
-  t('sobram 3: "Ainda não fechamos!"', /Ainda não fechamos!/.test(a) && /Fique atento às possíveis oportunidades/.test(a));
-  t('e diz quantas e ate quando', /3 corridas ainda podem abrir AvB hoje, a última às 17:45/.test(a));
-  t('sobra 1: singular', /1 corrida ainda pode abrir AvB hoje/.test(tela({ total: 12, restantes: 1, ultima_hora_br: '17:45' })));
-  t('o dia teve corrida e todas largaram: "Ciclo do dia encerrado"', /Ciclo do dia encerrado/.test(tela({ total: 12, restantes: 0, ultima_hora_br: null })));
-  t('sem corrida no dia (antes da coleta): a mensagem de antes', /Favor aguardar o próximo turno/.test(tela({ total: 0, restantes: 0 })));
+  const a = tela({ total: 12, corridas: 4, restantes: 3, ultima_hora_br: '17:32' });
+  t('sobram 3 nao skip: "Ainda não fechamos!" + fique atento', /Ainda não fechamos!/.test(a) && /Fique atento às possíveis oportunidades/.test(a));
+  t('e diz quantas e a hora em que encerra', /3 corridas ainda podem abrir AvB hoje\. Encerramos às 17:32\./.test(a));
+  t('sobra 1: singular', /1 corrida ainda pode abrir AvB hoje/.test(tela({ total: 12, corridas: 1, restantes: 1, ultima_hora_br: '17:32' })));
+  // O caso de 19/09: as ultimas do dia (Shelbourne e Dunstall 9:54 PM, OR)
+  // eram skip. Decisao do Bruno: o dia fecha na ultima NAO skip.
+  const s = tela({ total: 12, corridas: 2, restantes: 0, ultima_hora_br: null });
+  t('so sobram skips: o dia fecha ("Ciclo do dia encerrado")', /Ciclo do dia encerrado/.test(s));
+  t('todas largaram: "Ciclo do dia encerrado"', /Ciclo do dia encerrado/.test(tela({ total: 12, corridas: 0, restantes: 0, ultima_hora_br: null })));
+  t('sem corrida no dia (antes da coleta): a mensagem de antes', /Favor aguardar o próximo turno/.test(tela({ total: 0, corridas: 0, restantes: 0 })));
   t('painel ainda sem resposta: a mensagem de antes, nunca uma promessa', /Favor aguardar o próximo turno/.test(tela(undefined)));
-  t('nenhum travessao comprido na mensagem nova', !/—/.test(a));
+  t('nenhum travessao comprido nas mensagens novas', !/—/.test(a) && !/—/.test(s));
 
   try { db.close(); } catch (e) {}
   try { fs.unlinkSync(DBF); } catch (e) {}
