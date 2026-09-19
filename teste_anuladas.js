@@ -71,6 +71,7 @@ const idHove = insRace.run(sess, 1, '3:10', 'Hove A5', '500', 'media', 2, 3, 'Ne
 // A aposta do Bruno na corrida que nao vai acontecer.
 db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet_entrou) VALUES (?,?,?,?,1)').run(idMonmore, 1, 1.8, 2.5);
 
+let idNovoGlobal = null;
 (async function () {
   const srv = app.listen(0);
   try {
@@ -97,19 +98,19 @@ db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet
     t('usuario comum nao ve lixeira nem Desfazer', hc.texto.indexOf('onclick="anularCorrida(this)"') < 0 && hc.texto.indexOf('onclick="desanularCorrida(this)"') < 0);
     t('a tela carrega o dialogo do app (sem confirm() nativo)', /static\/js\/dialogo\.js/.test(h.texto) && /ghConfirmar\(/.test(h.texto));
 
-    bloco('[3] A BANCA: A APOSTA FICA, MARCADA ANULADA, SEM VALOR');
+    bloco('[3] A BANCA: A APOSTA SAI TAMBEM (MAS NAO E\' APAGADA)');
+    // "ao excluir, nao tem como excluir o registro da banca tb?" (19/09/2026)
     const bd = await pedir(srv, 'GET', '/banca/data?view=day&date=' + DIA);
-    const ap = (bd.json && bd.json.apostas || []).find(function (a) { return a.id === idMonmore; });
-    t('a aposta continua na lista do dia', !!ap);
-    t('status "anulada"', ap && ap.status === 'anulada');
-    t('sem green nem red, e sem valor (ganhoReais null)', ap && ap.bateu == null && ap.ganhoReais == null);
-    t('nao conta como pendente', bd.json && bd.json.pendentes === 0);
-    t('nem no dinheiro transitado (o stake volta)', bd.json && bd.json.dinheiroTransitado === 0);
+    t('a Banca respondeu', bd.status === 200 && bd.json && bd.json.ok);
+    t('a aposta da corrida anulada saiu da Banca', !(bd.json.apostas || []).some(function (a) { return a.corrida === 'Monmore A4'; }));
+    t('e nao sobrou pendente nem dinheiro transitado dela', bd.json.pendentes === 0 && bd.json.dinheiroTransitado === 0);
+    t('mas a odd e as unidades continuam guardadas (o Desfazer precisa delas)',
+      !!db.prepare('SELECT 1 FROM race_user_data WHERE race_id=? AND odd=1.8 AND bet_unidades=2.5').get(idMonmore));
 
     bloco('[4] A ANALISAR RECRIA A CORRIDA COM OUTRO ID, E ELA CONTINUA ANULADA');
     // E' o que o autoSaveSession faz: apaga as corridas do dia e grava de novo.
     db.prepare('DELETE FROM races WHERE id=?').run(idMonmore);
-    const idNovo = insRace.run(sess, 1, '12:42', 'Monmore A4', '480', 'media', 1, 6, 'Cabra Rambo', 'Mumbai Pickle', '[]').lastInsertRowid;
+    const idNovo = idNovoGlobal = insRace.run(sess, 1, '12:42', 'Monmore A4', '480', 'media', 1, 6, 'Cabra Rambo', 'Mumbai Pickle', '[]').lastInsertRowid;
     t('(o id mudou)', idNovo !== idMonmore);
     const h2 = await pedir(srv, 'GET', '/sessao/' + sess);
     const all2 = (h2.texto.match(/var ALL_RACES=(\[[\s\S]*?\]);\r?\n/) || [])[1] || '[]';
@@ -127,6 +128,12 @@ db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet
     t('a corrida volta pro Historico', all3.indexOf('Monmore A4') >= 0 && !/Corridas anuladas neste dia/.test(h3.texto));
     const p3 = await pedir(srv, 'GET', '/api/painel-dia');
     t('e pro resumo do dia', p3.json && p3.json.dia && p3.json.dia.total === 2);
+    // A aposta estava presa ao id antigo, que a recriacao do [4] apagou; aqui
+    // ela volta presa ao novo, como faz o autoSaveSession (que leva a odd junto).
+    db.prepare('INSERT INTO race_user_data (race_id, user_id, odd, bet_unidades, bet_entrou) VALUES (?,?,?,?,1)').run(idNovoGlobal, 1, 1.8, 2.5);
+    const bd2 = await pedir(srv, 'GET', '/banca/data?view=day&date=' + DIA);
+    const volta = (bd2.json && bd2.json.apostas || []).find(function (a) { return a.corrida === 'Monmore A4'; });
+    t('a aposta volta pra Banca com a mesma odd e as mesmas unidades', !!volta && Number(volta.odd) === 1.8 && Number(volta.bet_unidades) === 2.5);
   } catch (e) {
     t('o teste rodou sem erro: ' + e.message, false);
   } finally { srv.close(); }

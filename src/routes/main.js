@@ -3619,9 +3619,8 @@ document.addEventListener('click', function(ev){
 var ALL_RACES=${JSON.stringify(races.filter(naTela).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida),/* o PDF completo e' so da Analisar; aqui pesaria a pagina a toa */pdf_completo:undefined}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
 // ── ANULAR CORRIDA (Bruno, 19/09/2026) ─────────────────────────────────────
-// A corrida nao aconteceu. Nao apaga: marca. Ela some daqui e das contas do
-// dia, a aposta vira "Anulada" na Banca, e o "Desfazer" no fim da tela volta
-// tudo como era. \\n com duas barras: isto mora dentro de um template literal.
+// A corrida nao aconteceu. Nao apaga: marca. Ela some daqui, das contas do
+// dia e da Banca, e o "Desfazer" no fim da tela volta tudo como era. \\n com duas barras: isto mora dentro de um template literal.
 function anularCorrida(el){
   var id = el.getAttribute('data-row');
   var r = ALL_RACES.find(function(x){ return String(x.id) === String(id); }) || {};
@@ -3629,8 +3628,8 @@ function anularCorrida(el){
     titulo: 'Anular esta corrida?',
     texto: (r.hora || '') + ' UK  ' + (r.corridaNome || r.corrida || '') + '\\n\\n'
       + 'Use quando a corrida NAO aconteceu. Ela sai do Historico e das contas do dia, '
-      + 'e se voce apostou nela a aposta aparece na Banca como Anulada, sem green nem red. '
-      + 'Nada e apagado: da pra desfazer na lista de anuladas, no fim desta tela.',
+      + 'e se voce apostou nela a aposta sai da Banca tambem. '
+      + 'Nada e apagado: da pra desfazer na lista de anuladas, no fim desta tela, e a aposta volta como era.',
     ok: 'Anular',
     perigo: true
   }).then(async function(sim){

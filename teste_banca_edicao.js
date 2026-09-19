@@ -64,9 +64,7 @@ bloco('[3] O STATUS NAO VIROU CAMPO');
 
 t('nao existe campo de status na tabela', !/data-f="bateu"/.test(BANCA) && !/data-f="status"/.test(BANCA));
 t('o status continua saindo do bateu resolvido no servidor',
-  // Desde 19/09/2026 a corrida ANULADA vem na frente (nao tem green nem red);
-  // o resto da regra e' o mesmo de antes.
-  /status: a\.anulada \? 'anulada' : a\.bateu === 'sim' \? 'green' : a\.bateu === 'nao' \? 'red' : 'pendente'/.test(BANCA));
+  /status: a\.bateu === 'sim' \? 'green' : a\.bateu === 'nao' \? 'red' : 'pendente'/.test(BANCA));
 t('e o resolverAposta continua dando a palavra final ao SEU par',
   /if \(esc && a\.finishing_order_json\)/.test(BANCA));
 
