@@ -3296,7 +3296,13 @@ function injectValModal(){
      no <wbr> que o buildDogCard poe so nesta janela — pra continuar inteiro.
      O !important e' obrigatorio: a largura do colgroup vem em style="" no
      proprio <col>, e estilo em atributo ganha de regra sem ele. */
-  .vf-grade .val-tbl{table-layout:fixed;width:100%}
+  .vf-grade .val-tbl{table-layout:fixed;width:100%;min-width:0}
+  /* O min-width:0 acima e' A CORRECAO de 19/09. O main.js tem uma regra
+     GERAL "table{...;min-width:880px}" (feita pras tabelas do Historico) que
+     pega toda tabela da pagina, esta inclusive. Com o card tendo ~740px, a
+     tabela era obrigada a ter 880: o Remarks engolia a sobra e Grade/CalTm
+     ficavam pra fora do card. Nas medicoes anteriores eu montei a pagina so
+     com o CSS do app.js, sem o do main.js, e por isso nunca vi o problema. */
   /* Bruno: "vai ter que reduzir todas as colunas... deixar meio que no
      automatico... ainda nao consigo ver o tempo". Entao cada coluna curta
      tem SO a largura do proprio conteudo (medida com a fonte Inter do app:

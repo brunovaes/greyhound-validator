@@ -177,7 +177,7 @@ t('e ele so quebra depois de virgula', html.indexOf(',<wbr>') >= 0);
 // cada card media as colunas pelo proprio texto e a tabela invadia o vizinho.
 const CSSJ = semComentarios(APP);
 t('a tabela da janela e\' de largura fixa (nao mede pelo texto)',
-  /\.vf-grade \.val-tbl\{table-layout:fixed;width:100%\}/.test(CSSJ) && !/\.vf-grade \.val-tbl\{table-layout:auto/.test(CSSJ));
+  /\.vf-grade \.val-tbl\{table-layout:fixed;width:100%;min-width:0\}/.test(CSSJ) && !/\.vf-grade \.val-tbl\{table-layout:auto/.test(CSSJ));
 // "Reduzir todas as colunas... deixar meio que no automatico": as nove curtas
 // com a largura do proprio conteudo, em px, iguais em todo card; o Remarks sem
 // largura, ficando com o que sobra.
@@ -193,6 +193,7 @@ t('celula que nao couber corta dentro dela, nao por cima do vizinho',
 t('a letra desceu um ponto (15 -> 14) so no computador',
   /@media\(min-width:769px\)\{[\s\S]*?\.vf-grade \.val-tbl td\{font-size:14px/.test(CSSJ) && !/\.vf-grade \.val-tbl td\{font-size:15px/.test(CSSJ));
 t('e a janela nao ganha barra pro lado', /#val-box\.vf-grande #val-body\{overflow-x:hidden\}/.test(CSSJ));
+t('a tabela anula o min-width:880px geral do main.js', /\.vf-grade \.val-tbl\{table-layout:fixed;width:100%;min-width:0\}/.test(CSSJ));
 
 // A MEDIDA: seis galgos de cinco linhas cabem numa tela so? Num Chromium de
 // verdade, com o zoom .9 do app e dados como os do print do Bruno de 19/09
@@ -205,7 +206,13 @@ const medidas = [];
 if (chromium) {
   medidas.push((async function () {
     const { designTokensCSS } = require('./src/utils/designTokens');
-    const css = (APP.match(/vs\.textContent=`([\s\S]*?)`;/) || [])[1];
+    // A regra GERAL de tabela do main.js ("table{...min-width:880px}") vale na
+    // pagina de verdade. Sem ela aqui, a medida passava e a tela do Bruno
+    // cortava o CalTm (19/09) — foi exatamente o que aconteceu.
+    const MAINJS = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'main.js'), 'utf8');
+    const tabelaGeral = (MAINJS.match(/^table\{[^\r\n]*/m) || [''])[0];
+    if (!tabelaGeral) throw new Error('a regra geral table{} do main.js sumiu: rever esta medida');
+    const css = tabelaGeral + (APP.match(/vs\.textContent=`([\s\S]*?)`;/) || [])[1];
     const js = ['_escPdf', '_janelaGrande', 'buildDogCard', 'extrairRemarks', '_pintaPdfCompleto', 'corridaDisplay', 'getRaceClass'].map(fn).join('\n');
     const REM = ['Rls-Mid,HitRls1,W&Blk4', 'SAw,EP,Crd1,Imp1/4', 'Mid,CrdRnUp&1&1/4', 'EP,Crd1&1/4&3&4', 'Blk1&1/4,Ld3-3/4',
       'QAw,Mid,ALd,HldOn', 'Mid,Crd&CkdW1', 'Rls-Mid,Eased&BdCrd1&1/4', 'MsdBrk,Crd1&3,RnOn'];
