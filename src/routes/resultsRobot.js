@@ -177,6 +177,40 @@ function extractDnf(text) {
   return nomes;
 }
 
+// ── A PAGINA E' DESTA CORRIDA? (Bruno, 19/09/2026) ─────────────────────────
+//
+// "tem duas corridas em que o BATEU esta como aguarda, porem o RESULTADO ja
+// contem o replay... porque nao esta puxando a ordem de chegada?"
+//
+// O robo casa o link do Racing Post com a corrida do banco SO PELO HORARIO. E
+// varias pistas correm no mesmo horario. Quando so UMA corrida nossa tinha
+// aquele horario, ele aceitava QUALQUER pagina daquele horario sem conferir a
+// pista — a de outra pista inclusive. Nessa pagina nenhum nome batia com o
+// race_card, a chegada saia vazia, e o UPDATE gravava assim mesmo: o replay
+// (da OUTRA corrida) e a chegada em branco. Se a pagina errada fosse a ultima
+// daquele horario na lista, ela apagava por cima a chegada certa que a pagina
+// certa tinha acabado de gravar.
+//
+// A conferencia agora e' pelos NOMES DOS GALGOS: quantos nomes da chegada
+// batem com o race_card da corrida. Nome de galgo nao se repete entre pistas
+// no mesmo horario; abreviacao de pista ("Romfd" x "Romford") casa mal, e por
+// isso a pista vira so o ultimo recurso.
+function casamentoComCard(finishing, raceCardJson) {
+  let card = [];
+  try { card = typeof raceCardJson === 'string' ? JSON.parse(raceCardJson) : (raceCardJson || []); } catch (e) { card = []; }
+  if (!Array.isArray(card) || !card.length) return null;   // sem card: nao da pra conferir
+  const traps = new Set();
+  for (const f of (finishing || [])) {
+    for (const g of card) {
+      if (similarity(f.name, g.nome || '') > 0.5) { traps.add(String(g.trap)); break; }
+    }
+  }
+  return traps.size;
+}
+// Minimo de galgos da chegada que precisam estar no card pra pagina ser desta
+// corrida. Dois: um nome so pode ser coincidencia de palavra ("Blue ...").
+const MIN_CASAMENTO = 2;
+
 // ── Robô principal ────────────────────────────────────────────────────────────
 async function runResultsRobot(targetDate) {
   if (status.running) { addLog('warn', 'Robo ja esta rodando.'); return; }
@@ -295,7 +329,24 @@ async function runResultsRobot(targetDate) {
         // varias pistas correm no mesmo slot), desempata pelo nome da pista,
         // que a gente sabe de verdade so depois de abrir a pagina.
         var dbRace;
-        if (candidates.length === 1) {
+        // 1) PELOS NOMES DOS GALGOS (ver casamentoComCard). Vale com um ou com
+        //    varios candidatos: com um so e' exatamente onde o erro acontecia.
+        const _chegadaPre = extractFinishingOrder(pageText.text);
+        const _notas = candidates.map(function (c) { return { c: c, n: casamentoComCard(_chegadaPre, c.race_card) }; });
+        const _comCard = _notas.filter(function (x) { return x.n !== null; });
+        const _bons = _comCard.filter(function (x) { return x.n >= MIN_CASAMENTO; })
+          .sort(function (a, b) { return b.n - a.n; });
+        if (_bons.length && (_bons.length === 1 || _bons[0].n > _bons[1].n)) {
+          dbRace = _bons[0].c;
+          if (candidates.length > 1) addLog('info', 'Pista pelos nomes dos galgos: ' + dbRace.corrida + ' (' + _bons[0].n + ' nomes batem)');
+        } else if (_comCard.length === candidates.length && _chegadaPre.length) {
+          // Todo candidato tem card e nenhum bate: a pagina e' de outra pista.
+          // NAO grava nada — gravar aqui apagaria a chegada certa.
+          addLog('info', link.rTime + ' - pagina de outra pista (nenhum nome bate com '
+            + candidates.map(function (c) { return c.corrida; }).join(' | ') + ') — pulando.');
+          continue;
+        } else if (candidates.length === 1) {
+          // 2) Sem card pra conferir (sessao antiga): o comportamento de antes.
           dbRace = candidates[0];
         } else {
           const scrapedTrack = extractTrackFromText(pageText.text);
@@ -454,6 +505,14 @@ async function runResultsRobot(targetDate) {
         const bateu = vereditoAvB(finishingOrderCompleto, dbRace.trap_fav, dbRace.trap_und, posFav, posUnd);
         addLog('info', 'Fav:"'+favName+'"=pos'+posFav+' Und:"'+undName+'"=pos'+posUnd+' → '+(bateu === '' ? 'INDEFINIDO' : bateu.toUpperCase()));
 
+        // Nada de chegada nem de podio: NAO grava. Um UPDATE aqui so trocaria o
+        // que ja estava certo no banco por vazio (e um replay possivelmente
+        // errado). A proxima volta do robo tenta de novo.
+        if (!finishingOrderCompleto.length && !r1 && !r2 && !r3) {
+          addLog('warn', link.rTime + ' ' + dbRace.corrida + ' - nenhum galgo da pagina bateu com o card — nada gravado.');
+          continue;
+        }
+
         logChanges(
           dbRace.id, 'results_robot', dbRace,
           { bateu: bateu, resultado_1: r1, resultado_2: r2, resultado_3: r3 },
@@ -587,6 +646,8 @@ router.get('/status', requireAdmin, (req, res) => {
 
 module.exports = router;
 module.exports.runResultsRobot  = runResultsRobot;
+module.exports.casamentoComCard = casamentoComCard;
+module.exports.MIN_CASAMENTO    = MIN_CASAMENTO;
 module.exports.getResultsStatus = () => ({ ...status });
 
 module.exports.requestStop      = () => { status.stopRequested = true; };
