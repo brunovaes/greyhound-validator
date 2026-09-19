@@ -1263,6 +1263,46 @@ async function rodarAnaliseAutomatica(date, userId) {
   return { ok: true, sessionId, total: allRaces.length, avbs: allRaces.filter(r=>r.nivel!=='skip').length, errors: errors.length ? errors : undefined };
 }
 
+// ── ANULAR / DESANULAR CORRIDA (Bruno, 19/09/2026) ─────────────────────────
+// A lixeirinha do Historico. Marca a corrida como anulada (nao apaga nada; ver
+// src/utils/anuladas.js). So admin, como a correcao de chegada: e' uma decisao
+// que tira a corrida de todas as contas do dia.
+router.post('/race/:id/anular', express.json(), (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Somente admin pode anular corrida.' });
+  try {
+    const an = require('../utils/anuladas');
+    const c = an.daCorrida(db, req.params.id);
+    if (!c) return res.status(404).json({ error: 'Corrida não encontrada.' });
+    const motivo = (req.body && req.body.motivo) ? String(req.body.motivo).slice(0, 200) : null;
+    an.anular(db, { data: c.data, corrida: c.corrida, hora: c.hora, motivo, por: req.user.id });
+    // A camada da corrida tem que sumir ja, nao daqui a 12s.
+    _painelDiaCache = { date: null, ts: 0, corridas: null };
+    _resumoDiaCache = { date: null, ts: 0, v: null };
+    res.json({ ok: true, data: c.data, chave: an.chave(c.corrida, c.hora) });
+  } catch (e) {
+    console.error('[anular]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+// Desanula pela chave (dia + corrida + hora), e nao pelo id: a corrida pode ter
+// sido recriada pela Analisar depois de anulada, com outro id.
+router.post('/anuladas/desanular', express.json(), (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Somente admin pode desfazer a anulação.' });
+  try {
+    const b = req.body || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.data || '')) || !b.chave) return res.status(400).json({ error: 'Faltou o dia ou a corrida.' });
+    const n = require('../utils/anuladas').desanular(db, { data: String(b.data), chave: String(b.chave) });
+    _painelDiaCache = { date: null, ts: 0, corridas: null };
+    _resumoDiaCache = { date: null, ts: 0, v: null };
+    res.json({ ok: true, desfeitas: n });
+  } catch (e) {
+    console.error('[desanular]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.put('/race/:id', express.json(), (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
   const userId = req.user.id;
@@ -1945,7 +1985,10 @@ function baseDoDia(date) {
       const rows = db.prepare(
         "SELECT r.id, r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json "
         + "FROM races r JOIN race_sessions s ON s.id=r.session_id "
-        + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+        + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.hist_full IS NOT NULL "
+        // Corrida ANULADA (19/09/2026) sai daqui: nao vira camada, nao toca
+        // alarme, nao manda push (o agendador le esta mesma base).
+        + "AND " + require('../utils/anuladas').SQL_NAO_ANULADA + " ORDER BY r.hora"
       ).all(date, CANONICO);
       const h2hRows = db.prepare('SELECT corrida, hora, pares_json, capturado_em FROM avb_abertos WHERE data=?').all(date);
       const h2hByRace = {};
@@ -1997,6 +2040,46 @@ function baseDoDia(date) {
   return corridasBase;
 }
 
+// ── QUANTAS CORRIDAS AINDA PODEM VIRAR CAMADA HOJE (Bruno, 19/09/2026) ──────
+// A tela Analisar, quando a lista da manha acaba, dizia "Corridas encerradas.
+// Favor aguardar o proximo turno." O Bruno pediu "Ainda nao fechamos! Corridas
+// acontecendo... fique atento" — mas so e' verdade enquanto houver corrida do
+// dia que ainda NAO largou e que o motor leu (hist_full). E' essa a condicao
+// pra uma corrida virar TOP/HIGH/GOOD: a BW abrir um par dela antes de 1 min
+// depois da largada. Sem hist_full nao ha camada possivel (skip).
+//
+// Conta o DIA inteiro, todas as sessoes, como o painel. Nao o lote que a tela
+// carregou: foi exatamente esse descasamento que ja escondeu um HIGH em 10/09.
+// Anulada nao conta. Cache de 30s: a resposta so muda quando uma corrida larga.
+let _resumoDiaCache = { date: null, ts: 0, v: null };
+function resumoDoDia(date) {
+  if (_resumoDiaCache.date === date && (Date.now() - _resumoDiaCache.ts) < 30000) return _resumoDiaCache.v;
+  let v = null;
+  try {
+    const cd = require('../utils/camadasDoDia');
+    const rows = db.prepare(
+      "SELECT r.corrida, r.hora FROM races r JOIN race_sessions s ON s.id=r.session_id "
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.user_id=? AND r.hist_full IS NOT NULL "
+      + "AND " + require('../utils/anuladas').SQL_NAO_ANULADA
+    ).all(date, CANONICO);
+    const vistas = {};
+    rows.forEach(r => { vistas[cd.chaveCorrida(r.corrida, r.hora)] = r; });
+    const unicas = Object.keys(vistas).map(k => vistas[k]);
+    const agora = Date.now();
+    const faltam = unicas.filter(r => !cd.expirou(r.hora, agora));
+    // A ultima a largar, em hora de Brasilia, pra tela poder dizer "ate quando".
+    let ultima = null, ultimaMin = -1;
+    faltam.forEach(r => {
+      const hb = cd.horaBr(r.hora);
+      const m = hb ? (parseInt(hb.split(':')[0], 10) * 60 + parseInt(hb.split(':')[1], 10)) : -1;
+      if (m > ultimaMin) { ultimaMin = m; ultima = hb; }
+    });
+    v = { total: unicas.length, restantes: faltam.length, ultima_hora_br: ultima };
+  } catch (e) { v = null; }
+  _resumoDiaCache = { date, ts: Date.now(), v };
+  return v;
+}
+
 router.get('/painel-dia', (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Não autorizado' });
@@ -2044,7 +2127,7 @@ router.get('/painel-dia', (req, res) => {
       };
     });
 
-    res.json({ date, atualizado_em: new Date().toISOString(), corridas });
+    res.json({ date, atualizado_em: new Date().toISOString(), corridas, dia: resumoDoDia(date) });
   } catch (e) {
     console.error('[painel-dia]', e.message);
     res.status(500).json({ error: e.message });

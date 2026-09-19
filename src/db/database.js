@@ -246,6 +246,21 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  -- CORRIDA ANULADA (Bruno, 19/09/2026): a corrida que nao aconteceu por motivo
+  -- extraordinario. Marca, nao apaga: a chave e' dia + corrida + hora (e nao o
+  -- id da races) pra sobreviver a Analisar recriar as corridas do dia. Ver
+  -- src/utils/anuladas.js.
+  CREATE TABLE IF NOT EXISTS corridas_anuladas (
+    data TEXT NOT NULL,
+    chave TEXT NOT NULL,
+    corrida TEXT,
+    hora TEXT,
+    motivo TEXT,
+    por INTEGER,
+    em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (data, chave)
+  );
 `);
 
 // Migracoes seguras para banco existente

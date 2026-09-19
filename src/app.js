@@ -937,9 +937,43 @@ function showDayEndMsg() {
 // Mensagem especifica pra quando o lote CARREGADO (avulso ou nao) e' inteiro
 // composto por corridas de hoje que ja aconteceram (nao antigas — antigas
 // tem mensagem/tratamento proprio — so ja passaram do horario hoje mesmo)
+//
+// "AINDA NAO FECHAMOS" (Bruno, 19/09/2026). A lista da manha acabar nao quer
+// dizer que o dia acabou: TOP/HIGH/GOOD nascem quando a BW abre um par, e isso
+// pode acontecer em qualquer corrida do dia que ainda nao largou — inclusive
+// uma que nunca esteve na lista. Quem sabe quantas sobram e' o SERVIDOR (o
+// resumo `dia` do /api/painel-dia, o dia inteiro, todas as sessoes); a lista
+// da tela e' so o lote carregado aqui.
+//
+//   sobram corridas      -> "Ainda nao fechamos!" (e o painel segue ouvindo:
+//                           o AvB que abrir traz a lista de volta sozinho)
+//   o dia teve corridas
+//   e todas ja largaram  -> "Ciclo do dia encerrado", a mesma do fim do dia
+//   sem corrida no dia,
+//   ou sem resposta ainda -> a mensagem de antes (espera o proximo lote)
+//
+// Esta funcao roda de novo a cada volta do painel (18s), entao a mensagem
+// troca sozinha quando a ultima corrida larga.
+function _resumoDiaPainel() {
+  try {
+    var d = window.PainelDia && window.PainelDia.dados ? window.PainelDia.dados() : null;
+    return (d && d.dia) ? d.dia : null;
+  } catch (e) { return null; }
+}
 function showAllExpiredMsg() {
   var focusCol = document.getElementById('focus-col');
-  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px;margin-left:-85px"><div style="font-size:64px">&#9200;</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">Corridas encerradas</div><div style="font-size:13px">Favor aguardar o próximo turno.</div></div>';
+  var dia = _resumoDiaPainel();
+  if (dia && dia.total > 0 && dia.restantes === 0) { showDayEndMsg(); return; }
+  var aindaTem = !!(dia && dia.restantes > 0);
+  var titulo = aindaTem ? 'Ainda não fechamos!' : 'Corridas encerradas';
+  var texto = aindaTem
+    ? 'Corridas acontecendo. Fique atento às possíveis oportunidades.'
+    : 'Favor aguardar o próximo turno.';
+  var detalhe = aindaTem
+    ? '<div style="font-size:12px;color:var(--mut)">' + dia.restantes + (dia.restantes === 1 ? ' corrida ainda pode abrir AvB hoje' : ' corridas ainda podem abrir AvB hoje')
+      + (dia.ultima_hora_br ? ', a última às ' + dia.ultima_hora_br : '') + '.</div>'
+    : '';
+  if (focusCol) focusCol.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mut);text-align:center;padding:40px;margin-left:-85px"><div style="font-size:64px">' + (aindaTem ? '&#128064;' : '&#9200;') + '</div><div style="font-size:18px;font-weight:700;color:var(--mut2)">' + titulo + '</div><div style="font-size:13px">' + texto + '</div>' + detalhe + '</div>';
   var col = document.getElementById('race-list-col');
   if (col) { col.innerHTML = ''; col.style.background = '#0D1117'; col.style.borderRight = 'none'; }
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }

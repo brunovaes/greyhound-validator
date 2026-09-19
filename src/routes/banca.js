@@ -73,7 +73,10 @@ function getApostas(userId) {
             r.trap_fav, r.trap_und,
             rud.odd AS odd, rud.bet_unidades AS bet_unidades, r.bateu,
             rud.avb_escolhido AS avb_escolhido, r.finishing_order_json,
-            date(s.created_at, '-3 hours') as dia
+            date(s.created_at, '-3 hours') as dia,
+            -- Corrida anulada no Historico (19/09/2026): a aposta fica na
+            -- lista, marcada, sem green nem red e sem valor (stake devolvido).
+            (CASE WHEN ${require('../utils/anuladas').SQL_ANULADA} THEN 1 ELSE 0 END) AS anulada
      FROM races r JOIN race_sessions s ON s.id = r.session_id
           LEFT JOIN race_user_data rud ON rud.race_id = r.id AND rud.user_id = ?
      WHERE r.user_id=? AND rud.odd IS NOT NULL AND rud.odd != ''
@@ -212,11 +215,14 @@ function getCadeiaBanca(userId) {
   const cadeia = {};
   Object.keys(porMes).sort().forEach(ym => {
     const apostasDoMes = porMes[ym].map(a => {
+      if (a.anulada) a = Object.assign({}, a, { bateu: null, motivo_pendente: null });
       const ganhoPct = calcGanhoPct(a);
       return Object.assign({}, a, {
         ganhoPct,
         ganhoReais: ganhoPct != null ? (ganhoPct / 100) * fixa : null,
-        status: a.bateu === 'sim' ? 'green' : a.bateu === 'nao' ? 'red' : 'pendente'
+        // ANULADA vem antes de tudo: a corrida nao aconteceu, entao nao existe
+        // green nem red, e o ganhoPct ja sai null (bateu zerado abaixo).
+        status: a.anulada ? 'anulada' : a.bateu === 'sim' ? 'green' : a.bateu === 'nao' ? 'red' : 'pendente'
       });
     });
     const somaGanhoPct = apostasDoMes.reduce((s, a) => s + (a.ganhoPct || 0), 0);
@@ -329,7 +335,8 @@ router.get('/data', (req, res) => {
       // Dinheiro transitado: soma de TUDO que foi apostado no dia (o volume
       // que entrou em jogo), independente de ter ganho ou perdido — nao e o
       // resultado liquido, e o "handle" do dia.
-      const dinheiroTransitado = apostasDoDia.reduce((s, a) => s + (parseNumBR(a.bet_unidades) / 100) * mes.inicial, 0);
+      // Aposta de corrida anulada nao transitou: o stake volta.
+      const dinheiroTransitado = apostasDoDia.filter(a => a.status !== 'anulada').reduce((s, a) => s + (parseNumBR(a.bet_unidades) / 100) * mes.inicial, 0);
       const cfg = getUserConfig(userId);
       const pctStop = cfg && cfg.banca_pct_stop != null ? cfg.banca_pct_stop : 20;
       const stopHit = pctDia < 0 && Math.abs(pctDia) >= pctStop;
@@ -541,6 +548,7 @@ table.betstbl th{text-align:left;padding:8px 10px;color:#666;font-size:10px;text
 table.betstbl td{padding:8px 10px;border-bottom:1px solid #1c1c1c}
 .status-green{color:#22c55e;font-weight:700}
 .status-red{color:#ef4444;font-weight:700}
+.status-anulada{color:#888;text-decoration:line-through}
 .status-pendente{color:#888}
 .gain-pos{color:#22c55e;font-weight:600}
 .gain-neg{color:#ef4444;font-weight:600}
@@ -731,7 +739,8 @@ function barChart(items) {
 // Cada TRECHO da linha e colorido pelo resultado daquela aposta especifica —
 // verde subindo (green), vermelho descendo (red) — tipo uma curva de equity.
 function intradayEquityChart(apostas) {
-  const resolvidas = apostas.filter(function(a){ return a.status !== 'pendente'; })
+  // So green e red viram trecho da curva: anulada nao ganhou nem perdeu.
+  const resolvidas = apostas.filter(function(a){ return a.status === 'green' || a.status === 'red'; })
     .slice().sort(function(a,b){ return (a.hora_br||a.hora||'').localeCompare(b.hora_br||b.hora||''); });
   if (!resolvidas.length) return '<div class="empty-msg">Sem apostas resolvidas nesse dia ainda.</div>';
 
@@ -963,7 +972,7 @@ function renderDay(d) {
   if (!d.apostas.length) { tblEl.innerHTML = '<div class="empty-msg">Nenhuma aposta registrada nesse dia.</div>'; return; }
   tblEl.innerHTML = '<table class="betstbl"><thead><tr><th class="bc-hora">Hora</th><th class="bc-corrida">Corrida</th><th class="bc-avb">AvB</th><th class="bc-fav">Favorito</th><th class="bc-und">Desafiado</th><th class="bc-odd">Odd</th><th class="bc-unid">Unid.</th><th class="bc-status">Status</th><th class="bc-pct">%Gain/Loss</th><th class="bc-rs">R$</th><th class="bc-acoes" style="width:62px"></th></tr></thead><tbody>' +
     d.apostas.map(function(a) {
-      const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':'Pendente';
+      const statusLabel = a.status==='green'?'Green':a.status==='red'?'Red':a.status==='anulada'?'Anulada':'Pendente';
       const statusCls = 'status-'+a.status;
       const gainCls = a.ganhoReais>0?'gain-pos':a.ganhoReais<0?'gain-neg':'';
       // Pendente sem explicacao e' o que fez isto passar meses despercebido: a

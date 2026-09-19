@@ -4923,7 +4923,10 @@ router.get('/diag/oportunidades-bw-resultado', requireAdmin, (req, res) => {
     }
     const rows = db.prepare(
       "SELECT r.hora, r.corrida, r.dist, r.hist_full, r.hist_all, r.race_card, r.data_card, r.finishing_order_json FROM races r JOIN race_sessions s ON s.id=r.session_id "
-      + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL ORDER BY r.hora"
+      + "WHERE date(s.created_at,'-3 hours')=? AND r.hist_full IS NOT NULL "
+      // Corrida anulada no Historico (19/09/2026) nao entra no Placar: ela nao
+      // aconteceu, entao nao tem bateu nem errou, e ficaria "sem resultado" pra sempre.
+      + "AND " + require('../utils/anuladas').SQL_NAO_ANULADA + " ORDER BY r.hora"
     ).all(date);
     const vazio = () => ({ n: 0, bateu: 0, errou: 0, sem_resultado: 0 });
     const resumo = { TOP: vazio(), HIGH: vazio(), GOOD: vazio() };

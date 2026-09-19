@@ -696,7 +696,9 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
   // que nao existe sessao de hoje mesmo ela existindo.
   const hojeStr = (function(){ var n=new Date(Date.now() - 3*60*60*1000); return String(n.getUTCDate()).padStart(2,'0')+'/'+String(n.getUTCMonth()+1).padStart(2,'0')+'/'+n.getUTCFullYear(); })();
   const sessaoHoje = sessions.find(s => s.name === 'Races ' + hojeStr);
-  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
+  // Anulada (19/09/2026) fora da taxa. JOIN com a sessao porque a marca e' por
+  // dia, e o dia sai da data da sessao.
+  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN r.bateu='sim' THEN 1 ELSE 0 END) as a FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE r.user_id=? AND r.bateu IS NOT NULL AND r.bateu!='' AND " + require('../utils/anuladas').SQL_NAO_ANULADA).get(CANONICO);
   const taxa = stats.t > 0 ? Math.round(stats.a/stats.t*100) : 0;
   const logoB64 = getLogo();
 
@@ -2156,7 +2158,9 @@ window.NOMES_PISTAS = ${JSON.stringify(NOMES_PISTAS || {})};</script>
 router.get('/historico', exigirAcesso('screen.historicos'), (req, res) => {
   const user = req.user;
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC').all(CANONICO);
-  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN bateu='sim' THEN 1 ELSE 0 END) as a FROM races WHERE user_id=? AND bateu IS NOT NULL AND bateu!=''").get(CANONICO);
+  // Anulada (19/09/2026) fora da taxa. JOIN com a sessao porque a marca e' por
+  // dia, e o dia sai da data da sessao.
+  const stats = db.prepare("SELECT COUNT(*) as t, SUM(CASE WHEN r.bateu='sim' THEN 1 ELSE 0 END) as a FROM races r JOIN race_sessions s ON s.id=r.session_id WHERE r.user_id=? AND r.bateu IS NOT NULL AND r.bateu!='' AND " + require('../utils/anuladas').SQL_NAO_ANULADA).get(CANONICO);
   const logoB64 = getLogo();
   res.send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Histórico - Greyhound Validator</title>
 <link rel="stylesheet" href="${BASE}/static/css/shared.css">
@@ -2750,7 +2754,7 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
   // que o problema que estamos consertando. Fica a copia com historico
   // carregado (sem hist_full nao ha classificacao possivel) e, empatando, a
   // mais recente.
-  const races = (function () {
+  const racesDoDia = (function () {
     const nota = function (r) { return (r.hist_full ? 2 : 0) + (r.finishing_order_json ? 1 : 0); };
     const porChave = new Map();
     for (const r of racesBrutas) {
@@ -2768,6 +2772,22 @@ router.get('/sessao/:id', exigirAcesso('screen.historicos'), (req, res) => {
       return x < y ? -1 : (x > y ? 1 : 0);
     });
   })();
+  // ── CORRIDA ANULADA SAI DO REGISTRO (Bruno, 19/09/2026) ─────────────────
+  // A lixeirinha marca a corrida (src/utils/anuladas.js); aqui ela sai de
+  // `races`, e com isso de TUDO que a tela calcula a partir dela: as linhas,
+  // os KPIs, os graficos, o ALL_RACES e o filtro de pista. Sai no comeco, num
+  // lugar so, pra nao existir conta que esqueceu de pular a anulada.
+  // As anuladas vao pra uma lista propria no fim da tela, com o "desfazer".
+  const _anul = require('../utils/anuladas');
+  const _diaAnul = (function () {
+    try { const r = db.prepare("SELECT date(created_at,'-3 hours') AS d FROM race_sessions WHERE id=?").get(sess.id); return r ? r.d : null; }
+    catch (e) { return null; }
+  })();
+  const _chavesAnuladas = _diaAnul ? _anul.doDia(db, _diaAnul) : new Set();
+  const races = racesDoDia.filter(function (r) { return !_chavesAnuladas.has(_anul.chave(r.corrida, r.hora)); });
+  const anuladasDoDia = _diaAnul ? _anul.lista(db, _diaAnul) : [];
+  const _horaBrAnul = require('../utils/camadasDoDia').horaBr;
+  const ehAdmin = !!(user && user.role === 'admin');
   // ── NAVEGACAO POR DIA (Bruno, 15/09/2026) ────────────────────────────────
   //
   // Antes, pra ver outro dia era preciso sair do Historico, ir na Analisar,
@@ -3369,11 +3389,31 @@ ${linhasAvb.map(function(Lx){
     + col('hc-obs', pri ? _celulaObs(r) : vazia)
     + col('hc-odd', _celulaOddConf(r, esc))
     + col('hc-bw', pri ? _celulaAberto(r, stAberto) : vazia)
-    + col('hc-lapis', pri ? '<td style="text-align:center"><span class="edit-pencil" data-row="'+r.id+'" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span></td>' : vazia)
+    + col('hc-lapis', pri ? '<td style="text-align:center;white-space:nowrap"><span class="edit-pencil" data-row="'+r.id+'" onclick="toggleRowEdit(this)" title="Editar Odd/Bateu/Aberto">&#9998;</span>'
+      // Lixeira: anula a corrida que nao aconteceu. So admin (a rota tambem
+      // confere), e ao lado do lapis porque e' edicao da mesma linha.
+      + (ehAdmin ? '<span class="anular-lixo" data-row="'+r.id+'" onclick="anularCorrida(this)" title="Anular corrida (nao aconteceu)">&#128465;</span>' : '')
+      + '</td>' : vazia)
     + '</tr>';
 }).join('')}
 ${!linhasAvb.length?'<tr><td colspan="13" style="text-align:center;color:#666;padding:20px">Nenhum AvB confirmado pela BW nesta sessao</td></tr>':''}
 </tbody></table></div>
+${anuladasDoDia.length ? '<div class="anuladas-box"><div class="anuladas-tit">Corridas anuladas neste dia (' + anuladasDoDia.length + ')</div>'
+  + anuladasDoDia.map(function (a) {
+      return '<div class="anuladas-lin"><span class="anuladas-txt">' + (a.hora || '') + ' UK | ' + (_horaBrAnul(a.hora) || '') + ' BR &nbsp; ' + nomeCorridaCompleto(a.corrida || '') + '</span>'
+        + (ehAdmin ? '<button class="anuladas-desf" data-data="' + a.data + '" data-chave="' + String(a.chave).replace(/"/g, '&quot;') + '" onclick="desanularCorrida(this)">Desfazer</button>' : '')
+        + '</div>';
+    }).join('') + '</div>' : ''}
+<style>
+.anular-lixo{cursor:pointer;margin-left:10px;opacity:.55;font-size:14px}
+.anular-lixo:hover{opacity:1}
+.anuladas-box{margin:14px 0 0;padding:10px 14px;border:1px dashed #444;border-radius:8px;background:#111}
+.anuladas-tit{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.anuladas-lin{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:#999;padding:4px 0}
+.anuladas-txt{text-decoration:line-through}
+.anuladas-desf{background:#222;color:#ccc;border:1px solid #444;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer}
+.anuladas-desf:hover{background:#2a2a2a;color:#fff}
+</style>
 
 <style>
 .row-atrasada{animation:rowAtrasadaBlink 1.2s ease-in-out infinite}
@@ -3559,6 +3599,7 @@ ${cssCardGalgo()}
 </div>
 <div id="sv-modal"><div id="sv-box"><div id="sv-hdr"><h3 id="sv-title">Historico</h3><button id="sv-xbtn" onclick="closeSvModal()">&#x2715;</button></div><div id="sv-body"></div></div></div>
 <script src="${BASE}/static/js/cardGalgo.js"></script>
+<script src="${BASE}/static/js/dialogo.js"></script>
 <script>
 
 // "leia mais" das Observacoes: um listener so pra tabela inteira, em vez de
@@ -3577,6 +3618,42 @@ document.addEventListener('click', function(ev){
 
 var ALL_RACES=${JSON.stringify(races.filter(naTela).map(r=>Object.assign({},r,{corridaNome:nomeCorridaCompleto(r.corrida),/* o PDF completo e' so da Analisar; aqui pesaria a pagina a toa */pdf_completo:undefined}))).replace(/</g,'\u003c').replace(/>/g,'\u003e')};
 var BASE='${BASE}';
+// ── ANULAR CORRIDA (Bruno, 19/09/2026) ─────────────────────────────────────
+// A corrida nao aconteceu. Nao apaga: marca. Ela some daqui e das contas do
+// dia, a aposta vira "Anulada" na Banca, e o "Desfazer" no fim da tela volta
+// tudo como era. \\n com duas barras: isto mora dentro de um template literal.
+function anularCorrida(el){
+  var id = el.getAttribute('data-row');
+  var r = ALL_RACES.find(function(x){ return String(x.id) === String(id); }) || {};
+  ghConfirmar({
+    titulo: 'Anular esta corrida?',
+    texto: (r.hora || '') + ' UK  ' + (r.corridaNome || r.corrida || '') + '\\n\\n'
+      + 'Use quando a corrida NAO aconteceu. Ela sai do Historico e das contas do dia, '
+      + 'e se voce apostou nela a aposta aparece na Banca como Anulada, sem green nem red. '
+      + 'Nada e apagado: da pra desfazer na lista de anuladas, no fim desta tela.',
+    ok: 'Anular',
+    perigo: true
+  }).then(async function(sim){
+    if (!sim) return;
+    try {
+      var resp = await fetch(BASE + '/api/race/' + id + '/anular', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (!resp.ok) { var e = await resp.json().catch(function(){ return {}; }); throw new Error(e.error || ('o servidor respondeu ' + resp.status)); }
+      location.reload();
+    } catch (e) { ghErro('Não consegui anular: ' + e.message); }
+  });
+}
+function desanularCorrida(el){
+  var data = el.getAttribute('data-data'), chave = el.getAttribute('data-chave');
+  ghConfirmar({ titulo: 'Desfazer a anulação?', texto: 'A corrida volta pro Historico e pras contas do dia, e a aposta, se houver, volta pra Banca como era.', ok: 'Desfazer' })
+  .then(async function(sim){
+    if (!sim) return;
+    try {
+      var resp = await fetch(BASE + '/api/anuladas/desanular', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: data, chave: chave }) });
+      if (!resp.ok) { var e = await resp.json().catch(function(){ return {}; }); throw new Error(e.error || ('o servidor respondeu ' + resp.status)); }
+      location.reload();
+    } catch (e) { ghErro('Não consegui desfazer: ' + e.message); }
+  });
+}
 // Salva edicoes de Odd/Apostei/Aberto direto no banco, sem precisar voltar
 // pra tela Analisar — e recalcula os KPIs afetados na hora (Apostas/Green/%Green)
 function saveHistField(id, field, value){

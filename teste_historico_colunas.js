@@ -80,7 +80,11 @@ for (const n of DEPS) {
 const STUBS = 'var BASE="/greyhound";'
   + 'function nomeCorridaCompleto(c){return c||"";}'
   + 'function cardGalgoHTML(){return "";}'
-  + 'function icon(){return "";}';
+  + 'function icon(){return "";}'
+  // Variavel da rota /sessao (19/09/2026): a lixeira de anular so aparece pro
+  // admin. Aqui true, pra a linha sair com a lixeira e a contagem de celulas
+  // provar que ela mora DENTRO da celula do lapis, sem criar coluna nova.
+  + 'var ehAdmin=true;';
 let H;
 try {
   H = new Function(STUBS + corpo + ';return {_celulaAvbConf,_celulaCamada,_celulaEntreiConf,_celulaBateuConf,_celulaOddConf,_celulaResultado,_celulaObs,_celulaAberto,_abriuDaLinha};')();
