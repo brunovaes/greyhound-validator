@@ -3297,16 +3297,20 @@ function injectValModal(){
      O !important e' obrigatorio: a largura do colgroup vem em style="" no
      proprio <col>, e estilo em atributo ganha de regra sem ele. */
   .vf-grade .val-tbl{table-layout:fixed;width:100%}
-  .vf-grade .val-tbl col.c-date{width:11%!important}
-  .vf-grade .val-tbl col.c-track{width:9%!important}
+  /* Remarks de 27% pra 22% (Bruno: "nao da pra ver o tempo... pode reduzir
+     a largura da coluna remark"): os 5 pontos vao pra Date, Track, Grade e
+     CalTm, que e' o numero que ele mais olha. Remark mais longo quebra em
+     duas linhas depois da virgula, sem cortar. */
+  .vf-grade .val-tbl col.c-date{width:12%!important}
+  .vf-grade .val-tbl col.c-track{width:10%!important}
   .vf-grade .val-tbl col.c-dis{width:8%!important}
   .vf-grade .val-tbl col.c-trp{width:6%!important}
   .vf-grade .val-tbl col.c-split{width:7%!important}
   .vf-grade .val-tbl col.c-bends{width:8%!important}
   .vf-grade .val-tbl col.c-fin{width:6%!important}
-  .vf-grade .val-tbl col.c-rem{width:27%!important}
-  .vf-grade .val-tbl col.c-grade{width:8%!important}
-  .vf-grade .val-tbl col.c-caltm{width:10%!important}
+  .vf-grade .val-tbl col.c-rem{width:22%!important}
+  .vf-grade .val-tbl col.c-grade{width:9%!important}
+  .vf-grade .val-tbl col.c-caltm{width:12%!important}
   .vf-grade .val-dog-hdr{margin-bottom:3px}
   .vf-grade .val-dog-hdr .trap-badge{width:26px;height:26px;font-size:13px}
   .vf-grade .val-name{font-size:16px}
