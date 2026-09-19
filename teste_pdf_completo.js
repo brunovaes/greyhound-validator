@@ -119,63 +119,105 @@ t('NAO recalibra a paleta de traps', rota.indexOf('saveTrapBadgeColors') < 0);
 t('sem PDF no disco, diz por que em vez de estourar', /os PDFs desse dia nao estao mais no servidor/.test(rota));
 
 // ═══════════════════════════════════════════════════════════════════════════
-bloco('[6] A JANELA: TODOS OS GALGOS, AS MESMAS DEZ COLUNAS');
+bloco('[6] A JANELA: SEIS GALGOS, DEZ COLUNAS, SEM DESCARTE, LETRA GRANDE');
 // ═══════════════════════════════════════════════════════════════════════════
 
+// "ta muito pequena a fonte... queria tudo na mesma tela... pode aumentar a
+//  tela... e tirar as informacoes de descarte e motivos".
 function fn(nome) {
   const m = APP.match(new RegExp('^function\\s+' + nome + '\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?^\\}', 'm'));
   if (!m) throw new Error('sumiu do app.js: ' + nome);
   return m[0];
 }
-const doc = { els: {}, getElementById: function (id) {
-  if (!this.els[id]) this.els[id] = { textContent: '', innerHTML: '', classList: { add: function () {}, contains: function () { return true; } } };
-  return this.els[id];
-} };
+function elemento() {
+  const cls = {};
+  return { textContent: '', innerHTML: '', classList: {
+    add: function (c) { cls[c] = 1; }, remove: function (c) { delete cls[c]; },
+    contains: function (c) { return !!cls[c]; } }, _cls: cls };
+}
+const doc = { els: {}, getElementById: function (id) { return this.els[id] || (this.els[id] = elemento()); } };
 const ctx = { document: doc, console: console, Number: Number, String: String, Math: Math, parseFloat: parseFloat, parseInt: parseInt, JSON: JSON };
 vm.createContext(ctx);
-vm.runInContext(['_escPdf', 'buildDogCard', 'extrairRemarks', '_pintaPdfCompleto', 'corridaDisplay', 'getRaceClass']
+vm.runInContext(['_escPdf', '_janelaGrande', 'buildDogCard', 'extrairRemarks', '_pintaPdfCompleto', 'closeValModal', 'corridaDisplay', 'getRaceClass']
   .map(function (n) { try { return fn(n); } catch (e) { return ''; } }).join('\n'), ctx);
 
-const galgos = pdfDe([
-  { trap: 3, nome: 'Roseville Chic', historico: CPARK.concat([ROMFD]).map(L) },
-  { trap: 2, nome: 'Insane Drum', historico: CPARK.slice(0, 2).map(L) },
-  { trap: 6, nome: 'Roseville Comet', historico: [L(CPARK[0])] },
-  { trap: 1, nome: 'Kilara Ace', historico: [L(ROMFD), L(CPARK[1])] },
-  { trap: 4, nome: 'Lenson Fox', historico: [L(CPARK[2])] },
-  { trap: 5, nome: 'Fora De Tudo', historico: [L(CPARK[0])] }
-]);
-const corrida = {
-  corrida: 'CPark A3', dist: '491', trackFull: 'Central Park',
-  histAll: [{ trap: 3 }, { trap: 2 }, { trap: 6 }],
-  eliminados: [{ trap: 1, motivo: '0 linha(s) na pista/distancia exata (min. 3)' },
-               { trap: 4, motivo: 'Ret.inatividade (47d parado, 0/2 corridas pos-trial)' }]
-};
+// Chegam fora de ordem de proposito: a janela ordena por trap.
+const galgos = pdfDe([6, 2, 5, 1, 4, 3].map(function (tp) {
+  return { trap: tp, nome: 'Galgo ' + tp, historico: CPARK.concat([ROMFD, CPARK[0]]).slice(0, tp === 6 ? 5 : tp).map(L) };
+}));
+const corrida = { corrida: 'CPark A3', dist: '491', trackFull: 'Central Park',
+  histAll: [{ trap: 3 }], eliminados: [{ trap: 1, motivo: 'qualquer coisa' }] };
+doc.els['val-body'] = elemento(); doc.els['val-body'].classList.add('val-compact');
 ctx._pintaPdfCompleto(corrida, galgos);
 const html = doc.els['val-body'].innerHTML;
 const titulo = doc.els['val-title'].textContent;
 
-t('os seis galgos aparecem (antes eram so os do calculo)', (html.match(/class="val-dog"/g) || []).length === 6);
-// Conta so as linhas de corrida: cada card tem tambem o <tr> do cabecalho.
+t('os seis galgos aparecem', (html.match(/class="val-dog"/g) || []).length === 6);
+t('na ordem de trap, 1 a 6 (a ordem do PDF)',
+  [1, 2, 3, 4, 5, 6].every(function (n, i, a) { return i === 0 || html.indexOf('Galgo ' + a[i - 1]) < html.indexOf('Galgo ' + n); }));
 const linhasCorrida = (html.match(/<tr>/g) || []).length - (html.match(/<thead><tr>/g) || []).length;
-t('todas as linhas aparecem (4+2+1+2+1+1 = 11)', linhasCorrida === 11);
-t('inclusive a de outra pista e distancia (Romford 400m)', /Romfd/.test(html) && /400m/.test(html));
-t('o descartado agora vem COM historico', /Kilara Ace[\s\S]*?<tbody><tr>/.test(html));
-t('e com o motivo, como antes', /motivo: 0 linha\(s\) na pista\/distancia exata/.test(html));
-t('a faixa DESCARTADOS DO CÁLCULO continua', html.indexOf('DESCARTADOS DO CÁLCULO') >= 0);
-t('ordem de antes: calculo (3, 2, 6), depois o que o PDF trouxe a mais (5), depois os descartados',
-  html.indexOf('Roseville Chic') < html.indexOf('Insane Drum')
-  && html.indexOf('Insane Drum') < html.indexOf('Roseville Comet')
-  && html.indexOf('Roseville Comet') < html.indexOf('Fora De Tudo')
-  && html.indexOf('Fora De Tudo') < html.indexOf('DESCARTADOS')
-  && html.indexOf('DESCARTADOS') < html.indexOf('Kilara Ace'));
-t('titulo no mesmo formato: "4 no cálculo + 2 descartados"', /4 no cálculo \+ 2 descartados/.test(titulo));
-
-// As colunas: exatamente as dez do anexo, nenhuma a mais.
+t('todas as linhas: 1+2+3+4+5+5 = 20', linhasCorrida === 20);
+t('inclusive a de outra pista (Romford 400m)', /Romfd/.test(html));
+t('SEM a faixa de descartados', html.indexOf('DESCARTADOS') < 0);
+t('SEM motivo', !/motivo:/.test(html) && html.indexOf('qualquer coisa') < 0);
+t('titulo conta so os galgos: "6 galgos"', /· +6 galgos$/.test(titulo) && !/descartad/.test(titulo));
 const cab = (html.match(/<thead><tr>[\s\S]*?<\/tr><\/thead>/) || [''])[0];
 const nomesCol = (cab.match(/<th[^>]*>([^<]*)<\/th>/g) || []).map(function (x) { return x.replace(/<[^>]+>/g, ''); });
-t('as mesmas dez colunas do anexo, na mesma ordem: ' + nomesCol.join(' '),
+t('as mesmas dez colunas, na mesma ordem: ' + nomesCol.join(' '),
   nomesCol.join(',') === 'Date,Track,Dis,Trp,Split,Bends,Fin,Remarks,Grade,CalTm');
-t('nenhuma coluna da primeira versao sobrou', !/WnrTm|Gng|Wght|Winner/.test(html));
+t('os galgos vao numa grade', /^<div class="vf-grade">/.test(html));
+t('a letra miuda (val-compact, 9px) saiu', !doc.els['val-body'].classList.contains('val-compact'));
+t('a janela alarga', doc.els['val-box'].classList.contains('vf-grande'));
+ctx.closeValModal();
+t('e fechar devolve o tamanho de sempre (a disputa usa a mesma caixa)', !doc.els['val-box'].classList.contains('vf-grande'));
+t('o plano B tambem volta ao tamanho normal', /function _abrirRecorteAntigo\(key, aviso\)\{\r?\n\s*\/\/[^\n]*\r?\n\s*_janelaGrande\(false\);/.test(APP));
+t('remark inteiro: sem reticencias na janela', /\.vf-grade \.val-td-rem\{[^}]*text-overflow:clip/.test(APP));
+t('e ele so quebra depois de virgula', html.indexOf(',<wbr>') >= 0);
+t('as larguras fixas do colgroup cedem (o !important vence o style do <col>)',
+  /\.vf-grade \.val-tbl col\{width:auto!important\}/.test(APP));
+t('letra maior so no computador: no celular valem as regras dos cards',
+  /@media\(min-width:769px\)\{[\s\S]*?\.vf-grade \.val-tbl td\{font-size:15px/.test(APP));
+
+// A MEDIDA: seis galgos de cinco linhas cabem numa tela so? Num Chromium de
+// verdade, com o zoom .9 do app e os remarks mais longos da tela do Bruno.
+let chromium = null;
+try { chromium = require('playwright').chromium; } catch (e) { chromium = null; }
+const medidas = [];
+if (chromium) {
+  medidas.push((async function () {
+    const { designTokensCSS } = require('./src/utils/designTokens');
+    const css = (APP.match(/vs\.textContent=`([\s\S]*?)`;/) || [])[1];
+    const js = ['_escPdf', '_janelaGrande', 'buildDogCard', 'extrairRemarks', '_pintaPdfCompleto', 'corridaDisplay', 'getRaceClass'].map(fn).join('\n');
+    const REM = ['Mid,QAw,SnLd-2,CmAgnNrLn', 'Rls-Mid,Eased&BdCrd1&1/4', 'Mid,EP,Fcd-Ck1/4', 'Rls-Mid,Bmp1/4,Crd3', 'Mid-W,Ld-Crd1/4'];
+    const seis = pdfDe([1, 2, 3, 4, 5, 6].map(function (tp) {
+      return { trap: tp, nome: 'Roseville Comet ' + tp, historico: [0, 1, 2, 3, 4].map(function (k) {
+        return L(String(14 - k * 3).padStart(2, '0') + 'Sep26 CPark 491m [' + tp + '] 3.1' + k + ' 4444 4th 5 Some Dog ' + REM[k] + ' 29.85 N 30.4 7/2 A3 30.1' + k);
+      }) };
+    }));
+    const pag = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box;margin:0;padding:0}'
+      + designTokensCSS() + '.trap-badge{display:inline-flex;border-radius:50%}' + css + '#val-modal{display:flex}</style></head><body>'
+      + '<div id="val-modal" class="open"><div id="val-box"><div id="val-hdr"><h3 id="val-title"></h3></div><div id="val-body"></div></div></div>'
+      + '<script>' + js + '\n_pintaPdfCompleto(' + JSON.stringify({ corrida: 'CPark A3', dist: '491', trackFull: 'Central Park' }) + ',' + JSON.stringify(seis) + ');</script></body></html>';
+    const browser = await chromium.launch();
+    try {
+      for (const [w, h] of [[1920, 1080], [1600, 900], [1536, 864], [1366, 768]]) {
+        const page = await browser.newPage({ viewport: { width: w, height: h } });
+        await page.setContent(pag);
+        const r = await page.evaluate(function () {
+          const body = document.getElementById('val-body');
+          return {
+            rola: body.scrollHeight > body.clientHeight + 1,
+            lado: [].slice.call(document.querySelectorAll('.val-dog')).some(function (d) { return d.scrollWidth > d.clientWidth + 1; })
+          };
+        });
+        t('6 galgos x 5 linhas cabem numa tela so em ' + w + 'x' + h, !r.rola && !r.lado);
+        await page.close();
+      }
+    } finally { await browser.close(); }
+  })());
+} else {
+  console.log('  PULADO| playwright nao esta instalado aqui — a medida de "cabe numa tela" nao rodou');
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 bloco('[7] O CALTM AMARELO SO COMPARA A MESMA PROVA');
@@ -189,9 +231,11 @@ t('e NAO no 24.30 de Romford 400m, que e outra prova', !/color:#fbbf24"?>24\.30<
 // dois galgos chama, e ela nao podia mudar.
 const semProva = ctx.buildDogCard(3, 'X', '', misto, true);
 t('sem a prova, o card se comporta como antes (menor da lista)', /color:#fbbf24"?>24\.30</.test(semProva));
-const chamadas = (APP.match(/buildDogCard\([^;]*?\)/g) || []).filter(function (c) { return !/^buildDogCard\(trap,/.test(c); });
+// Conta pela linha inteira da chamada: com Number(g.trap) dentro, um regex que
+// para no primeiro ")" nao enxerga o fim da chamada.
 t('so a janela da corrida completa passa a prova',
-  chamadas.filter(function (c) { return /, prova\)$/.test(c); }).length === 1);
+  (semComentarios(APP).match(/buildDogCard\([^\n]*, prova\)/g) || []).length === 1);
+t('sem a prova o remark nao ganha quebra (a disputa nao muda)', semProva.indexOf('<wbr>') < 0);
 
 // ═══════════════════════════════════════════════════════════════════════════
 bloco('[8] O RECORTE ANTIGO VIROU PLANO B, E SE ANUNCIA');
@@ -202,6 +246,10 @@ t('existe o plano B', /function _abrirRecorteAntigo\(key, aviso\)/.test(APP));
 t('e ele avisa que e recorte', /Não consegui o PDF completo desta corrida/.test(APP));
 t('a busca nao pinta uma corrida por cima de outra', /_pdfPedidoAtual !== pedido/.test(AP));
 t('o card de 15 colunas da primeira versao saiu', !/function buildDogCardCompleto/.test(APP) && !/\.vf-tbl\{/.test(APP));
+t('e a faixa de descartados saiu da janela completa (so o plano B ainda tem)',
+  (fn('_pintaPdfCompleto').indexOf('DESCARTADOS') < 0));
 
-console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK: ' + ok + ' verificacoes') + '\n');
-process.exit(fail ? 1 : 0);
+Promise.all(medidas).catch(function (e) { t('medida no navegador: ' + e.message, false); }).then(function () {
+  console.log('\n' + (fail ? 'FALHOU: ' + fail + ' de ' + (ok + fail) : 'TUDO OK: ' + ok + ' verificacoes') + '\n');
+  process.exit(fail ? 1 : 0);
+});

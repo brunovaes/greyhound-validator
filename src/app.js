@@ -3273,6 +3273,42 @@ function injectValModal(){
   #val-body.val-compact .val-dog-hdr .trap-badge{width:22px;height:22px;font-size:11px}
   #val-body.val-compact .val-name{font-size:12px}
 }
+#val-box.vf-grande{width:97vw;max-width:1700px;max-height:98vh}
+#val-box.vf-grande #val-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px 18px}
+.vf-grade{display:grid;grid-template-columns:1fr 1fr;gap:10px 28px;align-items:start}
+.vf-cel{min-width:0}
+@media(min-width:769px){
+  /* Medido num navegador com o zoom .9 do app: seis galgos de cinco linhas
+     nesta medida pedem ~690px de altura e cabem ate num notebook de 1366x768.
+     Maior que isto, a tela de notebook ja passa a rolar. */
+  .vf-grade .val-dog-hdr{margin-bottom:5px}
+  .vf-grade .val-dog-hdr .trap-badge{width:30px;height:30px;font-size:15px}
+  .vf-grade .val-name{font-size:17px}
+  .vf-grade .val-tbl th{font-size:12px;padding:3px 4px}
+  .vf-grade .val-tbl td{font-size:15px;padding:4px 4px}
+  .vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:15px}
+  /* Remarks inteiro, sem reticencias: "todos os dados". A tabela passa a
+     distribuir a largura pelo conteudo — as colunas de numero curto (Trp,
+     Fin, Dis) cedem espaco pro Remarks. Em tela estreita, remark muito longo
+     quebra depois de uma virgula (o <wbr> que o buildDogCard poe so nesta
+     janela), em vez de estourar a tabela pro lado. O !important no col e'
+     obrigatorio: a largura do colgroup vem em style="" no proprio <col>, e
+     estilo em atributo ganha de qualquer regra sem ele. */
+  .vf-grade .val-tbl{table-layout:auto}
+  .vf-grade .val-tbl col{width:auto!important}
+  .vf-grade .val-td-rem{font-size:14px;max-width:none;white-space:normal;overflow:visible;text-overflow:clip}
+  #val-box.vf-grande #val-hdr h3{font-size:15px}
+  .vf-grade .val-badge-grade{font-size:14px}
+}
+/* Notebook (ate ~1450px): um ponto a menos na letra. Medido num navegador com
+   o zoom .9 do app e os remarks mais longos da tela do Bruno: em 1366x768 a
+   janela pedia 784px de 768 com a letra cheia; assim pede ~710px e cabe. */
+@media(min-width:1201px) and (max-width:1450px){
+  .vf-grade .val-tbl td,.vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:14px;padding:2px 3px}
+  .vf-grade .val-td-rem{font-size:13px}
+  .vf-grade .val-name{font-size:16px}
+}
+@media(max-width:1200px){.vf-grade{grid-template-columns:1fr}}
 .vf-nota{font-size:11px;color:rgba(255,255,255,.45);margin:0 0 8px}
 .vf-aviso{font-size:11px;color:#f59e0b;background:rgba(245,158,11,.08);border-left:2px solid #f59e0b;border-radius:4px;padding:6px 10px;margin:0 0 10px}
 .val-link{font-size:9px;color:rgba(96,165,250,.6);cursor:pointer;display:block;text-align:center;margin-top:4px;letter-spacing:.1px}
@@ -3280,7 +3316,9 @@ function injectValModal(){
 `;
   document.head.appendChild(vs);
 }
-function closeValModal(){var m=document.getElementById('val-modal');if(m)m.classList.remove('open');}
+// Fechar tira tambem a janela grande da corrida completa: a disputa de dois
+// galgos e o relatorio usam o mesmo #val-box e nao podem abrir alargados.
+function closeValModal(){var m=document.getElementById('val-modal');if(m)m.classList.remove('open');var bx=document.getElementById('val-box');if(bx)bx.classList.remove('vf-grande');}
 function openValModal(key){
   var r=results.find(function(x){return x.tipo==='avb'&&x.histFav&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[VAL] nao achou:',key);return;}
@@ -3290,61 +3328,47 @@ function openValModal(key){
   document.getElementById('val-modal').classList.add('open');
 }
 // ── TODOS OS GALGOS DO PDF NA JANELA DA CORRIDA (Bruno, 19/09/2026) ─────────
-// "quero todos os dados do PDF baixado, sem restricao ou filtro mais", e na
-// correcao do mesmo dia: "trazer todos os galgos, mas manter somente as mesmas
-// colunas".
+// "quero todos os dados do PDF baixado, sem restricao ou filtro mais"; depois,
+// "trazer todos os galgos, mas manter somente as mesmas colunas"; e por fim
+// "ta muito pequena a fonte... queria tudo na mesma tela... pode aumentar a
+// tela... e tirar as informacoes de descarte e motivos. Lembrando que o maximo
+// sao 5 linhas dos 6 galgos".
 //
-// A janela era o RECORTE da analise: os galgos que o motor pontuou, so as
-// linhas da mesma pista e distancia, ate 5. Os descartados apareciam sem
-// historico nenhum. Agora cada galgo traz TODAS as linhas que o PDF tem, de
-// qualquer pista e distancia, e o descartado traz as dele tambem.
+// Entao: os galgos do PDF, na ordem de trap (1 a 6, a ordem do proprio PDF),
+// cada um com TODAS as linhas que o PDF tem, no mesmo card de dez colunas. Sem
+// separar quem o motor pontuou de quem ele descartou — isso e' assunto do
+// motor, e aqui a pergunta e' "o que o PDF diz".
 //
-// O desenho NAO mudou: e' o mesmo buildDogCard, com as mesmas dez colunas, a
-// mesma ordem (quem esta no calculo primeiro, depois a faixa dos descartados
-// com o motivo). So o que entra nele e' que deixou de ser filtrado.
+// Pra caber numa tela so com letra maior, a janela alarga (classe vf-grande no
+// #val-box) e os galgos vao em GRADE de duas colunas: tres linhas de dois
+// galgos. Seis galgos de ate cinco corridas empilhados um embaixo do outro nao
+// cabem em tela nenhuma com a letra no tamanho que o Bruno pediu. Abaixo de
+// 1200px de largura a grade vira uma coluna so (ai rola, nao tem jeito).
 //
 // Nada disto alimenta o motor. E' so leitura.
 var _pdfPedidoAtual = null;
 function _escPdf(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _janelaGrande(liga){
+  var bx = document.getElementById('val-box');
+  if (bx) bx.classList[liga ? 'add' : 'remove']('vf-grande');
+}
 function _pintaPdfCompleto(r, galgos){
-  var porTrap = {};
-  (galgos||[]).forEach(function(g){ if (g && g.trap != null) porTrap[Number(g.trap)] = g; });
-  var elim = (r.eliminados||[]).filter(function(e){ return e && e.trap; });
-  var traposFora = elim.map(function(e){ return Number(e.trap); });
-  // Quem esta no calculo, na ordem que a janela sempre usou (a do histAll).
-  // Galgo que o PDF trouxe e que nao esta nem no calculo nem nos descartados
-  // entra no fim desse grupo: sumir com ele seria o filtro que acabou de sair.
-  var noCalculo = (r.histAll||[]).map(function(g){ return Number(g.trap); })
-    .filter(function(t){ return traposFora.indexOf(t) < 0; });
-  (galgos||[]).forEach(function(g){
-    var t = Number(g.trap);
-    if (noCalculo.indexOf(t) < 0 && traposFora.indexOf(t) < 0) noCalculo.push(t);
-  });
+  var lista = (galgos||[]).filter(function(g){ return g && g.trap != null; })
+    .slice().sort(function(a, b){ return Number(a.trap) - Number(b.trap); });
   var prova = { pista: String(r.corrida || '').split(' ')[0], dist: r.dist };
-  var cartao = function(t, nomeReserva){
-    var g = porTrap[t] || {};
-    return buildDogCard(t, g.nome || nomeReserva || '', '', g.historico || [], true, prova);
-  };
-
   document.getElementById('val-title').textContent = 'Corrida completa — ' + corridaDisplay(r)
-    + '  \u00b7  ' + noCalculo.length + ' no cálculo'
-    + (elim.length ? ' + ' + elim.length + ' descartado' + (elim.length > 1 ? 's' : '') : '');
+    + '  \u00b7  ' + lista.length + ' galgos';
+  _janelaGrande(true);
   var body = document.getElementById('val-body');
-  body.classList.add('val-compact');
-  var html = noCalculo.map(function(t, i){
-    return cartao(t) + ((i < noCalculo.length-1 || elim.length) ? '<div class="val-sep"></div>' : '');
-  }).join('');
-  if (elim.length) {
-    // A mesma faixa de antes. Sem ela o descartado pareceria mais um do grid.
-    html += '<div style="margin:4px 0 10px;padding:6px 10px;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;border-radius:4px;'
-      + 'font-size:11px;font-weight:700;color:#fca5a5;letter-spacing:.3px">DESCARTADOS DO CÁLCULO'
-      + '<span style="font-weight:400;color:#c88;margin-left:6px">correm a prova do mesmo jeito</span></div>';
-    html += elim.map(function(e, i){
-      var motivo = '<div style="font-size:11px;color:#fca5a5;padding:2px 0 6px 2px">motivo: ' + _escPdf(e.motivo || 'não informado') + '</div>';
-      return cartao(Number(e.trap), e.nome) + motivo + (i < elim.length-1 ? '<div class="val-sep"></div>' : '');
-    }).join('');
-  }
-  body.innerHTML = html;
+  // SEM o val-compact: e' ele que deixava a letra em 9px.
+  body.classList.remove('val-compact');
+  body.innerHTML = '<div class="vf-grade">'
+    + lista.map(function(g){
+        return '<div class="vf-cel">'
+          + buildDogCard(Number(g.trap), g.nome || '', '', g.historico || [], false, prova)
+          + '</div>';
+      }).join('')
+    + '</div>';
 }
 function openAllDogsModal(key){
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
@@ -3361,7 +3385,8 @@ function openAllDogsModal(key){
   // na lista de corridas, que a tela busca de tempos em tempos).
   document.getElementById('val-title').textContent = 'Corrida completa — ' + corridaDisplay(r);
   var body = document.getElementById('val-body');
-  body.classList.add('val-compact');
+  body.classList.remove('val-compact');
+  _janelaGrande(true);
   body.innerHTML = '<div class="vf-nota" style="text-align:center;padding:24px">Lendo o PDF da corrida…</div>';
   document.getElementById('val-modal').classList.add('open');
   var pedido = r.id;
@@ -3388,6 +3413,8 @@ function openAllDogsModal(key){
 // servidor (7 dias) ou que ainda nao foi salva. E ele se anuncia como recorte,
 // pra ninguem achar que o PDF so tinha aquilo.
 function _abrirRecorteAntigo(key, aviso){
+  // O recorte antigo tem o desenho antigo, no tamanho antigo.
+  _janelaGrande(false);
   var r=results.find(function(x){return x.tipo==='avb'&&(x.hora+'|'+x.corrida)===key;});
   if(!r){console.warn('[ALLDOGS] nao achou:',key);return;}
   var all=r.histAll&&r.histAll.length?r.histAll:[];
@@ -3645,7 +3672,10 @@ function buildDogCard(trap,nome,perfil,hist,compact,prova){
       +'<td class="val-td-muted c-split" style="text-align:center">'+(h.split||'')+'</td>'
       +'<td class="val-td-bends c-bends">'+(h.bends||'')+'</td>'
       +'<td class="val-td-muted c-fin" style="text-align:center">'+(h.pos||'-')+'</td>'
-      +'<td class="val-td-rem c-rem">'+rem+'</td>'
+      // Na janela da corrida completa (a unica que passa `prova`) o remark pode
+      // quebrar linha DEPOIS DE VIRGULA quando a tela for estreita — nunca no
+      // meio de uma sigla. Na disputa de dois galgos nada muda.
+      +'<td class="val-td-rem c-rem">'+(prova?String(rem).replace(/,/g,',<wbr>'):rem)+'</td>'
       +'<td class="c-grade" style="text-align:center"><span class="val-badge-grade"'+(isBestCl?' style="color:#f97316;border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1)"':'')+'>'+( h.classe||'')+'</span></td>'
       +'<td class="val-td-caltm c-caltm"'+(isBestCt?' style="color:#fbbf24"':'')+'>'+ct+'</td>'
       +'</tr>';
