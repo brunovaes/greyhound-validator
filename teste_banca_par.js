@@ -266,7 +266,11 @@ t('e o ganho em R\$ sai dela', /\(ganhoPct \/ 100\) \* fixa/.test(SRC));
 // As tres bancas, rodando.
 const ctxB = { console: console, Object: Object, Number: Number };
 vm.createContext(ctxB);
-vm.runInContext(arranca('getBancas')
+// Desde 19/09 o getBancas usa tres ajudantes da BW por dia; sem ajuste gravado
+// (o db daqui devolve nada) ele cai na regra de antes.
+vm.runInContext(arranca('hojeBr') + '\n' + arranca('somaResolvidasAte') + '\n' + arranca('ultimoAjusteBw')
+  + '\nvar db = { prepare: function(){ return { get: function(){ return null; } }; } };\n'
+  + arranca('getBancas')
   + '\nthis.g = function(cfg, cadeia, fixa){'
   + '  getUserConfig = function(){ return cfg; };'
   + '  getBancaPadrao = function(){ return fixa; };'

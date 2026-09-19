@@ -2230,7 +2230,18 @@ function resumoDoDia(date) {
     });
     const unicas = Object.keys(vistas).map(k => vistas[k]);
     const agora = Date.now();
-    const faltam = unicas.filter(r => !cd.expirou(r.hora, agora));
+    // SEM a "volta do dia" do cd.expirou (19/09/2026, a noite: a tela dizia
+    // "Ainda nao fechamos! Encerramos as 6:32" sem corrida nenhuma). O
+    // minutosParaLargada soma 24h a quem largou ha mais de 12h — feito pra
+    // corrida perto da meia-noite —, entao a Doncaster das 10:32 AM (6:32 BR)
+    // virava "amanha as 6:32" depois das 18:32. Aqui a conta e' do mesmo dia:
+    // dia que nao e' hoje nao tem corrida por largar, e hoje so conta a corrida
+    // cuja hora BR ainda nao passou (+1 min de graca, como o expirou).
+    const hojeBr = new Date(agora - 3 * 3600 * 1000);
+    const agoraMin = hojeBr.getUTCHours() * 60 + hojeBr.getUTCMinutes();
+    const ehHoje = hojeBr.toISOString().slice(0, 10) === date;
+    const minBr = hora => { const hb = cd.horaBr(hora); const m = String(hb).match(/(\d{1,2}):(\d{2})/); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; };
+    const faltam = ehHoje ? unicas.filter(r => { const m = minBr(r.hora); return m != null && m + (cd.GRACA_MIN || 1) >= agoraMin; }) : [];
     // A ultima NAO skip a largar, em hora de Brasilia: e' o horario em que o
     // dia fecha, e e' o que a tela mostra.
     let ultima = null, ultimaMin = -1;

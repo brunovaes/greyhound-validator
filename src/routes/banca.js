@@ -247,7 +247,52 @@ function getCadeiaBanca(userId) {
 // SEM RESET NENHUM, acumula desde a primeira aposta. Assim quem nunca resetou
 // ve o historico inteiro, e o primeiro reset e' que cria o marco — ninguem
 // perde passado por eu ter escolhido uma data de corte.
-function getBancas(userId, cadeia) {
+// ── BANCA BW EDITAVEL, POR DIA (Bruno, 19/09/2026) ──────────────────────────
+// "deixar na banca o valor Banca BW editavel, pois as vezes o valor pode dar
+// uma variada... isso e' para o dia, nao tem que mexer com o passado. No dia
+// seguinte ele comeca com o valor que esta."
+//
+// Cada edicao vira um AJUSTE datado: o valor que voce informou e o total das
+// apostas ja resolvidas naquele momento (soma_ref). A Banca BW de um dia V e':
+//
+//     valor do ultimo ajuste feito ate V  +  (resultado acumulado ate V - soma_ref)
+//
+// ou seja: o que voce digitou, mais o que foi resolvido DEPOIS de digitar.
+//   - Editar hoje nao muda o que os dias anteriores mostram (eles usam o
+//     ajuste que valia na epoca, ou a regra antiga se nao havia ajuste).
+//   - Aposta de hoje que ja estava resolvida quando voce digitou nao conta de
+//     novo (ela esta dentro do soma_ref) — o valor digitado ja e' o saldo real.
+//   - Amanha a conta segue do valor de hoje, sem fazer nada.
+// Sem ajuste nenhum ainda, vale a regra de antes (valor + marco de reset).
+db.prepare(`CREATE TABLE IF NOT EXISTS banca_bw_ajustes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  dia TEXT NOT NULL,
+  valor REAL NOT NULL,
+  soma_ref REAL NOT NULL,
+  em DATETIME DEFAULT CURRENT_TIMESTAMP
+)`).run();
+
+function hojeBr() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }
+
+// Resultado (R$) de todas as apostas resolvidas com dia <= ate (ou todas).
+function somaResolvidasAte(cadeia, ate) {
+  let s = 0;
+  Object.keys(cadeia || {}).forEach(ym => {
+    (cadeia[ym].apostas || []).forEach(a => {
+      if (a.ganhoReais != null && (!ate || a.dia <= ate)) s += a.ganhoReais;
+    });
+  });
+  return s;
+}
+
+function ultimoAjusteBw(userId, ate) {
+  try {
+    return db.prepare('SELECT dia, valor, soma_ref, em FROM banca_bw_ajustes WHERE user_id=? AND dia<=? ORDER BY dia DESC, id DESC LIMIT 1').get(userId, ate) || null;
+  } catch (e) { return null; }
+}
+
+function getBancas(userId, cadeia, dia) {
   const cfg = getUserConfig(userId) || {};
   const fixa = getBancaPadrao(userId);
   const todas = [];
@@ -261,14 +306,22 @@ function getBancas(userId, cadeia) {
   const bwBase = (cfg.banca_bw_valor != null) ? Number(cfg.banca_bw_valor) : 0;
   const fixaDesde = cfg.banca_fixa_reset_em || null;
   const bwDesde = cfg.banca_bw_reset_em || null;
+  // O dia que a tela esta mostrando (ou hoje): a BW de cada dia vem do ajuste
+  // que valia naquele dia. Sem ajuste, a regra antiga, igual a de antes.
+  const diaBw = dia || hojeBr();
+  const aj = ultimoAjusteBw(userId, diaBw);
+  const bwPorAjuste = aj ? (aj.valor + (somaResolvidasAte(cadeia, diaBw) - aj.soma_ref)) : null;
   return {
+    bancaBwAjuste: aj ? { dia: aj.dia, valor: aj.valor } : null,
     bancaFixa: fixa,
     bancaAcumulada: fixa + somaDesde(fixaDesde),
     // NULL enquanto a BW nunca foi ancorada. Sem o marco eu nao sei de quando
     // contar, e somar o historico inteiro em cima de zero mostraria um numero
     // com cara de saldo real da casa — o tipo de mentira que ninguem confere.
     // A tela desenha um traco e o titulo explica como configurar.
-    bancaBw: bwDesde ? (bwBase + somaDesde(bwDesde)) : null,
+    // Regra antiga (sem ajuste) tambem por dia: o marco ate o dia mostrado. Antes
+    // um dia do passado mostrava a BW de HOJE, o que misturava os dias.
+    bancaBw: aj ? bwPorAjuste : (bwDesde ? (bwBase + somaDesde(bwDesde) - (somaResolvidasAte(cadeia, null) - somaResolvidasAte(cadeia, diaBw))) : null),
     bancaBwBase: bwBase,
     bancaFixaResetEm: fixaDesde,
     bancaBwResetEm: bwDesde
@@ -315,6 +368,19 @@ router.post('/reset-banca', express.json(), (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Edicao da Banca BW (so o dia de hoje). Ver o comentario de getBancas.
+router.post('/bw-ajuste', express.json(), (req, res) => {
+  try {
+    const userId = req.user.id;
+    const valor = parseFloat(String((req.body && req.body.valor) != null ? req.body.valor : '').replace(',', '.'));
+    if (!Number.isFinite(valor) || valor < 0) return res.status(400).json({ error: 'Valor inválido.' });
+    const cadeia = getCadeiaBanca(userId);
+    const soma = somaResolvidasAte(cadeia, null);
+    db.prepare('INSERT INTO banca_bw_ajustes (user_id, dia, valor, soma_ref) VALUES (?,?,?,?)').run(userId, hojeBr(), valor, soma);
+    res.json({ ok: true, dia: hojeBr(), valor });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/data', (req, res) => {
   const userId = req.user.id;
   const view = req.query.view || 'day';
@@ -344,7 +410,7 @@ router.get('/data', (req, res) => {
         pendentes: apostasDoDia.length - resolvidas.length,
         stopHit, pctStop,
         avisoStop: cfg && cfg.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.'
-      }, getBancas(userId, cadeia)));
+      }, getBancas(userId, cadeia, dateParam)));
     } else if (view === 'month') {
       const ym = dateParam.slice(0, 7);
       const mes = cadeia[ym] || { inicial: getBancaAtualPadrao(userId), final: getBancaAtualPadrao(userId), apostas: [] };
@@ -416,10 +482,12 @@ router.post('/save-config', express.json(), (req, res) => {
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_pct_stop REAL DEFAULT 20").run(); } catch(e) {}
     try { db.prepare("ALTER TABLE analysis_config ADD COLUMN banca_aviso_stop TEXT").run(); } catch(e) {}
     getUserConfig(userId); // garante que a linha de config do usuario existe
-    db.prepare(`UPDATE analysis_config SET banca_unidade_padrao=?, banca_valor_inicial=?, banca_bw_valor=?, banca_pct_stop=?, banca_aviso_stop=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
+    // banca_bw_valor saiu daqui (19/09/2026): a BW agora se edita no proprio
+    // cartao, por dia (banca_bw_ajustes). Regravar o campo aqui com o que viesse
+    // da tela zeraria a base da regra antiga sem ninguem pedir.
+    db.prepare(`UPDATE analysis_config SET banca_unidade_padrao=?, banca_valor_inicial=?, banca_pct_stop=?, banca_aviso_stop=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?`).run(
       parseFloat(d.banca_unidade_padrao) || 2.5,
       parseFloat(d.banca_valor_inicial) || 1000,
-      parseFloat(d.banca_bw_valor) || 0,
       (d.banca_pct_stop != null && d.banca_pct_stop !== '') ? parseFloat(d.banca_pct_stop) : 20,
       d.banca_aviso_stop || 'Atenção: o prejuízo de hoje atingiu o limite configurado. Considere parar as apostas por hoje.',
       userId
@@ -647,13 +715,6 @@ ${sidebarInfo(req.user)}
         <div style="font-size:11px;color:#666;margin-top:4px">A base da unidade: 1 unidade = 1% dela. Não se mexe sozinha — vale igual em todos os meses.</div>
         <button type="button" onclick="resetarBanca('fixa')" style="margin-top:8px;background:#161B27;border:1px solid #333;color:#cbd5e1;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer">Resetar acumulada (começa hoje)</button>
         <span style="font-size:11px;color:#666;margin-left:8px">${cfg.banca_fixa_reset_em ? 'acumulando desde ' + cfg.banca_fixa_reset_em : 'acumulando desde a primeira aposta'}</span>
-      </div>
-      <div>
-        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Banca BW — saldo real na casa (R$)</label>
-        <input id="cfg_bw" type="number" step="0.01" min="0" value="${cfg.banca_bw_valor||0}" style="width:100%;background:#0D1117;border:1px solid #222;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px">
-        <div style="font-size:11px;color:#666;margin-top:4px">O que está de fato na BetWinner. Resete depois de depósito ou saque — o sistema não tem como saber que eles aconteceram.</div>
-        <button type="button" onclick="resetarBanca('bw')" style="margin-top:8px;background:#161B27;border:1px solid #333;color:#eab308;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer">Resetar BW com este valor</button>
-        <span style="font-size:11px;color:#666;margin-left:8px">${cfg.banca_bw_reset_em ? 'contando desde ' + cfg.banca_bw_reset_em : 'nunca resetada'}</span>
       </div>
       <div>
         <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px">Percentual de stop do dia (%)</label>
@@ -937,11 +998,20 @@ function renderDay(d) {
   cardsEl.className = 'cards l8';
   var dicaFixa = d.bancaFixaResetEm ? 'Base da unidade. Acumulando desde o reset de ' + d.bancaFixaResetEm : 'Base da unidade: 1 unidade = 1% dela. Nao se mexe sozinha.';
   var dicaAcum = d.bancaFixaResetEm ? 'Banca fixa + resultado desde ' + d.bancaFixaResetEm : 'Banca fixa + resultado de todas as apostas';
-  var dicaBw = d.bancaBwResetEm ? 'Saldo informado em ' + d.bancaBwResetEm + ' (' + fmtR$(d.bancaBwBase) + ') + resultado desde entao' : 'Informe o saldo real da casa em Configuracoes e resete pra comecar a medir';
+  // A BW se edita no proprio cartao, so no dia de hoje (Bruno, 19/09/2026).
+  var ehHoje = (d.date === hojeBrTela());
+  var dicaBw = d.bancaBwAjuste
+    ? 'Valor informado em ' + d.bancaBwAjuste.dia + ' (' + fmtR$(d.bancaBwAjuste.valor) + ') + resultado desde entao'
+    : (d.bancaBwResetEm ? 'Saldo informado em ' + d.bancaBwResetEm + ' (' + fmtR$(d.bancaBwBase) + ') + resultado desde entao' : 'Clique no valor pra informar o saldo real da casa');
+  if (ehHoje) dicaBw += ' | clique no valor pra corrigir';
   cardsEl.innerHTML =
     '<div class="card" title="'+dicaFixa+'"><div class="lbl">Banca fixa</div><div class="val">'+fmtR$(d.bancaFixa)+'</div></div>' +
     '<div class="card" title="'+dicaAcum+'"><div class="lbl">Banca acumulada</div><div class="val '+(d.bancaAcumulada>=d.bancaFixa?'pos':'neg')+'">'+fmtR$(d.bancaAcumulada)+'</div></div>' +
-    '<div class="card" title="'+dicaBw+'"><div class="lbl">Banca BW</div><div class="val bw">'+(d.bancaBw==null?'&mdash;':fmtR$(d.bancaBw))+'</div></div>' +
+    '<div class="card" title="'+dicaBw+'"><div class="lbl">Banca BW</div>'
+      + (ehHoje
+          ? '<div class="val bw bw-edit" id="bw-val" onclick="editarBw(this)" data-v="'+(d.bancaBw==null?'':Number(d.bancaBw).toFixed(2))+'" style="cursor:pointer">'+(d.bancaBw==null?'&mdash;':fmtR$(d.bancaBw))+' <span style="font-size:12px;opacity:.6">&#9998;</span></div>'
+          : '<div class="val bw">'+(d.bancaBw==null?'&mdash;':fmtR$(d.bancaBw))+'</div>')
+      + '</div>' +
     '<div class="card"><div class="lbl">Dinheiro transitado</div><div class="val" style="color:#3B82F7">'+fmtR$(d.dinheiroTransitado)+'</div></div>' +
     '<div class="card"><div class="lbl">Lucros do dia</div><div class="val pos">'+fmtR$(d.lucros)+'</div></div>' +
     '<div class="card"><div class="lbl">Prejuízos do dia</div><div class="val neg">'+fmtR$(-d.prejuizos)+'</div></div>' +
@@ -1127,6 +1197,34 @@ async function salvarBancaInicial(yearMonth) {
   } catch(e) { ghErro('Nao consegui salvar. ' + e.message); }
 }
 
+// Data de hoje em Brasilia, no formato do /banca/data (YYYY-MM-DD).
+function hojeBrTela(){ return new Date(Date.now() - 3*3600*1000).toISOString().slice(0,10); }
+// Clique no valor da Banca BW: vira campo; Enter ou sair do campo grava.
+// Esc desiste. So existe no dia de hoje (o passado nao se edita).
+function editarBw(el){
+  if (el.querySelector('input')) return;
+  var atual = el.getAttribute('data-v') || '';
+  el.innerHTML = '<input type="text" inputmode="decimal" value="'+atual+'" style="width:100%;background:#0D1117;border:1px solid #eab308;color:#eab308;padding:4px 6px;border-radius:6px;font-size:18px;font-weight:700">';
+  var inp = el.querySelector('input');
+  var feito = false;
+  inp.focus(); inp.select();
+  async function gravar(){
+    if (feito) return; feito = true;
+    var v = inp.value.trim().replace(',', '.');
+    if (v === '' || v === atual) { carregarDados(); return; }
+    try {
+      var r = await fetch(BASE+'/banca/bw-ajuste', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({valor:v})});
+      if (!r.ok) { var j = await r.json().catch(function(){return {};}); throw new Error(j.error || ('HTTP '+r.status)); }
+    } catch(e){ ghErro('Nao consegui salvar a Banca BW. ' + e.message); }
+    carregarDados();
+  }
+  inp.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); gravar(); }
+    if (e.key === 'Escape') { feito = true; carregarDados(); }
+  });
+  inp.addEventListener('blur', gravar);
+}
+
 carregarDados();
 // Resetar NAO apaga aposta nenhuma: so move o marco a partir do qual a banca
 // acumula. O historico continua inteiro nas abas Mes e Ano.
@@ -1160,7 +1258,6 @@ async function salvarConfigBanca(){
   var body = {
     banca_unidade_padrao: document.getElementById('cfg_unidade').value,
     banca_valor_inicial: document.getElementById('cfg_inicial').value,
-    banca_bw_valor: document.getElementById('cfg_bw').value,
     banca_pct_stop: document.getElementById('cfg_pctstop').value,
     banca_aviso_stop: document.getElementById('cfg_aviso').value
   };
