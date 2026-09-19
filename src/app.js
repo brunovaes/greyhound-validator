@@ -3340,6 +3340,18 @@ function injectValModal(){
   /* E um card nunca desenha por cima do vizinho, aconteca o que acontecer. */
   .vf-grade .vf-cel{overflow:hidden}
 }
+/* Relatorio de Analise no computador: a letra da janela do PDF (tabela em
+   14px). Ver o comentario em buildRelatorioHtml. O th nao tem font-size
+   proprio no HTML (pegava os 9px da regra geral th{} do main.js), entao
+   ganha regra aqui. */
+@media(min-width:769px){
+  #val-body{--rel-tit:12px;--rel-txt:14px;--rel-res:15px;--rel-tbl:14px;--rel-tag:11px}
+  #val-body .rel-tbl th{font-size:11px}
+  /* A regra geral table{min-width:880px} do main.js tambem pegava esta
+     tabela: na caixa de 920px ela passava da margem do quadro e encostava
+     na borda da janela. */
+  #val-body .rel-tbl{min-width:0}
+}
 /* TELA LARGA — AS COLUNAS DO DESENHO DO BRUNO (19/09/2026).
    Ele mandou a tela como esta e a tela como quer (desenhada no Paint): as
    dez colunas espalhadas pela largura do card, o Remarks com ~22% em vez de
@@ -3626,19 +3638,25 @@ function _fmtOdd(v){
   return (v == null || v === '') ? '—' : Number(v).toFixed(2);
 }
 
+// Tamanho da letra (19/09/2026, Bruno: "deixar o relatorio do jeito que
+// esta, porem aumentar um pouquinho a fonte, do tamanho da que voce colocou
+// no pdf"). Cada font-size aqui e' uma variavel CSS com o tamanho ANTIGO como
+// reserva: no celular nenhuma variavel e' definida e tudo fica exatamente
+// como era; no computador o bloco @media(min-width:769px) do <style> define
+// os tamanhos maiores (os mesmos da janela do PDF: 14px na tabela).
 function buildRelatorioHtml(r){
   var sec = 'padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)';
-  var title = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#22c55e;margin-bottom:10px';
+  var title = 'font-size:var(--rel-tit,11px);font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#22c55e;margin-bottom:10px';
   var html = '';
 
   if (!r.scores || !r.scores.length) {
-    return '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Relatório detalhado não disponível para esta corrida (sessão salva antes deste recurso, ou corrida descartada antes do cálculo de scores).</div>';
+    return '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.4);font-size:var(--rel-txt,12px)">Relatório detalhado não disponível para esta corrida (sessão salva antes deste recurso, ou corrida descartada antes do cálculo de scores).</div>';
   }
 
   // Resumo humanizado (paragrafo de abertura)
   var resumo = buildResumoHumanizado(r);
   if (resumo) {
-    html += '<div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(34,197,94,.04)"><div style="font-size:13px;color:#eee;line-height:1.6">'+resumo+'</div></div>';
+    html += '<div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(34,197,94,.04)"><div style="font-size:var(--rel-res,13px);color:#eee;line-height:1.6">'+resumo+'</div></div>';
   }
 
   // Eliminados
@@ -3647,22 +3665,22 @@ function buildRelatorioHtml(r){
     html += r.eliminados.map(function(e){
       var _cio = /Cio recente/i.test(e.motivo||'');
       if (_cio) {
-        return '<div style="font-size:12px;color:#fca5a5;padding:4px 0;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;padding-left:6px;border-radius:3px;margin:2px 0"><span style="margin-right:4px">🩸</span><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
+        return '<div style="font-size:var(--rel-txt,12px);color:#fca5a5;padding:4px 0;background:rgba(239,68,68,.08);border-left:2px solid #ef4444;padding-left:6px;border-radius:3px;margin:2px 0"><span style="margin-right:4px">🩸</span><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
       }
-      return '<div style="font-size:12px;color:#ccc;padding:4px 0"><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
+      return '<div style="font-size:var(--rel-txt,12px);color:#ccc;padding:4px 0"><strong style="color:#ef4444">T'+e.trap+'</strong> — '+e.motivo+'</div>';
     }).join('');
     html += '</div>';
   }
 
   // Tabela de scores
   html += '<div style="'+sec+'"><div style="'+title+'">Scores calculados (motor fixo/configurado)</div>';
-  html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#888;text-align:left">'
+  html += '<table class="rel-tbl" style="width:100%;border-collapse:collapse;font-size:var(--rel-tbl,11px)"><thead><tr style="color:#888;text-align:left">'
     + '<th style="padding:4px 6px">Trap</th><th style="padding:4px 6px">Galgo</th><th style="padding:4px 6px;text-align:center">CalTm</th><th style="padding:4px 6px;text-align:center">Categoria</th><th style="padding:4px 6px;text-align:center">Bends</th><th style="padding:4px 6px;text-align:center">Split</th><th style="padding:4px 6px;text-align:center">Remarks</th><th style="padding:4px 6px;text-align:center">SP</th><th style="padding:4px 6px;text-align:center" title="Odd decimal média das 2 últimas SPs na pista/distância">Odd méd</th><th style="padding:4px 6px;text-align:center">BRT</th><th style="padding:4px 6px;text-align:center">Post Pick</th><th style="padding:4px 6px;text-align:center">Final</th></tr></thead><tbody>';
   html += r.scores.map(function(g){
     var s = g.scores||{};
     var isFav = g.trap===r.trapFav, isUnd = g.trap===r.trapUnd;
     var rowStyle = 'border-top:1px solid rgba(255,255,255,.06)' + (isFav?';background:rgba(34,197,94,.08)':(isUnd?';background:rgba(239,68,68,.08)':''));
-    var tag = isFav?' <span style="color:#22c55e;font-size:9px">FAV</span>':(isUnd?' <span style="color:#ef4444;font-size:9px">UND</span>':'');
+    var tag = isFav?' <span style="color:#22c55e;font-size:var(--rel-tag,9px)">FAV</span>':(isUnd?' <span style="color:#ef4444;font-size:var(--rel-tag,9px)">UND</span>':'');
     return '<tr style="'+rowStyle+'"><td style="padding:5px 6px">T'+g.trap+'</td><td style="padding:5px 6px">'+(g.nome||'')+tag+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.caltm!=null?s.caltm:'-')+'</td>'
       +'<td style="padding:5px 6px;text-align:center">'+(s.categoria!=null?s.categoria:'-')+'</td>'
@@ -3690,16 +3708,16 @@ function buildRelatorioHtml(r){
   }
   if (tbNotes.length) {
     html += '<div style="'+sec+'"><div style="'+title+'">Desempates aplicados (score final ≤ 5 pts de diferença)</div>';
-    html += tbNotes.map(function(t){return '<div style="font-size:12px;color:#ccc;padding:4px 0">'+t+'</div>';}).join('');
+    html += tbNotes.map(function(t){return '<div style="font-size:var(--rel-txt,12px);color:#ccc;padding:4px 0">'+t+'</div>';}).join('');
     html += '</div>';
   }
 
   // Decisao final
   html += '<div style="padding:16px 20px">';
   if (r.nivel === 'skip') {
-    html += '<div style="font-size:12px;color:#f97316;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:12px">Corrida marcada como <strong>Skip</strong> — margem insuficiente pra indicação confiável.</div>';
+    html += '<div style="font-size:var(--rel-txt,12px);color:#f97316;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:12px">Corrida marcada como <strong>Skip</strong> — margem insuficiente pra indicação confiável.</div>';
   } else {
-    html += '<div style="font-size:13px;color:#fff;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:14px">'
+    html += '<div style="font-size:var(--rel-res,13px);color:#fff;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:14px">'
       // Odd media de cada lado ao lado do nome. Com o modo avb_parelho o
       // trapFav/trapUnd ja e' o par de odds mais proximas, entao ver as duas
       // juntas mostra na hora o quao equilibrada e' a disputa.
