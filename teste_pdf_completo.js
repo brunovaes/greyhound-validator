@@ -171,7 +171,7 @@ t('a janela alarga', doc.els['val-box'].classList.contains('vf-grande'));
 ctx.closeValModal();
 t('e fechar devolve o tamanho de sempre (a disputa usa a mesma caixa)', !doc.els['val-box'].classList.contains('vf-grande'));
 t('o plano B tambem volta ao tamanho normal', /function _abrirRecorteAntigo\(key, aviso\)\{\r?\n\s*\/\/[^\n]*\r?\n\s*_janelaGrande\(false\);/.test(APP));
-t('remark inteiro: sem reticencias na janela', /\.vf-grade \.val-td-rem\{[^}]*text-overflow:clip/.test(APP));
+t('remark inteiro: sem reticencias na janela', /\.vf-grade (\.val-tbl td)?\.val-td-rem\{[^}]*text-overflow:clip/.test(APP));
 t('e ele so quebra depois de virgula', html.indexOf(',<wbr>') >= 0);
 // "As colunas nao ficaram no mesmo tamanho" (19/09): com table-layout:auto
 // cada card media as colunas pelo proprio texto e a tabela invadia o vizinho.
@@ -188,7 +188,7 @@ const px = ['date', 'track', 'dis', 'trp', 'split', 'bends', 'fin', 'grade', 'ca
 t('as nove colunas curtas com largura justa, em px: ' + px.join('+'), px.every(isFinite) && px.every(function (x) { return x <= 70; }));
 // Em tela larga (19/09): as larguras que o Bruno escolheu, coluna por coluna.
 const larga = (CSSJ.match(/@media\(min-width:1560px\)\{([\s\S]*?)\n\}/) || ['', ''])[1];
-const BRUNO = { date: 100, track: 100, dis: 70, trp: 30, split: 70, bends: 70, fin: 30, grade: 50, caltm: 55 };
+const BRUNO = { date: 100, track: 120, dis: 80, trp: 50, split: 80, bends: 70, fin: 25, grade: 50, caltm: 55 };
 const lidas = Object.keys(BRUNO).map(function (c) {
   const m = larga.match(new RegExp('col\\.c-' + c + '\\{width:(\\d+)px!important\\}'));
   return m ? Number(m[1]) : NaN;
@@ -196,6 +196,10 @@ const lidas = Object.keys(BRUNO).map(function (c) {
 t('tela larga: as larguras do Bruno (' + lidas.join(',') + ')',
   Object.keys(BRUNO).every(function (c, k) { return lidas[k] === BRUNO[c]; }));
 t('e o Remarks segue automatico nela', !/c-rem/.test(larga));
+// "Tem que ficar com no maximo 140": teto da tabela = soma das nove + 140.
+const soma = lidas.reduce(function (a, b) { return a + b; }, 0);
+t('e com no maximo 140px: a tabela tem teto de ' + (soma + 140) + 'px',
+  new RegExp('\\.vf-grade \\.val-tbl\\{max-width:' + (soma + 140) + 'px\\}').test(larga));
 t('e o Remarks fica com o resto da linha', /\.vf-grade \.val-tbl col\.c-rem\{width:auto!important\}/.test(CSSJ));
 t('um card nunca desenha por cima do vizinho', /\.vf-grade \.vf-cel\{overflow:hidden\}/.test(CSSJ));
 t('celula que nao couber corta dentro dela, nao por cima do vizinho',
@@ -233,7 +237,8 @@ if (chromium) {
         const dist = (k + i) % 3 === 0 ? 285 : (k === 2 ? 695 : 500);
         return { data: (28 - k * 5) + (k % 2 ? 'Aug26' : 'Sep26'), pista: k === 3 ? 'Towcs' : 'Hove', dist: dist, trap: (k + tp) % 6 + 1,
           split: (k + i) % 4 === 0 ? '' : (4.1 + k / 10).toFixed(2), bends: dist === 285 ? '4-3-' : (k % 2 ? '1-1-' : '4444'),
-          pos: ((k + i) % 6) + 1 + 'th', remarks: REM[(i * 2 + k) % REM.length], classe: GR[(k + i) % GR.length],
+          // Fin vem do PDF so com o numero ("2", "3"), sem "th".
+          pos: String(((k + i) % 6) + 1), remarks: REM[(i * 2 + k) % REM.length], classe: GR[(k + i) % GR.length],
           caltm: dist === 285 ? 16.87 : (30.23 + k / 7).toFixed(2) };
       }) };
     });

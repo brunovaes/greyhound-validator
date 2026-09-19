@@ -3328,7 +3328,10 @@ function injectValModal(){
   /* Um ponto a menos que a versao anterior (15 -> 14), como o Bruno pediu. */
   .vf-grade .val-tbl td{font-size:14px;padding:3px 3px;white-space:nowrap;overflow:hidden;text-overflow:clip}
   .vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:14px}
-  .vf-grade .val-td-rem{font-size:13px;max-width:none;white-space:normal;overflow:hidden;text-overflow:clip;line-height:1.2;overflow-wrap:anywhere}
+  /* "td.val-td-rem" e nao so ".val-td-rem": sem o td, a regra de cima
+     (.vf-grade .val-tbl td{white-space:nowrap}) ganha por especificidade e o
+     remark nunca quebra linha, fica cortado. */
+  .vf-grade .val-tbl td.val-td-rem{font-size:13px;max-width:none;white-space:normal;overflow:hidden;text-overflow:clip;line-height:1.2;overflow-wrap:anywhere}
   #val-box.vf-grande #val-hdr h3{font-size:14px}
   .vf-grade .val-badge-grade{font-size:12px;padding:0 3px}
   /* Rede de seguranca: se um dia algo ainda passar da largura, a janela nao
@@ -3341,24 +3344,33 @@ function injectValModal(){
    um pouquinho Date, Track, Dis, Trp, Split, Bends e Fin; o que diminuir em
    remarks, distribui entre esses" (19/09/2026), e depois "pode tirar mais".
    Os numeros abaixo sao os que o proprio Bruno escolheu, coluna por coluna
-   (19/09/2026). As nove somam 575px; o Remarks fica com o resto (~167px em
-   1600), e remark mais comprido que isso quebra depois da virgula. So a
-   partir de 1560px: abaixo disso sobraria pouco pro Remarks. */
+   (19/09/2026, segunda rodada). As nove somam 630px; o Remarks fica com o
+   resto e, a pedido dele, com NO MAXIMO 140px: por isso a tabela tem teto
+   de 770px (630 + 140). Em tela mais larga sobra espaco a direita do card
+   em vez de o Remarks crescer. Remark mais comprido que o espaco quebra
+   depois da virgula. So a partir de 1560px. */
 @media(min-width:1560px){
+  .vf-grade .val-tbl{max-width:770px}
+  /* Com o Remarks estreito, os remarks longos passam a ocupar duas linhas e a
+     janela, com seis galgos em 1600x700, pedia ~40px a mais que a tela.
+     Linha mais baixa (1px em cima e embaixo) e o remark em 12px devolvem
+     esse espaco, e com 12px menos remarks quebram. */
+  .vf-grade .val-tbl td{padding-top:1px;padding-bottom:1px}
+  .vf-grade .val-tbl td.val-td-rem{font-size:12px;line-height:1.1}
   .vf-grade .val-tbl col.c-date{width:100px!important}
-  .vf-grade .val-tbl col.c-track{width:100px!important}
-  .vf-grade .val-tbl col.c-dis{width:70px!important}
-  .vf-grade .val-tbl col.c-trp{width:30px!important}
-  .vf-grade .val-tbl col.c-split{width:70px!important}
+  .vf-grade .val-tbl col.c-track{width:120px!important}
+  .vf-grade .val-tbl col.c-dis{width:80px!important}
+  .vf-grade .val-tbl col.c-trp{width:50px!important}
+  .vf-grade .val-tbl col.c-split{width:80px!important}
   .vf-grade .val-tbl col.c-bends{width:70px!important}
-  .vf-grade .val-tbl col.c-fin{width:30px!important}
+  .vf-grade .val-tbl col.c-fin{width:25px!important}
   .vf-grade .val-tbl col.c-grade{width:50px!important}
   .vf-grade .val-tbl col.c-caltm{width:55px!important}
 }
 /* Notebook (ate ~1450px de largura): mais um ponto a menos. */
 @media(min-width:1201px) and (max-width:1450px){
   .vf-grade .val-tbl td,.vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:13px;padding:2px 2px}
-  .vf-grade .val-td-rem{font-size:12px}
+  .vf-grade .val-tbl td.val-td-rem{font-size:12px}
   .vf-grade .val-name{font-size:15px}
   .vf-grade .val-tbl th{font-size:10px}
 }
