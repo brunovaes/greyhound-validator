@@ -178,11 +178,16 @@ t('e ele so quebra depois de virgula', html.indexOf(',<wbr>') >= 0);
 const CSSJ = semComentarios(APP);
 t('a tabela da janela e\' de largura fixa (nao mede pelo texto)',
   /\.vf-grade \.val-tbl\{table-layout:fixed;width:100%\}/.test(CSSJ) && !/\.vf-grade \.val-tbl\{table-layout:auto/.test(CSSJ));
-const pct = ['date', 'track', 'dis', 'trp', 'split', 'bends', 'fin', 'rem', 'grade', 'caltm'].map(function (c) {
-  const m = CSSJ.match(new RegExp('\\.vf-grade \\.val-tbl col\\.c-' + c + '\\{width:(\\d+)%!important\\}'));
+// "Reduzir todas as colunas... deixar meio que no automatico": as nove curtas
+// com a largura do proprio conteudo, em px, iguais em todo card; o Remarks sem
+// largura, ficando com o que sobra.
+const px = ['date', 'track', 'dis', 'trp', 'split', 'bends', 'fin', 'grade', 'caltm'].map(function (c) {
+  const m = CSSJ.match(new RegExp('\\.vf-grade \\.val-tbl col\\.c-' + c + '\\{width:(\\d+)px!important\\}'));
   return m ? Number(m[1]) : NaN;
 });
-t('as dez colunas com porcentagem fixa, somando 100%: ' + pct.join('+'), pct.every(isFinite) && pct.reduce(function (a, b) { return a + b; }, 0) === 100);
+t('as nove colunas curtas com largura justa, em px: ' + px.join('+'), px.every(isFinite) && px.every(function (x) { return x <= 70; }));
+t('e o Remarks fica com o resto da linha', /\.vf-grade \.val-tbl col\.c-rem\{width:auto!important\}/.test(CSSJ));
+t('um card nunca desenha por cima do vizinho', /\.vf-grade \.vf-cel\{overflow:hidden\}/.test(CSSJ));
 t('celula que nao couber corta dentro dela, nao por cima do vizinho',
   /\.vf-grade \.val-tbl td\{[^}]*overflow:hidden/.test(CSSJ));
 t('a letra desceu um ponto (15 -> 14) so no computador',
@@ -233,11 +238,13 @@ if (chromium) {
           return {
             rola: body.scrollHeight > body.clientHeight + 1,
             lado: body.scrollWidth > body.clientWidth + 1 || dogs.some(function (d) { return d.scrollWidth > d.clientWidth + 1; }),
-            iguais: larg.every(function (x) { return x === larg[0]; })
+            iguais: larg.every(function (x) { return x === larg[0]; }),
+            cortados: [].slice.call(document.querySelectorAll('.vf-grade td,.vf-grade th')).filter(function (c) { return c.scrollWidth > c.clientWidth + 1; }).length
           };
         });
         t('6 galgos x 5 linhas cabem numa tela so em ' + w + 'x' + h + ', sem rolar pra baixo nem pro lado', !r.rola && !r.lado);
         t('  e as colunas tem a mesma largura nos seis cards', r.iguais);
+        t('  e nenhum texto (nem o CalTm) fica cortado', r.cortados === 0);
         await page.close();
       }
     } finally { await browser.close(); }

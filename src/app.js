@@ -3297,20 +3297,24 @@ function injectValModal(){
      O !important e' obrigatorio: a largura do colgroup vem em style="" no
      proprio <col>, e estilo em atributo ganha de regra sem ele. */
   .vf-grade .val-tbl{table-layout:fixed;width:100%}
-  /* Remarks de 27% pra 22% (Bruno: "nao da pra ver o tempo... pode reduzir
-     a largura da coluna remark"): os 5 pontos vao pra Date, Track, Grade e
-     CalTm, que e' o numero que ele mais olha. Remark mais longo quebra em
-     duas linhas depois da virgula, sem cortar. */
-  .vf-grade .val-tbl col.c-date{width:12%!important}
-  .vf-grade .val-tbl col.c-track{width:10%!important}
-  .vf-grade .val-tbl col.c-dis{width:8%!important}
-  .vf-grade .val-tbl col.c-trp{width:6%!important}
-  .vf-grade .val-tbl col.c-split{width:7%!important}
-  .vf-grade .val-tbl col.c-bends{width:8%!important}
-  .vf-grade .val-tbl col.c-fin{width:6%!important}
-  .vf-grade .val-tbl col.c-rem{width:22%!important}
-  .vf-grade .val-tbl col.c-grade{width:9%!important}
-  .vf-grade .val-tbl col.c-caltm{width:12%!important}
+  /* Bruno: "vai ter que reduzir todas as colunas... deixar meio que no
+     automatico... ainda nao consigo ver o tempo". Entao cada coluna curta
+     tem SO a largura do proprio conteudo (medida com a fonte Inter do app:
+     "28Aug26" em 14px da 61px, "30.60" em negrito 41px, "CALTM" no cabecalho
+     39px; mais 6px de respiro), igual em todos os cards. O Remarks nao tem
+     largura: fica com o que sobrar da linha, cresce em tela larga, encolhe em
+     tela estreita e quebra depois de virgula. O CalTm, na ponta, nunca e' o
+     que perde espaco. Total das nove curtas: 400px. */
+  .vf-grade .val-tbl col.c-date{width:68px!important}
+  .vf-grade .val-tbl col.c-track{width:50px!important}
+  .vf-grade .val-tbl col.c-dis{width:44px!important}
+  .vf-grade .val-tbl col.c-trp{width:30px!important}
+  .vf-grade .val-tbl col.c-split{width:38px!important}
+  .vf-grade .val-tbl col.c-bends{width:44px!important}
+  .vf-grade .val-tbl col.c-fin{width:28px!important}
+  .vf-grade .val-tbl col.c-rem{width:auto!important}
+  .vf-grade .val-tbl col.c-grade{width:46px!important}
+  .vf-grade .val-tbl col.c-caltm{width:52px!important}
   .vf-grade .val-dog-hdr{margin-bottom:3px}
   .vf-grade .val-dog-hdr .trap-badge{width:26px;height:26px;font-size:13px}
   .vf-grade .val-name{font-size:16px}
@@ -3318,12 +3322,14 @@ function injectValModal(){
   /* Um ponto a menos que a versao anterior (15 -> 14), como o Bruno pediu. */
   .vf-grade .val-tbl td{font-size:14px;padding:3px 3px;white-space:nowrap;overflow:hidden;text-overflow:clip}
   .vf-grade .val-td-date,.vf-grade .val-td-track,.vf-grade .val-td-muted,.vf-grade .val-td-bends,.vf-grade .val-td-caltm{font-size:14px}
-  .vf-grade .val-td-rem{font-size:13px;max-width:none;white-space:normal;overflow:hidden;text-overflow:clip;line-height:1.2}
+  .vf-grade .val-td-rem{font-size:13px;max-width:none;white-space:normal;overflow:hidden;text-overflow:clip;line-height:1.2;overflow-wrap:anywhere}
   #val-box.vf-grande #val-hdr h3{font-size:14px}
   .vf-grade .val-badge-grade{font-size:12px;padding:0 3px}
   /* Rede de seguranca: se um dia algo ainda passar da largura, a janela nao
      ganha barra de rolar pro lado. */
   #val-box.vf-grande #val-body{overflow-x:hidden}
+  /* E um card nunca desenha por cima do vizinho, aconteca o que acontecer. */
+  .vf-grade .vf-cel{overflow:hidden}
 }
 /* Notebook (ate ~1450px de largura): mais um ponto a menos. */
 @media(min-width:1201px) and (max-width:1450px){
