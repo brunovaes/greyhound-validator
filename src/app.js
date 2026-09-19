@@ -3340,19 +3340,20 @@ function injectValModal(){
 /* Tela larga (a do Bruno, 1600px): "reduzir a largura do remarks e aumentar
    um pouquinho Date, Track, Dis, Trp, Split, Bends e Fin; o que diminuir em
    remarks, distribui entre esses" (19/09/2026), e depois "pode tirar mais".
-   Sao +158px nas sete colunas, que saem do Remarks: em 1600 ele cai de ~310
-   pra ~180px, o justo pro remark mais comprido ("Rls-Mid,Eased&BdCrd1&1/4"
-   pede ~165px); um maior que isso quebra depois da virgula. So a partir de
-   1560px: abaixo disso tirar 158px deixaria quase todo remark em duas
-   linhas. Grade e CalTm nao mudam. */
+   Os numeros abaixo sao os que o proprio Bruno escolheu, coluna por coluna
+   (19/09/2026). As nove somam 575px; o Remarks fica com o resto (~167px em
+   1600), e remark mais comprido que isso quebra depois da virgula. So a
+   partir de 1560px: abaixo disso sobraria pouco pro Remarks. */
 @media(min-width:1560px){
-  .vf-grade .val-tbl col.c-date{width:95px!important}
-  .vf-grade .val-tbl col.c-track{width:72px!important}
-  .vf-grade .val-tbl col.c-dis{width:66px!important}
-  .vf-grade .val-tbl col.c-trp{width:51px!important}
-  .vf-grade .val-tbl col.c-split{width:60px!important}
-  .vf-grade .val-tbl col.c-bends{width:66px!important}
-  .vf-grade .val-tbl col.c-fin{width:50px!important}
+  .vf-grade .val-tbl col.c-date{width:100px!important}
+  .vf-grade .val-tbl col.c-track{width:100px!important}
+  .vf-grade .val-tbl col.c-dis{width:70px!important}
+  .vf-grade .val-tbl col.c-trp{width:30px!important}
+  .vf-grade .val-tbl col.c-split{width:70px!important}
+  .vf-grade .val-tbl col.c-bends{width:70px!important}
+  .vf-grade .val-tbl col.c-fin{width:30px!important}
+  .vf-grade .val-tbl col.c-grade{width:50px!important}
+  .vf-grade .val-tbl col.c-caltm{width:55px!important}
 }
 /* Notebook (ate ~1450px de largura): mais um ponto a menos. */
 @media(min-width:1201px) and (max-width:1450px){
