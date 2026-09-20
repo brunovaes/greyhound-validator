@@ -232,6 +232,10 @@ function rodarLista(corridas, aguardando, minutos) {
     renderFocusPanel: () => {},
     refreshFocusMode: () => {},
     atualizarProximas: () => {},
+    // O cabecalho da lista agora tem o espelho da linha da sessao (o texto que
+    // no celular fica na mesma linha do Atualizar). Aqui ele nao e' o assunto:
+    // devolve vazio.
+    _stEspelhoHtml: () => '',
     window: {}
   };
   const nomes = Object.keys(ctx);

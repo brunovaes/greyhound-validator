@@ -950,6 +950,13 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
 .fp-hdr{padding:10px 18px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:52px;background:var(--sur)}
 .fp-race-title{font-size:14px;font-weight:700;color:#fff}
 .fp-race-meta{font-size:11px;color:var(--mut2);margin-top:1px}
+/* Pedacos que existem SO no celular: a hora BR dentro do titulo e a copia do
+   selo de confianca na mesma linha (no computador os dois moram na segunda
+   linha, a .fp-race-meta). Nascem escondidos; quem liga e' o @media do mobile,
+   e e' por isso que o HTML pode trazer os dois sem nunca mostrar os dois. */
+.fp-so-cel{display:none}
+/* O espelho da linha da sessao, que no celular fica na linha do Atualizar. */
+.st-m{display:none}
 .fp-toggle-tbl{padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--bdr2);color:var(--mut2);border-radius:4px;cursor:pointer}
 .fp-toggle-tbl:hover{border-color:var(--grn);color:var(--grn)}
 .fp-arena{display:flex;align-items:flex-end;padding:12px 20px 0;gap:0;flex-shrink:0;background:radial-gradient(ellipse at center bottom,rgba(34,197,94,.04) 0%,transparent 70%)}
@@ -1203,6 +1210,55 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
      todos. Agora a tabela tem a largura da tela, e quem decide quais colunas
      aparecem e' o bloco do app.js, onde as .val-* moram. */
   .val-tbl{table-layout:auto!important;width:100%!important;min-width:0!important}
+
+  /* ── ANALISAR NO CELULAR (Bruno, 20/09/2026) ─────────────────────────────
+     Tudo aqui tem um objetivo so: caber mais corrida na tela do telefone.
+     O que ele pediu, item por item:
+
+     1. A sidebar inteira sai. No celular ela ja nao tinha o Carregar PDF
+        (escondido acima), o Historicos dela repete o do menu de cima, e a
+        linha da sessao passou pro cabecalho da lista - sobrava um titulo e
+        divisores ocupando a primeira tela. Os elementos continuam no DOM (so
+        display:none), entao o app.js continua escrevendo neles sem quebrar:
+        #rlist, #btn-clear e o proprio #st seguem existindo.
+     2. A linha "20/09/2026 - 2 AvBs carregados" aparece no cabecalho da lista,
+        na mesma linha do Atualizar (o espelho .st-m / #st-m do app.js).
+     3. Tres corridas no maximo: isso e' no app.js (racasEmTela), nao aqui.
+     4. O cabecalho da corrida vira UMA linha: a segunda (.fp-race-meta) sai e
+        o que ela tinha de util - hora BR e selo de confianca - foi pra
+        primeira, nos .fp-so-cel. O escopo e' .fp-hdr de proposito: as tiles do
+        Painel do Dia usam a MESMA classe .fp-race-meta e nao podem perder a
+        segunda linha delas.
+     5. A barra de baixo cabe numa linha so: nowrap, gaps e fontes menores, e o
+        texto "Atrasada" sai (fica o checkbox e a bandeirinha). O !important e'
+        obrigatorio porque cada campo desses tem style="" no proprio elemento,
+        posto pelo app.js. O escopo .focus-col > .fp-inputs-row e' pela mesma
+        razao do item 4: a barra das tiles usa a mesma classe. */
+  .sidebar{display:none!important}
+  .st-m{display:block;font-size:10px;color:var(--mut2);text-decoration:none;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fp-so-cel{display:inline}
+  .fp-hdr{padding:6px 10px!important;min-height:0!important;gap:6px!important}
+  .fp-hdr .fp-race-meta{display:none!important}
+  /* O titulo e' UMA linha: nome comprido de pista e' cortado com "..." em vez
+     de virar duas linhas e devolver a altura que acabamos de tirar. O selo e'
+     irmao do titulo justamente pra nao ser cortado com ele. Medido no
+     Chromium: de 360 a 430px o cabecalho fica em 31px (era 52). */
+  .fp-hdr-left{display:flex!important;align-items:center;gap:6px;flex:1 1 auto;min-width:0}
+  .fp-hdr .fp-race-title{font-size:11px!important;line-height:1.3;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
+  .fp-so-cel.fp-badge-cel{flex:0 0 auto}
+  /* O chip de odd ao vivo do canto direito sai no celular: ele repete o par e a
+     odd do cartao do AvB que fica logo abaixo, e era ele (110px de piso) que
+     empurrava o nome da pista pra fora da linha. */
+  .fp-hdr #fp-odds-hdr{display:none!important}
+  .fp-atr-txt{display:none}
+  .focus-col > .fp-inputs-row{flex-wrap:nowrap!important;gap:6px!important;
+    padding:6px 8px!important;overflow:hidden}
+  .focus-col > .fp-inputs-row > span,
+  .focus-col > .fp-inputs-row > label{font-size:10px!important;gap:3px!important}
+  .focus-col > .fp-inputs-row input[type=text]{width:40px!important;padding:3px 4px!important;font-size:11px!important}
+  .focus-col > .fp-inputs-row #fp-entrei{padding:4px 8px!important;font-size:10px!important}
 }
 
 /* ── A tela inteira cabe na altura da janela, em qualquer notebook ─────────

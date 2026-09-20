@@ -15,7 +15,15 @@ function trapClass(n){return['','t1','t2','t3','t4','t5','t6'][n]||'t1';}
 function perfilBadge(p){if(!p)return'';var c=p==='Recuperador'?'p-rec':p==='Fumador'?'p-fum':p==='Frontrunner'?'p-fro':'p-est';var i=p==='Recuperador'?'&#128170;':p==='Fumador'?'&#128684;':p==='Frontrunner'?'&#9889;':'&#10145;';return'<span class="perfil-badge '+c+'">'+i+' '+p+'</span>';}
 function ukHoraParaOrdem(h){if(!h)return 9999;var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;hr=hr-4;if(hr<0)hr+=24;return hr*60+parseInt(p[1]||0);}
 function convertHora(h){if(!h)return'';var p=h.split(':');var hr=parseInt(p[0]);if(hr>=1&&hr<=9)hr+=12;else if(hr===10||hr===11||hr===12)hr=hr;hr=hr-4;if(hr<0)hr+=24;return hr+':'+p[1];}
-function setSt(m){document.getElementById('st').textContent=m;}
+// O #st-m e' o MESMO texto num segundo lugar: o cabecalho da lista de
+// corridas, onde ele fica na mesma linha do Atualizar no celular (Bruno,
+// 20/09/2026). Escrever nos dois AQUI, no unico ponto do app que escreve esse
+// texto, evita um segundo caminho de atualizacao que sairia do ar na primeira
+// mudanca de mensagem.
+function setSt(m){
+  document.getElementById('st').textContent=m;
+  var _m=document.getElementById('st-m'); if(_m) _m.textContent=m;
+}
 function prog(p,t){document.getElementById('pw').style.display='block';document.getElementById('pf').style.width=p+'%';document.getElementById('pt').textContent=t;}
 function addFI(name,id){var list=document.getElementById('rlist');var d=document.createElement('div');d.className='fi';d.id='fi-'+id;var sn=name.length>22?name.slice(0,20)+'...':name;d.innerHTML='<span class="fi-name">'+sn+'</span><span class="fi-st fi-load" id="fis-'+id+'">...</span><button class="fi-rm" data-id="'+id+'">x</button>';list.appendChild(d);}
 function updFI(id,ok){var el=document.getElementById('fis-'+id);if(!el)return;el.className='fi-st '+(ok?'fi-ok':'fi-err');el.textContent=ok?'OK':'erro';}
@@ -145,6 +153,13 @@ var _SIM_AVB = (function(){
 })();
 
 var RACAS_EM_TELA = 6;
+// No celular a lista mostra no maximo 3 corridas (Bruno, 20/09/2026) e a
+// corrida marcada como atrasada CONTA dentro das 3 - no computador ela entra
+// por fora do teto. A largura e' medida na hora de montar a lista, e nao uma
+// vez no carregamento: girar o aparelho muda a conta.
+var RACAS_EM_TELA_MOBILE = 3;
+function ehTelaCelular(){ try { return window.matchMedia('(max-width:768px)').matches; } catch(e){ return false; } }
+function racasEmTela(){ return ehTelaCelular() ? Math.min(RACAS_EM_TELA_MOBILE, RACAS_EM_TELA) : RACAS_EM_TELA; }
 var STAKE_PADRAO = null;   // unidade padrao vinda da Banca (Configuracoes)
 var AUTO_REFRESH_MIN = 1;
 var ALERTA_MIN_ANTES = 3;
@@ -1071,8 +1086,14 @@ function refreshFocusMode() {
     if (f !== 0) return f;
     return ukHoraParaOrdem(x.hora) - ukHoraParaOrdem(y.hora);
   });
-  // O slice pega SO o que nao foi marcado. Marcadas entram por fora.
-  var toShow = _atrasadas.concat(_comAvb.concat(_resto).slice(0, RACAS_EM_TELA));
+  // No computador o slice pega SO o que nao foi marcado: as marcadas entram por
+  // fora do teto. No celular o teto e' o TOTAL de linhas da tela (Bruno: "a
+  // atrasada seria a terceira, no caso a 4a fica de fora"), entao cada marcada
+  // desconta uma vaga das outras.
+  var _lim = racasEmTela();
+  var toShow = ehTelaCelular()
+    ? _atrasadas.concat(_comAvb.concat(_resto).slice(0, Math.max(0, _lim - _atrasadas.length))).slice(0, _lim)
+    : _atrasadas.concat(_comAvb.concat(_resto).slice(0, _lim));
 
   renderRaceListPanel(toShow);
 
@@ -1147,7 +1168,7 @@ function enterFocusMode() {
   // sobre o que sobrou do filtro, senao liga-lo mostraria menos que N corridas.
   var _naJanela = avbs.filter(shouldShowRace);
   var _classificada = _sessaoTemRegua(_naJanela);
-  var toShow = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); }).slice(0, RACAS_EM_TELA);
+  var toShow = _naJanela.filter(function(x){ return passaNoFiltroTier(x, _classificada); }).slice(0, racasEmTela());
   document.getElementById('main-layout').classList.add('focus-mode');
   renderRaceListPanel(toShow);
   var next = _primeiraPraFoco(toShow);
@@ -1795,8 +1816,14 @@ function renderFocusPanel(r, idx) {
   // Titulo: "3:44 - Newcastle (A3) - 480m" (hora UK, nome completo da pista,
   // classe, distancia). Se a sessao for antiga e nao tiver trackFull salvo
   // (campo novo), cai pro formato curto de antes.
+  // No celular a segunda linha do cabecalho saiu (Bruno, 20/09/2026), e com ela
+  // a hora BR. Entao ela volta AQUI, no titulo, junto da hora UK: "16:52 BR /
+  // 3:44 UK - Newcastle (A3) - 480m". Os pedacos a mais vao em <span
+  // class="fp-so-cel">, que o CSS mostra so no celular - no computador o titulo
+  // continua exatamente "3:44 - Newcastle (A3) - 480m".
   var tituloCorrida = r.trackFull
-    ? (r.hora||'') + ' - ' + r.trackFull + (raceClass ? ' ('+raceClass+')' : '') + ' - ' + (r.dist||'') + 'm'
+    ? '<span class="fp-so-cel">' + hbr + ' BR / </span>' + (r.hora||'') + '<span class="fp-so-cel"> UK</span>'
+      + ' - ' + r.trackFull + (raceClass ? ' ('+raceClass+')' : '') + ' - ' + (r.dist||'') + 'm'
     : (r.corrida||'-');
 
   // Par mostrado na arena grande. Comeca no fav x und do motor e pode ser
@@ -1840,7 +1867,14 @@ function renderFocusPanel(r, idx) {
     // a arena pra baixo o tempo todo. La embaixo ocupam o espaco que sobrou
     // da linha de analise e da faixa do ao vivo, que sairam.
     '<div class="fp-hdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
-    + '<div><div class="fp-race-title">'+tituloCorrida+'</div>'
+    + '<div class="fp-hdr-left" style="min-width:0"><div class="fp-race-title">'+tituloCorrida+'</div>'
+    // O selo de confianca aparece DUAS vezes no HTML: aqui, ao lado do titulo
+    // (so no celular), e na linha de baixo (so no computador). Sao dois porque
+    // cada um mora numa linha diferente, e no celular a linha de baixo nao
+    // existe - o CSS garante que apenas um dos dois fica visivel. Ele e' IRMAO
+    // do titulo, e nao filho: no celular o titulo e' uma linha com corte por
+    // "..." , e dentro dele o selo seria cortado junto.
+    + '<span class="fp-so-cel fp-badge-cel"><span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></span>'
     + '<div class="fp-race-meta">'+(r.dist||'')+'m &middot; '+hbr+' BR &middot; <span class="badge '+confClass+'">'+conf+'% '+nivel+'</span></div></div>'
     + '<div id="fp-odds-hdr" style="text-align:right;min-width:110px;flex-shrink:0"></div>'
     + '</div>'
@@ -1886,7 +1920,7 @@ function renderFocusPanel(r, idx) {
     // "AvB não aberto" oculto por enquanto (pedido do Bruno). O input continua
     // no DOM pra nao quebrar quem le o valor; so nao aparece.
     + '<label style="display:none"><input type="checkbox" id="fp-avb-nao-aberto" '+(r.avbNaoAberto?'checked':'')+'></label>'
-    + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> 🚩 Atrasada</label>'
+    + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> 🚩<span class="fp-atr-txt"> Atrasada</span></label>'
     + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '</div>'
@@ -2929,13 +2963,33 @@ function _playSomWebAudio(nome){
   try { var ctx = getAudioCtx(); if (!ctx) return; (SONS_DISPONIVEIS[nome] || tocarSino)(ctx); } catch(e){}
 }
 
+// O espelho da linha da sessao. Nasce a cada desenho da lista lendo o texto que
+// esta no #st e o href que o servidor gerou: assim nunca mostra data velha e
+// nao precisa saber qual e' a sessao de hoje.
+function _stEspelhoHtml(){
+  var _st = document.getElementById('st');
+  var _txt = _st ? _st.textContent : '';
+  var _lk = document.querySelector('.st-link');
+  var _href = _lk ? _lk.getAttribute('href') : '';
+  var _in = '<span id="st-m">' + _txt + '</span>';
+  return _href
+    ? '<a class="st-m" href="' + _href + '" title="Abrir a sessao de hoje">' + _in + '</a>'
+    : '<span class="st-m">' + _in + '</span>';
+}
+
 function renderRaceListPanel(avbs) {
   var col = document.getElementById('race-list-col');
   if (!col) return;
   col.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)">'
     // O rotulo "Próximas" saiu: a lista em sequencia ja diz o que e', e o
     // espaco vale mais pro filtro.
-    + '<span></span>'
+    // A linha da sessao ("20/09/2026 - 2 AvBs carregados") entra AQUI no
+    // celular, na mesma linha do Atualizar. E' um espelho: quem escreve o texto
+    // continua sendo o setSt, e o link e' o mesmo <a> da sessao do dia que o
+    // servidor pos na sidebar (que no celular fica oculta). O <span> de fora
+    // fica sempre, mesmo vazio no computador: ele e' quem segura o
+    // space-between que joga o Atualizar pra direita.
+    + '<span style="min-width:0;overflow:hidden">' + _stEspelhoHtml() + '</span>'
     + '<button onclick="atualizarProximas()" style="font-size:11px;background:none;border:none;color:var(--grn);cursor:pointer;padding:0">&#8635; Atualizar</button>'
     + '</div>';
   // `first` marca a PROXIMA da fila (selo verde + destaque), e nao a primeira

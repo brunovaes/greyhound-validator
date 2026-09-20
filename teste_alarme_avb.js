@@ -582,10 +582,15 @@ async function cena(cfg, corridas, quantosRepiques) {
   const mOrdem = SRC_APP.match(/var _atrasadas = \[\], _comAvb = \[\], _resto = \[\];[\s\S]*?var toShow = [^;]+;/);
   t('o bloco de ordenacao foi encontrado', !!mOrdem);
 
-  function ordena(passou, teto) {
+  function ordena(passou, teto, celular) {
     const ctx = {
       _passou: passou,
       RACAS_EM_TELA: teto,
+      // No celular o teto e' o TOTAL de linhas da tela e a marcada desconta
+      // vaga; no computador ela entra por fora. As duas contas moram no mesmo
+      // bloco do app.js, entao o teste roda o bloco nos dois modos.
+      ehTelaCelular: function () { return !!celular; },
+      racasEmTela: function () { return celular ? Math.min(3, teto) : teto; },
       _avbDaCorrida: function (x) { return x.avb || null; },
       _forcaCamada: function (c) { return ['TOP', 'HIGH', 'GOOD'].indexOf((c && c.camada) || '') ; },
       ukHoraParaOrdem: function (h) { return parseInt(String(h).replace(':', ''), 10) || 0; }
@@ -608,6 +613,39 @@ async function cena(cfg, corridas, quantosRepiques) {
   t('e nao custa vaga: 3 normais continuam entrando (4 na tela)', o1.length === 4);
   t('as normais entram na ordem de sempre',
     o1[1] === 'normal-1' && o1[2] === 'normal-2' && o1[3] === 'normal-3');
+
+  // ── O MESMO CENARIO NO CELULAR (Bruno, 20/09/2026) ───────────────────────
+  // "a corrida marcada como atrasada fica fixa no topo e essa seria a terceira,
+  // no caso a 4a fica de fora": no telefone o teto e' o total de LINHAS, entao a
+  // marcada ocupa uma das tres.
+  const o1m = ordena(cena1, 6, true);
+  t('no celular a lista para em 3 linhas', o1m.length === 3);
+  t('a marcada continua em primeiro e leva duas normais atras',
+    o1m[0] === 'MARCADA' && o1m[1] === 'normal-1' && o1m[2] === 'normal-2');
+
+  // Duas marcadas no celular: sobra uma vaga so pras normais.
+  const cena1b = [
+    R('normal-1', '1:00'), R('normal-2', '2:00'), R('normal-3', '3:00'),
+    R('MARCADA-cedo', '8:00', { flagAtrasada: 1 }),
+    R('MARCADA-tarde', '9:00', { flagAtrasada: 1 })
+  ];
+  const o1c = ordena(cena1b, 6, true);
+  t('duas marcadas no celular: 3 linhas, duas marcadas e uma normal',
+    o1c.length === 3 && o1c[0] === 'MARCADA-cedo' && o1c[1] === 'MARCADA-tarde' && o1c[2] === 'normal-1');
+
+  // Quatro marcadas no celular: o teto vale pra elas tambem, senao a tela
+  // voltaria a crescer sem limite justamente no aparelho menor.
+  const cena1d = [
+    R('M1', '6:00', { flagAtrasada: 1 }), R('M2', '7:00', { flagAtrasada: 1 }),
+    R('M3', '8:00', { flagAtrasada: 1 }), R('M4', '9:00', { flagAtrasada: 1 }),
+    R('normal', '1:00')
+  ];
+  const o1d = ordena(cena1d, 6, true);
+  t('quatro marcadas no celular: a tela nunca passa de 3 linhas', o1d.length === 3);
+
+  // E no computador a regra antiga continua: marcada nao custa vaga.
+  const o1e = ordena(cena1b, 3);
+  t('no computador as duas marcadas entram por fora das 3 vagas', o1e.length === 5);
 
   // A marcada nao pode perder o primeiro lugar nem pra um TOP.
   const cena2 = [
