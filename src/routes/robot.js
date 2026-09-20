@@ -2685,6 +2685,41 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
 
         addLog('info', `   Página: "${info.pageTitle}" | HTML: ${info.bodyLen} chars | Track: "${info.track}"`);
 
+        // ── PAGINA QUE NAO CARREGOU NAO VIRA PDF (Bruno, 20/09/2026) ────────
+        //
+        // Na 6:11PM Clonmel de hoje a aba Form nao abriu ("detached Frame"), o
+        // robo reconectou, tentou de novo, a tabela nunca apareceu - e mesmo
+        // assim o PDF foi salvo: 19.006 chars de HTML (as paginas boas do dia
+        // tiveram de 110 a 181 mil) e cabecalho "GREYHOUND BET", que e' o
+        // titulo do site, nao o nome da pista. Saiu um 6.11PM_GREYHOUND.pdf de
+        // 49KB, o parser falhou nele, a corrida ficou fora do dia - e o log
+        // terminou dizendo "88 salvos | 0 erros".
+        //
+        // Falha que se disfarca de sucesso e' pior que falha barulhenta: so
+        // aparece dias depois, quando alguem pergunta por que uma corrida
+        // sumiu. Entao aqui ela passa a contar como ERRO no fim do log.
+        //
+        // O corte principal e' o TAMANHO: e' sintoma direto de "a pagina nao
+        // carregou". O nome NUNCA reprova sozinho - um dia pode existir uma
+        // pista chamada Greyhound alguma coisa, e ela nao pode ser recusada por
+        // causa do proprio nome. Ele so amplia a rede numa faixa em que a
+        // pagina ja e' suspeita por tamanho (abaixo dos 110 mil chars que a
+        // menor pagina boa do dia teve).
+        //
+        // NAO ha nova tentativa aqui, de proposito: esta ja era a segunda, e a
+        // segunda veio pior que a primeira. Sem o arquivo com o nome certo
+        // (6.11PM_Clonmel.pdf), a coleta complementar de hora em hora busca
+        // esta corrida mais tarde, com a pista ja respondendo. E' exatamente o
+        // caso pra que ela existe.
+        if (info.bodyLen < 60000
+            || (/^greyhound/i.test(String(info.track || '').trim()) && info.bodyLen < 100000)) {
+          addLog('err', `❌ ${race.time || ''} ${race.track || ''}: a página não carregou (${info.bodyLen} chars, cabeçalho "${info.track}"). PDF não salvo; a coleta complementar tenta de novo.`);
+          errors++;
+          await page.goto(LIST_URL, { timeout: 30000, waitUntil: "networkidle0" });
+          await new Promise(r => setTimeout(r, 3000));
+          continue;
+        }
+
         const track = ((info.track || race.track).split(/[\s,]/)[0].replace(/[^a-zA-Z]/g,'') || 'Race');
         const raceTime = info.time || race.time || '';
         const dist = race.dist || info.dist;
