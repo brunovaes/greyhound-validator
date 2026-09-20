@@ -50,6 +50,64 @@ function getLogo() {
 // passa o dia pra economizar duplicacao de marcacao seria trocar risco por
 // elegancia. O que se repete aqui e' desenho, nao regra: os numeros vem todos
 // do mesmo /api/acertos-resumo.
+// ── OS DOIS INDICADORES (Bruno, 20/09/2026) ────────────────────────────────
+//
+// "Entradas pela Banca" sao o % do dia e o % do mes da tela Banca; "Analises
+// pelo Sistema" e' a taxa de acerto que ja estava aqui, que antes ocupava duas
+// caixas separadas e agora divide uma caixa em duas colunas.
+//
+// O HTML vive numa funcao so porque o bloco aparece em TRES lugares: a barra
+// lateral da Analisar, o rodape do celular e a faixa lateral das outras telas.
+// Tres copias do mesmo HTML divergem na primeira mudanca - foi o Bruno quem
+// pediu os tres iguais ("nos tres lugares").
+//
+// Os ids entram por parametro porque cada lugar ja tinha o seu: o app.js
+// procura por acertos-dia/acertos-mes pelo nome, o rodape do celular usa os
+// mesmos com sufixo -m, e o teste de sidebar exige os gf-*.
+function blocoIndicadores(ids) {
+  const cel = (lbl, id) =>
+    `<div style="flex:1;min-width:0">`
+    + `<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${lbl}</div>`
+    + `<div id="${id}" style="font-size:20px;font-weight:700;color:#666;line-height:1.1">-</div></div>`;
+  const caixa = (titulo, idDia, idMes) =>
+    `<div style="flex:1 1 150px;min-width:0;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:8px 6px;text-align:center">`
+    + `<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${titulo}</div>`
+    + `<div style="display:flex;align-items:center;gap:4px">`
+    +   cel('Dia', idDia)
+    +   `<div style="width:1px;align-self:stretch;background:#262b38"></div>`
+    +   cel('Mês', idMes)
+    + `</div></div>`;
+  return caixa('Entradas pela Banca', ids.bancaDia, ids.bancaMes)
+       + caixa('Análises pelo Sistema', ids.sisDia, ids.sisMes);
+}
+
+// O script que pinta a parte da BANCA. A do Sistema ja tem quem pinte em cada
+// tela (o app.js na Analisar, o proprio bloco na faixa lateral).
+//
+// Zero e' VERDE, escolha do Bruno: dia sem aposta nenhuma nao e' prejuizo.
+// Sem acesso ou sem resposta, o traco fica - numero errado e' pior que numero
+// nenhum.
+function scriptIndicadoresBanca(idDia, idMes) {
+  return `
+(function(){
+  function pintaBanca(el, pct){
+    if (!el) return;
+    if (pct == null) { el.textContent = '-'; el.style.color = '#666'; return; }
+    var casas = Math.abs(pct) >= 100 ? 0 : 1;
+    el.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(casas).replace('.', ',') + '%';
+    el.style.color = pct >= 0 ? '#22c55e' : '#ef4444';
+  }
+  fetch('${BASE}/banca/resumo', { credentials: 'same-origin' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if (!d || !d.ok) return;
+      pintaBanca(document.getElementById('${idDia}'), d.pctDia);
+      pintaBanca(document.getElementById('${idMes}'), d.pctMes);
+    })
+    .catch(function(){});
+})();`;
+}
+
 function sidebarInfo(user) {
   const sessions = db.prepare(
     'SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7'
@@ -86,9 +144,7 @@ function sidebarInfo(user) {
   border-bottom:1px solid #2a3142}
 .gf-sess:hover{color:#22c55e}
 .gf-sess span{float:right;color:#666}
-.gf-ac{display:flex;gap:8px;margin-top:8px}
-.gf-ac > div{flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;
-  padding:10px 8px;text-align:center}
+.gf-ac{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .gf-ac-l{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .gf-ac-v{font-size:20px;font-weight:700;color:#666}
 /* No celular a faixa some, igual a Analisar faz abaixo de 900px. Escolha do
@@ -108,8 +164,7 @@ function sidebarInfo(user) {
     ${linhas}
   </div>
   <div class="gf-ac">
-    <div><div class="gf-ac-l">Acertos do dia</div><div class="gf-ac-v" id="gf-acertos-dia">-</div></div>
-    <div><div class="gf-ac-l">Acertos do mês</div><div class="gf-ac-v" id="gf-acertos-mes">-</div></div>
+    ${blocoIndicadores({ bancaDia: 'gf-banca-dia', bancaMes: 'gf-banca-mes', sisDia: 'gf-acertos-dia', sisMes: 'gf-acertos-mes' })}
   </div>
 </aside>
 <script>
@@ -134,6 +189,7 @@ function sidebarInfo(user) {
     })
     .catch(function(){});
 })();
+${scriptIndicadoresBanca('gf-banca-dia', 'gf-banca-mes')}
 </script>`;
 }
 
@@ -1339,15 +1395,8 @@ ${navBar(user, 'analisar')}
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
       <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
     </div>
-    <div class="acertos-box acertos-sidebar" style="display:flex;gap:8px;margin-top:8px">
-      <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-        <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
-        <div id="acertos-dia" class="acertos-dia-val" style="font-size:20px;font-weight:700;color:#666">-</div>
-      </div>
-      <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-        <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
-        <div id="acertos-mes" class="acertos-mes-val" style="font-size:20px;font-weight:700;color:#666">-</div>
-      </div>
+    <div class="acertos-box acertos-sidebar" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      ${blocoIndicadores({ bancaDia: 'banca-dia', bancaMes: 'banca-mes', sisDia: 'acertos-dia', sisMes: 'acertos-mes' })}
     </div>
   </div>
   <div class="race-list-col" id="race-list-col"></div>
@@ -1376,15 +1425,8 @@ ${navBar(user, 'analisar')}
       <button class="bexp" id="btn-exp">Exportar CSV</button>
     </div>
   </div>
-  <div class="acertos-box acertos-mobile" style="display:none;gap:8px;margin-top:4px;padding:0 10px 16px">
-    <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-      <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do dia</div>
-      <div id="acertos-dia-m" style="font-size:20px;font-weight:700;color:#666">-</div>
-    </div>
-    <div style="flex:1;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:10px 8px;text-align:center">
-      <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Acertos do mês</div>
-      <div id="acertos-mes-m" style="font-size:20px;font-weight:700;color:#666">-</div>
-    </div>
+  <div class="acertos-box acertos-mobile" style="display:none;gap:8px;margin-top:4px;padding:0 10px 16px;flex-wrap:wrap">
+    ${blocoIndicadores({ bancaDia: 'banca-dia-m', bancaMes: 'banca-mes-m', sisDia: 'acertos-dia-m', sisMes: 'acertos-mes-m' })}
   </div>
 </div>
 <script>
@@ -1392,7 +1434,8 @@ ${navBar(user, 'analisar')}
    para a copia do rodape usada no mobile — assim funciona independe da versao do app.js. */
 (function(){
   function espelharAcertos(){
-    [['acertos-dia','acertos-dia-m'],['acertos-mes','acertos-mes-m']].forEach(function(p){
+    [['acertos-dia','acertos-dia-m'],['acertos-mes','acertos-mes-m'],
+     ['banca-dia','banca-dia-m'],['banca-mes','banca-mes-m']].forEach(function(p){
       var src=document.getElementById(p[0]), dst=document.getElementById(p[1]);
       if(src&&dst){ dst.textContent=src.textContent; dst.style.color=src.style.color; }
     });
@@ -1400,6 +1443,7 @@ ${navBar(user, 'analisar')}
   document.addEventListener('DOMContentLoaded', espelharAcertos);
   setInterval(espelharAcertos, 1200);
 })();
+${scriptIndicadoresBanca('banca-dia', 'banca-mes')}
 </script>
 
 <div class="pdf-ready-modal" id="pdf-ready-modal">

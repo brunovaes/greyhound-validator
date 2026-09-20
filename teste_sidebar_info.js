@@ -65,8 +65,13 @@ t('nem o texto Carregar PDF', !/Carregar PDF/.test(semCom(FN)));
 t('nem o Restaurado', !/Restaurado/.test(semCom(FN)));
 t('mas tem o link Historicos', /\/historico" class="gf-tab"/.test(FN));
 t('a lista de sessoes', /class="gf-sess"/.test(FN));
+// Os ids agora entram pelo blocoIndicadores (um desenho so pros tres lugares),
+// entao o que importa e que eles CHEGUEM aqui, nao que estejam escritos como
+// id="..." no meio do HTML.
 t('e os dois cartoes de acertos',
-  /id="gf-acertos-dia"/.test(FN) && /id="gf-acertos-mes"/.test(FN));
+  /'gf-acertos-dia'/.test(FN) && /'gf-acertos-mes'/.test(FN));
+t('mais os dois da banca, que entraram junto',
+  /'gf-banca-dia'/.test(FN) && /'gf-banca-mes'/.test(FN));
 
 t('os acertos vem do endpoint que ja existia, nao de conta nova',
   /fetch\('\$\{BASE\}\/api\/acertos-resumo'\)/.test(FN));
@@ -94,9 +99,9 @@ t('ela mantem o proprio Carregar PDF', /id="race-input"/.test(ANALISAR));
 t('o proprio Restaurado, pelos ids que o app.js manipula',
   /id="sessoes-recentes-slot"/.test(ANALISAR));
 t('e os proprios ids de acertos, que o app.js preenche',
-  /id="acertos-dia"/.test(ANALISAR) && /id="acertos-mes"/.test(ANALISAR));
+  /'acertos-dia'/.test(ANALISAR) && /'acertos-mes'/.test(ANALISAR));
 t('os ids novos nao colidem com os dela',
-  !/id="gf-acertos-dia"/.test(ANALISAR));
+  !/'gf-acertos-dia'/.test(ANALISAR));
 
 // ── [4] a Live ficou de fora ────────────────────────────────────────────────
 bloco('[4] A LIVE FICOU DE FORA, QUE FOI O PEDIDO');

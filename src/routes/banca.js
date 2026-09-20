@@ -381,6 +381,49 @@ router.post('/bw-ajuste', express.json(), (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── RESUMO DA BANCA PRA FORA DA TELA BANCA (Bruno, 20/09/2026) ─────────────
+//
+// Os MESMOS "% do dia" e "% do mes" que a tela Banca mostra, num pedido so.
+// Existe porque esses dois numeros passaram a aparecer no bloco de indicadores
+// de TODA tela: pelo /data seriam duas chamadas (view=day e view=month) e cada
+// uma remonta a cadeia inteira da banca, mes a mes, do zero.
+//
+// As contas nao sao refeitas aqui - sao as mesmas linhas do /data, com a mesma
+// base (a banca inicial do mes). Se um dia a formula mudar la, muda aqui: sao
+// duas rotas lendo a MESMA cadeia, e nao duas contas concorrentes.
+//
+// Cache curto por usuario: a tela abre, o numero e' o mesmo por alguns
+// segundos, e uma aposta marcada agora aparece no proximo refresh.
+const _cacheResumoBanca = new Map();   // userId -> { ts, dados }
+const RESUMO_BANCA_TTL_MS = 30 * 1000;
+
+router.get('/resumo', (req, res) => {
+  const userId = req.user.id;
+  try {
+    const c = _cacheResumoBanca.get(userId);
+    if (c && Date.now() - c.ts < RESUMO_BANCA_TTL_MS) return res.json(c.dados);
+
+    const hoje = hojeBr();
+    const ym = hoje.slice(0, 7);
+    const cadeia = getCadeiaBanca(userId);
+    const mes = cadeia[ym] || { inicial: getBancaAtualPadrao(userId), final: getBancaAtualPadrao(userId), apostas: [] };
+
+    const resolvidasHoje = mes.apostas.filter(x => x.dia === hoje && x.status !== 'pendente');
+    const saldoDia = resolvidasHoje.reduce((s, x) => s + (x.ganhoReais || 0), 0);
+
+    const dados = {
+      ok: true,
+      dia: hoje,
+      pctDia: mes.inicial ? (saldoDia / mes.inicial) * 100 : 0,
+      pctMes: mes.inicial ? ((mes.final - mes.inicial) / mes.inicial) * 100 : 0
+    };
+    _cacheResumoBanca.set(userId, { ts: Date.now(), dados });
+    res.json(dados);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/data', (req, res) => {
   const userId = req.user.id;
   const view = req.query.view || 'day';
