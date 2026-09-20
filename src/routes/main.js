@@ -70,7 +70,7 @@ function blocoIndicadores(ids) {
     + `<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${lbl}</div>`
     + `<div id="${id}" style="font-size:20px;font-weight:700;color:#666;line-height:1.1">-</div></div>`;
   const caixa = (titulo, idDia, idMes) =>
-    `<div style="flex:1 1 150px;min-width:0;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:8px 6px;text-align:center">`
+    `<div style="flex:1 1 150px;min-width:0;background:#161B27;border:1px solid #262b38;border-radius:8px;padding:8px 4px;text-align:center">`
     + `<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${titulo}</div>`
     + `<div style="display:flex;align-items:center;gap:4px">`
     +   cel('Dia', idDia)
@@ -93,7 +93,11 @@ function scriptIndicadoresBanca(idDia, idMes) {
   function pintaBanca(el, pct){
     if (!el) return;
     if (pct == null) { el.textContent = '-'; el.style.color = '#666'; return; }
-    var casas = Math.abs(pct) >= 100 ? 0 : 1;
+    // As casas caem conforme o numero cresce, pra bater com a tela Banca (que
+    // mostra duas) sem vazar da coluna, que e' estreita: medido no Chromium,
+    // duas casas com dois digitos ("+12,75%") nao cabem no rodape do celular.
+    var abs = Math.abs(pct);
+    var casas = abs >= 100 ? 0 : (abs >= 10 ? 1 : 2);
     el.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(casas).replace('.', ',') + '%';
     el.style.color = pct >= 0 ? '#22c55e' : '#ef4444';
   }

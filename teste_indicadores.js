@@ -83,13 +83,16 @@ t('sem dado fica traco e cinza',
   pinta(null).textContent === '-' && pinta(null).style.color === '#666');
 
 bloco('[4] O FORMATO DO NUMERO (MEDIDO NO CHROMIUM)');
-t('uma casa decimal, com virgula', pinta(-3.52).textContent === '-3,5%');
-t('positivo leva o sinal, igual a tela Banca', pinta(12.75).textContent === '+12,8%');
-t('zero aparece como +0,0%', pinta(0).textContent === '+0,0%');
-// Duas casas vazavam 7px na coluna do celular; 123,4% vazava 9px. Daí o corte.
-t('a partir de 100% a casa decimal sai, pra nao vazar da coluna',
-  pinta(123.4).textContent === '+123%');
+// A coluna e estreita: medido em 234, 370 e 430px, "+12,75%" (duas casas com
+// dois digitos) vaza. Entao as casas caem conforme o numero cresce, e o caso
+// comum - o do dia a dia do Bruno, abaixo de 10% - sai IGUAL a tela Banca.
+t('abaixo de 10% saem as duas casas, igual a tela Banca',
+  pinta(2.8).textContent === '+2,80%' && pinta(8.96).textContent === '+8,96%');
+t('negativo abaixo de 10% idem', pinta(-3.52).textContent === '-3,52%');
+t('de 10% pra cima fica uma casa', pinta(12.75).textContent === '+12,8%');
+t('de 100% pra cima nao fica nenhuma', pinta(123.4).textContent === '+123%');
 t('e o mesmo vale no negativo', pinta(-123.4).textContent === '-123%');
+t('zero aparece como +0,00%', pinta(0).textContent === '+0,00%');
 
 bloco('[5] A COR DO SISTEMA NAO MUDOU: CORTE EM 50');
 t('o app.js continua cortando em 50', /pct >= 50 \? '#22c55e' : '#ef4444'/.test(APP));
