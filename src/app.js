@@ -1920,7 +1920,7 @@ function renderFocusPanel(r, idx) {
     // "AvB não aberto" oculto por enquanto (pedido do Bruno). O input continua
     // no DOM pra nao quebrar quem le o valor; so nao aparece.
     + '<label style="display:none"><input type="checkbox" id="fp-avb-nao-aberto" '+(r.avbNaoAberto?'checked':'')+'></label>'
-    + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> 🚩<span class="fp-atr-txt"> Atrasada</span></label>'
+    + '<label class="fp-atr-lb" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0" '+(r.flagAtrasada?'checked':'')+' onchange="updateFocusField(\'flag_atrasada\',this.checked?1:0)"> <span class="fp-atr-bnd">🚩</span><span class="fp-atr-txt">Atrasada</span></label>'
     + '<a onclick="openRelatorioModal(\''+r.hora+'|'+r.corrida+'\')" title="Relatório detalhado da análise (scores, eliminados, desempates)" style="cursor:pointer;line-height:1;margin-left:auto"><img src="'+BASE+'/static/img/icone_relatorio.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '<a onclick="openAllDogsModal(\''+r.hora+'|'+r.corrida+'\')" title="Ver corrida completa (6 galgos)" style="cursor:pointer;line-height:1"><img src="'+BASE+'/static/img/icone_pdf.png" style="width:18px;height:18px;vertical-align:middle"></a>'
     + '</div>'

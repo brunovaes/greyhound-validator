@@ -117,10 +117,17 @@ t('e o piso de 52px continua valendo no computador',
 
 bloco('[5] TODOS OS CONTROLES NA MESMA LINHA');
 t('o texto "Atrasada" fica num span proprio',
-  /<span class="fp-atr-txt"> Atrasada<\/span>/.test(APP));
-t('e some no celular, sobrando o checkbox e a bandeirinha',
-  /\.fp-atr-txt\{display:none\}/.test(CEL));
-t('a bandeirinha NAO foi removida', /\u{1F6A9}<span class="fp-atr-txt">/u.test(APP));
+  /<span class="fp-atr-txt">Atrasada<\/span>/.test(APP));
+t('quem some no celular e a BANDEIRINHA; o rotulo fica (2a rodada do Bruno)',
+  /\.fp-atr-bnd\{display:none\}/.test(CEL) && !/\.fp-atr-txt\{display:none\}/.test(CEL));
+t('a bandeirinha esta num span proprio (texto solto nao se esconde por CSS)',
+  /<span class="fp-atr-bnd">\u{1F6A9}<\/span>/u.test(APP));
+t('e no computador a bandeirinha continua aparecendo (nenhuma regra a esconde fora do celular)',
+  !/(?<!  )\.fp-atr-bnd\{display:none/.test(MAIN.replace(CEL, '')));
+t('o Entrei e a caixinha de atrasada ganham respiro a esquerda',
+  /#fp-entrei\{margin-left:6px\}/.test(CEL) && /\.fp-atr-lb\{margin-left:8px/.test(CEL));
+t('e o respiro sai em tela de 360px, onde a barra estourava por 4px',
+  /@media\(max-width:374px\)\{[\s\S]*?#fp-entrei\{margin-left:0\}[\s\S]*?\.fp-atr-lb\{margin-left:0\}/.test(CEL));
 t('a barra nao quebra mais linha no celular',
   /\.focus-col > \.fp-inputs-row\{flex-wrap:nowrap!important/.test(CEL));
 t('ESCOPADA em .focus-col >: a barra das tiles do Painel do Dia usa a mesma classe',

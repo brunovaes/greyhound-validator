@@ -1252,7 +1252,21 @@ td select{padding:3px 6px;background:var(--sur2);border:1px solid var(--bdr2);bo
      odd do cartao do AvB que fica logo abaixo, e era ele (110px de piso) que
      empurrava o nome da pista pra fora da linha. */
   .fp-hdr #fp-odds-hdr{display:none!important}
-  .fp-atr-txt{display:none}
+  /* No celular sai a BANDEIRINHA e fica o rotulo "Atrasada" (Bruno viu na mao e
+     preferiu a palavra ao desenho). No computador os dois continuam. */
+  .fp-atr-bnd{display:none}
+  /* O Entrei e a caixinha de atrasada ganham um respiro a esquerda: no desenho
+     do Bruno eles ficam mais pra direita, separando "o que eu digito" (Odd e
+     Stake) do "o que eu marco". */
+  .focus-col > .fp-inputs-row #fp-entrei{margin-left:6px}
+  .focus-col > .fp-inputs-row .fp-atr-lb{margin-left:8px;gap:4px!important}
+  /* Aparelho estreito (iPhone SE e afins, 360px e menos): medido no Chromium, a
+     barra com o rotulo "Atrasada" passa 4px da tela. O respiro extra e' o
+     primeiro a sair - e' enfeite, e sem ele tudo continua cabendo numa linha. */
+  @media(max-width:374px){
+    .focus-col > .fp-inputs-row #fp-entrei{margin-left:0}
+    .focus-col > .fp-inputs-row .fp-atr-lb{margin-left:0}
+  }
   .focus-col > .fp-inputs-row{flex-wrap:nowrap!important;gap:6px!important;
     padding:6px 8px!important;overflow:hidden}
   .focus-col > .fp-inputs-row > span,

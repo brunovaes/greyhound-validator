@@ -68,7 +68,7 @@ function html() {
         <span style="font-size:11px;color:var(--mut2);display:flex;align-items:center;gap:6px">Stake <input type="text" id="fp-stake" placeholder="-" value="10" style="width:52px;text-align:center"></span>
         <button type="button" id="fp-entrei" style="font-size:11px;font-weight:700;padding:4px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;background:transparent;border:1px solid #22c55e;color:#22c55e">Entrei !</button>
         <label style="display:none"><input type="checkbox" id="fp-avb-nao-aberto"></label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0"> \u{1F6A9}<span class="fp-atr-txt"> Atrasada</span></label>
+        <label class="fp-atr-lb" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#eab308;white-space:nowrap"><input type="checkbox" id="fp-atrasada" style="cursor:pointer;margin:0"> <span class="fp-atr-bnd">\u{1F6A9}</span><span class="fp-atr-txt">Atrasada</span></label>
         <a title="rel" style="cursor:pointer;line-height:1;margin-left:auto"><span style="display:inline-block;width:18px;height:18px;background:#444"></span></a>
         <a title="pdf" style="cursor:pointer;line-height:1"><span style="display:inline-block;width:18px;height:18px;background:#444"></span></a>
       </div>
