@@ -100,8 +100,17 @@ function casaRegras(regras, turnoCorrida, pista, classe) {
 }
 
 function casaFiltro(cfg, race) {
-  if (!cfg.alarme_filtro_ativo) return false;
-
+  // O `alarme_filtro_ativo` NAO manda mais aqui (Bruno, 20/09/2026). Ele era da
+  // secao "Alarme para filtro selecionado", que saiu das Configuracoes em
+  // 16/09, quando o alarme passou a ser por camada. Como o formulario nao manda
+  // mais esse campo e o save-config continua gravando a coluna, qualquer save
+  // das Configuracoes a zerava - e com ela em 0 o push emudecia inteiro, embora
+  // o alarme da tela seguisse tocando. Foi o que aconteceu: ultimo push em
+  // 19/09 06:20 BRT.
+  //
+  // Quem liga e desliga o aviso agora e' o alarmeLigado() abaixo, com os
+  // MESMOS campos que a tela usa. O que sobrou aqui e' so o recorte de
+  // turno/pista/classe: filtro vazio deixa passar, em vez de barrar tudo.
   let regras = [];
   try { regras = cfg.alarme_filtro_regras ? JSON.parse(cfg.alarme_filtro_regras) : []; } catch (e) { regras = []; }
   const porRegra = casaRegras(regras, turnoDaCorrida(race.hora_br),
@@ -129,6 +138,28 @@ function casaFiltro(cfg, race) {
 // seria criar um segundo lugar respondendo "isto e TOP?" — e dois lugares
 // divergem em silencio no dia em que alguem afina um corte.
 const FORCA = { GOOD: 1, HIGH: 2, TOP: 3 };
+
+// ── LIGA/DESLIGA: OS MESMOS CAMPOS DA TELA ─────────────────────────────────
+//
+// O public/js/painelDia.js decide o alarme da tela com avb_alarme_ativo (geral)
+// e avb_top_ativo / avb_high_ativo / avb_good_ativo (por camada). O push passa
+// a ler exatamente esses, e nao um campo proprio: duas fontes respondendo "isto
+// apita?" divergem em silencio, e foi assim que o push ficou mudo enquanto a
+// tela continuava tocando.
+//
+// Campo ausente ou nulo vale LIGADO, que e' o DEFAULT das colunas no banco
+// (database.js: avb_alarme_ativo e as tres camadas nascem com 1). Isso importa:
+// configuracao que ainda nao foi salva nao pode calar o aviso.
+const COL_CAMADA = { TOP: 'avb_top_ativo', HIGH: 'avb_high_ativo', GOOD: 'avb_good_ativo' };
+
+function _liga(v) { return v == null || v === '' ? true : !!Number(v); }
+
+function alarmeLigado(cfg, camada) {
+  if (!cfg) return false;
+  if (!_liga(cfg.avb_alarme_ativo)) return false;
+  const col = COL_CAMADA[camada];
+  return col ? _liga(cfg[col]) : false;
+}
 
 function camadaDaCorrida(c) {
   let melhor = null, forca = 0;
@@ -170,7 +201,8 @@ async function ciclo() {
     for (const [userId] of porUsuario) {
       let cfg;
       try { cfg = getUserConfig(userId, false); } catch (e) { continue; }
-      if (!cfg || !cfg.alarme_filtro_ativo) continue;   // usuario nao quer alarme
+      // Chave geral do alarme de AvB, a mesma da tela.
+      if (!cfg || !_liga(cfg.avb_alarme_ativo)) continue;
 
       // UM relogio pro ciclo inteiro: as duas contas de largada abaixo tem que
       // responder sobre o mesmo instante.
@@ -179,6 +211,10 @@ async function ciclo() {
       for (const c of base) {
         const camada = camadaDaCorrida(c);
         if (!camada) continue;                          // nenhuma camada aberta
+
+        // E o liga/desliga DAQUELA camada: quem desmarca GOOD nas Configuracoes
+        // nao quer GOOD no bolso tambem.
+        if (!alarmeLigado(cfg, camada)) continue;
 
         // Corrida que ja largou nao avisa. Dois caminhos, e precisa dos dois:
         // `ja_correu` e' a chegada gravada (definitivo, mas so chega quando o
@@ -225,4 +261,4 @@ function iniciar() {
   setInterval(() => { ciclo().catch(e => console.error('[push/agendador]', e.message)); }, INTERVALO_MS);
 }
 
-module.exports = { iniciar, ciclo, casaFiltro, casaRegras, minutosAte, classeDaCorrida, pistaDaCorrida, turnoDaCorrida, camadaDaCorrida, FORCA };
+module.exports = { iniciar, ciclo, casaFiltro, casaRegras, minutosAte, classeDaCorrida, pistaDaCorrida, turnoDaCorrida, camadaDaCorrida, alarmeLigado, FORCA };

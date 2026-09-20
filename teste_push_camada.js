@@ -38,7 +38,7 @@ const origLoad = Module._load;
 
 let enviados = [];
 let baseFake = [];
-let cfgFake = { alarme_filtro_ativo: 1 };
+let cfgFake = { avb_alarme_ativo: 1, avb_top_ativo: 1, avb_high_ativo: 1, avb_good_ativo: 1 };
 let inscritos = [{ user_id: 1, endpoint: 'x' }];
 
 const storeFake = {
@@ -179,17 +179,50 @@ async function ciclo() { enviados = []; await ag.ciclo(); return enviados; }
     e.length === 0);
 
   // O filtro do usuario continua valendo POR CIMA da camada.
-  cfgFake = { alarme_filtro_ativo: 1, alarme_filtro_pistas: 'Kinsley' };
+  cfgFake = { avb_alarme_ativo: 1, alarme_filtro_pistas: 'Kinsley' };
   baseFake = [corrida({ race_id: 6 })];
   e = await ciclo();
   t('pista fora do filtro do usuario nao avisa, mesmo sendo TOP', e.length === 0);
 
-  cfgFake = { alarme_filtro_ativo: 0 };
+  cfgFake = { avb_alarme_ativo: 0 };
   baseFake = [corrida({ race_id: 7 })];
   e = await ciclo();
-  t('usuario com o alarme desligado nao recebe nada', e.length === 0);
+  t('usuario com o alarme de AvB desligado nao recebe nada', e.length === 0);
 
-  cfgFake = { alarme_filtro_ativo: 1 };
+  // ── O QUE CALOU O PUSH EM 19/09/2026 ────────────────────────────────────
+  // O agendador exigia `alarme_filtro_ativo`, campo da secao de alarme que
+  // saiu das Configuracoes em 16/09. O formulario parou de mandar o campo, o
+  // save-config continuou gravando a coluna, e o primeiro save zerou tudo: a
+  // tela seguiu apitando (ela le os campos novos) e o bolso ficou mudo por
+  // dois dias. Este teste existe pra que a divergencia nao volte.
+  cfgFake = { alarme_filtro_ativo: 0, avb_alarme_ativo: 1, avb_top_ativo: 1 };
+  baseFake = [corrida({ race_id: 71 })];
+  e = await ciclo();
+  t('o alarme_filtro_ativo zerado NAO cala mais o push', e.length === 1);
+
+  // Config que nunca foi salva: as colunas nascem com 1 no banco, entao campo
+  // ausente tem que valer LIGADO. Config nova nao pode nascer muda.
+  cfgFake = {};
+  baseFake = [corrida({ race_id: 72 })];
+  e = await ciclo();
+  t('config sem campo nenhum avisa (padrao de fabrica e ligado)', e.length === 1);
+
+  // Cada camada tem o seu interruptor, igual a tela.
+  cfgFake = { avb_alarme_ativo: 1, avb_top_ativo: 0, avb_high_ativo: 1, avb_good_ativo: 1 };
+  baseFake = [corrida({ race_id: 73, confrontos: [{ camada: 'TOP' }] })];
+  e = await ciclo();
+  t('TOP desmarcado nas Configuracoes nao vira push', e.length === 0);
+
+  baseFake = [corrida({ race_id: 74, confrontos: [{ camada: 'HIGH' }] })];
+  e = await ciclo();
+  t('mas HIGH, que ficou marcado, continua avisando', e.length === 1);
+
+  cfgFake = { avb_alarme_ativo: 1, avb_good_ativo: 0 };
+  baseFake = [corrida({ race_id: 75, confrontos: [{ camada: 'GOOD' }] })];
+  e = await ciclo();
+  t('GOOD desmarcado tambem nao vira push', e.length === 0);
+
+  cfgFake = { avb_alarme_ativo: 1, avb_top_ativo: 1, avb_high_ativo: 1, avb_good_ativo: 1 };
 
   // Se a base falhar, o ciclo nao pode derrubar o processo nem inventar aviso.
   Module._load = function (req) {
