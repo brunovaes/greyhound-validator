@@ -6,9 +6,14 @@ var SS_KEY='ghf_results_v1';
 // teto. Estourado o teto, o setItem falha calado no catch abaixo e a Analisar
 // perde o estado inteiro no proximo recarregar. Sem ele no cache, o icone de
 // PDF so busca de novo no servidor (Bruno, 19/09/2026).
-function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({results:results,raceNames:raceFiles.map(function(f){return f.name;})},function(k,v){return k==='pdfCompleto'?undefined:v;}));}catch(e){}}
+// O CACHE DA ABA TEM DATA (Bruno, 21/09/2026). O sessionStorage sobrevive ao F5
+// e a aba aberta de um dia pro outro; sem a data, a tela restaurava um lote
+// velho e nunca ia buscar o do servidor. Cache sem data (gravado antes desta
+// regra) tambem e' descartado: a tela so recarrega do servidor, nada se perde.
+function _hojeSS(){var n=new Date();return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();}
+function saveSessionState(){try{sessionStorage.setItem(SS_KEY,JSON.stringify({dia:_hojeSS(),results:results,raceNames:raceFiles.map(function(f){return f.name;})},function(k,v){return k==='pdfCompleto'?undefined:v;}));}catch(e){}}
 function clearSessionState(){try{sessionStorage.removeItem(SS_KEY);}catch(e){}}
-function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!raw)return false;var data=JSON.parse(raw);if(data&&Array.isArray(data.results)&&data.results.length){results=data.results;return true;}}catch(e){}return false;}
+function restoreSessionState(){try{var raw=sessionStorage.getItem(SS_KEY);if(!raw)return false;var data=JSON.parse(raw);if(data&&data.dia===_hojeSS()&&Array.isArray(data.results)&&data.results.length){results=data.results;return true;}}catch(e){}return false;}
 
 function readB64(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result.split(',')[1]);};r.onerror=rej;r.readAsDataURL(file);});}
 function trapClass(n){return['','t1','t2','t3','t4','t5','t6'][n]||'t1';}
@@ -310,6 +315,46 @@ async function autoSaveSession(dateLabel) {
   } catch(e) { console.error('autoSave erro:', e); }
 }
 
+// UMA corrida do banco no formato da tela. Um montador so, usado pela carga
+// do dia e pelo syncFromServer: com duas copias, o campo novo entrava numa e
+// a outra montava a corrida pela metade.
+function _corridaDoServidor(r) {
+  return {
+    tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
+    corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
+    nameFav:_limpaNome(r.name_fav)||'', trapUnd:r.trap_und||0, nameUnd:_limpaNome(r.name_und)||'',
+    pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
+    obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
+    avbNaoAberto: !!r.avb_nao_aberto,
+    // tier: 'top' | 'regular' | null. E' a regua em que a corrida
+    // passou. null = ficou fora das duas e nao aparece em filtro
+    // nenhum. NAO confundir com avbNaoAberto/abriu, que e' se o par
+    // ficou disponivel na casa: uma corrida pode ser TOP e nunca
+    // ter aberto.
+    // bw=1 continua sendo o atalho de TOP, pra linha antiga (antes
+    // do tier existir) nao virar "fora".
+    tier: r.tier != null ? r.tier : (r.bw ? 'top' : null),
+    histAll: r.hist_all?JSON.parse(r.hist_all):[],
+    // TODOS os galgos do card, inclusive os que o motor descartou.
+    // O histAll tem so os pontuados; sem esta fonte, abrir a
+    // disputa de um par com galgo descartado mostrava "sem
+    // historico disponivel" — e o dado existia no banco o tempo
+    // todo, so nao era carregado.
+    histFull: r.hist_full?JSON.parse(r.hist_full):[],
+    eliminados: r.eliminados?JSON.parse(r.eliminados):[],
+    postPick: r.post_pick||'',
+    dataCard: r.data_card||null,
+    trackFull: r.track_full||null,
+    cardSuspect: !!r.card_suspect,
+    betEntrou: !!r.bet_entrou,
+    betUnidades: r.bet_unidades!=null?r.bet_unidades:(STAKE_PADRAO!=null?STAKE_PADRAO:2.5),
+    histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
+    flagAtrasada: !!r.flag_atrasada,
+    scores: r.scores || null,
+    id:r.id
+  };
+}
+
 async function autoCheckAndAnalyze() {
   if (raceFiles.length) return;
   if (results.length) return;
@@ -340,40 +385,7 @@ async function autoCheckAndAnalyze() {
           var dd = await dr.json();
           if (dd.races && dd.races.length) {
             dd.races.forEach(function(r) {
-              results.push({
-                tipo:'avb', nivel:r.nivel||'', hora:r.hora||'', hora_br:convertHora(r.hora||'')||r.hora_br||'',
-                corrida:r.corrida||'', dist:r.dist||'', trapFav:r.trap_fav||0,
-                nameFav:_limpaNome(r.name_fav)||'', trapUnd:r.trap_und||0, nameUnd:_limpaNome(r.name_und)||'',
-                pct:r.pct||0, perfilFav:r.perfil_fav||'', perfilUnd:r.perfil_und||'',
-                obs:r.obs||'', odd:r.odd||'', valor:r.valor||'', top3:r.top3||'',
-                avbNaoAberto: !!r.avb_nao_aberto,
-                // tier: 'top' | 'regular' | null. E' a regua em que a corrida
-                // passou. null = ficou fora das duas e nao aparece em filtro
-                // nenhum. NAO confundir com avbNaoAberto/abriu, que e' se o par
-                // ficou disponivel na casa: uma corrida pode ser TOP e nunca
-                // ter aberto.
-                // bw=1 continua sendo o atalho de TOP, pra linha antiga (antes
-                // do tier existir) nao virar "fora".
-                tier: r.tier != null ? r.tier : (r.bw ? 'top' : null),
-                histAll: r.hist_all?JSON.parse(r.hist_all):[],
-                // TODOS os galgos do card, inclusive os que o motor descartou.
-                // O histAll tem so os pontuados; sem esta fonte, abrir a
-                // disputa de um par com galgo descartado mostrava "sem
-                // historico disponivel" — e o dado existia no banco o tempo
-                // todo, so nao era carregado.
-                histFull: r.hist_full?JSON.parse(r.hist_full):[],
-                eliminados: r.eliminados?JSON.parse(r.eliminados):[],
-                postPick: r.post_pick||'',
-                dataCard: r.data_card||null,
-                trackFull: r.track_full||null,
-                cardSuspect: !!r.card_suspect,
-                betEntrou: !!r.bet_entrou,
-                betUnidades: r.bet_unidades!=null?r.bet_unidades:(STAKE_PADRAO!=null?STAKE_PADRAO:2.5),
-                histFav:r.hist_fav?JSON.parse(r.hist_fav):[], histUnd:r.hist_und?JSON.parse(r.hist_und):[],
-                flagAtrasada: !!r.flag_atrasada,
-                scores: r.scores || null,
-                id:r.id
-              });
+              results.push(_corridaDoServidor(r));
             });
             updCards();
             setSt(todayLabel+' - '+results.filter(function(r){return r.nivel!=='skip';}).length+' AvBs carregados');
@@ -653,10 +665,25 @@ async function syncFromServer() {
     var focusedKey = (focusRaceIdx>=0 && results[focusRaceIdx]) ? (results[focusRaceIdx].hora+'|'+results[focusRaceIdx].corrida) : null;
     var changedAny = false;
     var changes = [];
+    var novas = 0;
+    // Lote de estudo (so PDFs de data anterior) nao recebe as corridas de hoje:
+    // o Atualizar e' quem troca o estudo pelo dia, mesma regra do atualizarProximas.
+    var _avbsLote = results.filter(function(x){ return x.nivel !== 'skip' && x.trapFav > 0; });
+    var _loteDeEstudo = _avbsLote.length > 0 && _avbsLote.every(isOldRaceCard);
 
     dd.races.forEach(function(r){
       var idx = results.findIndex(function(x){ return x.hora===r.hora && x.corrida===r.corrida; });
-      if (idx === -1) return;
+      // CORRIDA QUE A TELA NAO TEM ENTRA NA LISTA (Bruno, 21/09/2026). Antes era
+      // ignorada: a tela restaurou 17 corridas de manha, o servidor foi pra 71,
+      // e as 54 novas nunca apareceram. As 17 largaram e a tela ficou vazia com
+      // 39 corridas ainda por vir. Entra no FIM do array pra nao mexer no indice
+      // das que ja estao na tela (focusRaceIdx, data-idx dos cartoes).
+      if (idx === -1) {
+        if (_loteDeEstudo) return;
+        results.push(_corridaDoServidor(r));
+        novas++;
+        return;
+      }
       var cur = results[idx];
       var oldNivel = cur.nivel, oldFav = cur.trapFav, oldUnd = cur.trapUnd;
       var oldCioTraps = (cur.eliminados||[]).filter(function(e){return /Cio recente/i.test(e.motivo||'');}).map(function(e){return e.trap;});
@@ -749,6 +776,18 @@ async function syncFromServer() {
         }
       } else {
         showToast('\u2139\uFE0F Alguma corrida foi atualizada automaticamente.', true);
+      }
+    }
+
+    if (novas) {
+      updCards();
+      saveSessionState();
+      // Sem o refresh da lista rodando (a tela estava no 'Ainda nao fechamos!'),
+      // quem religa tudo e' o enterFocusMode. Com a lista no ar, so o refresh:
+      // o enterFocusMode trocaria a corrida em foco.
+      if (!focusRefreshInterval) enterFocusMode(); else refreshFocusMode();
+      if (typeof window.ghTicker === 'function') {
+        try { window.ghTicker(novas === 1 ? '1 corrida nova entrou na lista' : novas + ' corridas novas entraram na lista'); } catch(e){}
       }
     }
   } catch(e) { console.error('[syncFromServer] erro', e); }
@@ -1012,7 +1051,13 @@ function showAllExpiredMsg() {
   if (col) { col.innerHTML = ''; col.style.background = '#0D1117'; col.style.borderRight = 'none'; }
   if (focusRefreshInterval) { clearInterval(focusRefreshInterval); focusRefreshInterval = null; }
   if (alertCheckInterval) { clearInterval(alertCheckInterval); alertCheckInterval = null; }
-  if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
+  // Com corrida por vir, o sync com o banco segue ligado: e' por ele que as
+  // corridas que a tela ainda nao tem chegam e trazem a lista de volta. So
+  // cria se nao existir, porque esta funcao roda de novo a cada volta e um
+  // setInterval recriado a cada 18s nunca chegaria aos 2 min.
+  if (aindaTem) {
+    if (!serverSyncInterval) serverSyncInterval = setInterval(syncFromServer, 120000);
+  } else if (serverSyncInterval) { clearInterval(serverSyncInterval); serverSyncInterval = null; }
 }
 
 // A LISTA DA ANALISAR INCLUI A CORRIDA COM AvB ESPERANDO (Bruno, 11/09/2026).
