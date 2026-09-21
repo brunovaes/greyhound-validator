@@ -1,4 +1,5 @@
 'use strict';
+const { encerrarBrowser } = require('../utils/encerrarBrowser'); // fecha abas e navegador, nao so desconecta
 // src/routes/finalCheckRobot.js
 // Checagem final, pertinho da corrida (15 min antes por padrao, configuravel
 // em Configuracoes). Compara o card ao vivo contra o que foi analisado de
@@ -305,7 +306,7 @@ async function runFinalCheckRobot(targetDate) {
   } catch (e) {
     addLog('err', 'Erro fatal: ' + e.message);
   } finally {
-    if (browser) { try { await browser.disconnect(); } catch (e) {} }
+    if (browser) { try { await encerrarBrowser(browser); } catch (e) {} }
     status.running = false;
     saveRobotLog('final_check', status);
   }

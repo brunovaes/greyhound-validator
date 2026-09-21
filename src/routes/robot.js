@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAdmin } = require('../middleware/auth');
+const { encerrarBrowser } = require('../utils/encerrarBrowser'); // fecha abas e navegador, nao so desconecta
 const { getUserConfig, saveRobotLog, loadRobotLog, getTrapBadgeColors, saveTrapBadgeColors } = require('../db/database');
 const { parseRacingPostPDF } = require('../utils/pdfParser');
 const { logChanges } = require('../utils/auditLog');
@@ -2572,7 +2573,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
       addLog('err', '❌ Nenhuma corrida encontrada.');
       addLog('info', '💡 O site pode estar bloqueando o acesso via bot.');
       robotStatus.running = false;
-      await browser.disconnect();
+      await encerrarBrowser(browser);
       return;
     }
 
@@ -2585,7 +2586,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
         return currentPage;
       } catch(e) {
         addLog('info', '🔄 Reconectando ao Browserless...');
-        try { await browser.disconnect(); } catch(e2) {}
+        try { await encerrarBrowser(browser); } catch(e2) {}
         browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
         const newPage = await browser.newPage();
         await newPage.setViewport({ width: 1280, height: 900 });
@@ -2805,7 +2806,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
         const msg = err.message || '';
         if (msg.includes('detached') || msg.includes('Session closed') || msg.includes('Target closed')) {
           addLog('info', '🔄 Sessão expirada, reconectando...');
-          try { await browser.disconnect(); } catch(e2) {}
+          try { await encerrarBrowser(browser); } catch(e2) {}
           try {
             browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
             page = await browser.newPage();
@@ -2837,7 +2838,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
         await new Promise(r => setTimeout(r, 3000));
       } catch(navErr) {
         addLog('info', '🔄 Erro ao voltar para lista, reconectando...');
-        try { await browser.disconnect(); } catch(e2) {}
+        try { await encerrarBrowser(browser); } catch(e2) {}
         browser = await puppeteer.connect({ browserWSEndpoint: BROWSERLESS_WS });
         page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 900 });
@@ -2854,7 +2855,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
     addLog('err', err.stack ? err.stack.slice(0, 300) : '(sem stack)');
   } finally {
     if (browser) {
-      try { await browser.disconnect(); } catch(e) {}
+      try { await encerrarBrowser(browser); } catch(e) {}
     }
     robotStatus.running = false;
     robotStatus.current = 'Concluido';

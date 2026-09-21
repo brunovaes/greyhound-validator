@@ -1,4 +1,5 @@
 'use strict';
+const { encerrarBrowser } = require('../utils/encerrarBrowser'); // fecha abas e navegador, nao so desconecta
 // src/routes/cardMonitorRobot.js
 // Robo que varre as corridas do dia de hora em hora, comparando o card atual
 // no Racing Post com o race_card salvo na analise da manha. Se detectar
@@ -713,7 +714,7 @@ async function runCardMonitorRobot(targetDate) {
   } catch (e) {
     addLog('err', 'Erro fatal: ' + e.message);
   } finally {
-    if (browser) { try { await browser.disconnect(); } catch(e) {} }
+    if (browser) { try { await encerrarBrowser(browser); } catch(e) {} }
     status.running = false;
     saveRobotLog('monitor', status);
   }

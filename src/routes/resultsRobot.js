@@ -1,4 +1,5 @@
 'use strict';
+const { encerrarBrowser } = require('../utils/encerrarBrowser'); // fecha abas e navegador, nao so desconecta
 const express = require('express');
 const router  = express.Router();
 const { requireAdmin } = require('../middleware/auth');
@@ -625,7 +626,7 @@ async function runResultsRobot(targetDate) {
   } catch (e) {
     addLog('err', 'Erro fatal: ' + e.message);
   } finally {
-    if (browser) { try { await browser.disconnect(); } catch(e) {} }
+    if (browser) { try { await encerrarBrowser(browser); } catch(e) {} }
     status.running = false;
     saveRobotLog('results', status);
   }
