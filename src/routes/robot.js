@@ -2446,6 +2446,7 @@ router.post('/start', requireAdmin, async (req, res) => {
 async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
   opts = opts || {};
   let browser = null;
+  let salvosDoRun = null; // o conjunto de race_id, visivel no finally pra gravar
   const PDF_DIR = getPdfDir(DATE);
   if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
   addLog('info', '📁 Pasta: ' + PDF_DIR);
@@ -2594,6 +2595,14 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
       }
     }
 
+    // Corridas ja salvas hoje, pelo race_id (ver idsSalvosDoDia). E quantas
+    // corridas a lista tem em cada horario, pro casamento so-por-hora abaixo.
+    const salvos = idsSalvosDoDia(DATE);
+    salvosDoRun = salvos;
+    const porHorario = {};
+    races.races.forEach(r => { porHorario[r.time] = (porHorario[r.time] || 0) + 1; });
+    const tentativas = {};
+
     for (let i = 0; i < races.races.length; i++) {
       if (!robotStatus.running) { addLog('info', '⏹ Parado pelo usuario'); break; }
 
@@ -2606,7 +2615,25 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
       // So as novas: ja tem PDF desta hora com esta pista na pasta? Pula sem
       // visitar. A pista do arquivo vem do cabecalho da pagina e a da lista pode
       // vir mais longa ("Central Park" x "Central"), por isso compara o comeco.
-      if (opts.soNovas && jaTemPdf(PDF_DIR, race.time, race.track)) { skipped++; continue; }
+      //
+      // PELO race_id (Bruno, 21/09/2026). A lista e' lida no modo "por horario"
+      // e a primeira linha de cada item e' a HORA, nao a pista: race.track
+      // chegava "7:33", o jaTemPdf ficava sem letra pra comparar e devolvia
+      // false. A complementar nunca pulava nada e revisitava as ~50 corridas
+      // toda hora, 20 a 40 min de Chromium por volta, pra PDF que ja existia.
+      //
+      // Agora: race_id salvo hoje -> pula. Sem race_id no conjunto (o dia de
+      // hoje, que comecou antes desta regra), aceita o PDF da pasta com a MESMA
+      // hora quando a lista tem uma corrida so naquele horario: todo PDF do dia
+      // veio desta lista, entao nao tem de quem mais ser. Com duas corridas no
+      // mesmo horario, visita (nao da pra saber qual das duas ja tem).
+      if (opts.soNovas) {
+        const rid = raceIdDoHref(race.href);
+        const jaTem = salvos.has(rid)
+          || jaTemPdf(PDF_DIR, race.time, race.track)
+          || (porHorario[race.time] === 1 && jaTemPdfNaHora(PDF_DIR, race.time));
+        if (jaTem) { salvos.add(rid); skipped++; continue; }
+      }
 
       // Filtro de horário antecipado — usa horário da lista sem visitar a página
       if (!inTimeRange(race.time, TIME_FROM, TIME_TO)) {
@@ -2771,6 +2798,7 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
           addLog('ok', `✅ ${filename} — ${Math.round(size/1024)}KB`);
           robotStatus.pdfs.push({ filename, name: filename, track, dist, time: raceTime });
           saved++;
+          salvos.add(raceIdDoHref(race.href));
         }
 
       } catch(err) {
@@ -2783,8 +2811,17 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
             page = await browser.newPage();
             await page.setViewport({ width: 1280, height: 900 });
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
-            addLog('ok', '✅ Reconectado! Retentando corrida...');
-            i--; // retenta a mesma corrida
+            // No maximo 2 retentativas por corrida. Sem teto, uma pagina que
+            // derruba a sessao sempre prendia o robo na mesma corrida (o 1/80
+            // parado da manha de 21/09). Desistindo, a proxima volta tenta.
+            tentativas[i] = (tentativas[i] || 0) + 1;
+            if (tentativas[i] <= 2) {
+              addLog('ok', '✅ Reconectado! Retentando corrida...');
+              i--; // retenta a mesma corrida
+            } else {
+              addLog('err', '❌ ' + (race.time || '') + ': derrubou a sessao 3 vezes, pulando. A proxima volta tenta de novo.');
+              errors++;
+            }
           } catch(reconnErr) {
             addLog('err', '❌ Falha ao reconectar: ' + reconnErr.message.slice(0,80));
             errors++;
@@ -2822,7 +2859,35 @@ async function runRobot(DATE, DIST_MIN, DIST_MAX, TIME_FROM, TIME_TO, opts) {
     robotStatus.running = false;
     robotStatus.current = 'Concluido';
     if (!opts.soNovas) saveRobotLog('pdf', robotStatus);
+    if (salvosDoRun) gravarIdsDoDia(DATE, salvosDoRun);
   }
+}
+
+// race_id da corrida, tirado do link da lista ("#card/race_id=2224917&...").
+// Link sem race_id usa o proprio link como chave: continua unico no dia.
+function raceIdDoHref(href) {
+  const m = String(href || '').match(/race_id=(\d+)/);
+  return m ? m[1] : String(href || '');
+}
+
+// Conjunto dos race_id ja salvos em PDF no dia, em robot_logs (sobrevive a
+// restart e a deploy). Outro dia = conjunto vazio.
+function idsSalvosDoDia(date) {
+  const c = loadRobotLog('pdf_ids_dia');
+  return new Set(c && c.date === date && Array.isArray(c.ids) ? c.ids : []);
+}
+function gravarIdsDoDia(date, conjunto) {
+  try { saveRobotLog('pdf_ids_dia', { date, ids: Array.from(conjunto) }); }
+  catch (e) { console.error('[PDF] falha ao gravar ids do dia:', e.message); }
+}
+
+// Algum PDF da pasta com esta hora, de qualquer pista? So vale quando a lista
+// tem UMA corrida neste horario (quem chama confere).
+function jaTemPdfNaHora(dir, hora) {
+  try {
+    const pref = formatTime(String(hora || '')) + '_';
+    return fs.readdirSync(dir).some(f => f.indexOf(pref) === 0 && /\.pdf$/i.test(f));
+  } catch (e) { return false; }
 }
 
 // A pasta ja tem o PDF desta corrida? "9:42" + "Romford" casa "9.42PM_Romford.pdf"
