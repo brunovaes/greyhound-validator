@@ -478,6 +478,23 @@ function dashKpi3(t){
        + bloco('Motor',       t.motor, 'AvB da analise global original');
 }
 
+// Lista das apostas pendentes: data, hora BR, corrida, o SEU par e o motivo
+// (o mesmo texto que a Banca usa). Some quando nao ha pendente.
+function dashPendentes(lst){
+  if(!lst||!lst.length) return '';
+  var linhas=lst.map(function(p){
+    var dt=p.dia?p.dia.split('-').reverse().join('/'):'';
+    return '<tr><td style="padding:5px 8px;color:#ccc;white-space:nowrap">'+dt+'</td>'
+      +'<td style="padding:5px 8px;color:#ccc">'+p.hora+'</td>'
+      +'<td style="padding:5px 8px;color:#f0f0f0;font-weight:600">'+p.corrida+'</td>'
+      +'<td style="padding:5px 8px;color:#ccc">'+p.par+'</td>'
+      +'<td style="padding:5px 8px;color:#eab308">'+(p.motivo||'sem chegada registrada')+'</td></tr>';
+  }).join('');
+  return '<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:#eab308;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Pendentes ('+lst.length+')</div>'
+    +'<div style="background:#0D1117;border:1px solid #222;border-radius:8px;overflow:auto"><table style="width:100%;min-width:0;border-collapse:collapse;font-size:12px">'
+    +'<thead><tr style="color:#888;text-align:left"><th style="padding:6px 8px">Data</th><th style="padding:6px 8px">Hora BR</th><th style="padding:6px 8px">Corrida</th><th style="padding:6px 8px">Seu par</th><th style="padding:6px 8px">Motivo</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div></div>';
+}
 // Unidades e percentual com sinal, no formato BR (virgula).
 function dashUn(v){ return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' un'; }
 function dashPctSin(v){ return (v>=0?'+':'')+Math.round(v*100)+'%'; }
@@ -727,7 +744,7 @@ async function carregarDashboard(){
       +'</div>';
     var pistaRows=(d.porPista||[]).map(function(x){ return {chave:nomePistaCli(x.chave), n:x.n, ac:x.ac, hr:x.hr, hrCru:x.hrCru, err:x.err, amostra:x.amostra, lucro:x.lucro, roi:x.roi}; });
     var corpo = rz.total? (dashSecao('Por Tipo',d.porTipo)+dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',pistaRows)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma entrada resolvida nesse recorte.</div>';
-    cont.innerHTML=recorte+aviso+kpi+corpo
+    cont.innerHTML=recorte+aviso+kpi+corpo+dashPendentes(rz.pendentesLista)
       +'<div style="font-size:10px;color:#666;margin-top:6px">Amostra: baixa (&lt;15) = ruído · média (15–29) · boa (≥30). Só confie em faixas com amostra boa.</div>';
   }catch(e){ cont.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
 }

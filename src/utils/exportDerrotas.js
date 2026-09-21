@@ -395,7 +395,11 @@ function coletarEntradas(userId, fromISO, toISO, dbOverride) {
       raw: null,                     // sem "HR cru": ele mede o label do motor
       lucro,
       stake: (lucro != null) ? (parseFloat(String(r.bet_unidades || '').replace(',', '.')) || 0) : 0,
-      odd: temOdd ? (parseFloat(String(r.odd).replace(',', '.')) || null) : null
+      odd: temOdd ? (parseFloat(String(r.odd).replace(',', '.')) || null) : null,
+      // So pra listar as pendentes na tela: qual corrida, qual par e por que.
+      corrida: r.corrida || '',
+      par: (r.name_fav || '?') + ' x ' + (r.name_und || '?'),
+      motivo: r.motivo_pendente || null
     });
   }
   return out;
@@ -543,7 +547,8 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
 
   // Aposta sem chegada ainda (ou galgo fora dela) fica fora do HR, mas contada:
   // some do denominador sem sumir da vista.
-  const pendentes = filtrados.filter(x => x.der !== 'sim' && x.der !== 'nao').length;
+  const listaPendentes = filtrados.filter(x => x.der !== 'sim' && x.der !== 'nao');
+  const pendentes = listaPendentes.length;
   const items = filtrados.filter(x => x.der === 'sim' || x.der === 'nao');
 
   const total = items.length;
@@ -568,6 +573,13 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
       hrCru: rawItems.length ? acRaw / rawItems.length : null,
       erros: err,
       pendentes,
+      // As pendentes uma a uma (21/09/2026: "consegue me listar as datas e
+      // corridas?"). Hora em BR, a mesma conta do turno.
+      pendentesLista: listaPendentes.map(x => {
+        const h = horaBr24(x.hora);
+        const mm = String(x.hora || '').split(':')[1] || '00';
+        return { dia: x.dia, hora: h == null ? x.hora : (h + ':' + mm), corrida: x.corrida || '', par: x.par || '', motivo: x.motivo || '' };
+      }).sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora)),
       // Dinheiro, em unidades, so onde houve odd. ROI = lucro / unidades apostadas.
       lucro: soma(items, 'lucro'),
       stake: soma(items, 'stake'),
