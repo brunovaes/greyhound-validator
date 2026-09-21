@@ -625,10 +625,11 @@ async function refreshSidebarSessions() {
     }
     var sessSlot = document.getElementById('sessoes-recentes-slot');
     if (sessSlot && d.sessions) {
-      // slice(0,7): o servidor renderiza 7 na carga inicial, mas o endpoint do
-      // refresh devolve mais — a lista crescia sozinha depois do 1o ciclo.
+      // slice(0,5): o servidor desenha 5 na carga inicial (Bruno, 21/09/2026:
+      // eram 7), e o endpoint do refresh devolve mais - sem o corte a lista
+      // crescia sozinha depois do 1o ciclo. Os dois numeros andam juntos.
       sessSlot.innerHTML = d.sessions.length
-        ? d.sessions.slice(0,7).map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
+        ? d.sessions.slice(0,5).map(function(s){ return '<a href="'+BASE+'/sessao/'+s.id+'" class="sess-link">'+(s.name||'Sessao '+s.id)+'<span>'+s.total_avbs+' AvBs</span></a>'; }).join('')
         : '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>';
     }
   } catch(e) { /* falha silenciosa - nao atrapalha o resto da tela */ }

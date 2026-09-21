@@ -749,6 +749,10 @@ router.get('/', exigirAcesso('screen.analisar'), (req, res) => {
   const user = req.user;
   const config = getUserConfig(user.id);
   // Sessoes e corridas sao do SISTEMA: le sempre o canonico, nao o login.
+  // A lista "Sessoes recentes" mostra 5 (Bruno, 21/09/2026), mas a consulta
+  // continua trazendo 7: a sessaoHoje logo abaixo e' procurada nesta MESMA
+  // lista, e o corte fica so no desenho. O app.js corta no mesmo numero quando
+  // redesenha a lista no refresh.
   const sessions = db.prepare('SELECT * FROM race_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 7').all(CANONICO);
   // new Date() roda no SERVIDOR (Railway = UTC), nao no relogio do Bruno.
   // Sem o ajuste de -3h, depois das 21h BRT o servidor ja calcula a data de
@@ -1397,7 +1401,7 @@ ${navBar(user, 'analisar')}
     <div class="dv"></div>
     <div class="sess-recentes-box">
       <h2 style="margin-bottom:6px">Sessoes recentes</h2>
-      <div id="sessoes-recentes-slot">${sessions.map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
+      <div id="sessoes-recentes-slot">${sessions.slice(0, 5).map(s => `<a href="${BASE}/sessao/${s.id}" class="sess-link">${s.name||'Sessao '+s.id}<span>${s.total_avbs} AvBs</span></a>`).join('') || '<span style="font-size:11px;color:var(--mut)">Nenhuma sessao salva</span>'}</div>
     </div>
     <div class="acertos-box acertos-sidebar" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       ${blocoIndicadores({ bancaDia: 'banca-dia', bancaMes: 'banca-mes', sisDia: 'acertos-dia', sisMes: 'acertos-mes' })}
