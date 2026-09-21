@@ -357,8 +357,8 @@ ${[
 
 <div class="tab-panel" id="t-dash">
 <div class="section">
-<div class="sec-title">Desempenho — Painel de HR (Taxa de Acerto)</div>
-<div class="info-box">Acompanhe o andamento sem baixar nada. HR corrigido pela chegada real, quebrado por <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). ⚠ = resultados suspeitos (label).<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>17h no UK aparece aqui como 13h BR</strong>. Dois turnos: <strong>Manhã (a partir das 6h)</strong> e <strong>Tarde (a partir das 13h)</strong>, horário BR.</div>
+<div class="sec-title">Desempenho: minhas entradas</div>
+<div class="info-box">Só as corridas em que você <strong>entrou</strong> (marcou Entrei ou lançou odd). O acerto é o do <strong>par que você apostou</strong>, contra a chegada real, a mesma regra da Banca. Quebrado por <strong>tipo</strong> (TOP, HIGH, GOOD), <strong>turno</strong>, <strong>pista</strong>, <strong>nº de cães</strong> e <strong>classe</strong>. Lucro em <strong>unidades</strong>, só onde há odd lançada; ROI = lucro ÷ unidades apostadas. Verde = confiável (≥65%), âmbar = médio, vermelho = fraco (&lt;50%). Corrida anulada não entra; aposta sem chegada fica como pendente, fora do HR.<br><strong>Horários em BR (Brasília).</strong> As corridas são do Reino Unido (UK = BR + 4h) e já vêm convertidas pro teu relógio. Ex.: um páreo que corre às <strong>17h no UK aparece aqui como 13h BR</strong>. Dois turnos: <strong>Manhã (a partir das 6h)</strong> e <strong>Tarde (a partir das 13h)</strong>, horário BR.</div>
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
   <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">De</label><input type="date" id="dash_from" onclick="try{this.showPicker()}catch(e){}"></div>
   <div class="field" style="flex:1;min-width:120px"><label style="white-space:nowrap">Até</label><input type="date" id="dash_to" onclick="try{this.showPicker()}catch(e){}"></div>
@@ -369,6 +369,7 @@ ${[
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid #222">
 <div style="font-size:12px;color:#22c55e;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">Cruzar filtros <span style="color:#888;font-weight:400;text-transform:none;letter-spacing:0">— deixe em "Todos" o que não quiser fixar</span></div>
 <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <div class="field" style="width:120px;flex-shrink:0"><label style="white-space:nowrap">Tipo</label><select id="dash_f_tipo" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
   <div class="field" style="flex:1;min-width:150px"><label style="white-space:nowrap">Turno</label><select id="dash_f_turno" onchange="carregarDashboard()"><option value="">Todos</option></select></div>
   <div class="field" style="flex:1;min-width:150px;position:relative"><label style="white-space:nowrap">Pista (várias)</label>
     <div id="dash_f_pista_box" onclick="togglePistaPanel(event)" style="padding:8px 10px;background:#0D1117;border:1px solid #222;border-radius:6px;color:#f0f0f0;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Todas ▾</div>
@@ -477,6 +478,9 @@ function dashKpi3(t){
        + bloco('Motor',       t.motor, 'AvB da analise global original');
 }
 
+// Unidades e percentual com sinal, no formato BR (virgula).
+function dashUn(v){ return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' un'; }
+function dashPctSin(v){ return (v>=0?'+':'')+Math.round(v*100)+'%'; }
 function dashKpi(label,val,col){
   return '<div style="background:#0D1117;border:1px solid #222;border-radius:8px;padding:12px 16px;min-width:110px;flex:1">'
     +'<div style="font-size:22px;font-weight:800;color:'+col+'">'+val+'</div>'
@@ -486,11 +490,16 @@ function dashBar(item){
   var pct=Math.round(item.hr*100), col=dashHrColor(item.hr);
   var amCor=item.amostra==='boa'?'#22c55e':(item.amostra==='media'?'#eab308':'#666');
   var err=item.err>0?' <span style="color:#ef4444;font-size:10px" title="resultados suspeitos (label)">⚠'+item.err+'</span>':'';
+  // Lucro do grupo em unidades, so quando o grupo teve odd lancada.
+  var luc=(item.lucro!=null)
+    ?'<div style="width:104px;text-align:right;font-size:11px;font-weight:700;color:'+(item.lucro>=0?'#22c55e':'#ef4444')+'" title="lucro em unidades · ROI">'+dashUn(item.lucro)+(item.roi!=null?' <span style="font-weight:400;color:#888">'+dashPctSin(item.roi)+'</span>':'')+'</div>'
+    :'';
   return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">'
     +'<div style="width:135px;flex-shrink:0;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+item.chave+'">'+item.chave+'</div>'
     +'<div style="flex:1;background:#0D1117;border:1px solid #222;border-radius:4px;height:16px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div>'
     +'<div style="width:40px;text-align:right;font-weight:700;color:'+col+'">'+pct+'%</div>'
     +'<div style="width:78px;color:#888;font-size:10px">'+item.ac+'/'+item.n+' <span style="color:'+amCor+'">'+item.amostra+'</span>'+err+'</div>'
+    +luc
     +'</div>';
 }
 function dashSecao(titulo,arr){
@@ -647,7 +656,7 @@ function dashPreencheSelect(id, valores, sel, prefixoTodos){
   el.innerHTML=opts;
 }
 function limparFiltrosDash(){
-  ['dash_f_turno','dash_f_caes','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
+  ['dash_f_tipo','dash_f_turno','dash_f_caes','dash_qtd_min','dash_qtd_max'].forEach(function(id){var e=document.getElementById(id); if(e)e.value='';});
   dashPistasSel=[]; dashParesSel={}; dashPistaDirty=false; preenchePistaPanel(dashPistasDisponiveis);
   dashClassesSel=[]; dashClasseDirty=false; atualizaClasseBox();
   carregarDashboard();
@@ -658,12 +667,16 @@ async function carregarDashboard(){
   var cont=document.getElementById('dash-content'); if(!cont) return;
   var f=document.getElementById('dash_from').value, t=document.getElementById('dash_to').value;
   var t1=document.getElementById('dash_t1').value||6, t2=document.getElementById('dash_t2').value||13;
+  var fTipo=document.getElementById('dash_f_tipo').value;
   var fTurno=document.getElementById('dash_f_turno').value, fPista=dashPistasSel.join(',');
   var fCaes=document.getElementById('dash_f_caes').value, fClasse=dashClassesSel.join(',');
   var fQtdMin=document.getElementById('dash_qtd_min').value, fQtdMax=document.getElementById('dash_qtd_max').value;
   cont.innerHTML='<div style="color:#888;font-size:13px">Carregando…</div>';
-  var qs=['t1='+t1,'t2='+t2];
+  // modo=entradas: esta tela mede so as SUAS apostas (21/09/2026). O Dashboard
+  // chama o mesmo endereco sem modo e continua medindo o motor.
+  var qs=['t1='+t1,'t2='+t2,'modo=entradas'];
   if(f)qs.push('from='+f); if(t)qs.push('to='+t);
+  if(fTipo)qs.push('tipo='+encodeURIComponent(fTipo));
   if(fTurno)qs.push('turno='+encodeURIComponent(fTurno));
   if(fPista)qs.push('pista='+encodeURIComponent(fPista));
   var fPares=montaPares(); if(fPares)qs.push('pares='+encodeURIComponent(fPares));
@@ -677,6 +690,7 @@ async function carregarDashboard(){
     var d=await r.json();
     if(d.error) throw new Error(d.error);
     dashNomes = d.nomes || {};
+    dashPreencheSelect('dash_f_tipo', d.opcoes.tipos, d.filtros.tipo, 'Todos');
     dashPreencheSelect('dash_f_turno', d.opcoes.turnos, d.filtros.turno, 'Todos');
     dashPistasDisponiveis = d.opcoes.pistas || [];
     dashClassesPorPista = d.classesPorPista || {};
@@ -684,7 +698,7 @@ async function carregarDashboard(){
     dashPreencheSelect('dash_f_caes', d.opcoes.caes, d.filtros.caes, 'Todos');
     preencheClassePanel(d.opcoes.classes);
     var rz=d.resumo;
-    var temFiltro=d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.qtdMin||d.filtros.qtdMax;
+    var temFiltro=d.filtros.tipo||d.filtros.turno||d.filtros.pista||d.filtros.caes||d.filtros.classe||d.filtros.qtdMin||d.filtros.qtdMax;
     var recorte='';
     if(temFiltro){
       var partes=[];
@@ -693,22 +707,26 @@ async function carregarDashboard(){
       else if(d.filtros.qtdMax) qlbl='pistas c/ até '+d.filtros.qtdMax+' corridas';
       else if(d.filtros.qtdMin) qlbl='pistas c/ mín. '+d.filtros.qtdMin+' corridas';
       if(qlbl)partes.push(qlbl);
+      if(d.filtros.tipo)partes.push(d.filtros.tipo);
       if(d.filtros.turno)partes.push(d.filtros.turno); if(d.filtros.pista)partes.push('Pista '+d.filtros.pista.split(',').map(nomePistaCli).join(', ')); if(d.filtros.caes)partes.push(d.filtros.caes+' cães'); if(d.filtros.classe)partes.push('Classe '+d.filtros.classe.split(',').join(', '));
       recorte='<div style="font-size:12px;color:#22c55e;margin-bottom:10px;font-weight:600">Recorte: '+partes.join(' · ')+'</div>';
     }
     var aviso='';
     if(rz.total<15){
-      aviso='<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:14px">⚠ Amostra insuficiente ('+rz.total+' corrida'+(rz.total===1?'':'s')+') — esse HR é ruído, não conclua nada. Cruzar muitas dimensões esfarela o número; solte algum filtro ou espere volume.</div>';
+      aviso='<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:14px">⚠ Amostra insuficiente ('+rz.total+' entrada'+(rz.total===1?'':'s')+'): esse HR ainda é ruído, não conclua nada. Cruzar muitas dimensões esfarela o número; solte algum filtro ou espere volume.</div>';
     }
+    // Sem HR cru, erros de label e as tres taxas: todos medem o label do
+    // motor, e aqui a pergunta e' a aposta.
     var kpi='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">'
-      +dashKpi('AvBs resolvidos',rz.total,'#f0f0f0')
-      +dashKpi('HR corrigido',rz.total?Math.round(rz.hr*100)+'%':'-',dashHrColor(rz.hr))
-      +dashKpi('HR cru',rz.hrCru!=null?Math.round(rz.hrCru*100)+'%':'-','#888')
-      +dashKpi('Erros de label',rz.erros,rz.erros>0?'#ef4444':'#22c55e')
-      +'</div>'
-      + (rz.tres ? '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">'+dashKpi3(rz.tres)+'</div>' : '');
-    var pistaRows=(d.porPista||[]).map(function(x){ return {chave:nomePistaCli(x.chave), n:x.n, ac:x.ac, hr:x.hr, hrCru:x.hrCru, err:x.err, amostra:x.amostra}; });
-    var corpo = rz.total? (dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',pistaRows)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma corrida nesse recorte.</div>';
+      +dashKpi('Entradas',rz.total,'#f0f0f0')
+      +dashKpi('HR',rz.total?Math.round(rz.hr*100)+'%':'-',rz.total?dashHrColor(rz.hr):'#666')
+      +dashKpi('Lucro',rz.stake?dashUn(rz.lucro):'-',rz.stake?(rz.lucro>=0?'#22c55e':'#ef4444'):'#666')
+      +dashKpi('ROI',rz.roi!=null?dashPctSin(rz.roi):'-',rz.roi!=null?(rz.roi>=0?'#22c55e':'#ef4444'):'#666')
+      +dashKpi('Odd média',rz.oddMedia!=null?rz.oddMedia.toFixed(2).replace('.',','):'-','#f0f0f0')
+      +(rz.pendentes?dashKpi('Pendentes',rz.pendentes,'#eab308'):'')
+      +'</div>';
+    var pistaRows=(d.porPista||[]).map(function(x){ return {chave:nomePistaCli(x.chave), n:x.n, ac:x.ac, hr:x.hr, hrCru:x.hrCru, err:x.err, amostra:x.amostra, lucro:x.lucro, roi:x.roi}; });
+    var corpo = rz.total? (dashSecao('Por Tipo',d.porTipo)+dashSecao('Por Turno',d.porTurno)+dashSecao('Por Pista (pior → melhor)',pistaRows)+dashSecao('Por Nº de Cães',d.porCaes)+dashSecao('Por Classe',d.porClasse)) : '<div style="color:#888;font-size:13px">Nenhuma entrada resolvida nesse recorte.</div>';
     cont.innerHTML=recorte+aviso+kpi+corpo
       +'<div style="font-size:10px;color:#666;margin-top:6px">Amostra: baixa (&lt;15) = ruído · média (15–29) · boa (≥30). Só confie em faixas com amostra boa.</div>';
   }catch(e){ cont.innerHTML='<div style="color:#ef4444;font-size:13px">Erro ao carregar: '+e.message+'</div>'; }
@@ -1409,7 +1427,9 @@ router.get('/desempenho-data', requireAdmin, (req, res) => {
       classe: String(req.query.classe || '').trim(),
       pares: String(req.query.pares || '').trim(),
       qtdMin: String(req.query.qtdMin || '').trim(),
-      qtdMax: String(req.query.qtdMax || '').trim()
+      qtdMax: String(req.query.qtdMax || '').trim(),
+      modo: String(req.query.modo || '').trim(),
+      tipo: String(req.query.tipo || '').trim()
     };
     const data = buildDesempenhoData(req.user.id, from || null, to || null, turnos, filtros);
     res.json(data);

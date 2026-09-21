@@ -2,7 +2,7 @@
 // Corridas sao compartilhadas (etapa 2.x): as consultas leem sempre o dono
 // canonico. O userId recebido continua valendo pro dado PESSOAL (odd, valor,
 // aposta), sobreposto por aplicarPessoais depois da leitura.
-const { CANONICO, aplicarPessoais } = require('../db/compartilhado');
+const { CANONICO, aplicarPessoais, garantirColunas } = require('../db/compartilhado');
 // src/utils/exportDerrotas.js
 // Gera a planilha de "Revisao de Derrotas" (mesmo formato entregue na conversa
 // de afinacao do motor) direto do banco, para um intervalo de datas escolhido
@@ -306,6 +306,101 @@ function coletarResolvidos(userId, fromISO, toISO, dbOverride) {
   return out;
 }
 
+// ── MINHAS ENTRADAS (Bruno, 21/09/2026) ────────────────────────────────────
+// "Consegue refazer essa tela baseado somente nas que eu entrei?"
+//
+// O coletarResolvidos mede o MOTOR: toda corrida resolvida, sempre com o par da
+// manha. Aqui a pergunta e' outra: como foram as MINHAS apostas.
+//
+// ENTRADA = marcou Entrei (bet_entrou) ou lancou odd. A Banca conta so as com
+// odd; o Historico marca Entrei as vezes sem odd. As duas sao entrada; lucro so
+// existe onde tem odd.
+//
+// O ACERTO vem do resolverAposta da Banca, nao de conta propria: e' o SEU par
+// (avb_escolhido) contra a chegada, com a mesma precedencia que ja paga a
+// Banca. Assim o HR daqui e o green/red da Banca nunca divergem.
+//
+// Corrida sem par da manha (a pescada) ENTRA: o filtro trap_fav > 0 do motor
+// cortaria justamente as entradas que a BW abriu fora da lista.
+//
+// O TIPO (TOP/HIGH/GOOD) sai do avb_precalc do dia, pela mesma regua do
+// camadasDoDia (camadaPorRegua). E' o tier gravado no dia, com a config do dia;
+// o Historico recalcula com a config de hoje, entao se um corte mudou no meio
+// do caminho os dois podem discordar numa corrida antiga. Entrada sem linha no
+// precalc (antes de 07/09, ou par que a tabela nao viu) fica "Sem tipo".
+function coletarEntradas(userId, fromISO, toISO, dbOverride) {
+  const db = getDb(dbOverride);
+  garantirColunas(db);
+  const { resolverAposta, calcGanhoPct } = require('../routes/banca');
+  const { SQL_NAO_ANULADA } = require('./anuladas');
+  const cd = require('./camadasDoDia');
+  const rows = db.prepare(
+    `SELECT r.id, r.hora, r.corrida, r.dist, r.trap_fav, r.trap_und, r.name_fav, r.name_und,
+            r.bateu, r.finishing_order_json, r.scores_json,
+            date(s.created_at,'-3 hours') AS dia,
+            rud.odd AS odd, rud.bet_unidades AS bet_unidades, rud.bet_entrou AS bet_entrou,
+            rud.avb_escolhido AS avb_escolhido
+       FROM races r JOIN race_sessions s ON s.id = r.session_id
+            JOIN race_user_data rud ON rud.race_id = r.id AND rud.user_id = ?
+      WHERE r.user_id = ?
+        AND (rud.bet_entrou = 1 OR (rud.odd IS NOT NULL AND rud.odd != ''))
+        AND ${SQL_NAO_ANULADA}
+      ORDER BY s.created_at ASC, r.hora ASC`
+  ).all(userId, CANONICO)
+    .filter(r => (!fromISO || r.dia >= fromISO) && (!toISO || r.dia <= toISO));
+
+  // A mesma corrida em dois lotes do dia conta uma vez: fica a que tem odd.
+  const unicas = new Map();
+  for (const r of rows) {
+    const k = r.dia + '|' + cd.chaveCorrida(r.corrida, r.hora);
+    const ja = unicas.get(k);
+    if (!ja || (!ja.odd && r.odd)) unicas.set(k, r);
+  }
+
+  // Tier de cada confronto dos dias envolvidos, numa consulta so.
+  const tierDe = new Map();
+  const dias = Array.from(new Set(Array.from(unicas.values()).map(r => r.dia)));
+  if (dias.length) {
+    try {
+      const marc = dias.map(() => '?').join(',');
+      for (const p of db.prepare('SELECT data, corrida, hora, pick_trap, outro_trap, tier FROM avb_precalc WHERE data IN (' + marc + ')').all(...dias)) {
+        tierDe.set(p.data + '|' + cd.idConfronto(p.corrida, p.hora, Number(p.pick_trap), Number(p.outro_trap)), p.tier || null);
+      }
+    } catch (e) { /* sem a tabela: tudo fica Sem tipo, a tela segue */ }
+  }
+
+  const out = [];
+  for (const r0 of unicas.values()) {
+    const r = resolverAposta(r0);
+    const a = Number(r.trap_a), b = Number(r.trap_b);
+    let tipo = 'Sem tipo';
+    if (a > 0 && b > 0) {
+      const k = r.dia + '|' + cd.idConfronto(r.corrida, r.hora, a, b);
+      if (tierDe.has(k)) tipo = cd.camadaPorRegua(tierDe.get(k));
+    }
+    let scores = [];
+    try { scores = r.scores_json ? JSON.parse(r.scores_json) : []; } catch (e) { scores = []; }
+    const partes = (r.corrida || '').split(' ');
+    const temOdd = r.odd != null && String(r.odd).trim() !== '';
+    const lucro = temOdd ? calcGanhoPct(r) : null;   // unidades; null = pendente ou sem odd
+    out.push({
+      pista: partes[0] || '?',
+      classe: partes[partes.length - 1] || '?',
+      dist: r.dist || '?',
+      nElig: scores.length || null,
+      hora: r.hora || '',
+      dia: r.dia,
+      tipo,
+      der: r.bateu,                  // 'sim' | 'nao' | null (pendente)
+      raw: null,                     // sem "HR cru": ele mede o label do motor
+      lucro,
+      stake: (lucro != null) ? (parseFloat(String(r.bet_unidades || '').replace(',', '.')) || 0) : 0,
+      odd: temOdd ? (parseFloat(String(r.odd).replace(',', '.')) || null) : null
+    });
+  }
+  return out;
+}
+
 // Nomes completos das pistas — fonte UNICA em ./nomesPistas.js (compartilhada
 // com historico/replay). Ajuste os nomes la, vale pra todas as telas.
 const { nomePista } = require('./nomesPistas');
@@ -337,6 +432,11 @@ function rotuloTurno(h, t1, t2) {
   return `Tarde (${t2}h+ BR)`;
 }
 
+// Ordem de exibicao do tipo: a do camadasDoDia (TOP > HIGH > GOOD), com o
+// "Sem tipo" das entradas antigas por ultimo.
+const ORDEM_TIPOS = ['TOP', 'HIGH', 'GOOD', 'Sem tipo'];
+function soma(arr, campo) { return arr.reduce((a, x) => a + (x[campo] != null ? x[campo] : 0), 0); }
+
 // Converte um agrupamento {chave:{n,ac,nRaw,acRaw,err}} num array pronto pro
 // front, com HR calculado e flag de amostra. ordenar: 'hr' (pior primeiro),
 // 'num' (numerico crescente) ou 'none' (ordem de insercao).
@@ -346,6 +446,9 @@ function grupoParaArray(grupo, ordenar) {
     hr: b.n ? b.ac / b.n : 0,
     hrCru: b.nRaw ? b.acRaw / b.nRaw : null,
     err: b.err,
+    // Lucro/ROI so quando o grupo teve odd lancada; senao null (a tela omite).
+    lucro: b.nLucro ? b.lucro : null,
+    roi: (b.nLucro && b.stake) ? b.lucro / b.stake : null,
     amostra: b.n >= 30 ? 'boa' : b.n >= 15 ? 'media' : 'baixa'
   }));
   if (ordenar === 'hr') arr.sort((a, b) => a.hr - b.hr);
@@ -376,7 +479,12 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   const t1 = (turnos && turnos.t1) || 6;
   const t2 = (turnos && turnos.t2) || 13;
   const f = filtros || {};
-  const todos = coletarResolvidos(userId, fromISO || null, toISO || null, dbOverride)
+  // modo 'entradas' = so as minhas apostas (tela Desempenho). Sem modo = o
+  // motor, como sempre (o Dashboard continua nele).
+  const soEntradas = f.modo === 'entradas';
+  const todos = (soEntradas
+      ? coletarEntradas(userId, fromISO || null, toISO || null, dbOverride)
+      : coletarResolvidos(userId, fromISO || null, toISO || null, dbOverride))
     .map(x => Object.assign(x, { turno: rotuloTurno(x.hora, t1, t2) }));
 
   // Opcoes dos dropdowns — sempre do conjunto do PERIODO (antes do cruzamento),
@@ -387,7 +495,8 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     turnos: uniq(todos.map(x => x.turno)).sort((a, b) => ordTurno(a) - ordTurno(b)),
     pistas: uniq(todos.map(x => x.pista)).sort(),
     caes: uniq(todos.map(x => x.nElig)).sort((a, b) => a - b),
-    classes: uniq(todos.map(x => x.classe)).sort(cmpClasse)
+    classes: uniq(todos.map(x => x.classe)).sort(cmpClasse),
+    tipos: ORDEM_TIPOS.filter(t => todos.some(x => x.tipo === t))
   };
 
   // Nomes completos das pistas disponiveis (pro filtro e o relatorio).
@@ -415,7 +524,8 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
     });
   const casaPar = x => paresSel.some(p => p.pista === x.pista && (!p.classe || p.classe === x.classe));
 
-  const items = todos.filter(x =>
+  const filtrados = todos.filter(x =>
+    (!f.tipo || x.tipo === f.tipo) &&
     (!f.turno || x.turno === f.turno) &&
     (!f.caes || String(x.nElig) === String(f.caes)) &&
     (paresSel.length
@@ -431,6 +541,11 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   const qMax = parseInt(f.qtdMax, 10);
   const passaQtd = n => (!(qMin > 0) || n >= qMin) && (!(qMax > 0) || n <= qMax);
 
+  // Aposta sem chegada ainda (ou galgo fora dela) fica fora do HR, mas contada:
+  // some do denominador sem sumir da vista.
+  const pendentes = filtrados.filter(x => x.der !== 'sim' && x.der !== 'nao').length;
+  const items = filtrados.filter(x => x.der === 'sim' || x.der === 'nao');
+
   const total = items.length;
   const ac = items.filter(x => x.der === 'sim').length;
   const rawItems = items.filter(x => x.raw === 'sim' || x.raw === 'nao');
@@ -440,7 +555,8 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
   return {
     periodo: { from: fromISO || null, to: toISO || null },
     turnos: { t1, t2 },
-    filtros: { turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', pares: f.pares || '', qtdMin: f.qtdMin || '', qtdMax: f.qtdMax || '' },
+    modo: soEntradas ? 'entradas' : 'motor',
+    filtros: { tipo: f.tipo || '', turno: f.turno || '', pista: f.pista || '', caes: f.caes || '', classe: f.classe || '', pares: f.pares || '', qtdMin: f.qtdMin || '', qtdMax: f.qtdMax || '' },
     // Classes que EXISTEM em cada pista, pro front montar a arvore
     // (marcou a pista -> abrem as classes dela, e so as dela).
     classesPorPista: (function(){ const m={}; todos.forEach(x=>{ if(!x.pista) return; (m[x.pista]=m[x.pista]||new Set()).add(x.classe); });
@@ -451,6 +567,12 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
       hr: total ? ac / total : 0,
       hrCru: rawItems.length ? acRaw / rawItems.length : null,
       erros: err,
+      pendentes,
+      // Dinheiro, em unidades, so onde houve odd. ROI = lucro / unidades apostadas.
+      lucro: soma(items, 'lucro'),
+      stake: soma(items, 'stake'),
+      roi: (function(){ const st = soma(items, 'stake'); return st ? soma(items, 'lucro') / st : null; })(),
+      oddMedia: (function(){ const o = items.filter(x => x.odd > 0); return o.length ? o.reduce((a, x) => a + x.odd, 0) / o.length : null; })(),
       // Tres taxas comparaveis, calculadas sobre a MESMA chegada e com a
       // MESMA funcao (bateuPar). Cada uma tem o proprio denominador: o
       // indefinido (null) fica de fora, e a "minha" so conta as corridas em
@@ -470,6 +592,8 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
         return o;
       })()
     },
+    porTipo: grupoParaArray(agrupaPor(items, x => x.tipo), 'none')
+      .sort((a, b) => ORDEM_TIPOS.indexOf(a.chave) - ORDEM_TIPOS.indexOf(b.chave)),
     porTurno: grupoParaArray(agrupaPor(items, x => x.turno), 'none'),
     porPista: grupoParaArray(agrupaPor(items, x => x.pista), 'hr').filter(r => passaQtd(r.n)),
     porCaes: grupoParaArray(agrupaPor(items, x => x.nElig), 'num'),
@@ -480,8 +604,9 @@ function buildDesempenhoData(userId, fromISO, toISO, turnos, filtros, dbOverride
       for (const x of items) {
         const d = x.dia || '';
         if (!d) continue;
-        if (!m[d]) m[d] = { dia: d, abertos: 0, acertados: 0, errados: 0 };
+        if (!m[d]) m[d] = { dia: d, abertos: 0, acertados: 0, errados: 0, lucro: 0 };
         m[d].abertos++;
+        if (x.lucro != null) m[d].lucro += x.lucro;
         if (x.der === 'sim') m[d].acertados++;
         else if (x.der === 'nao') m[d].errados++;
       }
@@ -495,8 +620,9 @@ function agrupaPor(items, keyFn) {
   for (const it of items) {
     const k = keyFn(it);
     if (k == null || k === '' || k === '?') continue;
-    const b = (g[k] = g[k] || { n: 0, ac: 0, nRaw: 0, acRaw: 0, err: 0 });
+    const b = (g[k] = g[k] || { n: 0, ac: 0, nRaw: 0, acRaw: 0, err: 0, lucro: 0, stake: 0, nLucro: 0 });
     b.n++; if (it.der === 'sim') b.ac++;
+    if (it.lucro != null) { b.lucro += it.lucro; b.stake += (it.stake || 0); b.nLucro++; }
     if (it.raw === 'sim' || it.raw === 'nao') {
       b.nRaw++; if (it.raw === 'sim') b.acRaw++;
       if (it.raw !== it.der) b.err++;
@@ -650,5 +776,5 @@ function buildBacktestJson(userId, fromISO, toISO, dbOverride) {
 module.exports = {
   buildDerrotasWorkbook, coletarDerrotas,
   buildDesempenhoWorkbook, coletarResolvidos,
-  buildBacktestJson, buildDesempenhoData
+  buildBacktestJson, buildDesempenhoData, coletarEntradas
 };

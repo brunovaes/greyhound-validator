@@ -1315,3 +1315,8 @@ async function salvarConfigBanca(){
 });
 
 module.exports = router;
+// A regra de resolucao da aposta e o calculo do ganho, pra quem precisa da MESMA
+// conta fora da Banca (o Desempenho de "minhas entradas", 21/09/2026). Exportar
+// em vez de copiar: duas copias da regra foi o que a Banca ja corrigiu em 17/09.
+module.exports.resolverAposta = resolverAposta;
+module.exports.calcGanhoPct = calcGanhoPct;
